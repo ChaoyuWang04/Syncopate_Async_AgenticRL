@@ -1,6 +1,6 @@
 <!-- PROJECT LOGO -->
 <div align="center">
-  <a href="https://github.com/ChaoyuWang04/Async-AgenticRL">
+  <a href="https://github.com/ChaoyuWang04/Syncopate_Async_AgenticRL">
     <img src="images/logo.jpg" alt="Syncopate banner" width="100%">
   </a>
 
@@ -71,8 +71,8 @@ The `reference/` directory holds a production-grade verl AgentLoop post-training
 ## Setup
 
 ```sh
-git clone https://github.com/ChaoyuWang04/Async-AgenticRL.git
-cd Async-AgenticRL
+git clone https://github.com/ChaoyuWang04/Syncopate_Async_AgenticRL.git
+cd Syncopate_Async_AgenticRL
 ```
 
 Environment setup scripts (verl + sglang/vllm on sm_120) will land together with Phase 0 code.
@@ -96,7 +96,7 @@ Issues and pull requests are welcome. The highest-leverage areas:
 
 ## Links
 
-- Project: [https://github.com/ChaoyuWang04/Async-AgenticRL](https://github.com/ChaoyuWang04/Async-AgenticRL)
+- Project: [https://github.com/ChaoyuWang04/Syncopate_Async_AgenticRL](https://github.com/ChaoyuWang04/Syncopate_Async_AgenticRL)
 - HuggingFace:
 - Author: [Chaoyu Wang](https://www.linkedin.com/in/samwang04/)
 
