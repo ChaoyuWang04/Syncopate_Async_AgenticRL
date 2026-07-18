@@ -1,0 +1,38 @@
+# 老师的参考项目（有版权限制，不得传播）
+reference/
+
+# 模型权重与训练产物
+models/
+checkpoints/
+runs/
+wandb/
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# 数据与压缩包
+data/
+*.zip
+*.parquet
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+venv/
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 工具/编辑器
+.vscode/
+.idea/
+.DS_Store
+nsys_reports/
+*.nsys-rep
+*.ncu-rep
