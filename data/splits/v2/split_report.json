@@ -1,0 +1,44 @@
+{
+ "batch_dir": "data/batches/v2",
+ "mode": "difficulty_proxy",
+ "counts": {
+  "eval": 52,
+  "sft": 105,
+  "rl": 423
+ },
+ "strata_count": 26,
+ "overlaps_by_content_sha256": {
+  "eval∩sft": 0,
+  "eval∩rl": 0,
+  "sft∩rl": 0
+ },
+ "duplicate_content_pairs": 0,
+ "eval_strata_coverage": {
+  "BUD|tool_call|denied|id_given": 14,
+  "BUD|tool_call|denied|must_discover": 12,
+  "BUD|tool_call|escalated|id_given": 43,
+  "BUD|tool_call|escalated|must_discover": 41,
+  "BUD|tool_call|executed|id_given": 16,
+  "BUD|tool_call|executed|must_discover": 14,
+  "CLAR|clarify|-|id_given": 27,
+  "CLAR|clarify|-|must_discover": 23,
+  "CRE|tool_call|block|id_given": 32,
+  "CRE|tool_call|block|must_discover": 30,
+  "CRE|tool_call|launch|id_given": 14,
+  "CRE|tool_call|launch|must_discover": 14,
+  "DIA|tool_call|default_plan|id_given": 19,
+  "DIA|tool_call|default_plan|must_discover": 17,
+  "DIA|tool_call|switch_plan|id_given": 27,
+  "DIA|tool_call|switch_plan|must_discover": 27,
+  "HIGH|tool_call|-|id_given": 16,
+  "HIGH|tool_call|-|must_discover": 14,
+  "LONG|tool_call|-|id_given": 26,
+  "LONG|tool_call|-|must_discover": 24,
+  "LOW|tool_call|-|id_given": 26,
+  "LOW|tool_call|-|must_discover": 24,
+  "MISS|tool_call|-|id_given": 16,
+  "MISS|tool_call|-|must_discover": 14,
+  "REJ|reject|-|id_given": 26,
+  "REJ|reject|-|must_discover": 24
+ }
+}

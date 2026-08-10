@@ -1,0 +1,587 @@
+{
+ "label": "models/Qwen3-4B + checkpoints/sft/qwen4b_v3_bal",
+ "rows": [
+  {
+   "case_id": "BUD_0000",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.99875,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    0.995,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.25,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "BUD_0008",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.48208300000000004,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 0.483333,
+   "group": [
+    0.483333,
+    0.483333,
+    0.483333,
+    0.478333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.25,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "BUD_0016",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.9,
+   "reward_std": 0.0,
+   "reward_max": 0.9,
+   "group": [
+    0.9,
+    0.9,
+    0.9,
+    0.9
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0004",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify"
+  },
+  {
+   "case_id": "CLAR_0012",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify"
+  },
+  {
+   "case_id": "CLAR_0020",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify"
+  },
+  {
+   "case_id": "CRE_0002",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.4833335,
+   "reward_std": 0.4833335,
+   "reward_max": 0.966667,
+   "group": [
+    0.0,
+    0.0,
+    0.966667,
+    0.966667
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 4,
+   "truncated": 0.0,
+   "num_steps": 4.75,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CRE_0010",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.9,
+   "reward_std": 0.06236100099020219,
+   "reward_max": 0.966667,
+   "group": [
+    0.9,
+    0.933333,
+    0.8,
+    0.966667
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.25,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CRE_0018",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.6366665,
+   "reward_std": 0.3738240123671164,
+   "reward_max": 0.96,
+   "group": [
+    0.793333,
+    0.96,
+    0.0,
+    0.793333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.0,
+   "num_steps": 5.25,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "DIA_0000",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.61875,
+   "reward_std": 0.37209499795079215,
+   "reward_max": 0.995,
+   "group": [
+    0.74,
+    0.995,
+    0.0,
+    0.74
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "DIA_0008",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.25,
+   "reward_std": 0.4330127018922193,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 6,
+   "truncated": 0.0,
+   "num_steps": 3.5,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "reject"
+  },
+  {
+   "case_id": "DIA_0016",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.6799999999999999,
+   "reward_std": 0.40489196089821294,
+   "reward_max": 0.99,
+   "group": [
+    0.985,
+    0.745,
+    0.99,
+    0.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.0,
+   "num_steps": 6,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0006",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0014",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0022",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0000",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0008",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0016",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0006",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.9624999999999999,
+   "reward_std": 0.016007810593582136,
+   "reward_max": 0.99,
+   "group": [
+    0.99,
+    0.955,
+    0.95,
+    0.955
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7.5,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0014",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.79875,
+   "reward_std": 0.2883655449251869,
+   "reward_max": 0.99,
+   "group": [
+    0.3,
+    0.955,
+    0.95,
+    0.99
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 8,
+   "caps": [
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0022",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.9775,
+   "reward_std": 0.016007810593582136,
+   "reward_max": 0.99,
+   "group": [
+    0.985,
+    0.985,
+    0.99,
+    0.95
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 8.5,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "MISS_0004",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "MISS_0012",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "MISS_0020",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "REJ_0006",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject"
+  },
+  {
+   "case_id": "REJ_0014",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject"
+  },
+  {
+   "case_id": "REJ_0022",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject"
+  }
+ ]
+}

@@ -1,0 +1,255 @@
+{
+ "label": "models/Qwen3-0.6B + checkpoints/sft/qwen06b_v1",
+ "rows": [
+  {
+   "case_id": "CLAR_0000",
+   "signal_class": "graded",
+   "reward": 0.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 1,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0008",
+   "signal_class": "graded",
+   "reward": 0.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 1,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0016",
+   "signal_class": "graded",
+   "reward": 0.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 1,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0024",
+   "signal_class": "graded",
+   "reward": 0.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 1,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0032",
+   "signal_class": "graded",
+   "reward": 0.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 1,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0000",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0008",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0016",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0024",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0032",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0040",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0048",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0056",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0064",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0072",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0080",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0088",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0096",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0104",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0112",
+   "signal_class": "graded",
+   "reward": 1.0,
+   "parse_ok": true,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": false,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  }
+ ]
+}

@@ -1,38 +1,26 @@
-# 老师的参考项目（有版权限制，不得传播）
-reference/
+# 环境
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+uv.lock
 
-# 模型权重与训练产物
+# 模型与产物（大文件，不进版本管理）
 models/
 checkpoints/
-runs/
 wandb/
-*.safetensors
-*.bin
-*.pt
-*.ckpt
+data/rollouts/
 
-# 数据与压缩包
-data/
-*.zip
-*.parquet
-*.jsonl
+# 生成的数据（可由 `syncopate cases generate` 完全重建）
+data/batches/
+data/rl/
+data/sft/
+data/external/creatives/
+data/external/ingested.json
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv*/
-venv/
+# 老师的参考包（版权：深圳途明智启科技，不得传播）
+reference/
 
-# 环境与密钥
-.env
-.env.*
-!.env.example
-
-# 工具/编辑器
-.vscode/
-.idea/
-.DS_Store
-nsys_reports/
-*.nsys-rep
-*.ncu-rep
+# 临时
+tmp/
+*.log

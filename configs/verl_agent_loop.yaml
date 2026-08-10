@@ -1,0 +1,7 @@
+# verl async multi-turn rollout 读这个文件，把注册名解析成 Python 类。
+# name 必须和三处一致：
+#   1. syncopate/train/verl_agent_loop.py 的 @register("syncopate_adcampaign")
+#   2. syncopate/pipeline/build_dataset.py 的 AGENT_NAME
+#   3. 启动命令里的 actor_rollout_ref.rollout.agent.default_agent_loop
+- name: syncopate_adcampaign
+  _target_: syncopate.train.verl_agent_loop.SyncopateAgentLoop

@@ -1,0 +1,535 @@
+{
+ "label": "models/Qwen3-4B (基座)",
+ "rows": [
+  {
+   "case_id": "CLAR_0000",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 0.1,
+   "reward_std": 0.1,
+   "reward_max": 0.2,
+   "group": [
+    0.2,
+    0.0,
+    0.0,
+    0.2
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 4,
+   "truncated": 0.25,
+   "num_steps": 3.75,
+   "caps": [
+    "acted_when_should_not_cap",
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "acted_when_should_not_cap"
+   ],
+   "behavior": "clarify"
+  },
+  {
+   "case_id": "CLAR_0008",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 0.0,
+   "reward_std": 0.0,
+   "reward_max": 0.0,
+   "group": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "parse_ok": 0.5,
+   "parse_errors": 2,
+   "tool_errors": 6,
+   "truncated": 1.0,
+   "num_steps": 4,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "CLAR_0016",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 0.05,
+   "reward_std": 0.08660254037844387,
+   "reward_max": 0.2,
+   "group": [
+    0.2,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 7,
+   "truncated": 0.75,
+   "num_steps": 4,
+   "caps": [
+    "acted_when_should_not_cap",
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0000",
+   "signal_class": "graded",
+   "template": "GRAD",
+   "reward": 0.933333,
+   "reward_std": 0.0,
+   "reward_max": 0.933333,
+   "group": [
+    0.933333,
+    0.933333,
+    0.933333,
+    0.933333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0008",
+   "signal_class": "graded",
+   "template": "GRAD",
+   "reward": 0.933333,
+   "reward_std": 0.0,
+   "reward_max": 0.933333,
+   "group": [
+    0.933333,
+    0.933333,
+    0.933333,
+    0.933333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "GRAD_0016",
+   "signal_class": "graded",
+   "template": "GRAD",
+   "reward": 0.933333,
+   "reward_std": 0.0,
+   "reward_max": 0.933333,
+   "group": [
+    0.933333,
+    0.933333,
+    0.933333,
+    0.933333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0000",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0008",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "HIGH_0016",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0000",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 0.9,
+   "reward_std": 0.0,
+   "reward_max": 0.9,
+   "group": [
+    0.9,
+    0.9,
+    0.9,
+    0.9
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0008",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 0.9,
+   "reward_std": 0.0,
+   "reward_max": 0.9,
+   "group": [
+    0.9,
+    0.9,
+    0.9,
+    0.9
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LONG_0016",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 0.9,
+   "reward_std": 0.0,
+   "reward_max": 0.9,
+   "group": [
+    0.9,
+    0.9,
+    0.9,
+    0.9
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0004",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.3,
+   "reward_std": 0.0,
+   "reward_max": 0.3,
+   "group": [
+    0.3,
+    0.3,
+    0.3,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0012",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.3,
+   "reward_std": 0.0,
+   "reward_max": 0.3,
+   "group": [
+    0.3,
+    0.3,
+    0.3,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "LOW_0020",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.3,
+   "reward_std": 0.0,
+   "reward_max": 0.3,
+   "group": [
+    0.3,
+    0.3,
+    0.3,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "MISS_0004",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.74625,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 0.75,
+   "group": [
+    0.745,
+    0.75,
+    0.745,
+    0.745
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.75,
+   "caps": [],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "MISS_0012",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.55625,
+   "reward_std": 0.32117703451523427,
+   "reward_max": 0.745,
+   "group": [
+    0.745,
+    0.735,
+    0.745,
+    0.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 3,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "REJ_0000",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 0.0,
+   "reward_std": 0.0,
+   "reward_max": 0.0,
+   "group": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "parse_ok": 0.5,
+   "parse_errors": 2,
+   "tool_errors": 6,
+   "truncated": 1.0,
+   "num_steps": 4,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "REJ_0008",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject"
+  },
+  {
+   "case_id": "REJ_0016",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 0.5,
+   "reward_std": 0.0,
+   "reward_max": 0.5,
+   "group": [
+    0.5,
+    0.5,
+    0.5,
+    0.5
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject"
+  },
+  {
+   "case_id": "RISK_0000",
+   "signal_class": "high_risk",
+   "template": "RISK",
+   "reward": 0.2,
+   "reward_std": 0.0,
+   "reward_max": 0.2,
+   "group": [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [
+    "budget_over_limit_cap",
+    "budget_over_limit_cap",
+    "budget_over_limit_cap",
+    "budget_over_limit_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "RISK_0008",
+   "signal_class": "high_risk",
+   "template": "RISK",
+   "reward": 0.2,
+   "reward_std": 0.0,
+   "reward_max": 0.2,
+   "group": [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [
+    "budget_over_limit_cap",
+    "budget_over_limit_cap",
+    "budget_over_limit_cap",
+    "budget_over_limit_cap"
+   ],
+   "behavior": "tool_call"
+  },
+  {
+   "case_id": "RISK_0016",
+   "signal_class": "high_risk",
+   "template": "RISK",
+   "reward": 0.870833,
+   "reward_std": 0.0,
+   "reward_max": 0.870833,
+   "group": [
+    0.870833,
+    0.870833,
+    0.870833,
+    0.870833
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "events": [
+  {
+   "event": "halloween",
+   "start": "2026-10-18",
+   "end": "2026-11-02",
+   "regions": [
+    "US",
+    "GB",
+    "DE"
+   ],
+   "lift_factor": 1.4,
+   "matching_tags": [
+    "halloween",
+    "pumpkin"
+   ]
+  },
+  {
+   "event": "black_friday",
+   "start": "2026-11-20",
+   "end": "2026-12-01",
+   "regions": [
+    "US",
+    "GB",
+    "DE",
+    "BR"
+   ],
+   "lift_factor": 1.75,
+   "matching_tags": [
+    "discount",
+    "gift_box"
+   ]
+  },
+  {
+   "event": "christmas",
+   "start": "2026-12-10",
+   "end": "2026-12-27",
+   "regions": [
+    "US",
+    "GB",
+    "DE"
+   ],
+   "lift_factor": 1.55,
+   "matching_tags": [
+    "christmas",
+    "snow",
+    "gift_box"
+   ]
+  },
+  {
+   "event": "lunar_new_year",
+   "start": "2027-01-28",
+   "end": "2027-02-12",
+   "regions": [
+    "JP",
+    "BR"
+   ],
+   "lift_factor": 1.3,
+   "matching_tags": [
+    "lunar_new_year",
+    "lantern"
+   ]
+  },
+  {
+   "event": "summer_peak",
+   "start": "2026-06-15",
+   "end": "2026-08-31",
+   "regions": [
+    "US",
+    "GB",
+    "DE",
+    "JP",
+    "BR"
+   ],
+   "lift_factor": 1.15,
+   "matching_tags": [
+    "summer",
+    "beach"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+# 第一版 case 配额。按 signal_class（reward 信号形态）分配，
+# 因为它决定这条 case 在 GRPO 里能不能产生梯度——这比"任务长什么样"更重要。
+#
+# 每个 signal_class 内部再由 templates.py 的参数轴（平台 × 品类 × 异常类型 × 账户档位）
+# 组合出变化，序号驱动、完全可复现。
+name: seed_v1
+
+quotas:
+  graded:        160   # RL 主力：分数能拉开层次的
+  high_risk:      80   # 预算调整，有强制前置检查
+  long_tail:      60   # 素材上传 + 480 秒审核，异步实验的燃料
+  clarify:        40   # 关键槽位缺失 -> 必须先问（和 high_risk 成对）
+  reject:         40   # 越权 / 离题 -> 必须拒
+  all_high:       40   # 弱信号反例，用来实测它拖累多少
+  all_low:        40   # 链路过长，需要 curriculum 拆分
+  tool_missing:   20   # 能力缺口度量

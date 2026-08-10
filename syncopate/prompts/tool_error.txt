@@ -1,0 +1,7 @@
+上一个 tool call 无法执行。
+
+工具 error：
+{{ error }}
+
+请根据当前 tool schema、已知实体和这条 error observation，输出一个修正后的 tool call，
+或者信息已足够时直接给出最终结论 JSON。除非参数已经修正，否则不要重复同一个无效 tool call。

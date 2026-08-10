@@ -1,0 +1,8 @@
+# 本机 ~/.config/uv/uv.toml 把清华源设为默认，但全局代理下国内镜像不通（实测 0 B/s）。
+# 这里覆盖回官方源（实测 1.47 MB/s）。
+[[index]]
+url = "https://pypi.org/simple"
+default = true
+
+[pip]
+index-url = "https://pypi.org/simple"

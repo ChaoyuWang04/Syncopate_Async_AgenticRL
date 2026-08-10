@@ -1,0 +1,17 @@
+# v2 配额。模板名对应 templates.py 的 TEMPLATES。
+#
+# 和 v1 的区别：每个模板内部按 axes.py 的控制轴分叉，
+# 同一个模板会长出多条**结局不同**的路径（执行 / 走审批 / 拒绝），
+# 而不是固定一条。所以骨架数不再等于模板数。
+name: seed_v2
+
+quotas:
+  budget_change:    140   # 主分支：风控 × 记忆 × 政策 三者决定结局
+  creative_launch:   90   # 记忆 + 时令双轴，你说的核心场景
+  diagnosis:         90   # 记忆决定方案是否复用
+  portfolio_review:  50   # 长链，需要 curriculum
+  long_tail:         50   # 480 秒审核，异步实验的燃料
+  clarify:           50   # 和 budget_change 成对
+  reject:            50
+  all_high:          30   # 弱信号反例
+  tool_missing:      30

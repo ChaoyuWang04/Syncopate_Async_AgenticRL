@@ -1,0 +1,11 @@
+当前投放任务：
+{% for key, value in context.items() -%}
+{{ key }}={{ value }}
+{% endfor %}
+用户请求：
+{{ user_message }}
+
+本次结论需要给出的字段：
+{% for field in answer_fields -%}
+- {{ field.key }}{% if field.description %}（{{ field.description }}）{% endif %}
+{% endfor %}
