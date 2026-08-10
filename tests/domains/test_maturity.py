@@ -150,9 +150,38 @@ def _call_freshness(env, **args):
 
 def test_freshness_tool_reports_the_world_not_the_request():
     obs = _call_freshness(_env(2))
-    assert obs.ok and obs.data["maturity"] == IMMATURE
-    assert obs.data["converge_eta_days"] == 5
+    assert obs.ok
     assert obs.data["days_elapsed"] == 2
+    assert obs.data["converge_at_day"] == CONVERGE_DAYS["roas_d7"]
+    assert obs.data["expected_final_range"][0] < obs.data["expected_final_range"][1]
+
+
+def test_freshness_returns_facts_not_the_conclusion():
+    """★★★ 工具**不能**回 maturity 标签。
+
+    第一版回了，于是完全没训过的 base 在 I02 上 defer 准确率就有 97%——
+    因为答案字段就叫 `data_maturity`，模型只是把工具返回值照抄过去。
+    判断根本没有发生，SFT 和 RL 都没东西可学。
+
+    ⇒ 设计文档 §0.1 的切分线：「查什么」属于工具，「怎么判」属于权重。
+    """
+    from syncopate.domains.adcampaign.tools.freshness import FACT_FIELDS
+
+    data = _call_freshness(_env(2)).data
+    assert set(data) == set(FACT_FIELDS)
+    for conclusion in ("maturity", "is_converged", "converge_eta_days", "reason"):
+        assert conclusion not in data
+    # 但 verifier / cap 侧仍然拿得到结论——口径只有一份，只是不外泄
+    assert campaign_maturity(_env(2).table("campaigns")["CMP_4012"])["maturity"] == IMMATURE
+
+
+def test_thresholds_are_not_in_the_system_prompt():
+    """阈值写进 prompt 就等于把规则还给了上下文，而这条规则是「不变的」，该进权重。"""
+    from syncopate.prompts import load_prompt
+
+    system = load_prompt("system.txt")
+    for leaked in ("7 天", "mature", "partial", "immature"):
+        assert leaked not in system
 
 
 def test_freshness_has_no_as_of_parameter():
