@@ -32,7 +32,10 @@ _TOOL_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 # ```json ... ``` 或裸 ``` ... ```
 _CODE_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
-VALID_BEHAVIORS = {"tool_call", "clarify", "reject"}
+# ★ defer 是 M1 加的第四个行为，它是「过早决策」这个最贵错误的**正向对立面**。
+# 没有这个标签，模型只能在「做」和「不做」之间选——学不会「等」。
+# 而「等到 D7 再判」恰恰是这个业务里最常见的正确答案。
+VALID_BEHAVIORS = {"tool_call", "clarify", "reject", "defer"}
 
 
 @dataclass

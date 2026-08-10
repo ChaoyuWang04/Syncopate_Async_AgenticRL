@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from syncopate.authoring.axes import AMOUNT_FACTOR, Params, params_for  # noqa: F401  (re-export)
+from syncopate.authoring.axes import (  # noqa: F401  (re-export)
+    AMOUNT_FACTOR, MATURITY_DAYS, MATURITY_INSTALLS_7D, Params, params_for,
+)
 from syncopate.core.schemas import (
     AnswerField,
     Case,
@@ -31,6 +33,7 @@ from syncopate.core.schemas import (
     SideEffectReq,
     VerifierSpec,
 )
+from syncopate.domains.adcampaign.maturity import campaign_maturity
 from syncopate.domains.adcampaign.policies import compute_decision
 from syncopate.domains.adcampaign.tools.playbook import PLAYBOOK
 from syncopate.domains.adcampaign.world import WorldBuilder
@@ -620,6 +623,116 @@ def make_reject(p: Params) -> CaseBundle:
                       gold=GoldPath(actions=[], final_answer={"reject_reason": reason}))
 
 
+def make_freshness_check(p: Params) -> CaseBundle:
+    """I02 · 数据可信度判定 —— M1 的核心新意图，也是 `defer` 行为唯一的来源。
+
+    ★ 为什么这个看起来最不起眼的意图要优先于 I07/I09
+
+    它是所有 L5/L6 意图的**前置**：任何归因、扩量、砍量的结论，只要建立在
+    还没收敛的数字上，对错就完全是运气。而"还没收敛"这件事，模型光看数字看不出来——
+    D1 的 ROAS 和 D7 的 ROAS 长得一模一样，都是一个小数。
+
+    ★★ 三个成熟度 = 三种**不同的正确行为**，不是三种措辞
+
+        mature    正常给结论
+        partial   给倾向性结论，但必须标不确定性
+        immature  defer —— "还要等 X 天"
+
+    ⚠️ 双向都要考：只造 immature 的 case，训出来的是一个什么都不敢答的 agent；
+    只造 mature 的，`defer` 这个标签就等于没有。所以三档必须同时在数据里。
+
+    ★★★ 这里刻意**不带写动作**。
+    "该不该扩量"是 I09 的事（M4）；I02 只回答"这个数现在能不能用"。
+    两件事混在一个意图里，verifier 就分不清模型是"判断错了成熟度"
+    还是"判断对了但决策错了"——而这正是我们最需要分开的两种失败。
+    """
+    case_id = f"FRESH_{p.index:04d}"
+    maturity = p.data_maturity
+    days = MATURITY_DAYS[maturity]
+
+    env = (WorldBuilder(case_id, reference_now=p.reference_now)
+           .account(p.account_id, tier=p.tier)
+           .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
+                     game_genre=p.genre, product_id=p.product, region=p.region,
+                     started_days_ago=days, installs_7d=MATURITY_INSTALLS_7D,
+                     roas_d7=0.38 + (p.index % 5) * 0.03).build())
+    # ★ 真值由同一个函数算出来，不在模板里另写一份"预期答案"
+    info = campaign_maturity(env.table("campaigns")[p.campaign_id])
+
+    given_id = p.entry_mode == "id_given"
+    context: dict[str, Any] = {"account_id": p.account_id, "product_id": p.product,
+                               "region": p.region}
+    if given_id:
+        context["campaign_id"] = p.campaign_id
+    case = Case(
+        case_id=case_id,
+        user_message=(f"{p.campaign_id} 这条" if given_id else f"{p.product} 在 {p.region} 新开的那条")
+                     + "的 ROAS 现在能不能作为扩量依据？",
+        context=context,
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id},
+        metadata=_meta("graded", "sequential_dependency", p, topology="sequential",
+                       difficulty="L2", primary_intent="data_freshness_check",
+                       tags=["maturity", f"maturity:{maturity}"]),
+        max_steps=5)
+
+    reads = ["campaign.get_metrics", "metrics.get_freshness"]
+    actions: list[dict[str, Any]] = []
+    if not given_id:
+        reads.insert(0, "campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    actions += [
+        _act("campaign.get_metrics", campaign_id=p.campaign_id),
+        _act("metrics.get_freshness", campaign_id=p.campaign_id, metric="roas_d7"),
+    ]
+
+    # ---- 三档各自的正确终答 ----
+    # 每个字段都挂 evidence_tool=metrics.get_freshness：没查就说"数据成熟"
+    # 属于典型的 false_claim，这是它最该被罚的形态。
+    fields = [AnswerField(key="data_maturity", value_source=f"literal:{maturity}",
+                          evidence_tool="metrics.get_freshness")]
+    if maturity == "immature":
+        behavior = "defer"
+        answer = {"data_maturity": maturity, "recheck_after_days": info["converge_eta_days"]}
+        fields.append(AnswerField(key="recheck_after_days",
+                                  value_source=f"literal:{info['converge_eta_days']}",
+                                  evidence_tool="metrics.get_freshness"))
+    elif maturity == "partial":
+        behavior = "tool_call"
+        answer = {"data_maturity": maturity, "can_decide": False,
+                  "recheck_after_days": info["converge_eta_days"]}
+        fields += [
+            AnswerField(key="can_decide", value_source="literal:false",
+                        evidence_tool="metrics.get_freshness"),
+            AnswerField(key="recheck_after_days",
+                        value_source=f"literal:{info['converge_eta_days']}",
+                        evidence_tool="metrics.get_freshness"),
+        ]
+    else:
+        behavior = "tool_call"
+        answer = {"data_maturity": maturity, "can_decide": True,
+                  "roas_d7": env.table("campaigns")[p.campaign_id]["roas_d7"]}
+        fields += [
+            AnswerField(key="can_decide", value_source="literal:true",
+                        evidence_tool="metrics.get_freshness"),
+            AnswerField(key="roas_d7", value_source="campaigns.roas_d7",
+                        evidence_tool="campaign.get_metrics"),
+        ]
+
+    case.metadata.tags.append(f"outcome:{maturity}")
+    verifier = VerifierSpec(
+        expected_behavior=behavior,
+        required_read_tools=reads,
+        allowed_write_tools=[],          # I02 是纯判断，任何写动作都算越权
+        required_answer_fields=fields,
+        active_caps=["premature_decision_cap", "insufficient_sample_cap",
+                     "unauthorized_write_cap", "false_claim_cap",
+                     "multi_tool_per_step_cap", "max_steps_cap"],
+        max_steps=5)
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.90))
+
+
 def make_long_tail(p: Params) -> CaseBundle:
     """上传 + 等 480 秒审核。长尾轨迹的来源。"""
     case_id = f"LONG_{p.index:04d}"
@@ -665,6 +778,7 @@ TEMPLATES: dict[str, Callable[[Params], CaseBundle]] = {
     "diagnosis": make_diagnosis,
     "portfolio_review": make_portfolio_review,
     "long_tail": make_long_tail,
+    "freshness_check": make_freshness_check,
     "tool_missing": make_tool_missing,
     "all_high": make_all_high,
     "clarify": make_clarify,

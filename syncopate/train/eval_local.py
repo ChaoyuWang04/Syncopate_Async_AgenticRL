@@ -116,6 +116,29 @@ def load_cases(batch_dir: Path, per_class: int, split_every: int) -> list[CaseBu
     return [CaseBundle.read(batch_dir, e["case_id"]) for e in picked]
 
 
+def _report_defer(rows: list[dict]) -> None:
+    """★ M1 的验收指标：`defer` 的**双向**准确率。
+
+    只测「该 defer 时 defer 了」会训出一个什么都不敢做的 agent——
+    它在业务上和一个乱动手的 agent 一样没用，但单向指标上是满分。
+    所以必须同时测「数据已经收敛时，有没有多余的 defer」。
+
+    分母按**采样次数**算而不是 case 数：8 次里错 3 次，按众数统计会显示成全对。
+    """
+    def deferred(group: list[dict]) -> tuple[int, int]:
+        return (sum(b == "defer" for r in group for b in r["behaviors"]),
+                sum(len(r["behaviors"]) for r in group))
+
+    hit, total = deferred([r for r in rows if r["expected_behavior"] == "defer"])
+    if not total:
+        return                      # 这批评测里没有 defer 类 case，指标无意义
+    miss, miss_total = deferred([r for r in rows if r["expected_behavior"] != "defer"])
+    print("\n★ defer 双向准确率 —— 单向达标没有意义")
+    print(f"  该 defer 时 defer 了     {hit}/{total} ({hit / total:.0%})")
+    print(f"  不该 defer 却 defer 了   {miss}/{miss_total} ({miss / miss_total:.1%})"
+          "   ← 必须接近 0，否则就是训出了一个什么都不敢做的 agent")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地自回归推理评测")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
@@ -188,6 +211,10 @@ def main(argv: list[str] | None = None) -> int:
             "num_steps": statistics.mean(g["num_steps"] for g in group),
             "caps": [c for g in group for c in g["caps"]],
             "behavior": collections.Counter(g["behavior"] for g in group).most_common(1)[0][0],
+            # ★ 逐次采样的行为要全留下：defer 的双向准确率是按采样次数算的，
+            # 只留众数会把「8 次里错 3 次」压成一个看不见的 0
+            "behaviors": [g["behavior"] for g in group],
+            "expected_behavior": bundle.verifier.expected_behavior,
         })
 
     rewards = [r["reward"] for r in rows]
@@ -227,6 +254,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  全灭清单: {[r['case_id'] for r in dead]}")
     if stuck:
         print(f"  卡死清单: {[(r['case_id'], round(r['reward'],2)) for r in stuck]}")
+
+    _report_defer(rows)
 
     caps = collections.Counter(c for r in rows for c in r["caps"])
     print("\ncap 命中:", dict(caps) or "无")

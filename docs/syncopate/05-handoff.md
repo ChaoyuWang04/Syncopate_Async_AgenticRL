@@ -1,6 +1,6 @@
 # Syncopate 交接文档
 
-> 写于 2026-08-10，M0 完成后。给下一个上下文窗口。
+> 写于 2026-08-10（M0），2026-08-10 更新（SFT 桶重切 + M1）。给下一个上下文窗口。
 > **先读这份，再读 `docs/syncopate-project-design-v0.1.md`（权威设计），最后按需查代码。**
 
 ---
@@ -96,39 +96,84 @@ base 的零梯度构成：
 
 ---
 
+## 2.5 · ✅ SFT 桶已按 dead_grid 重切（2026-08-10）
+
+`split.py` 原来只按 case_id 精确匹配死格 —— 而死格是在**冻结 EVAL** 上测出来的，
+精确匹配的结果是空桶。现在走一次外推：EVAL 里的死 case → 它所在的格子 → 池子里同格的 case，
+**每格按死因配额取**（见 `pipeline/dead_grid.py`）。
+
+| | 旧（difficulty_proxy） | 新（dead_grid） |
+|---|---|---|
+| SFT 桶 | 105 条 | 108 条 |
+| 模板构成 | BUD 25 / CRE 34 / LOW 46 | BUD 40 / CRE 30 / LOW 20 / **CLAR 12 / REJ 6** |
+| 与旧桶重合 | — | 仅 33 条 |
+
+配额 `{convention: 6/格, shortcut: 10/格}`。总量刻意卡在 ~105：
+**只换成分不换规模，新旧两次 SFT 才是单变量对比。**
+
+⚠️ **整格全取是错的**：12 个死格对应池子里 288/528 条，SFT 桶会吃掉一多半 RL 池。
+而且 12 个死格里有 3 个的 EVAL 证据是 1/2（同格里有活的）——
+`(模板, behavior, 结局, entry)` 这个粒度**分辨不出同格内的死活**。
+想彻底消掉这个外推，只能直接在池子上跑 base 评测拿 per-case 的 p。
+
+### ★★★ 顺带挖出的泄漏：三桶从来没被数据构造消费过
+
+`build_dataset.build()` 按整个 manifest 建数据集，**从没读过 split 目录**。
+所以 `data/sft/v2` 一直是全部 580 条，**52 条冻结 EVAL 从 M0 起就在训练数据里**，
+而 `split_report.json` 还写着「三桶零重叠 ✅」。
+
+⇒ **切分文件和训练数据是两件事。切得再干净，构造那步不读它照样泄漏。**
+现在 `build()` 必须二选一（`--split-dir` 或显式 `--full-batch`），忘了声明当场报错。
+
+---
+
+## 2.6 · ✅ M1 · 数据成熟度机制（2026-08-10）
+
+| 层 | 产出 |
+|---|---|
+| **成熟曲线** | `domains/adcampaign/maturity.py`：ROAS 7 天 / CPI 3 天 / CTR 1 天收敛；观测值 = 终值 × 形变（ROAS 早期偏低、CPI 早期偏高）；**未收敛返回区间**，区间宽度随进度收窄到 0 |
+| **工具** | `metrics.get_freshness(campaign_id, metric)` → 成熟度 / 已跑天数 / 还差几天 / 样本量 / 预期区间。工具菜单 21 → 22 |
+| **行为** | `defer` 进 `VALID_BEHAVIORS` + system.txt，要求给出 `recheck_after_days` |
+| **cap** | `premature_decision_cap` 0.15 / `insufficient_sample_cap` 0.20 / `missing_safety_line_cap` 0.20 |
+| **数据轴** | `DATA_MATURITIES = [mature, partial, immature]`，对应开投 14/3/1 天 |
+| **意图** | I02 `data_freshness_check` 模板（`FRESH_*`），90 条，三档齐全 |
+| **批次** | `data/batches/v3` = v2 的 580 条**逐字节不变** + 90 条 FRESH；`data/splits/v3` EVAL 64 / SFT 108 / RL 498 |
+
+### 这一段踩到/绕开的三个坑
+
+1. **新 cap 会追溯判旧数据**。cap 一注册，`active_caps=None` 的存量 case 立刻被打中，
+   gold 跌分、基线不可比。⇒ 三条新 cap 的判据都写成**自动闭合**：存量 campaign 默认
+   `started_days_ago=30`、安装量充足，永远算 mature，规则对它们恒为 None。
+   实测 580 条 gold 重放，新 cap 命中 **0**。
+   （`missing_safety_line_cap` 无法自动闭合，改为**只在 case 声明了安全线是必查项时**生效。）
+2. **`literal:false` 被判成「期望 True」**。`values_equal` 里 `bool("false")` 是 True，
+   于是所有期望 false 的字段悄悄失分，而 `literal:true` 一直是**碰巧**对的。
+   实测抓到点：I02 partial 档 outcome 卡在 0.67。已修 + 加测试。
+3. **`premature` 和 `insufficient` 必须分开**。样本量不足也会让 maturity 变成 IMMATURE，
+   最初的判据 `maturity == IMMATURE` 让两条 cap 同时命中。
+   改成按天数判。⇒ 「等就好了」和「等也没用」是两种病，合成一条会让模型学到错误的解法。
+
+### ⚠️ 代价：base 基线必须重测
+
+system.txt 加了 `defer` 和「数据成熟度规则」两节 ⇒ **每条 case 的 prompt 都变了**
+⇒ M0 那个 **0.524 不再可比**。新基线在 `_audit/M1_base_4b.json`（EVAL 64 条 × 8 采样）。
+冻结 EVAL 的 52 个原 case_id 全部保留，只是又加了 12 条 FRESH。
+
+`eval_local` 现在会直接算 **`defer` 双向准确率**（该 defer 的 defer 率 / 不该 defer 的误判率），
+这是 M1 的验收指标——只测单向会训出一个什么都不敢做的 agent。
+
+---
+
 ## 3 · 下一步（按优先级）
 
-### ★ 立刻做：用 `dead_grid` 模式重切 SFT 桶（约 10 分钟）
+### 尚未做完的 M1 收尾
 
-`pipeline/split.py` 的 `split(..., dead_grids=[...])` 已支持，但**目前只按 case_id 精确匹配**。需要：
+- 用新 SFT 桶（`data/sft/v3`）重训一版，确认 A 类死格（跳过前置）真的被抬起来
+- I02 的骨架只有 2 种（`get_metrics → get_freshness` ± `list`）。这是刻意的：
+  **三档成熟度走同一条链，区别全在读到 freshness 之后怎么判** —— 这比换条链更难，
+  但要注意别让它退化成"认模板"
 
-1. 从 `_audit/M0_base_4b.json` 提取「全灭 + A 类卡死」的 case_id（判据：`reward_std ≤ 0.01` 且（`reward < 0.15` 或命中 `missing_memory_check_cap`/`false_claim_cap`/`unauthorized_write_cap`））
-2. 但这 21 条只是 EVAL 里的样本——需要**把同格子的 case 从 SFT/RL 池里一并选出来**（按 `(模板, behavior, outcome, entry_mode)` 匹配），否则 SFT 桶只有 21 条
-3. 重跑 `data split` 并确认三桶仍零重叠
-
-**为什么必须先做**：按错的对象做冷启动，M6 的毕业条件（零梯度格子 <30%）大概率达不到。
-
-### 然后：M1 · 数据成熟度机制
-
-设计文档 §35.1 + §10 P0。这是**闭环的解药**，也是 4 条新 cap 的前置：
-
-```
-沙盒     加 as_of_date 时间轴 + metric_maturity(指标, campaign_start, as_of)
-         → 未收敛时返回**区间**而不是点估计（这个设计本身就在教"现在还说不准"）
-工具     metrics.get_freshness(metric, campaign_id, as_of)
-         → {is_converged, days_elapsed, converge_eta_days, sample_size}
-行为     新增 defer（"D7 还没到，X 天后再判"）
-         ★ 它是"过早决策"这个最贵错误的正向对立面。没有这个标签，
-           模型只能在"做"和"不做"之间选，学不会"等"
-cap      premature_decision_cap 0.15 / insufficient_sample_cap 0.20
-         / missing_safety_line_cap 0.20
-数据轴   data_maturity ∈ {mature, partial, immature}
-意图     I02 data_freshness_check（设计文档说它优先级高于 I07/I09）
-```
-
-**验收**：I02 anchor 跑通；`defer` **双向**准确率达标（只测"该 defer 时 defer 了"会训出一个什么都不敢做的 agent，必须同时测"数据已收敛时没有多余的 defer"）。
-
-### 之后：M2 RAG v0 → M3 L5 归因 → M4 L6 扩量 → M5 负面数据 → M6 SFT 毕业
+### 然后：M2 RAG v0 → M3 L5 归因 → M4 L6 扩量 → M5 负面数据 → M6 SFT 毕业
 
 见设计文档 §十 的 M0–M12 表。
 
@@ -169,7 +214,7 @@ cap      premature_decision_cap 0.15 / insufficient_sample_cap 0.20
 | **RL 从未正式跑过** | 只有 2 步冒烟，`checkpoints/grpo/` 为空，无 wandb run |
 | **`fully_async_policy` 一次没跑** | 第二目标（异步研究）的核心，完全空白 |
 | **业务价值指标** | **完全没有**。所有指标都是 reward/loss/ppl/std |
-| **数据成熟度轴 / `defer` 行为** | 0 条 gold |
+| ~~**数据成熟度轴 / `defer` 行为**~~ | ✅ M1 已做：90 条 I02 gold，三档齐全 |
 | **负面数据 N1–N6** | 工具失败/返回空/数据打架/**对抗输入** 均 0 条。N6 尤其要紧——广告平台的 campaign 名称、素材标题都是别人能填的，一次 prompt injection，而这个 agent 有真实写权限 |
 | **L1/L2 意图、L5 归因、L6 扩量** | 全空（设计文档 §7 的 I02/I07/I09/I11 是技术制高点） |
 | **tools schema 两侧 hash 比对** | 未测（结构上共用 `build_messages`，但没做 SHA-256 比对） |
@@ -197,6 +242,7 @@ cap      premature_decision_cap 0.15 / insufficient_sample_cap 0.20
 
 ## 8 · 给下一个窗口的第一句话
 
-> 「读 `docs/syncopate/05-handoff.md`，然后用 `dead_grid` 模式重切 SFT 桶，再进 M1。」
+> 「读 `docs/syncopate/05-handoff.md`。SFT 桶已按 dead_grid 重切、M1 数据成熟度机制已落地，
+> 数据在 `data/batches/v3` + `data/splits/v3`。下一步是用新 SFT 桶重训并验 `defer` 双向准确率，然后进 M2。」
 
 如果 Chaoyu 问的是方法论问题（数据量、LoRA、遗忘、评估指标），**先查 `核心手册/`，别凭通用经验答**。

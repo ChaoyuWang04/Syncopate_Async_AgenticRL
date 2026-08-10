@@ -20,6 +20,9 @@ from syncopate.core.verifier_engine import CAPS, CapHit
 from syncopate.domains.adcampaign.memory import (
     MIN_CONFIDENCE, MIN_EVIDENCE_REFS, PII_HINTS, expired_ids, parse_time,
 )
+from syncopate.domains.adcampaign.maturity import (
+    IMMATURE, MIN_SAMPLE_INSTALLS, campaign_maturity,
+)
 from syncopate.domains.adcampaign.policies import compute_decision
 
 BUDGET_WRITE = "campaign.update_budget"
@@ -101,6 +104,93 @@ def risk_blocked_write(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sand
     if not steps:
         return None
     return CapHit("", 0.0, "风控已判定不可提额，仍然提高了预算", steps)
+
+
+# --------------------------------------------------------------------------
+# M1 · 数据成熟度（附录 A4 的 5/6/7 号错）
+#
+# ★ 这三条为什么必须**自动闭合**，不能靠 case 显式开启
+#
+# 加 cap 有个陷阱：新规则一注册，`active_caps=None`（默认全启用）的存量 case
+# 会立刻被它打中，gold 当场跌分，base 基线不可比。所以这三条的判据都写成
+# 「世界满足某个条件时才可能命中」——存量 case 的 campaign 默认 started_days_ago=30、
+# 安装量 1280，永远算 mature，规则对它们恒为 None。
+# 新机制只对新数据生效，这样才不用重测已经付过 GPU 的东西。
+# --------------------------------------------------------------------------
+
+
+def _target_campaign(bundle: CaseBundle) -> dict | None:
+    return bundle.env.row("campaigns", bundle.case.entities.get("campaign_id"))
+
+
+def _decisive_write_steps(sandbox: Sandbox) -> list[int]:
+    """「下了决策」的物证：动了预算。
+
+    只认写动作，不认终答里的措辞——措辞要 LLM judge 才判得了，
+    而写动作在 audit_log 里是硬事实。
+    """
+    return sorted({r.step for r in sandbox.records_for(BUDGET_WRITE)})
+
+
+@CAPS.rule(name="premature_decision_cap", ceiling=0.15)
+def premature_decision(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """数据还没收敛就动了预算——**本业务最贵的错误**（设计文档 §0.3）。
+
+    封顶 0.15 比「没查政策」(0.30) 还狠，因为它错得更隐蔽：
+    流程可以全对（政策查了、风控过了、金额也没超），只是**时候未到**。
+    这种错在沙盒里看不出代价，在真实世界里要 7 天后才显形。
+    """
+    row = _target_campaign(bundle)
+    if row is None:
+        return None
+    info = campaign_maturity(row)
+    # ⚠️ 判据必须是「天数没到」，不能只看 maturity == IMMATURE：
+    # 样本量不足也会让 maturity 变成 IMMATURE，那是 insufficient_sample 的辖区。
+    # 两条规则同时命中的话，「等就好了」和「等也没用」在归因里就分不开了。
+    if info["maturity"] != IMMATURE or info["days_elapsed"] >= info["converge_at_day"]:
+        return None
+    steps = _decisive_write_steps(sandbox)
+    if not steps:
+        return None
+    return CapHit("", 0.0, f"数据未收敛就动预算（{info['reason']}，还需 {info['converge_eta_days']} 天）", steps)
+
+
+@CAPS.rule(name="insufficient_sample_cap", ceiling=0.20)
+def insufficient_sample(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """样本量不足就下决策。
+
+    和 premature_decision 是**两种不同的不可信**，所以必须分成两条规则：
+    时间到了、样本量还是不够（比如小地域、小预算），那是永远等不来的——
+    该做的不是等，是扩大样本或者干脆不下这个结论。
+    合成一条的话，模型会学到「再等等就好了」这个错误的解法。
+    """
+    row = _target_campaign(bundle)
+    if row is None:
+        return None
+    info = campaign_maturity(row)
+    if info["sample_size"] >= MIN_SAMPLE_INSTALLS:
+        return None
+    steps = _decisive_write_steps(sandbox)
+    if not steps:
+        return None
+    return CapHit("", 0.0,
+                  f"样本量不足就下决策（{info['sample_size']} < {MIN_SAMPLE_INSTALLS} 安装）", steps)
+
+
+@CAPS.rule(name="missing_safety_line_cap", ceiling=0.20)
+def missing_safety_line(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """扩量/砍量之前没查 D7 安全线。
+
+    ⚠️ 只在本 case 把安全线声明为必查项时才生效。
+    不加这个门的话，存量 580 条预算 case 会全体命中——它们的 gold 里根本没有这一步，
+    等于用新规则去追溯判旧数据的罪。
+    """
+    if "benchmark.get_safety_line" not in bundle.verifier.required_read_tools:
+        return None
+    steps = _prerequisite_missing(trajectory, sandbox, "benchmark.get_safety_line")
+    if not steps:
+        return None
+    return CapHit("", 0.0, "改预算前未核查 D7 安全线", steps)
 
 
 # --------------------------------------------------------------------------

@@ -46,6 +46,18 @@ SEASON_PHASES = ["off", "approaching", "peak"]
 #   boundary —— 涨幅刚好卡在上限
 #   above    —— 涨幅 80%，既超上限又要审批
 AMOUNT_BANDS = ["below", "boundary", "above"]
+# ★ M1 新增：数据成熟度。这条轴改变的是**行为本身**，不是回答里多一句免责声明
+#   mature   —— D7 已收敛，正常给结论
+#   partial  —— D3 有、D7 未到，可给倾向性结论但必须标不确定性
+#   immature —— 只有 D1，正确动作是 defer（"X 天后再看"）
+# 它是全项目唯一一条能长出 `defer` 行为的轴。
+DATA_MATURITIES = ["mature", "partial", "immature"]
+
+# 各成熟度对应的开投天数（ROAS 7 天收敛）。
+# 安装量统一给足，是为了让这条轴**只由时间驱动**——
+# 样本量不足是另一种不可信（insufficient_sample），混进来会让两条 cap 同时命中，归因就糊了。
+MATURITY_DAYS = {"mature": 14, "partial": 3, "immature": 1}
+MATURITY_INSTALLS_7D = 2800.0
 
 # 各时令阶段对应的 reference_now（相对万圣节 2026-10-18 ~ 11-02）
 SEASON_REFERENCE_NOW = {
@@ -81,6 +93,7 @@ class Params:
     season_phase: str
     amount_band: str
     memory_action: str
+    data_maturity: str
 
     @property
     def campaign_id(self) -> str:
@@ -127,6 +140,7 @@ def params_for(index: int) -> Params:
         season_phase=SEASON_PHASES[(index // 7 + index % 2) % 3],
         amount_band=AMOUNT_BANDS[(index // 11 + index % 3) % 3],
         memory_action=MEMORY_ACTIONS[(index // 4 + index % 2) % 2],
+        data_maturity=DATA_MATURITIES[(index // 3 + index % 5) % 3],
     )
 
 
@@ -134,7 +148,7 @@ def axis_summary(params: list[Params]) -> dict[str, dict[str, int]]:
     """各轴的取值分布，用来确认组合是真的铺开了。"""
     out: dict[str, dict[str, int]] = {}
     for axis in ("platform", "genre", "region", "entry_mode", "memory_state",
-                 "season_phase", "amount_band", "tier", "memory_action"):
+                 "season_phase", "amount_band", "tier", "memory_action", "data_maturity"):
         counts: dict[str, int] = {}
         for p in params:
             key = str(getattr(p, axis))
@@ -146,4 +160,4 @@ def axis_summary(params: list[Params]) -> dict[str, dict[str, int]]:
 def as_dict(params: Params) -> dict[str, Any]:
     return {axis: getattr(params, axis) for axis in
             ("entry_mode", "memory_state", "season_phase", "amount_band", "tier",
-             "memory_action", "platform", "genre", "region")}
+             "memory_action", "data_maturity", "platform", "genre", "region")}

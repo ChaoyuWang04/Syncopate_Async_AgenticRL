@@ -341,8 +341,9 @@ def test_asset_tags_carry_offline_visual_analysis():
 
 
 def test_tool_menu_is_complete():
-    """v2 菜单 21 个：12 投放治理 + 4 外部资料 + 5 记忆。"""
-    assert len(DOMAIN.default_tool_menu) == 21
+    """菜单 22 个：12 投放治理 + 4 外部资料 + 5 记忆 + 1 数据成熟度（M1）。"""
+    assert len(DOMAIN.default_tool_menu) == 22
+    assert "metrics.get_freshness" in DOMAIN.default_tool_menu
     assert set(DOMAIN.registry.write_tools()) == {
         "campaign.update_budget", "creative.upload", "approval.create_case",
         "memory.write_proposal", "memory.invalidate", "memory.conflict_resolve"}

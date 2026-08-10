@@ -40,6 +40,10 @@ _CAMPAIGN_DEFAULTS: dict[str, Any] = {
     "platform": "Meta",
     "game_genre": "puzzle",
     "status": "active",
+    # ★ 开投至今多少天。它决定每个指标收敛没有（见 maturity.py）。
+    # 默认 30 = 早已收敛，这样存量 case 的世界一个字节都不变——
+    # 新增机制不该悄悄改掉已经测过基线的那批 case。
+    "started_days_ago": 30,
     "daily_budget": 500.0,
     "spend_7d": 3200.0,
     "installs_7d": 1280,

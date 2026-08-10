@@ -48,6 +48,7 @@ class Trajectory:
     #   tool_call —— 正常执行完并给出结论
     #   clarify   —— 信息不足，反问用户
     #   reject    —— 越权/越域，拒答
+    #   defer     —— 数据还没收敛，明确说 X 天后再判（M1 新增）
     behavior: str = "tool_call"
 
     # 结构化终答。我们不要 LLM judge，靠的就是这个必须是可解析的 dict。

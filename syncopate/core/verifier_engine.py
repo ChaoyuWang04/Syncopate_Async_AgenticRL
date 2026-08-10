@@ -136,12 +136,26 @@ def _get_nested(row: dict[str, Any] | None, dotted: str) -> Any:
     return current
 
 
+def _as_bool(value: Any) -> bool:
+    """把 "true"/"false"/"1"/"0" 这类字面量按字面意思转成布尔，其余走 Python 真值。"""
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"true", "yes", "1"}:
+            return True
+        if text in {"false", "no", "0", ""}:
+            return False
+    return bool(value)
+
+
 def values_equal(actual: Any, expected: Any) -> bool:
     """宽松比较：数字按数值比（1 == 1.0），其余去空格小写后比字符串。"""
     if actual is None or expected is None:
         return actual is expected
     if isinstance(actual, bool) or isinstance(expected, bool):
-        return bool(actual) == bool(expected)
+        # ⚠️ `literal:false` 走到这里时是字符串 "false"，而 bool("false") 是 True——
+        # 于是「期望 false」永远判成期望 True，`literal:true` 只是碰巧对。
+        # 实测抓到点：I02 的 can_decide=False 被判为不匹配，outcome 卡在 0.67。
+        return _as_bool(actual) == _as_bool(expected)
     try:
         return abs(float(actual) - float(expected)) < 1e-6
     except (TypeError, ValueError):
