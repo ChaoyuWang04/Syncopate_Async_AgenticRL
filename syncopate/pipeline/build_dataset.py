@@ -9,6 +9,17 @@
           （整段渲染和增量拼接天生对不齐）。
 
 两者共用同一份 batch 目录和同一套切分规则，保证 case 不会一边在 train 一边在 eval。
+
+★★★ `split_dir` 不是可选装饰
+
+M0 切出了三桶，但本模块**曾经完全没读它**——直接按整个 manifest 建数据集。
+后果是 `data/sft/v2` 有 580 条，52 条冻结 EVAL 全在训练数据里，
+而 `split_report.json` 还写着「三桶零重叠 ✅」。切分文件和训练数据是两回事，
+**切得再干净，只要构造这一步不读它，泄漏照样发生**。
+
+所以这里不给 `split_dir` 一个安静的默认值：要么给桶，要么显式 `full_batch=True`
+说明你就是要全量。忘记声明会当场报错，不会安静地泄漏。
+（同一条原则见 VerifierSpec.active_caps 的 None / [] 之分。）
 """
 
 from __future__ import annotations
@@ -135,8 +146,30 @@ def build(
     artifact_root: Path = Path("data/rollouts"),
     model_path: str | None = None,
     max_length: int = 8192,
+    split_dir: Path | None = None,
+    full_batch: bool = False,
 ) -> BuildResult:
+    if (split_dir is None) == (not full_batch):
+        raise ValueError(
+            "必须二选一：给 split_dir（按三桶取 pool 对应的桶），"
+            "或显式 full_batch=True（整批，会把冻结 EVAL 一起训进去）"
+        )
+
     entries = read_manifest(batch_dir)
+    excluded = 0
+    if split_dir is not None:
+        from syncopate.pipeline.split import load_bucket
+
+        wanted = set(load_bucket(split_dir, pool))
+        kept = [e for e in entries if e["case_id"] in wanted]
+        if not kept:
+            raise ValueError(
+                f"{split_dir} 的 {pool} 桶和 {batch_dir} 一条都对不上——"
+                f"多半是 batch 和 split 不是同一个版本"
+            )
+        excluded = len(entries) - len(kept)
+        entries = kept
+
     bundles = [CaseBundle.read(batch_dir, entry["case_id"]) for entry in entries]
 
     if pool == "rl":
@@ -186,6 +219,8 @@ def build(
             "data_source": DATA_SOURCE,
             "agent_name": AGENT_NAME if pool == "rl" else None,
             "source_batch": str(batch_dir.resolve()),
+            "split_dir": str(split_dir.resolve()) if split_dir else None,
+            "excluded_by_split": excluded,
             "count": len(rows),
             "train_count": len(train_rows),
             "val_count": len(val_rows),

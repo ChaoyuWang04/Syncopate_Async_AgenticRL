@@ -125,7 +125,11 @@ def cmd_data_build(args: argparse.Namespace) -> int:
         batch_dir=Path(args.batch), out_dir=Path(args.out), pool=args.pool,
         val_every=args.val_every, artifact_root=Path(args.artifact_root),
         model_path=args.model, max_length=args.max_length,
+        split_dir=Path(args.split_dir) if args.split_dir else None,
+        full_batch=args.full_batch,
     )
+    if args.full_batch:
+        print("⚠️  --full-batch：整批构造，冻结 EVAL 也会进训练数据")
     print(f"[OK] {args.pool} 数据 -> {result.out_dir}  train={result.train_count} val={result.val_count}")
     print(f"     {result.train_path}")
     print(f"     {result.val_path}")
@@ -219,6 +223,11 @@ def build_parser() -> argparse.ArgumentParser:
     dbuild.add_argument("--artifact-root", default="data/rollouts")
     dbuild.add_argument("--model", default="models/Qwen3-0.6B", help="SFT 分词用")
     dbuild.add_argument("--max-length", type=int, default=8192)
+    dbuild.add_argument("--split-dir", default=None,
+                        help="三桶目录（如 data/splits/v2），只取 --pool 对应的桶。"
+                             "★ 不给就必须显式 --full-batch")
+    dbuild.add_argument("--full-batch", action="store_true",
+                        help="不按桶、整批构造。会把冻结 EVAL 训进去，只在造 v1 之前的旧批次时用")
     dbuild.set_defaults(func=lambda a: cmd_data_build(_default_out(a)))
 
     dsplit = data.add_parser("split", help="切三桶（EVAL 冻结 / SFT / RL）并实测互斥性")
