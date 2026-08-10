@@ -27,6 +27,12 @@
     dead_grid   —— base 评测出来后用。按实测死格清单精确选
 
 ⚠️ 两者切出来的 SFT 桶不同，切换时必须重新训练，不能混用。
+
+★ dead_grid 模式为什么不是「按 case_id 精确匹配」
+
+死格是在**冻结 EVAL** 上测出来的，而 EVAL 永不进训练——精确匹配的结果是空桶。
+所以要走一次外推：EVAL 里的死 case → 它所在的格子 → 池子里同格的 case，
+每格按死因配额取。死因的划分与配额见 `dead_grid.py`。
 """
 
 from __future__ import annotations
@@ -77,36 +83,45 @@ def _difficulty_rank(bundle: CaseBundle) -> tuple[int, int, str]:
     return (level, chain, bundle.case_id)
 
 
+# ⚠️ 分层维度必须细到"分支"，不能只到"模板"。
+# 早期用 (模板, behavior, 难度) 分层只得到 9 个格子——因为每个模板的
+# behavior 和难度基本是固定的，等于只按模板分了一次。
+# 结果 EVAL 只有 18 条，且**每种结局分支只有 0-2 条**，
+# 某个分支上的失败在评测里根本看不见。
+# 现在按 (模板, behavior, 结局, entry_mode) 分——结局是控制轴的产物，
+# 它才是"这条 case 走哪条路"的真正标识。
+def stratum(cid: str, b: CaseBundle) -> tuple[str, ...]:
+    tags = {t.split(":", 1)[0]: t.split(":", 1)[1]
+            for t in b.case.metadata.tags if ":" in t}
+    return (cid.split("_")[0], b.verifier.expected_behavior,
+            tags.get("outcome", "-"), tags.get("entry", "-"))
+
+
+def load_bundles(batch_dir: Path) -> dict[str, CaseBundle]:
+    manifest = json.loads((batch_dir / "manifest.json").read_text(encoding="utf-8"))
+    entries = sorted(manifest["entries"], key=lambda e: e["case_id"])
+    return {e["case_id"]: CaseBundle.read(batch_dir, e["case_id"]) for e in entries}
+
+
 def split(
     batch_dir: Path,
     *,
     eval_per_stratum: int = 2,
     sft_ratio: float = 0.20,
-    dead_grids: list[str] | None = None,
+    dead_grids: dict[tuple[str, ...], Any] | None = None,
+    quota_by_kind: dict[str, int] | None = None,
 ) -> tuple[Buckets, dict[str, Any]]:
     """切三桶。
 
-    EVAL 按 (模板 × behavior × 难度) 分层取样，保证每个格子都有代表——
+    EVAL 按 (模板 × behavior × 结局 × entry_mode) 分层取样，保证每个格子都有代表——
     否则某类失败模式在评测里完全不可见。
+
+    `dead_grids` 给了就走 dead_grid 模式：值是 `dead_grid.DeadGrid`，
+    按其 `kind` 到 `quota_by_kind` 查这一格取几条。
     """
-    manifest = json.loads((batch_dir / "manifest.json").read_text(encoding="utf-8"))
-    entries = sorted(manifest["entries"], key=lambda e: e["case_id"])
-    bundles = {e["case_id"]: CaseBundle.read(batch_dir, e["case_id"]) for e in entries}
+    bundles = load_bundles(batch_dir)
 
     # ---- 1. EVAL：分层冻结 ----
-    # ⚠️ 分层维度必须细到"分支"，不能只到"模板"。
-    # 早期用 (模板, behavior, 难度) 分层只得到 9 个格子——因为每个模板的
-    # behavior 和难度基本是固定的，等于只按模板分了一次。
-    # 结果 EVAL 只有 18 条，且**每种结局分支只有 0-2 条**，
-    # 某个分支上的失败在评测里根本看不见。
-    # 现在按 (模板, behavior, 结局, entry_mode) 分——结局是控制轴的产物，
-    # 它才是"这条 case 走哪条路"的真正标识。
-    def stratum(cid: str, b: CaseBundle) -> tuple[str, ...]:
-        tags = {t.split(":", 1)[0]: t.split(":", 1)[1]
-                for t in b.case.metadata.tags if ":" in t}
-        return (cid.split("_")[0], b.verifier.expected_behavior,
-                tags.get("outcome", "-"), tags.get("entry", "-"))
-
     strata: dict[tuple[str, ...], list[str]] = {}
     for cid, b in bundles.items():
         strata.setdefault(stratum(cid, b), []).append(cid)
@@ -117,11 +132,33 @@ def split(
 
     # ---- 2. 剩余池 → SFT（最难的）/ RL ----
     pool = [cid for cid in sorted(bundles) if cid not in eval_set]
+    selection: dict[str, Any] | None = None
     if dead_grids:
-        # 精确模式：base 实测的死格进 SFT
-        dead = set(dead_grids)
-        buckets.sft = [c for c in pool if c in dead]
-        buckets.rl = [c for c in pool if c not in dead]
+        # 死格模式：EVAL 测出来的死格 → 池子里同格的 case，每格按死因配额取。
+        # 取样用 case_id 排序而不是随机——切分必须可复现，随机化会让
+        # 「换了配额」和「换了随机种子」两件事在结果里分不开。
+        quota = dict(quota_by_kind or {})
+        by_stratum: dict[tuple[str, ...], list[str]] = {}
+        for cid in pool:
+            by_stratum.setdefault(stratum(cid, bundles[cid]), []).append(cid)
+
+        chosen: list[str] = []
+        selection = {}
+        for key in sorted(dead_grids):
+            grid = dead_grids[key]
+            available = sorted(by_stratum.get(key, []))
+            cap = quota.get(grid.kind, len(available))
+            taken = available[:cap]
+            chosen.extend(taken)
+            selection["|".join(key)] = {
+                "kind": grid.kind,
+                "eval_evidence": f"{len(grid.eval_case_ids)}/{grid.eval_seen}",
+                "available": len(available),
+                "taken": len(taken),
+            }
+        buckets.sft = sorted(chosen)
+        sft_set = set(buckets.sft)
+        buckets.rl = [c for c in pool if c not in sft_set]
         mode = "dead_grid"
     else:
         ranked = sorted(pool, key=lambda c: _difficulty_rank(bundles[c]), reverse=True)
@@ -151,6 +188,9 @@ def split(
         "duplicate_content_pairs": dupes,
         "eval_strata_coverage": {"|".join(k): len(v) for k, v in sorted(strata.items())},
     }
+    if selection is not None:
+        report["dead_grid_selection"] = selection
+        report["quota_by_kind"] = dict(quota_by_kind or {})
     return buckets, report
 
 

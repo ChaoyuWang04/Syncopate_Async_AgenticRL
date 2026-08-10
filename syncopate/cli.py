@@ -133,14 +133,30 @@ def cmd_data_build(args: argparse.Namespace) -> int:
 
 
 def cmd_data_split(args: argparse.Namespace) -> int:
-    from syncopate.pipeline.split import split, write
+    from syncopate.pipeline import dead_grid as dg
+    from syncopate.pipeline.split import load_bundles, split, stratum, write
+
+    grids = quota = None
+    if args.dead_from:
+        # 死格模式：先把 base 审计翻译成格子，再交给 split 去池子里取样。
+        bundles = load_bundles(Path(args.batch))
+        rows = dg.load_audit(Path(args.dead_from))
+        strata = {r["case_id"]: stratum(r["case_id"], bundles[r["case_id"]]) for r in rows}
+        grids, kinds = dg.analyze(rows, strata)
+        quota = dict(dg.DEFAULT_QUOTA)
+        print(f"[死格] 来源 {args.dead_from}（{len(rows)} 条 EVAL 实测）")
+        print(f"       格子构成: " + "  ".join(f"{k}={v}" for k, v in kinds.most_common()))
+        print(f"       死格 {len(grids)} 个   配额 {quota}")
 
     buckets, report = split(Path(args.batch), eval_per_stratum=args.eval_per_stratum,
-                            sft_ratio=args.sft_ratio)
+                            sft_ratio=args.sft_ratio, dead_grids=grids, quota_by_kind=quota)
     write(buckets, report, Path(args.out))
     print(f"[OK] 三桶 -> {args.out}   模式={report['mode']}")
     print(f"     EVAL {report['counts']['eval']}（冻结） / SFT {report['counts']['sft']} / RL {report['counts']['rl']}")
     print(f"     分层格子数: {report['strata_count']}")
+    for key, info in (report.get("dead_grid_selection") or {}).items():
+        print(f"       {key:<44} {info['kind']:<10} 证据 {info['eval_evidence']}"
+              f"  取 {info['taken']:>3}/{info['available']:<3}")
     print("     ★ 互斥性实测（SHA-256 内容级）:")
     for k, v in report["overlaps_by_content_sha256"].items():
         print(f"       {k:<12} {v}{'  ✅' if v == 0 else '  ❌ 泄漏！'}")
@@ -210,6 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     dsplit.add_argument("--out", default="data/splits/v2")
     dsplit.add_argument("--eval-per-stratum", type=int, default=2)
     dsplit.add_argument("--sft-ratio", type=float, default=0.20)
+    dsplit.add_argument("--dead-from", default=None,
+                        help="base 评测审计 json（如 _audit/M0_base_4b.json）。"
+                             "给了就走 dead_grid 模式，按实测死格选 SFT 桶")
     dsplit.set_defaults(func=cmd_data_split)
 
     dreport = data.add_parser("report", help="训练数据分布体检")

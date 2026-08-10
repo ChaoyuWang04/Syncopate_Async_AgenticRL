@@ -1,10 +1,10 @@
 {
  "batch_dir": "data/batches/v2",
- "mode": "difficulty_proxy",
+ "mode": "dead_grid",
  "counts": {
   "eval": 52,
-  "sft": 105,
-  "rl": 423
+  "sft": 108,
+  "rl": 420
  },
  "strata_count": 26,
  "overlaps_by_content_sha256": {
@@ -40,5 +40,83 @@
   "MISS|tool_call|-|must_discover": 14,
   "REJ|reject|-|id_given": 26,
   "REJ|reject|-|must_discover": 24
+ },
+ "dead_grid_selection": {
+  "BUD|tool_call|denied|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 12,
+   "taken": 10
+  },
+  "BUD|tool_call|denied|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 10,
+   "taken": 10
+  },
+  "BUD|tool_call|escalated|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 41,
+   "taken": 10
+  },
+  "BUD|tool_call|escalated|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 39,
+   "taken": 10
+  },
+  "CLAR|clarify|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 25,
+   "taken": 6
+  },
+  "CLAR|clarify|-|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 21,
+   "taken": 6
+  },
+  "CRE|tool_call|block|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 30,
+   "taken": 10
+  },
+  "CRE|tool_call|block|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 28,
+   "taken": 10
+  },
+  "CRE|tool_call|launch|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 12,
+   "taken": 10
+  },
+  "LOW|tool_call|-|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 10
+  },
+  "LOW|tool_call|-|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 22,
+   "taken": 10
+  },
+  "REJ|reject|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 6
+  }
+ },
+ "quota_by_kind": {
+  "convention": 6,
+  "shortcut": 10
  }
 }
