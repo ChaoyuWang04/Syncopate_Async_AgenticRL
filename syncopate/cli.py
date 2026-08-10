@@ -147,10 +147,13 @@ def cmd_data_split(args: argparse.Namespace) -> int:
         rows = dg.load_audit(Path(args.dead_from))
         strata = {r["case_id"]: stratum(r["case_id"], bundles[r["case_id"]]) for r in rows}
         grids, kinds = dg.analyze(rows, strata)
+        dead_count = len(grids)
+        if not args.no_controls:
+            grids = dg.add_controls(grids, rows, strata)
         quota = dict(dg.DEFAULT_QUOTA)
         print(f"[死格] 来源 {args.dead_from}（{len(rows)} 条 EVAL 实测）")
         print(f"       格子构成: " + "  ".join(f"{k}={v}" for k, v in kinds.most_common()))
-        print(f"       死格 {len(grids)} 个   配额 {quota}")
+        print(f"       死格 {dead_count} 个 + 对照格 {len(grids)-dead_count} 个   配额 {quota}")
 
     buckets, report = split(Path(args.batch), eval_per_stratum=args.eval_per_stratum,
                             sft_ratio=args.sft_ratio, dead_grids=grids, quota_by_kind=quota)
@@ -238,6 +241,9 @@ def build_parser() -> argparse.ArgumentParser:
     dsplit.add_argument("--dead-from", default=None,
                         help="base 评测审计 json（如 _audit/M0_base_4b.json）。"
                              "给了就走 dead_grid 模式，按实测死格选 SFT 桶")
+    dsplit.add_argument("--no-controls", action="store_true",
+                        help="不掺对照档。★ 实测过一次：只喂难例会把模型已经做对的行为"
+                             "抹掉（defer 97%%→0%%），只在专门做这个对照实验时才用")
     dsplit.set_defaults(func=cmd_data_split)
 
     dreport = data.add_parser("report", help="训练数据分布体检")

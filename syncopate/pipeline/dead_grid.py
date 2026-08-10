@@ -60,6 +60,7 @@ SATURATED = "saturated"     # 已经会了
 CONVENTION = "convention"   # 全灭·约定未知    → 廉价，少量样本即可
 SHORTCUT = "shortcut"       # A 类卡死·走捷径  → ★ SFT 冷启动的正主
 SUBSCORE = "subscore"       # B 类卡死·子分丢分 → 这是 RL 该管的，别放进 SFT
+CONTROL = "control"         # ★ 对照档：模型已经做对的兄弟格子，防止「教了 A 就忘了 B」
 
 DEAD_KINDS = (CONVENTION, SHORTCUT)
 
@@ -74,7 +75,9 @@ DEAD_KINDS = (CONVENTION, SHORTCUT)
 # 为什么总量卡在 ~105：旧的 difficulty_proxy 桶正好是 105 条。保持规模不变、
 # 只换成分，新旧两次 SFT 才是**单变量对比**——否则分数变了也说不清是
 # 「选对了对象」还是「样本多了」。
-DEFAULT_QUOTA: dict[str, int] = {CONVENTION: 6, SHORTCUT: 10}
+#
+# CONTROL 是实测打脸后加的，理由见 `add_controls()`。
+DEFAULT_QUOTA: dict[str, int] = {CONVENTION: 6, SHORTCUT: 10, CONTROL: 4}
 
 
 def classify(row: dict[str, Any]) -> str:
@@ -132,3 +135,50 @@ def analyze(rows: list[dict[str, Any]], strata: dict[str, tuple[str, ...]]) -> t
             grid.kind = SHORTCUT
         grid.eval_case_ids.append(row["case_id"])
     return grids, kinds
+
+
+def add_controls(grids: dict[tuple[str, ...], DeadGrid],
+                 rows: list[dict[str, Any]],
+                 strata: dict[str, tuple[str, ...]]) -> dict[tuple[str, ...], DeadGrid]:
+    """给每个死格补上**同模板下模型已经做对的兄弟格子**，作为对照档。
+
+    ★★★ 这一条是被实测打脸后加的，代价是一整轮 SFT + 两次评测
+
+    第一版 dead_grid 桶只装死格 —— 按定义就是「只喂难例」。实测后果：
+
+        CLAR  0.000 → 0.953   ✅ 桶里有
+        REJ   0.250 → 0.984   ✅ 桶里有
+        defer  97%  →   0%    ❌❌❌ 桶里只有 FRESH 的 mature 档
+
+    I02 有三档（mature / partial / immature），base 只在 mature|must_discover
+    那一格是死的，于是桶里 9 条 FRESH **全是「要回答，不要等」**。
+    模型老老实实学会了「FRESH 就回答」，把它本来做得很好的 `defer` 抹掉了。
+    没被覆盖的意图也一起退化：HIGH -0.12、DIA -0.09、LONG -0.11。
+
+    ⇒ 设计文档 §40.3 陷阱 1 早就写了：
+      「只喂难例 → badcase 全是难的，**模型在简单例上悄悄退化**」，
+      对策是「固定回归集 + 难例占比设上限」。
+      而 dead_grid 是**按定义只选难例**的机制——我们把这个陷阱做进了机制本身。
+
+    所以补对照档不是打补丁，是把那条对策变成机制的一部分：
+    **凡是 SFT 要教某个意图的一档，就必须同时给它这个意图的其它档。**
+    否则模型学到的不是「什么时候该 A」，而是「见到这类题就 A」。
+
+    对照格的选取：同模板、不在死格里、且审计显示模型本来就做得不错
+    （gradient / saturated）。取样量比死格小（配额 4 vs 6/10）——
+    对照档的作用是**锚定**，不是重新教一遍。
+    """
+    dead_templates = {key[0] for key in grids}
+    kind_of: dict[tuple[str, ...], str] = {}
+    for row in rows:
+        key = strata[row["case_id"]]
+        if key in grids or key[0] not in dead_templates:
+            continue
+        kind = classify(row)
+        if kind in (GRADIENT, SATURATED):
+            kind_of.setdefault(key, kind)
+
+    out = dict(grids)
+    for key in sorted(kind_of):
+        out[key] = DeadGrid(stratum=key, kind=CONTROL, eval_seen=0)
+    return out

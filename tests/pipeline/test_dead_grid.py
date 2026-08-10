@@ -73,6 +73,41 @@ def test_analyze_mixed_cause_takes_the_expensive_one():
     assert grids[key].kind == dg.SHORTCUT
 
 
+def test_controls_pull_in_the_sibling_grids_the_model_already_gets_right():
+    """★ 实测打脸后加的：只喂难例会把模型已经做对的行为抹掉。
+
+    I02 有三档，base 只在 mature 那格是死的 → 桶里全是「要回答，不要等」
+    → 模型学成「见到这类题就回答」，defer 从 97% 掉到 0%。
+    """
+    dead = ("FRESH", "tool_call", "mature", "must_discover")
+    sibling = ("FRESH", "defer", "immature", "id_given")
+    other_template = ("BUD", "tool_call", "denied", "id_given")
+    strata = {"a": dead, "b": sibling, "c": other_template}
+    rows = [row("a", 0.3, caps=["false_claim_cap"]),   # 死格
+            row("b", 0.9, std=0.2),                    # 同模板、模型做得对 → 该进对照
+            row("c", 0.9, std=0.2)]                    # 别的模板 → 不该进
+    grids, _ = dg.analyze(rows, strata)
+    out = dg.add_controls(grids, rows, strata)
+
+    assert out[dead].kind == dg.SHORTCUT
+    assert out[sibling].kind == dg.CONTROL
+    assert other_template not in out
+
+
+def test_controls_never_override_a_dead_grid():
+    key = ("CLAR", "clarify", "-", "id_given")
+    strata = {"a": key, "b": key}
+    grids, _ = dg.analyze([row("a", 0.0), row("b", 0.95)], strata)
+    out = dg.add_controls(grids, [row("a", 0.0), row("b", 0.95)], strata)
+    assert out[key].kind == dg.CONVENTION      # 死格身份优先，不被对照档覆盖
+
+
+def test_control_quota_is_smaller_than_dead_quota():
+    """对照档是**锚定**，不是重新教一遍——给多了就把死格挤掉了。"""
+    assert dg.DEFAULT_QUOTA[dg.CONTROL] < dg.DEFAULT_QUOTA[dg.CONVENTION]
+    assert dg.DEFAULT_QUOTA[dg.CONTROL] < dg.DEFAULT_QUOTA[dg.SHORTCUT]
+
+
 def test_analyze_ignores_live_grids():
     strata = {"a": ("BUD", "tool_call", "-", "-"), "b": ("CRE", "tool_call", "-", "-")}
     grids, kinds = dg.analyze([row("a", 0.5, std=0.2), row("b", 0.98)], strata)
