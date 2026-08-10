@@ -198,8 +198,8 @@ def evaluate(model, dataset, device, pad_id: int, batch_size: int) -> dict[str, 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate 最小 LoRA SFT")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
-    parser.add_argument("--train-file", default="data/sft/v1/train.parquet")
-    parser.add_argument("--val-file", default="data/sft/v1/val.parquet")
+    parser.add_argument("--train-file", default="data/sft/v3/train.parquet")
+    parser.add_argument("--val-file", default="data/sft/v3/val.parquet")
     parser.add_argument("--out", default="checkpoints/sft/run")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=2)

@@ -2,7 +2,7 @@
 
     python -m syncopate cases list                    # 看有哪些 case
     python -m syncopate cases verify                  # 跑 gold，确认每条都拿得到高分
-    python -m syncopate cases build --out data/batches/seed   # 落盘四件套
+    python -m syncopate cases build --out data/batches/handwritten  # 落盘手写种子
     python -m syncopate tools list                    # 看工具菜单
 
 设计原则：**一个入口 + 子命令**，不要一个任务一个脚本。
@@ -206,18 +206,18 @@ def build_parser() -> argparse.ArgumentParser:
     verify.set_defaults(func=cmd_cases_verify)
 
     build = cases.add_parser("build", help="把四件套写到磁盘")
-    build.add_argument("--out", default="data/batches/seed")
+    build.add_argument("--out", default="data/batches/handwritten")
     build.set_defaults(func=cmd_cases_build)
 
     gen = cases.add_parser("generate", help="按配额批量生成 case（含 gold 实跑验证）")
-    gen.add_argument("--spec", default="configs/buckets/v1.yaml")
-    gen.add_argument("--out", default="data/batches/v1")
+    gen.add_argument("--spec", default="configs/buckets/v3.yaml")
+    gen.add_argument("--out", default="data/batches/v3")
     gen.set_defaults(func=cmd_cases_generate)
 
     data = sub.add_parser("data", help="训练数据构造").add_subparsers(dest="action", required=True)
     dbuild = data.add_parser("build", help="四件套 -> parquet")
     dbuild.add_argument("--pool", choices=["rl", "sft"], required=True)
-    dbuild.add_argument("--batch", default="data/batches/seed")
+    dbuild.add_argument("--batch", default="data/batches/v3")
     dbuild.add_argument("--out", default=None)
     dbuild.add_argument("--val-every", type=int, default=5)
     dbuild.add_argument("--artifact-root", default="data/rollouts")
@@ -254,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _default_out(args: argparse.Namespace) -> argparse.Namespace:
     if args.out is None:
-        args.out = f"data/{args.pool}/seed"
+        args.out = f"data/{args.pool}/v3"
     return args
 
 

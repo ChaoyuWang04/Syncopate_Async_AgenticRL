@@ -140,8 +140,8 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
-    parser.add_argument("--train-file", default="data/rl/seed/train.parquet")
-    parser.add_argument("--val-file", default="data/rl/seed/val.parquet")
+    parser.add_argument("--train-file", default="data/rl/v3/train.parquet")
+    parser.add_argument("--val-file", default="data/rl/v3/val.parquet")
     parser.add_argument("--save-path", default="checkpoints/grpo/smoke")
     parser.add_argument("--project", default="syncopate")
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
