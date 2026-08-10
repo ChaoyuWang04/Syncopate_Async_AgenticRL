@@ -338,6 +338,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"          显存峰值 {peak:.1f} GB")
             log({"perf/peak_memory_gb": peak}, step=global_step)
 
+        # ★ 每个 epoch 都存一份 adapter（几十 MB，便宜）。
+        #
+        # 因为**该选哪个 ckpt 不看 val loss**：手册 §20——SFT 训得越狠，输出熵越低，
+        # 接上 GRPO 就探索不动了。我们已经踩过一次：选了 val loss 最低的那个，
+        # 结果零梯度格子 63%。要选的是「格式学会了但行为还没定型」的那一版，
+        # 而那一版只有在**每个 epoch 都存下来**的前提下才选得到。
+        epoch_dir = ROOT / args.out / f"epoch{epoch}"
+        epoch_dir.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(epoch_dir)
+
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir)          # LoRA 只存 adapter，几十 MB
