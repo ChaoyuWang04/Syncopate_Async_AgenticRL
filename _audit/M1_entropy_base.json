@@ -1,0 +1,132 @@
+{
+ "label": "models/Qwen3-4B (基座)",
+ "positions": 5733,
+ "mean_entropy": 0.0291,
+ "median_entropy": 0.0,
+ "decision_positions": 140,
+ "decision_mean_entropy": 0.0931,
+ "near_deterministic_ratio": 0.9463,
+ "mean_top1_prob": 0.9894,
+ "per_case": [
+  {
+   "case_id": "BUD_0012",
+   "tokens": 323,
+   "mean_entropy": 0.0218
+  },
+  {
+   "case_id": "BUD_0017",
+   "tokens": 176,
+   "mean_entropy": 0.0634
+  },
+  {
+   "case_id": "BUD_0002",
+   "tokens": 389,
+   "mean_entropy": 0.0138
+  },
+  {
+   "case_id": "BUD_0007",
+   "tokens": 117,
+   "mean_entropy": 0.0547
+  },
+  {
+   "case_id": "BUD_0001",
+   "tokens": 176,
+   "mean_entropy": 0.0214
+  },
+  {
+   "case_id": "BUD_0004",
+   "tokens": 185,
+   "mean_entropy": 0.0273
+  },
+  {
+   "case_id": "BUD_0006",
+   "tokens": 204,
+   "mean_entropy": 0.0322
+  },
+  {
+   "case_id": "BUD_0011",
+   "tokens": 205,
+   "mean_entropy": 0.0295
+  },
+  {
+   "case_id": "BUD_0000",
+   "tokens": 147,
+   "mean_entropy": 0.0336
+  },
+  {
+   "case_id": "BUD_0020",
+   "tokens": 157,
+   "mean_entropy": 0.0327
+  },
+  {
+   "case_id": "BUD_0003",
+   "tokens": 186,
+   "mean_entropy": 0.0422
+  },
+  {
+   "case_id": "BUD_0010",
+   "tokens": 181,
+   "mean_entropy": 0.0118
+  },
+  {
+   "case_id": "CLAR_0000",
+   "tokens": 131,
+   "mean_entropy": 0.01
+  },
+  {
+   "case_id": "CLAR_0001",
+   "tokens": 109,
+   "mean_entropy": 0.0309
+  },
+  {
+   "case_id": "CLAR_0002",
+   "tokens": 111,
+   "mean_entropy": 0.0273
+  },
+  {
+   "case_id": "CLAR_0003",
+   "tokens": 162,
+   "mean_entropy": 0.0866
+  },
+  {
+   "case_id": "CRE_0000",
+   "tokens": 276,
+   "mean_entropy": 0.0174
+  },
+  {
+   "case_id": "CRE_0001",
+   "tokens": 300,
+   "mean_entropy": 0.0085
+  },
+  {
+   "case_id": "CRE_0002",
+   "tokens": 238,
+   "mean_entropy": 0.0178
+  },
+  {
+   "case_id": "CRE_0003",
+   "tokens": 930,
+   "mean_entropy": 0.0343
+  },
+  {
+   "case_id": "CRE_0009",
+   "tokens": 185,
+   "mean_entropy": 0.0416
+  },
+  {
+   "case_id": "CRE_0013",
+   "tokens": 300,
+   "mean_entropy": 0.0074
+  },
+  {
+   "case_id": "CRE_0007",
+   "tokens": 204,
+   "mean_entropy": 0.0274
+  },
+  {
+   "case_id": "CRE_0011",
+   "tokens": 341,
+   "mean_entropy": 0.0426
+  }
+ ]
+}
