@@ -63,9 +63,9 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         "+actor_rollout_ref.model.override_config.attn_implementation=sdpa",
 
         # ---- ★ 改动 1：关掉 offload（本机瓶颈是内存不是显存）----
-        "actor_rollout_ref.actor.fsdp_config.param_offload=False",
+        f"actor_rollout_ref.actor.fsdp_config.param_offload={args.param_offload}",
         "actor_rollout_ref.actor.fsdp_config.optimizer_offload=False",
-        "actor_rollout_ref.ref.fsdp_config.param_offload=False",
+        f"actor_rollout_ref.ref.fsdp_config.param_offload={args.param_offload}",
 
         # ---- ★ 改动 4：FSDP 用 bf16 存参数，不存 fp32 主权重 ----
         #
@@ -98,6 +98,11 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.rollout.max_model_len={max_model_len}",
         # ★ 改动 3：单卡要给 vLLM 更大份额（老师 64 卡时是 0.2）
         f"actor_rollout_ref.rollout.gpu_memory_utilization={args.rollout_gpu_util}",
+        # ★ vLLM 默认 max_num_seqs=1024，而 colocate 单卡上我们同时最多只有
+        # train_batch_size × rollout_n 条 rollout（bs=8 时是 64）。
+        # 多出来的 960 个槽位不是白占的：调度结构和 block table 都按它预留，
+        # 而这块显存在 sleep/wake 循环里每轮都要重新申请 —— 实测 wake_up 就死在这。
+        f"actor_rollout_ref.rollout.max_num_seqs={args.max_num_seqs}",
         "actor_rollout_ref.rollout.enforce_eager=True",
         "actor_rollout_ref.rollout.free_cache_engine=True",
         f"actor_rollout_ref.rollout.n={args.rollout_n}",
@@ -189,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout-gpu-util", type=float, default=0.55,
                         help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
                              "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache")
+    parser.add_argument("--max-num-seqs", type=int, default=64,
+                        help="vLLM 并发槽位。默认 1024 远超实际需要"
+                             "（colocate 单卡上就是 train_batch_size × rollout_n）")
+    parser.add_argument("--param-offload", default="False", choices=["True", "False"],
+                        help="rollout 期间把 actor 参数挪到 CPU。bf16 下模型只有 7.75GB，"
+                             "内存有 28GB 可用时是 wake_up OOM 的兜底解法")
     parser.add_argument("--fsdp-dtype", default="bf16", choices=["bf16", "fp32"],
                         help="FSDP 持有参数的精度。LoRA 下 98.4%% 的参数冻结，"
                              "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")
