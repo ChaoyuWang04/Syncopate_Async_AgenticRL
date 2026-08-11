@@ -54,6 +54,40 @@ LATENCY_SCALE = float(os.environ.get("SYNCOPATE_LATENCY_SCALE", "1.0"))
 # verl 用第一条样本的 keys 去 stack 整个 batch，key 集合不齐会在 collate 时炸。
 CAP_NAMES: tuple[str, ...] = tuple(build_domain().caps.names())
 
+# ★ 下发侧的记账：每条 rollout **跑完就追加一行**，不管它最后有没有进训练。
+#
+# 这是「分布漂移」那把尺子的另一半：
+#   训练分布  ← trainer.rollout_data_dir 的每步 dump（**实际进入训练**的）
+#   下发分布  ← 这个文件（**跑完过**的）
+#   两者的差 = 漂移
+#
+# sync 下有 barrier，两者恒等，天然是对照组；async 下短任务先回、长任务被
+# partial_rollout 切断，训练分布会系统性偏向短任务——而长链正是 agentic 的核心。
+# 没有这个文件，漂移就只能靠推理，推理不出数值。
+DISPATCH_LOG = os.environ.get("SYNCOPATE_DISPATCH_LOG")
+_dispatch_lock = asyncio.Lock()
+
+
+async def record_dispatch(bundle: CaseBundle, output: RolloutOutput, reward: float) -> None:
+    if not DISPATCH_LOG:
+        return
+    line = json.dumps({
+        "case_id": bundle.case_id,
+        "num_steps": output.metrics["num_steps"],
+        "wall_seconds": output.metrics["wall_seconds"],
+        "truncated": int(output.metrics["truncated"]),
+        "reward": reward,
+    }, ensure_ascii=False)
+    async with _dispatch_lock:      # 多条 rollout 并发跑完，追加要串行化
+        await asyncio.to_thread(_append, line)
+
+
+def _append(line: str) -> None:
+    path = Path(DISPATCH_LOG)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+
 
 def load_bundle(extra_info: dict[str, Any]) -> CaseBundle:
     """从 parquet 行的 extra_info 把四件套读回来。
@@ -202,6 +236,9 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
         result = await score_and_persist(
             bundle, output, domain, Path(artifact_root) if artifact_root else None
         )
+        # ★ 记在这里而不是记在返回之后：这条 rollout 到此就算「跑完了」，
+        # 至于它会不会被 trainer 采纳，是下游的事——而两者的差正是我们要量的东西。
+        await record_dispatch(bundle, output, result.reward)
 
         return AgentLoopOutput(
             prompt_ids=output.prompt_ids,

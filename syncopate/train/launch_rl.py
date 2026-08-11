@@ -220,6 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_ASYNC_VERIFIER"] = args.async_verifier
     env["SYNCOPATE_RUN_ID"] = args.experiment
     env["SYNCOPATE_LATENCY_SCALE"] = str(args.latency_scale)
+    # 下发侧记账，和 trainer.rollout_data_dir 的训练侧 dump 配对算分布漂移
+    env["SYNCOPATE_DISPATCH_LOG"] = str(ROOT / args.save_path / "dispatched.jsonl")
     # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
     print(f"[实验设定] latency_scale={args.latency_scale}  async_verifier={args.async_verifier}"
           f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})")
