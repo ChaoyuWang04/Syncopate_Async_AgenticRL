@@ -132,7 +132,11 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         "trainer.nnodes=1",
         "trainer.total_epochs=1",
         f"trainer.total_training_steps={args.steps}",
-        "trainer.save_freq=-1",
+        # ★ 冒烟时 -1（不存）没问题，正式跑必须存 —— 否则两件事都做不了：
+        #   1. 跑完没有 ckpt 可以在冻结 EVAL 上重评，等于白跑
+        #   2. staleness 研究要的是**同一次训练里相隔 k 步的两个 policy**，
+        #      没有中途 ckpt 就凑不出 k>0 的样本对（单卡跑不了真异步，只能这么合成）
+        f"trainer.save_freq={args.save_freq}",
         f"trainer.val_before_train={str(args.val_before_train)}",
         f"trainer.test_freq={args.test_freq}",
         "trainer.resume_mode=disable",
@@ -195,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--use-kl-loss", default="True")
     parser.add_argument("--val-before-train", default="False")
     parser.add_argument("--test-freq", type=int, default=-1)
+    parser.add_argument("--save-freq", type=int, default=10,
+                        help="每 N 步存一次 ckpt。★ 正式跑不能是 -1：跑完没 ckpt 就没法重评，"
+                             "而且 staleness 研究要的就是同一次训练里相隔 k 步的两个 policy")
 
     parser.add_argument("--rollout-correction", action="store_true", default=True)
     parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"])
