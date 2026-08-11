@@ -47,6 +47,9 @@ class ToolContext:
     sandbox: Sandbox
     step: int                # 当前是第几个 assistant 轮，1-indexed
     tool_call_id: str
+    # 延迟缩放，由 execute 注入。system.wait 这类**等待时长由参数决定**的工具要用它——
+    # latency_seconds 是静态的，表达不了"等 30 秒"这种动态时长。
+    latency_scale: float = 1.0
 
     # ---- ★ 读工具必须走这两个方法，不要直接 ctx.env.row() ----
     #
@@ -198,6 +201,7 @@ class ToolRegistry:
         spec = self._tools.get(name)
         if spec is None:
             return ToolResult(ok=False, error=f"unknown_tool: {name}")
+        ctx.latency_scale = self.latency_scale
 
         # ---- ★ 幂等去重：同一个 client_request_id 重复提交，返回上次的结果 ----
         #
@@ -232,6 +236,10 @@ class ToolRegistry:
         script = F.match(ctx.env.failures, name, call_index)
 
         if script and script.get("mode") == F.TIMEOUT:
+            # ★ 超时必须**真的消耗时间**。它是最贵的一种等待——等满了，什么都没拿到。
+            # 不计时的话，超时在吞吐指标上是免费的，异步的收益会被系统性低估。
+            # 和 latency_seconds 走同一个缩放旋钮：训练时压掉，做异步对照实验时设 1.0。
+            await asyncio.sleep(float(script.get("timeout_seconds", 30)) * self.latency_scale)
             # ★ 灵魂所在：超时但**副作用可能已经生效**。
             # side_effect_applied=True 时照常执行 handler（世界真的变了、账本真的记了），
             # 但**返回给模型的是一个错误**，且错误里不透露到底变没变。

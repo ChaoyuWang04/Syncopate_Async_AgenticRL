@@ -95,7 +95,12 @@ async def verify_gold(bundle: CaseBundle, domain) -> tuple[bool, str]:
         final_answer=bundle.gold.final_answer,
         behavior=bundle.verifier.expected_behavior,
     )
-    failed = [(o.tool, o.error) for o in trajectory.observations if not o.ok]
+    # ★ 声明过失败剧本的工具，报错是**预期之内**的 —— F 类 gold 的全部意义
+    # 就是示范"失败之后怎么办"。这道检查写于"任何工具报错都是世界坏了"的年代，
+    # 现在有些错误就是题目本身。
+    injected = {f.get("tool") for f in bundle.env.failures}
+    failed = [(o.tool, o.error) for o in trajectory.observations
+              if not o.ok and o.tool not in injected]
     if failed:
         return False, f"工具报错 {failed}"
     result = score_trajectory(

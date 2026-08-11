@@ -20,6 +20,7 @@ from syncopate.core.verifier_engine import CAPS, CapRegistry
 # 副作用 import：这四行触发工具注册，不能删
 from syncopate.domains.adcampaign.tools import (  # noqa: F401
     analytics, creative, external_tools, freshness, governance, memory_tools, playbook,
+    system_tools,
 )
 from syncopate.domains.adcampaign import rules  # noqa: F401
 from syncopate.domains.adcampaign.policies import compute_decision, score_policy
@@ -54,6 +55,8 @@ DEFAULT_TOOL_MENU: list[str] = [
     "memory.write_proposal",
     "memory.invalidate",
     "memory.conflict_resolve",
+    # ---- runtime ----
+    "system.wait",
 ]
 
 
