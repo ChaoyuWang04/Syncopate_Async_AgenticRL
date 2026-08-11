@@ -1,0 +1,25 @@
+# v3 = v2 + M1 的数据成熟度意图（I02）。
+#
+# ★ 为什么 v2 的九个配额一个字都不改
+#
+# 生成器的 index 是**每个模板独立**从 0 开始的，`seen` 去重按内容指纹跨模板。
+# 只要 v2 的九项保持原顺序原数量，它们生成出来的 case 就和 v2 逐字节相同——
+# 新增意图不该扰动已经测过基线的那批数据。
+# （唯一会变的是 prompt：system.txt 加了 defer 和数据成熟度两节，
+#   所以 base 基线必须重测，这笔账躲不掉。）
+name: seed_v4
+
+quotas:
+  budget_change:    140   # 主分支：风控 × 记忆 × 政策 三者决定结局
+  creative_launch:   90   # 记忆 + 时令双轴
+  diagnosis:         90   # 记忆决定方案是否复用
+  portfolio_review:  50   # 长链，需要 curriculum
+  long_tail:         50   # 480 秒审核，异步实验的燃料
+  clarify:           50   # 和 budget_change 成对
+  reject:            50
+  all_high:          30   # 弱信号反例
+  tool_missing:      30
+  # ---- M1 新增 ----
+  # I02 data_freshness_check。90 条 = 3 档成熟度 × 2 entry_mode × 15，
+  # 三档必须都有：只造 immature 会训出一个什么都不敢答的 agent。
+  freshness_check:   90
