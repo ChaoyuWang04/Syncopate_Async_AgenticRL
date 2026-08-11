@@ -113,6 +113,12 @@ class ToolSpec:
     # 超了报 613/1487632 并封禁该 ad set 一小时。
     # {"limit": 4, "scope": "campaign_id", "error": "613"}
     quota: dict[str, Any] | None = None
+    # BUC 积分。Meta 实况：读 1 分、写 3 分。不声明就按 kind 推。
+    cost_points: int | None = None
+
+    @property
+    def points(self) -> int:
+        return self.cost_points if self.cost_points is not None else (3 if self.kind == "write" else 1)
 
     def openai_schema(self) -> dict[str, Any]:
         return {
@@ -148,6 +154,7 @@ class ToolRegistry:
         api_ref: str | None = None,
         idempotent: bool = False,
         quota: dict[str, Any] | None = None,
+        cost_points: int | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if kind == "write" and not fact_key:
@@ -164,6 +171,7 @@ class ToolRegistry:
                 api_ref=api_ref,
                 idempotent=idempotent,
                 quota=quota,
+                cost_points=cost_points,
             )
             return func
 
@@ -230,6 +238,18 @@ class ToolRegistry:
                     f"{spec.quota.get('error', 'rate_limited')}: "
                     f"{name} 对 {scope_value} 已达上限 {spec.quota['limit']} 次/小时，"
                     f"该对象已被平台冻结一小时"))
+
+        # ---- ★ BUC 积分：额度按账户共享，耗尽就得等衰减 ----
+        budget = ctx.env.api_budget
+        if budget:
+            cost = spec.points
+            if ctx.sandbox.api_points_spent + cost > int(budget.get("limit", 1 << 30)):
+                decay = int(budget.get("decay_seconds", 300))
+                return ToolResult(ok=False, error=(
+                    f"429 rate_limited: 账户 API 额度已耗尽"
+                    f"（已用 {ctx.sandbox.api_points_spent}/{budget['limit']} 分，"
+                    f"读 1 分/写 3 分）。retry_after={decay} 秒，等待可让额度衰减恢复。"))
+            ctx.sandbox.api_points_spent += cost
 
         # ---- ★★★ 失败注入。放在配额之后、handler 之前 ----
         call_index = ctx.sandbox.note_call(name)

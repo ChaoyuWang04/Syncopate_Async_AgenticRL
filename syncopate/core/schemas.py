@@ -125,6 +125,17 @@ class EnvSnapshot:
     #   —— 请求没发出去（该重试）vs 到了但回包丢了（重试=重复扣款）。
     #   构造不出后者，模型学到的就是「超时=没做成」，那是错的。
     failures: list[dict[str, Any]] = field(default_factory=list)
+
+    # ---- API 调用配额（Meta 的 BUC 积分制）----
+    #
+    # 实查文档：读 1 分、写 3 分；开发档上限 60 分、标准档 9000 分，衰减 300 秒；
+    # **额度按广告账户共享** —— 一个疯狂轮询的 agent 会把整个账户的额度烧光，
+    # 连累同账户下别的正常操作。
+    #
+    #   {"limit": 60, "decay_seconds": 300}
+    #
+    # None = 不限（存量 case 默认如此，不受影响）。
+    api_budget: dict[str, Any] | None = None
     version: str = SCHEMA_VERSION
 
     def table(self, name: str) -> dict[str, Any]:

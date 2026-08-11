@@ -47,6 +47,10 @@ MAX_WAIT_SECONDS = 600
     },
     kind="read",
     api_ref="runtime:sleep",
+    # ★ 不计平台配额：等待是**本地**操作，不是 API 调用。
+    # 计费的话，额度耗尽时连"等一下让额度恢复"都做不了——
+    # 那条唯一正确的出路会被自己堵死（实测踩到过）。
+    cost_points=0,
 )
 async def wait(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     try:
@@ -62,5 +66,12 @@ async def wait(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
                   "需要等这么久的事情应当走审批或改期，不要在会话里干等")
     await asyncio.sleep(seconds * ctx.latency_scale)
     ctx.sandbox.waited_seconds += seconds
+    # ★ 等待让 API 积分按衰减窗口回落 —— 这才是 429 时"等一下"真正有用的原因。
+    # 不建模衰减的话，等待只是浪费时间，模型学到的会是"等也没用"。
+    budget = ctx.env.api_budget
+    if budget and ctx.sandbox.api_points_spent > 0:
+        decay = float(budget.get("decay_seconds", 300)) or 300.0
+        recovered = int(int(budget.get("limit", 0)) * min(1.0, seconds / decay))
+        ctx.sandbox.api_points_spent = max(0, ctx.sandbox.api_points_spent - recovered)
     return ToolResult(ok=True, data={"waited_seconds": seconds,
                                      "total_waited_seconds": ctx.sandbox.waited_seconds})

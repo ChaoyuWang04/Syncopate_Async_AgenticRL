@@ -1,5 +1,5 @@
 当前投放任务：
-{% for key, value in context.items() -%}
+{% for key, value in context | dictsort -%}
 {{ key }}={{ value }}
 {% endfor %}
 用户请求：

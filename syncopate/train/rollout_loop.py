@@ -114,6 +114,17 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> lis
     SFT 和 RL 必须走同一个函数——两阶段 prompt 不一致是最难查的一类 bug
     （老师包 T10：`tool_schema_hash` 算了但从没比对过）。
     """
+    # ★★★ context 必须**按 key 排序**渲染（模板里的 `| dictsort`）。
+    #
+    # 实测踩到过：内存里 context 的插入顺序是 account_id → requested_budget → campaign_id，
+    # 而 CaseBundle.write 落盘时 sort_keys=True，读回来变成字母序。
+    # 于是**同一条 case，生成时的 prompt 和训练时的 prompt 不一样**：
+    #   · 生成器的内容去重守卫跑在"内存顺序"空间
+    #   · split 的泄漏检测和实际训练跑在"磁盘顺序"空间
+    # 两个空间不一致，直接漏掉了一对内容完全相同的 case（BUD_0108 / FAIL_0108）。
+    #
+    # 更根本的是：prompt 的内容不该取决于 dict 的插入顺序 ——
+    # 那意味着换个构造写法，模型看到的题面就变了。
     system_text = load_prompt("system.txt")
     user_text = render_prompt("step_user.txt", {
         "context": bundle.case.context,

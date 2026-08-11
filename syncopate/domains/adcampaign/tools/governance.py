@@ -20,6 +20,10 @@ from syncopate.domains.adcampaign.policies import select_policy
 
 _STR = {"type": "string"}
 
+# 每页条数。真实平台的默认页大小通常几十到几百，这里取小值让分页在
+# 一条 rollout 里就能被触发到（否则这个机制永远学不到）。
+PAGE_SIZE = 3
+
 
 @REGISTRY.tool(
     name="policy.get_budget_rule",
@@ -131,16 +135,24 @@ def update_budget(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="campaign.list",
-    description="列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。用户没给 campaign_id 时先用它定位。",
+    description=(
+        "列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。"
+        "用户没给 campaign_id 时先用它定位。\n"
+        f"· **分页返回**，每页最多 {PAGE_SIZE} 条。返回里的 next_cursor 非空表示还有下一页，"
+        "把它传回来继续取。\n"
+        "· 需要「全部/所有 campaign」才能得出的结论，必须翻到 next_cursor 为空为止。"
+    ),
     parameters={
         "type": "object",
         "properties": {
             "account_id": _STR,
             "status": {**_STR, "description": "按状态过滤，如 active"},
+            "cursor": {**_STR, "description": "上一页返回的 next_cursor；第一页不传"},
         },
         "required": ["account_id"],
     },
     kind="read",
+    api_ref="meta:GET /{account_id}/campaigns",
 )
 def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     account_id = args.get("account_id")
@@ -155,7 +167,19 @@ def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     ]
     if not rows:
         return ToolResult(ok=False, error=f"no_campaigns_for_account: {account_id}")
-    return ToolResult(ok=True, data={"count": len(rows), "campaigns": rows})
+    # ★ 分页。真实平台都是 cursor 分页——一次全给会让模型养成
+    # "list 一次就等于拿到全部"的习惯，接真 API 时静默漏数据。
+    rows.sort(key=lambda r: r["campaign_id"])
+    start = 0
+    if args.get("cursor"):
+        ids = [r["campaign_id"] for r in rows]
+        start = ids.index(args["cursor"]) if args["cursor"] in ids else 0
+    page = rows[start:start + PAGE_SIZE]
+    next_cursor = (rows[start + PAGE_SIZE]["campaign_id"]
+                   if start + PAGE_SIZE < len(rows) else None)
+    return ToolResult(ok=True, data={
+        "count": len(page), "campaigns": page,
+        "next_cursor": next_cursor, "has_more": next_cursor is not None})
 
 
 @REGISTRY.tool(

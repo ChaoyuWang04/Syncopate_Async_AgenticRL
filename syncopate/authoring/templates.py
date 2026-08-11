@@ -957,6 +957,62 @@ def _gold_source_conflict(p: Params, case_id: str, approved: int):
         "confidence": "low"}, []
 
 
+def _gold_pagination(p: Params, case_id: str, approved: int):
+    """★ 目标 campaign 在第 2 页 —— 必须翻页才找得到。
+
+    真实平台都是 cursor 分页。一次全给会让模型养成"list 一次 = 拿到全部"的习惯，
+    接真 API 时**静默漏数据**：找不到目标还以为账户里没有。
+    """
+    reads = ["campaign.list", "campaign.get_metrics", "policy.get_budget_rule", "risk.check_account"]
+    actions = [
+        _act("campaign.list", account_id=p.account_id, status="active"),        # 第 1 页
+        _act("campaign.list", account_id=p.account_id, status="active",
+             cursor=p.campaign_id),                                             # ★ 翻页
+        _act("campaign.get_metrics", campaign_id=p.campaign_id),
+        _act("policy.get_budget_rule", account_id=p.account_id),
+        _act("risk.check_account", account_id=p.account_id),
+        _act("campaign.update_budget", campaign_id=p.campaign_id, new_budget=approved,
+             reason="within_policy", client_request_id=f"req_{case_id}_budget"),
+    ]
+    fields = [
+        AnswerField(key="decision", value_source="literal:executed",
+                    evidence_tool="risk.check_account"),
+        AnswerField(key="approved_budget", value_source="decision.approved_budget",
+                    evidence_tool="policy.get_budget_rule"),
+    ]
+    return reads, actions, fields, {
+        "decision": "executed", "approved_budget": approved}, ["campaign.update_budget"]
+
+
+def _gold_quota(p: Params, case_id: str, approved: int):
+    """★ 平台额度耗尽（BUC 积分制）→ 等待让额度衰减恢复，再继续。
+
+    ⚠️ 和 429 限流的区别：限流是"这个接口太频繁"，配额是"整个账户的额度用完了"。
+    两者的解法碰巧都是等，但**等待的理由不同**——额度是按账户共享的，
+    烧光了会连累同账户下别的操作。
+    """
+    reads = ["campaign.get_metrics", "system.wait", "policy.get_budget_rule", "risk.check_account"]
+    actions = [
+        _act("campaign.get_metrics", campaign_id=p.campaign_id),
+        _act("policy.get_budget_rule", account_id=p.account_id),
+        _act("system.wait", seconds=FAIL_RETRY_AFTER * 5),      # ★ 等额度衰减
+        _act("risk.check_account", account_id=p.account_id),
+        _act("campaign.update_budget", campaign_id=p.campaign_id, new_budget=approved,
+             reason="within_policy", client_request_id=f"req_{case_id}_budget"),
+    ]
+    fields = [
+        AnswerField(key="decision", value_source="literal:executed",
+                    evidence_tool="risk.check_account"),
+        AnswerField(key="approved_budget", value_source="decision.approved_budget",
+                    evidence_tool="policy.get_budget_rule"),
+        AnswerField(key="recovery", value_source="literal:waited_for_quota",
+                    evidence_tool="system.wait"),
+    ]
+    return reads, actions, fields, {
+        "decision": "executed", "approved_budget": approved,
+        "recovery": "waited_for_quota"}, ["campaign.update_budget"]
+
+
 FAIL_RETRY_AFTER = 30
 FAIL_TIMEOUT_SECONDS = 30
 
@@ -993,6 +1049,12 @@ FAILURE_VARIANTS: list[dict[str, Any]] = [
      "mmp_window": "1d_click",
      "script": lambda p: {"tool": "campaign.get_metrics", "mode": "server_error", "at_call": 99},
      "gold": _gold_source_conflict},
+    {"name": "pagination", "extra_campaign": False, "extra_pages": True,
+     "script": lambda p: {"tool": "campaign.get_metrics", "mode": "server_error", "at_call": 99},
+     "gold": _gold_pagination},
+    {"name": "quota_exhausted", "extra_campaign": False, "api_budget": {"limit": 4, "decay_seconds": 300},
+     "script": lambda p: {"tool": "campaign.get_metrics", "mode": "server_error", "at_call": 99},
+     "gold": _gold_quota},
     {"name": "outage", "extra_campaign": False,
      "script": lambda p: {"tool": "campaign.update_budget", "mode": "server_error",
                           "every": True},
@@ -1035,12 +1097,19 @@ def make_failure_drill(p: Params) -> CaseBundle:
                          game_genre=p.genre, daily_budget=current,
                          product_id=p.product, region=p.region,
                          mmp_attribution_window=variant.get("mmp_window", "7d_click_1d_view")))
+    if variant.get("extra_pages"):
+        # 目标排在字母序靠后 → 落到第 2 页，逼出翻页
+        for k in range(3):
+            builder.campaign(f"CMP_0{k}{p.index:03d}", account_id=p.account_id,
+                             daily_budget=20_000, product_id=p.product, region=p.region)
     if variant["extra_campaign"]:
         # 注入类要有一个"别人的对象"可以被指使去动
         builder.campaign(f"CMP_{9000 + p.index}", account_id=p.account_id,
                          daily_budget=10_000, product_id=p.product, region=p.region)
     builder.failure(**variant["script"](p))
     env = builder.build()
+    if variant.get("api_budget"):
+        env.api_budget = dict(variant["api_budget"])
 
     case = Case(
         case_id=case_id,

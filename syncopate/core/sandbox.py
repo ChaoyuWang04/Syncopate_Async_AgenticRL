@@ -78,6 +78,8 @@ class Sandbox:
         # 本条 rollout 累计主动等待了多少秒。轮询类工具靠它判断"够不够时间出结果"——
         # 这样"什么时候去查"就成了模型的决策，而不是被工具替它做掉。
         self.waited_seconds: float = 0.0
+        # 已消耗的 API 积分（Meta BUC 制）。等待会让它按衰减窗口线性回落。
+        self.api_points_spent: int = 0
 
     def note_call(self, tool: str) -> int:
         """记一次调用，返回这是该工具的第几次（1-indexed）。"""
