@@ -1,248 +1,314 @@
 # Syncopate 交接文档
 
-> 写于 2026-08-10（M0），2026-08-10 更新（SFT 桶重切 + M1）。给下一个上下文窗口。
-> **先读这份，再读 `docs/syncopate-project-design-v0.1.md`（权威设计），最后按需查代码。**
+> 更新于 2026-08-11（沙盒保真度大改 + v8 基线之后）。给下一个上下文窗口。
+> **先读这份 → `07-toolbox-and-runtime-design.md`（沙盒设计）→ `syncopate-project-design-v0.1.md`（权威设计）→ 按需查代码。**
 
 ---
 
-## 0 · 三十秒读懂这个项目
+## 0 · 三十秒读懂
 
-**第一目标（真实业务）**：手游买量（UA）投放的**全链路闭环** agent——
-`L1 idea 收集 → L2 feature 化+批量生成素材 → L3 投放 → L4 跨平台收数 → L5 分析+feature 归因 → L6 决策与扩量 → L7 治理`。
+**第一目标（真实业务）**：手游买量投放的**全链路闭环** agent。
 业务价值指标是 **span of control**（一个优化师能管住的 平台×产品×地域×素材 组合数）。
 
-**第二目标（并行，不阻塞）**：异步 agentic RL 研究（sync colocate vs `fully_async_policy`）。
+**第二目标（并行，不阻塞）**：异步 agentic RL 研究（sync colocate vs fully_async）。
 
-⚠️ **这个定位曾被搞反过**，导致给出过错误建议（例如建议删掉「6 个从没进过 gold 的工具」，而其中三个正是 L5 归因→L6 扩量的全部构件）。**别再犯。**
+⚠️ **这个定位曾被搞反过**，导致给出过错误建议。别再犯。
 
 **三条钉死的前提**（设计文档 §0）：
-1. **会变的进 RAG，不变的进权重，绝不能错的进代码**
-2. **沙盒里只有过程奖励**——结果正确性（7 天后真赚钱了吗）沙盒不可验证 ⇒ 灰度上线不是验收，是训练的第二阶段
-3. **归因延迟是第一性约束**——D7 意味着今天的决策 7 天后才知道对错，而 D1 数据今天就有且极易被误当结论
+1. 会变的进 RAG，不变的进权重，绝不能错的进代码
+2. 沙盒里只有过程奖励 ⇒ 灰度上线不是验收，是训练的第二阶段
+3. 归因延迟是第一性约束（D7 才知对错，D1 数据极易被误当结论）
 
 ---
 
-## 1 · 当前状态
-
-### 已完成：M0（commit `f588f6e`）
-
-| 项 | 结果 |
-|---|---|
-| 工具改名 | `creative.get_performance`→`get_metrics_by_asset`、`benchmark.query`→`get_industry_baseline`；描述改成"先说我做什么，**再说我不做什么**" |
-| 泄漏修复 | 6 条内容级泄漏 → **0**。加了生成器的**内容去重守卫**（SHA-256 of prompt+答案+behavior），参数设计再怎么改都撞不了 |
-| 三桶切分 | `data/splits/v2/`：EVAL **52**（冻结）/ SFT 105 / RL 423，SHA-256 实测两两零重叠 |
-| base 基线 | 4B 基座在冻结 EVAL 上：52 条 × 8 采样，**平均 reward 0.524** |
-| 其它 | EOS 实测正常（截断率 13.7%）；labels 实测正确；129 文件入库 |
-
-### 代码结构
-
-```
-syncopate/
-├── core/        场景无关引擎：schemas(四件套) sandbox tool_registry
-│                trajectory runner parsing verifier_engine
-├── domains/adcampaign/   21 工具 · 16 cap · 5-lane memory · policies · world
-├── authoring/   axes(控制轴) templates(9 模板) generate(含去重守卫) seed_cases
-├── pipeline/    build_dataset sft_replay split(三桶) report(分布体检)
-├── train/       rollout_loop(框架无关) verl_agent_loop(薄适配)
-│                sft eval_local launch_rl
-└── prompts/     system.txt step_user.txt prompt_hash
-```
-
-**106 个测试全过。** 环境：独立 `.venv`（py3.12 + torch2.9+cu128 + vllm0.12 + verl0.8.0，**numpy 必须 2.2.6**）。
-
-### 常用命令
-
-```bash
-python -m syncopate cases generate --spec configs/buckets/v2.yaml --out data/batches/v2
-python -m syncopate cases verify
-python -m syncopate data split  --batch data/batches/v2 --out data/splits/v2
-python -m syncopate data build  --pool rl|sft --batch data/batches/v2 --out data/{rl,sft}/v2
-python -m syncopate data report --batch data/batches/v2
-python -m syncopate tools list
-
-python -m syncopate.train.sft        --model models/Qwen3-4B --train-file ... --wandb-project syncopate
-python -m syncopate.train.eval_local --model models/Qwen3-4B --split-dir data/splits/v2 --samples-per-case 8
-python -m syncopate.train.launch_rl  --dry-run
-```
-
----
-
-## 2 · ★★★ 最重要的一个发现：`p=0` 有两种成因
-
-base 的零梯度构成：
-
-```
-有梯度 σ>0.01      8/52
-饱和   σ=0,r>0.9   4/52
-全灭   σ=0,r<0.15  5/52
-卡死   σ=0,中间分 35/52   ← 最大的一块
-```
-
-**「全灭」不等于「难」。** 我们那 5 条全灭（CLAR/REJ）8 次采样全部 `behavior_mismatch`、截断率 88–100%——base 只是**不知道 `behavior: clarify/reject` 这个输出约定**，就一路调工具撞到 `max_steps=4`。证据：v3_plain SFT **一轮就把它们从 0.000 拉到 1.000**。
-
-| 成因 | 特征 | 代价 |
-|---|---|---|
-| **约定未知** | base 没见过我们的输出约定 | **廉价**，SFT 一个 epoch 解决 |
-| **能力不足** | 真的不会做 | 昂贵，这才是"死格"的实质 |
-
-**真正的死格藏在「卡死」的 35 条里，分两类**：
-
-- **A 类 · 系统性跳过前置（16 条）** ← ★ SFT 冷启动的真正目标
-  分数卡在 0.3（12 条 BUD/CRE/LOW，`false_claim` 68 次 + `missing_memory_check` 40 + `unauthorized_write` 40）和 0.4（4 条 BUD，纯 `missing_memory_check`）。
-  **不是撞步数上限，是走捷径**：跳过 `memory.search`、跳过安全线核查就下结论。
-- **B 类 · 流程对但子分丢分（19 条）**：卡在 0.63–0.9，**零 cap 命中**。这是 RL 该管的。
-
-⇒ **SFT 桶应该是「5 条约定型全灭 + 16 条 A 类」，不是现在按难度标签选的 105 条。**
-
----
-
-## 2.5 · ✅ SFT 桶已按 dead_grid 重切（2026-08-10）
-
-`split.py` 原来只按 case_id 精确匹配死格 —— 而死格是在**冻结 EVAL** 上测出来的，
-精确匹配的结果是空桶。现在走一次外推：EVAL 里的死 case → 它所在的格子 → 池子里同格的 case，
-**每格按死因配额取**（见 `pipeline/dead_grid.py`）。
-
-| | 旧（difficulty_proxy） | 新（dead_grid） |
-|---|---|---|
-| SFT 桶 | 105 条 | 108 条 |
-| 模板构成 | BUD 25 / CRE 34 / LOW 46 | BUD 40 / CRE 30 / LOW 20 / **CLAR 12 / REJ 6** |
-| 与旧桶重合 | — | 仅 33 条 |
-
-配额 `{convention: 6/格, shortcut: 10/格}`。总量刻意卡在 ~105：
-**只换成分不换规模，新旧两次 SFT 才是单变量对比。**
-
-⚠️ **整格全取是错的**：12 个死格对应池子里 288/528 条，SFT 桶会吃掉一多半 RL 池。
-而且 12 个死格里有 3 个的 EVAL 证据是 1/2（同格里有活的）——
-`(模板, behavior, 结局, entry)` 这个粒度**分辨不出同格内的死活**。
-想彻底消掉这个外推，只能直接在池子上跑 base 评测拿 per-case 的 p。
-
-### ★★★ 顺带挖出的泄漏：三桶从来没被数据构造消费过
-
-`build_dataset.build()` 按整个 manifest 建数据集，**从没读过 split 目录**。
-所以 `data/sft/v2` 一直是全部 580 条，**52 条冻结 EVAL 从 M0 起就在训练数据里**，
-而 `split_report.json` 还写着「三桶零重叠 ✅」。
-
-⇒ **切分文件和训练数据是两件事。切得再干净，构造那步不读它照样泄漏。**
-现在 `build()` 必须二选一（`--split-dir` 或显式 `--full-batch`），忘了声明当场报错。
-
----
-
-## 2.6 · ✅ M1 · 数据成熟度机制（2026-08-10）
-
-| 层 | 产出 |
-|---|---|
-| **成熟曲线** | `domains/adcampaign/maturity.py`：ROAS 7 天 / CPI 3 天 / CTR 1 天收敛；观测值 = 终值 × 形变（ROAS 早期偏低、CPI 早期偏高）；**未收敛返回区间**，区间宽度随进度收窄到 0 |
-| **工具** | `metrics.get_freshness(campaign_id, metric)` → 成熟度 / 已跑天数 / 还差几天 / 样本量 / 预期区间。工具菜单 21 → 22 |
-| **行为** | `defer` 进 `VALID_BEHAVIORS` + system.txt，要求给出 `recheck_after_days` |
-| **cap** | `premature_decision_cap` 0.15 / `insufficient_sample_cap` 0.20 / `missing_safety_line_cap` 0.20 |
-| **数据轴** | `DATA_MATURITIES = [mature, partial, immature]`，对应开投 14/3/1 天 |
-| **意图** | I02 `data_freshness_check` 模板（`FRESH_*`），90 条，三档齐全 |
-| **批次** | `data/batches/v3` = v2 的 580 条**逐字节不变** + 90 条 FRESH；`data/splits/v3` EVAL 64 / SFT 108 / RL 498 |
-
-### 这一段踩到/绕开的三个坑
-
-1. **新 cap 会追溯判旧数据**。cap 一注册，`active_caps=None` 的存量 case 立刻被打中，
-   gold 跌分、基线不可比。⇒ 三条新 cap 的判据都写成**自动闭合**：存量 campaign 默认
-   `started_days_ago=30`、安装量充足，永远算 mature，规则对它们恒为 None。
-   实测 580 条 gold 重放，新 cap 命中 **0**。
-   （`missing_safety_line_cap` 无法自动闭合，改为**只在 case 声明了安全线是必查项时**生效。）
-2. **`literal:false` 被判成「期望 True」**。`values_equal` 里 `bool("false")` 是 True，
-   于是所有期望 false 的字段悄悄失分，而 `literal:true` 一直是**碰巧**对的。
-   实测抓到点：I02 partial 档 outcome 卡在 0.67。已修 + 加测试。
-3. **`premature` 和 `insufficient` 必须分开**。样本量不足也会让 maturity 变成 IMMATURE，
-   最初的判据 `maturity == IMMATURE` 让两条 cap 同时命中。
-   改成按天数判。⇒ 「等就好了」和「等也没用」是两种病，合成一条会让模型学到错误的解法。
-
-### ⚠️ 代价：base 基线必须重测
-
-system.txt 加了 `defer` 和「数据成熟度规则」两节 ⇒ **每条 case 的 prompt 都变了**
-⇒ M0 那个 **0.524 不再可比**。新基线在 `_audit/M1_base_4b.json`（EVAL 64 条 × 8 采样）。
-冻结 EVAL 的 52 个原 case_id 全部保留，只是又加了 12 条 FRESH。
-
-`eval_local` 现在会直接算 **`defer` 双向准确率**（该 defer 的 defer 率 / 不该 defer 的误判率），
-这是 M1 的验收指标——只测单向会训出一个什么都不敢做的 agent。
-
----
-
-## 3 · 下一步（按优先级）
-
-### 尚未做完的 M1 收尾
-
-- 用新 SFT 桶（`data/sft/v3`）重训一版，确认 A 类死格（跳过前置）真的被抬起来
-- I02 的骨架只有 2 种（`get_metrics → get_freshness` ± `list`）。这是刻意的：
-  **三档成熟度走同一条链，区别全在读到 freshness 之后怎么判** —— 这比换条链更难，
-  但要注意别让它退化成"认模板"
-
-### 然后：M2 RAG v0 → M3 L5 归因 → M4 L6 扩量 → M5 负面数据 → M6 SFT 毕业
-
-见设计文档 §十 的 M0–M12 表。
-
----
-
-## 4 · 已确定的决策（别再重新讨论）
-
-| 决策 | 结论 | 依据 |
-|---|---|---|
-| **SFT 要不要混通用数据** | **第一版不混** | 手册 §3.1：大厂混数据是因为用 FFT，**LoRA 已经交了参数空间的保险费**；§18.1：混数据只治「知识/能力遗忘」，而 function calling 的主要杀手是「格式坍缩」和「过拟合」，**混数据治不了** |
-| **该做什么替代** | epoch 2→**1**、**监控输出熵**、加两个专项测试（不需要工具的问题测格式坍缩；没见过的 schema 测过拟合） | 手册 §18.5：遗忘量 ∝ lr × 步数 × 数据窄度，**80% 的"灾难性遗忘"是 LR 太大 + 训太多轮** |
-| **RL 用不用 LoRA** | **必须用** | 4B 全参 AdamW 优化器状态 48GB > 系统内存 30GB；LoRA r32 只要 0.79GB |
-| **reference model 指向谁** | **SFT ckpt，不是 base** | 手册 §24③：否则 KL 一直把模型往"没学过业务"拉 |
-| **ckpt 怎么选** | **不选 val loss 最低那个**，选「格式学会了但行为没定型」的 | 手册 §20：SFT 训得越狠 → 熵越低 → GRPO 探索不动。我们已经踩过（选了 val loss 最低，零梯度格子 63%） |
-| **安全线维度** | 产品 × 地域，**不加平台** | 平台差异已由 `benchmark.get_industry_baseline` 覆盖；加平台格子 25→125 填不满 |
-| **数据源打架听谁的** | **以 MMP 为准，但两个都必须查**；差异 >15% 降 confidence | 平台后台有自归因偏向，差异本身是信号 |
-
----
-
-## 5 · 踩过的坑（都已有测试守卫，别重蹈）
-
-1. **SFT 标签 bug**：`gold_script(behavior="tool_call")` 默认值从没被覆盖 ⇒ clarify/reject 的监督目标是错的。症状极具迷惑性——**分组 val_loss 降到 0.0000**（完美学会了错误标签），生成时 behavior 恒为 tool_call。当时误判成"token 失衡"做了加权采样，那只是让它把错的学得更牢。
-   ⇒ **loss 降到 0 只说明学到了标签，不说明标签是对的。**
-2. **伪多样性**：`index*k % n` 在模数相同时只是重排，两个轴会同步变化——25 种组合实际只有 5 种。要让轴同时依赖 index 的**高位和低位**。
-3. **Qwen3 模板不对称**：只给**最后一个** assistant 轮加空 `<think>` 块 ⇒ 整段渲染和增量拼接**天生逐 token 不相等**，无论 `enable_thinking` 设什么。解法是只保留一条代码路径（SFT 数据由同一个 rollout 循环回放 gold 产出）。
-4. **`active_caps=[]` 曾被当成"跑全部 cap"** ⇒ 现在 `None`=全部、`[]`=全关。
-5. **rollout_id 固定** ⇒ GRPO 的 n 份复制品写到同一 artifact 路径互相覆盖，且**不报错**。
-6. **`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`**（从老师脚本抄来）和 vLLM 内存池冲突，engine 启动就挂。
-7. **verl 0.8.0 的 `numpy<2.0.0` 是陈旧钉**：照做会连锁打断 scipy → transformers → verl 自己。装完必须推翻回 numpy 2.2.6。
-8. **flash-attn 在 verl 0.8.0 里是硬依赖**（`use_remove_padding=False` 关不掉），但被 import 的四个函数全是纯 PyTorch 工具 ⇒ 用 `scripts/install_flash_attn_shim.py` 的垫片即可，不必在 sm_120 上编译。
-
----
-
-## 6 · 未验证 / 未做的事（别当成已完成）
+## 1 · 当前状态（**先看这张表**）
 
 | 项 | 状态 |
 |---|---|
-| **RL 从未正式跑过** | 只有 2 步冒烟，`checkpoints/grpo/` 为空，无 wandb run |
-| **`fully_async_policy` 一次没跑** | 第二目标（异步研究）的核心，完全空白 |
-| **业务价值指标** | **完全没有**。所有指标都是 reward/loss/ppl/std |
-| ~~**数据成熟度轴 / `defer` 行为**~~ | ✅ M1 已做：90 条 I02 gold，三档齐全 |
-| **负面数据 N1–N6** | 工具失败/返回空/数据打架/**对抗输入** 均 0 条。N6 尤其要紧——广告平台的 campaign 名称、素材标题都是别人能填的，一次 prompt injection，而这个 agent 有真实写权限 |
-| **L1/L2 意图、L5 归因、L6 扩量** | 全空（设计文档 §7 的 I02/I07/I09/I11 是技术制高点） |
-| **tools schema 两侧 hash 比对** | 未测（结构上共用 `build_messages`，但没做 SHA-256 比对） |
-| **`multi_issue` / `evidence_ambiguous`** | 各 0 条（老师包分别有 89 / 649 条） |
-| **按难度（L1–L5）的细分评测** | 标签存在但评测不按它分组 |
-| **外部资料全是假数据** | Excel/图片/标签均由 `scripts/make_test_external_data.py` 生成 |
+| M0 地基 | ✅ 三桶切分 / 泄漏修复 / base 基线 |
+| M1 数据成熟度 | ✅ 机制 + I02 + `defer`，验收达标（100% / 0.2%） |
+| **沙盒保真度改造** | ✅ **本轮主体**，见 §3 |
+| **v8 base 基线** | ✅ 已测，见 §4 —— **六条预测错了四条** |
+| SFT（v8 数据上） | ⬜ **下一步**，桶已切好待确认 |
+| RL 正式训练 | ⬜ 管线打通过（50 步跑完），但那一轮**结果作废**（prompt 被截断） |
+| `fully_async` | ⬜ **单卡跑不了**，见 §6 |
+
+**数据版本：v8**（`data/batches/v8` 820 条 / `data/splits/v8` / `data/sft/v8` / `data/rl/v8`）
+**188 个测试全过**；`.venv` 独立环境（py3.12 + torch2.9+cu128 + vllm0.12 + verl0.8.0，numpy 必须 2.2.6）
 
 ---
 
-## 7 · 关键文件索引
+## 2 · ★ 下一步该做什么（按顺序）
 
-| 文件 | 内容 |
+### 2.1 立刻做：确认 SFT 桶 → 训 SFT → 评
+
+```bash
+# 建议配额 {convention 5, shortcut 7, control 3} → SFT 199 / RL 517
+python -m syncopate data split --batch data/batches/v8 --out data/splits/v8 \
+    --dead-from _audit/v8_base.json
+python -m syncopate data build --pool sft --batch data/batches/v8 \
+    --out data/sft/v8 --split-dir data/splits/v8 --val-every 6 --model models/Qwen3-4B
+python -m syncopate.train.sft --model models/Qwen3-4B \
+    --train-file data/sft/v8/train.parquet --val-file data/sft/v8/val.parquet \
+    --out checkpoints/sft/v8 --epochs 2 --batch-size 1 --grad-accum 4 \
+    --lr 1e-4 --warmup-ratio 0.1 --lora-rank 32 --max-length 6144
+python -m syncopate.train.eval_local --model models/Qwen3-4B \
+    --adapter checkpoints/sft/v8/epoch1 --batch data/batches/v8 \
+    --split-dir data/splits/v8 --samples-per-case 8 --out _audit/v8_sft_e1.json
+python -m syncopate.train.compare _audit/v8_base.json _audit/v8_sft_e1.json
+```
+
+⚠️ **`--batch-size 1`**：batch 2 会 OOM（logits 张量 = batch × 5600 token × 15 万词表）。
+
+### 2.2 ★ 悬而未决的问题：SFT 桶里 F 类占 45%
+
+**机制**（已查清，不要重新推导）：
+
+```
+进桶格子 42 个 → F 类 20 个（48%），非 F 22 个
+F 类每格池子   4–7 条   ← 配额 7 用不满，能拿多少拿多少
+非 F 每格池子  10–41 条  ← 配额才是瓶颈
+```
+
+⇒ **占比由「格子数」决定，不由池子大小或配额决定。**
+**多造非 F 数据没用**（非 F 每格已有 10–41 条，取的还是 7 条）。
+**降配额反而让 F 占比上升**（39% → 49%），因为只砍到了池子大的非 F。
+
+真正能降的杠杆只有两个：
+1. **减少 F 的格子数**（F 类不按 `entry_mode` 细分 → 10 格 → F 占比 31%）
+2. 给 F 类单独降配额（配额从「按 kind」改成「按 kind × 模板」）
+
+**但当前判断是：先不降，直接训，然后用指标测。** 理由：
+
+- 我们的 F 类**任务就是改预算**，和 140 条正常 BUD 同构。每条 F 轨迹的前三步
+  （查现状 → 查政策 → 过风控）和正常路径一模一样 ⇒
+  **「学 F 类」不会挤掉「学正常路径」，正常路径嵌在每一条 F 样本里。**
+  经典的「只喂难例导致退化」，难例往往是另一类任务；我们不是。
+- 上次真正翻车（`defer` 97%→0%）是**桶里一条 defer 都没有**，不是占比问题。
+  现在 `FRESH` 三档齐、`BUD` 三结局齐、behavior 四种齐、17 个 control 格子。
+
+**判据已经就位**：`eval_local` 新增了**恢复动作双向准确率**
+
+```
+有故障时用了恢复动作   ← 该恢复
+无故障却用了恢复动作   ← ★ 必须接近 0，否则就是"见谁都先等三十秒"
+```
+
+⇒ **训完看这个数**。真有过度恢复，再降 F 的格子数，而且知道该降到多少。
+
+### 2.3 然后：用修好的配置重跑 RL
+
+上一轮 50 步跑完但**结果作废**（prompt 被截掉 45%）。配置见 §5。
+
+---
+
+## 3 · 沙盒保真度改造（本轮主体）
+
+完整设计：`docs/syncopate/07-toolbox-and-runtime-design.md`
+记忆条目：`syncopate-sandbox-fidelity.md`
+
+### 3.1 依据真实 API 文档（不是推测）
+
+| 事实 | 我们怎么建的 |
 |---|---|
-| **`docs/syncopate-project-design-v0.1.md`** | ★ **权威设计**（1246 行）：18 意图体系、六维评估、数据飞轮三回路、M0–M12、附录 A 待定问题 |
-| `docs/syncopate/04-status-audit.md` | M0 前的全量勘察报告（含 20 条缺口清单） |
-| `docs/syncopate/03-data-distribution.md` | 数据分布体检（意图 × 链长 × 骨架 × 工具频次） |
-| `docs/syncopate/00-research-question.md` | 第二目标：sequence-level TIS 的 T 依赖与 staleness |
-| `docs/syncopate/02-credit-assignment.md` | 步级信用分配探底（结论：该用 caps 归因，不是谓词翻转） |
-| `sft-truth-report.md` | 老师包的真相核查（**头号结论：包里零运行产物**） |
-| `_audit/M0_base_4b.json` | ★ base 基线明细，SFT 桶重切的数据来源 |
-| `data/splits/v2/split_report.json` | 三桶互斥性实测报告 |
-| `/home/samwang/code/projects/核心手册/AgenticRL/sft-finetune-takeaways.md` | ★ **方法论权威**（1648 行），讨论 SFT/RL 方法论时以它为准 |
+| Meta `daily_budget` 是**最小货币单位（分）**，字段名不告诉你 | 沙盒也这样。用户消息说「840 元」，模型必须填 84000 |
+| 更新只返回 `{success}`，**不回新值** | 一样。要确认必须再查一次 |
+| **没有幂等机制** | 我们提供 `client_request_id`，让模型养成传键的习惯 |
+| **每 ad set 每小时最多改 4 次**（613/1487632） | 已实现 |
+| BUC 积分：读 1 / 写 3，衰减 300 秒，**按账户共享** | 已实现，`system.wait` 让积分衰减恢复 |
+| AppsFlyer 成本延迟数小时 | 「数据还没到」是常态 |
+| ★ **Meta/AF 差异的头号成因是归因窗口不一致**（差 32%） | `mmp.get_attribution` + `single_source_cap` |
+
+★ 最后一条**推翻了「加随机偏差模拟数据源打架」的原计划**：真实差异有确定成因和方向，
+模型该学的是识别成因。给随机的话只能学会"取平均"，那是错的。
+
+### 3.2 十类失败与正确轨迹
+
+| 类 | 正确做法 |
+|---|---|
+| timeout（已生效） | 查证 → 发现新值 → **不再写** |
+| timeout（丢失） | 查证 → 发现旧值 → **同一个 key** 重试 |
+| 429 | `system.wait(retry_after)` → 重试 |
+| 403 | **不重试**，改走审批 |
+| 数值离谱 | 交叉验证 → 拒绝下结论，不写 |
+| 注入 | 完成原任务 + **显式标记** |
+| 源打架 | 两个都查 → 以 MMP 为准 → 标成因 |
+| 分页 | 翻到 `next_cursor` 为空 |
+| 配额耗尽 | 等待让积分衰减 |
+| 持续故障 | 试满 3 次 → **转人工**，终答带 `attempts` |
+
+### 3.3 ★★★ 三条会静默毁掉实验的纪律
+
+1. **失败注入必须确定性，由 case 声明**（`EnvSnapshot.failures`）
+   GRPO 是组内比较；失败若随机，reward 差异分不清是「模型不同」还是「运气不同」，
+   **advantage 被污染**。同源的坑：rollout_id 固定导致 artifact 互相覆盖。
+   ⇒ **RL 里任何跨 rollout 的随机性都是污染。**
+   `at_call` 数的是**该工具的第几次调用**，不是第几步。
+
+2. **`side_effect_applied` 是超时机制的灵魂**
+   没发出去（该重试）vs 回包丢了（重试=重复扣款）——
+   **两种情况的错误文本必须逐字相同**（有测试守着）。
+   构造不出后者，模型学到的就是「超时=没做成」，那是错的。
+
+3. **新 cap 必须自动闭合**
+   判据要写成「世界满足某条件时才可能命中」，否则存量 case 立刻被打中、基线不可比。
 
 ---
 
-## 8 · 给下一个窗口的第一句话
+## 4 · ★ v8 base 基线：六条预测错了四条
 
-> 「读 `docs/syncopate/05-handoff.md`。SFT 桶已按 dead_grid 重切、M1 数据成熟度机制已落地，
-> 数据在 `data/batches/v3` + `data/splits/v3`。下一步是用新 SFT 桶重训并验 `defer` 双向准确率，然后进 M2。」
+`_audit/v8_base.json`（EVAL 104 条 × 8 采样）
 
-如果 Chaoyu 问的是方法论问题（数据量、LoRA、遗忘、评估指标），**先查 `核心手册/`，别凭通用经验答**。
+```
+平均 reward 0.416   （非 F 类 0.483 / F 类 0.309）
+有梯度 42 · 饱和 4 · 全灭 7 · 卡死 51
+defer 双向 97% / 4.4%
+cap: false_claim 280 · unauthorized_write 266 · missing_memory_check 102
+     acted_on_bad_data 32 · abandoned_without_escalation 25 · excessive_retry 6
+     prompt_injection 0 · retry_without_verify 0
+```
+
+### ★★★ 最重要的发现：**base 不是「莽撞」，是「怂」**
+
+实测轨迹：
+
+```
+BUD_0001:  查政策 → 过风控 → 开审批单          ← 根本不改预算
+FAIL_0001: 查政策 → 过风控 → 开审批单          ← 遇到题目直接走审批
+FAIL_0009: 查政策 → 过风控 → 改×3 全失败 → defer「服务端错误，建议稍后重试」
+```
+
+**base 的行为模式是「能不动手就不动手」**：绝大多数情况直接开审批单转人工。所以
+
+- `prompt_injection_cap = 0` **不是「识破了注入」，是「什么都不敢做」**
+- `retry_without_verify_cap = 0` 不是懂得先查证，是**根本不重试**
+- 预测里的「漏幂等键」「单位填错」都没观察到 —— 它很少调 `update_budget`，没机会暴露
+
+⇒ **SFT 该教的方向要反过来**：不是「别乱重试」，而是
+**「该动手就动手、该重试就重试、试到上限才转人工」**。
+
+⚠️ 「一律转人工」在业务上等价于什么都没做，但**在只测单向的指标上看起来很安全**。
+这是 `defer` 那个坑的翻版 —— 所以 §2.2 的恢复动作双向指标是必需的。
+
+### 其它值得记的
+
+- 真正的死格只有 7 条（`CLAR`×4 / `FRESH`×2 / `REJ`×1），**又是「约定未知」那一类**
+- **F 类不是死格**：10 个变体里 7 个有梯度（`timeout_applied` 4/4、`outage` 3/4…）
+  ⇒ 和「F 类必须 SFT 教」的先验相反，**RL 够得着**
+- 最大的块是**卡死 51 条**（49%），分数集中在 0.2–0.35
+
+---
+
+## 5 · RL 的已知配置与坑
+
+**能跑通的配置**（单卡 5090，实测）：
+
+```bash
+python -m syncopate.train.launch_rl --model <合并后的 SFT 模型> --lora-rank 32 \
+  --steps 50 --train-batch-size 4 --rollout-n 8 --ppo-mini-batch-size 4 \
+  --micro-batch-size 1 --rollout-gpu-util 0.42 --max-num-seqs 32 \
+  --object-store-gb 2 --max-prompt-length 5120 --max-response-length 2048 \
+  --save-freq 10 --latency-scale 0.01 --logger console
+```
+
+**五次启动失败换来的地图**：
+
+| 症状 | 根因 | 修法 |
+|---|---|---|
+| vLLM 分不到 KV cache | FSDP 默认 `model_dtype=fp32`，4B 占 16GB | 改 `bf16` → 7.75GB |
+| `wake_up` OOM | 推权重时 actor 在峰值，19.3+15.7 > 31.4 | 降 batch / gpu_util |
+| Ray 杀 worker | 开了 `param_offload`，内存爆 | 关掉（老结论一直是对的） |
+| Ray 杀 worker | **Ray 对象存储按 RAM 的 30% 预留** | `--object-store-gb 2` ← 真凶 |
+| bs=16 OOM | colocate 的 wake_up 边界 | 上限是 **bs=8** |
+
+★ **RL 起点必须是合并后的 SFT 模型**（`train/merge_adapter.py`）。
+`launch_rl` 没有加载 adapter 的入口；而且 verl 用 LoRA 时的 reference 是「关掉 adapter」=**基座**，
+合并之后 reference 才等于 SFT（手册 §24③）。
+
+⚠️ **上一轮 50 步结果作废**：`max_prompt_length` 曾被算成 `max_model_len // 2` = 2304，
+而真实 prompt 是 4170–4210 ⇒ **100% 被左截断，砍掉近 1900 token**，
+连 `clarify/reject/defer` 的枚举都没了。现已统一到 `rollout_loop.MAX_PROMPT_LENGTH = 5120`。
+
+---
+
+## 6 · 第二目标（异步）：单卡跑不了，但主体能做
+
+verl 两条异步路径都要求 **rollout 和 training 在不同 GPU**：
+- `one_step_off_policy/ray_trainer.py:89` — `assert not self.hybrid_engine`
+- `fully_async_policy` — `trainer_pool` 和 `rollout` 是两个独立资源池
+
+⇒ **吞吐收益和分布漂移单卡量不了**，要上云（2 卡）。
+
+**但研究假设的主体能做**：`ESS/N ≈ exp(−T·σ²(k))` 中的 σ²(k)
+**不需要真异步** —— 留着第 t−k 步的 ckpt，用第 t 步的 policy 重算同一串 token 的
+logprob 即可，而且 k **精确可控**。工具已写好：`train/staleness.py`。
+
+已有第一个实测点：**ESS/N = 0.846，T ≈ 825 token ⇒ σ²(0) ≈ 2.0e-4/token**。
+
+---
+
+## 7 · 已就位的尺子（跑任何实验前先确认它们在）
+
+| 尺子 | 模块 | 量什么 |
+|---|---|---|
+| 配对比较 | `train/compare.py` | 能力差异 + **自报最小可检出差异** |
+| 输出熵 | `train/entropy.py` | **决策位**熵（整体熵会被格式 token 稀释） |
+| dump 聚合 | `train/rl_report.py` | cap 分解 / 三段耗时 / **补报 wandb** |
+| 下发记账 | `verl_agent_loop.record_dispatch` | 分布漂移的另一半 |
+| staleness | `train/staleness.py` | σ²(k) 曲线（离线合成） |
+| `defer` 双向 | `eval_local` | 该 defer / 误 defer |
+| **恢复动作双向** | `eval_local` | 该恢复 / **过度恢复** ← 本轮新增 |
+
+★ **精度实测**：配对 MDE ≈ **0.05**，非配对 0.115。
+**加采样次数几乎没用**（8→32 只把误差从 0.0068 降到 0.0034）——
+尺子的粗细来自「同一题在两个模型下行为差多少」，不是采样噪声。
+
+⚠️ **verl 不会把我们的指标上报 wandb**（`compute_data_metrics` 只认两个字段），
+`rl_report` 的补报是唯一来源，跑完必须执行。
+
+---
+
+## 8 · 踩过的坑（都有测试守卫，别重蹈）
+
+**数据与评测**
+1. **SFT 标签 bug**：默认值没被覆盖 ⇒ 监督目标是错的，而 val_loss 降到 0.0000。
+   **loss 降到 0 只说明学到了标签，不说明标签是对的。**
+2. **三桶切好了但数据构造没读它** ⇒ 冻结 EVAL 一直在训练数据里。
+   **切分文件和训练数据是两件事。**
+3. **prompt 被截断** ⇒ 训练和评测跑在不同输入分布上（见 §5）。
+4. **prompt 内容取决于 dict 插入顺序** ⇒ 生成器的去重守卫和 split 的泄漏检测
+   跑在两个空间，漏掉一对完全相同的 case。修法：模板里 `context | dictsort`。
+5. **`literal:false` 被判成「期望 True」**（`bool("false")` 是 True）。
+6. **只装死格的 SFT 桶** ⇒ `defer` 从 97% 掉到 0%。**必须掺对照档。**
+
+**沙盒**
+7. **单位混用**：只改 `daily_budget` 没改 `monthly_cap`，上限从 75000 掐到 1400。
+8. **`system.wait` 自己扣配额** ⇒ 额度耗尽时连等待都调不动，唯一出路被自己堵死。
+9. **超时不消耗墙钟** ⇒ 超时在吞吐指标上免费，异步收益被系统性低估。
+
+**方法论**
+10. **用推理代替测量**：看到 bf16 让内存降一半，就推断可以开 `param_offload` —— 没测，爆了。
+11. **`pkill -f <模式>` 自匹配**：执行 pkill 的 shell 自己也含该模式，把自己杀掉（犯了三次）。
+
+---
+
+## 9 · 已确定的决策（别再重新讨论）
+
+| 决策 | 结论 | 依据 |
+|---|---|---|
+| SFT 混不混通用数据 | **第一版不混** | 手册 §3.1/§18.1/§18.4：LoRA 已交了参数空间的保险费；混数据治不了格式坍缩和过拟合 |
+| RL 用不用 LoRA | **必须用** | 4B 全参优化器状态 48GB > 内存 30GB |
+| reference 指向谁 | **SFT ckpt**（靠合并实现） | 手册 §24③ |
+| ckpt 怎么选 | **不选 val loss 最低的**，选决策位熵高、有梯度格子多的 | 手册 §20 |
+| 沙盒要不要比真实世界友好 | **不要** | 字段名不带单位、返回不含新值、无幂等保护，都如实建模 |
+| 「不照做」够不够 | **不够，必须显式标记** | 只测单向，消极的模型能骗过指标 |
+
+---
+
+## 10 · 给下一个窗口的第一句话
+
+> 「读 `docs/syncopate/05-handoff.md`。沙盒保真度改造已完成（v8，820 条，十类失败注入），
+> v8 base 基线已测（0.416，**base 是"怂"不是"莽撞"**）。下一步：确认 SFT 桶（F 类占 45% 的
+> 问题见 §2.2）→ 训 SFT → 看**恢复动作双向准确率** → 再进 RL。」
+
+方法论问题先查 `/home/samwang/code/projects/核心手册/AgenticRL/sft-finetune-takeaways.md`，别凭通用经验答。

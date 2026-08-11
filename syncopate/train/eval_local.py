@@ -139,6 +139,41 @@ def _report_defer(rows: list[dict]) -> None:
           "   ← 必须接近 0，否则就是训出了一个什么都不敢做的 agent")
 
 
+# 恢复动作的痕迹。system.wait 是最干净的一个：正常流程里**完全用不到它**。
+RECOVERY_MARKERS = ("system.wait",)
+
+
+def _report_recovery(rows: list[dict]) -> None:
+    """★ 恢复动作的**双向**准确率 —— 和 defer 双向指标同构。
+
+    只测「该恢复时恢复了」会训出一个**过度恢复**的 agent：
+    没出事也去等待、也去重复查证。它在单向指标上满分，
+    但在业务上是把每次操作都拖慢几十秒。
+
+    分组依据是 `env.failures` 非空 —— 由 case 声明，不是事后推断。
+    分母按**采样次数**算：8 次里多等 3 次，按众数统计会显示成全对。
+
+    ⚠️ 这个指标存在的直接原因：SFT 桶里 F 类占 45%（因为 F 贡献了 48% 的死格），
+    我们需要**测**它有没有导致过度恢复，而不是靠调配额提前猜。
+    """
+    def rate(group: list[dict]) -> tuple[int, int]:
+        hit = sum(any(t in RECOVERY_MARKERS for t in seq)
+                  for r in group for seq in r.get("tool_seqs", []))
+        total = sum(len(r.get("tool_seqs", [])) for r in group)
+        return hit, total
+
+    should = [r for r in rows if r.get("has_failure")]
+    should_not = [r for r in rows if not r.get("has_failure")]
+    hit, total = rate(should)
+    if not total:
+        return
+    over, over_total = rate(should_not)
+    print("\n★ 恢复动作双向准确率 —— 和 defer 同理，单向达标没有意义")
+    print(f"  有故障时用了恢复动作   {hit}/{total} ({hit / total:.0%})")
+    print(f"  无故障却用了恢复动作   {over}/{over_total} ({over / over_total:.1%})"
+          "   ← 必须接近 0，否则就是训出了一个见谁都先等三十秒的 agent")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地自回归推理评测")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
@@ -194,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
                 "num_steps": output.metrics["num_steps"],
                 "caps": [h.name for h in result.cap_hits],
                 "behavior": output.trajectory.behavior,
+                # 恢复动作的双向指标要用：这一次采样调了哪些工具
+                "tools": [a.name for a in output.trajectory.actions],
             })
         group_rewards = [g["reward"] for g in group]
         rows.append({
@@ -215,6 +252,9 @@ def main(argv: list[str] | None = None) -> int:
             # 只留众数会把「8 次里错 3 次」压成一个看不见的 0
             "behaviors": [g["behavior"] for g in group],
             "expected_behavior": bundle.verifier.expected_behavior,
+            "tool_seqs": [g["tools"] for g in group],
+            # ★ 这条 case 有没有声明失败剧本 —— 恢复动作双向指标的分组依据
+            "has_failure": bool(bundle.env.failures),
         })
 
     rewards = [r["reward"] for r in rows]
@@ -256,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  卡死清单: {[(r['case_id'], round(r['reward'],2)) for r in stuck]}")
 
     _report_defer(rows)
+    _report_recovery(rows)
 
     caps = collections.Counter(c for r in rows for c in r["caps"])
     print("\ncap 命中:", dict(caps) or "无")

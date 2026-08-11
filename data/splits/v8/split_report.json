@@ -3,8 +3,8 @@
  "mode": "dead_grid",
  "counts": {
   "eval": 104,
-  "sft": 122,
-  "rl": 594
+  "sft": 247,
+  "rl": 469
  },
  "strata_count": 52,
  "overlaps_by_content_sha256": {
@@ -75,10 +75,10 @@
    "taken": 10
   },
   "BUD|tool_call|denied|must_discover": {
-   "kind": "shortcut",
-   "eval_evidence": "1/2",
+   "kind": "control",
+   "eval_evidence": "0/0",
    "available": 10,
-   "taken": 10
+   "taken": 4
   },
   "BUD|tool_call|escalated|id_given": {
    "kind": "shortcut",
@@ -90,6 +90,12 @@
    "kind": "shortcut",
    "eval_evidence": "2/2",
    "available": 39,
+   "taken": 10
+  },
+  "BUD|tool_call|executed|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 14,
    "taken": 10
   },
   "BUD|tool_call|executed|must_discover": {
@@ -112,37 +118,193 @@
   },
   "CRE|tool_call|block|id_given": {
    "kind": "shortcut",
-   "eval_evidence": "1/2",
+   "eval_evidence": "2/2",
    "available": 30,
    "taken": 10
   },
   "CRE|tool_call|block|must_discover": {
    "kind": "shortcut",
-   "eval_evidence": "1/2",
+   "eval_evidence": "2/2",
    "available": 28,
    "taken": 10
   },
   "CRE|tool_call|launch|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "CRE|tool_call|launch|must_discover": {
    "kind": "shortcut",
    "eval_evidence": "2/2",
    "available": 12,
    "taken": 10
   },
-  "CRE|tool_call|launch|must_discover": {
+  "FAIL|tool_call|absurd_value|id_given": {
    "kind": "shortcut",
-   "eval_evidence": "1/2",
-   "available": 12,
-   "taken": 10
+   "eval_evidence": "2/2",
+   "available": 4,
+   "taken": 4
   },
-  "LOW|tool_call|-|id_given": {
+  "FAIL|tool_call|absurd_value|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 7,
+   "taken": 7
+  },
+  "FAIL|tool_call|forbidden|id_given": {
    "kind": "control",
    "eval_evidence": "0/0",
-   "available": 24,
+   "available": 4,
    "taken": 4
+  },
+  "FAIL|tool_call|forbidden|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 7,
+   "taken": 4
+  },
+  "FAIL|tool_call|injection|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|injection|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|outage|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|outage|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FAIL|tool_call|pagination|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FAIL|tool_call|pagination|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|quota_exhausted|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|quota_exhausted|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|rate_limited|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|rate_limited|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|source_conflict|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|source_conflict|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|timeout_applied|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_applied|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_lost|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_lost|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FRESH|defer|immature|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "FRESH|defer|immature|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 11,
+   "taken": 4
+  },
+  "FRESH|tool_call|mature|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "FRESH|tool_call|mature|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 13,
+   "taken": 4
+  },
+  "FRESH|tool_call|partial|id_given": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 14,
+   "taken": 6
+  },
+  "FRESH|tool_call|partial|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "LOW|tool_call|-|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 10
   },
   "LOW|tool_call|-|must_discover": {
    "kind": "shortcut",
-   "eval_evidence": "1/2",
+   "eval_evidence": "2/2",
    "available": 22,
    "taken": 10
   },
@@ -153,10 +315,10 @@
    "taken": 6
   },
   "REJ|reject|-|must_discover": {
-   "kind": "convention",
-   "eval_evidence": "1/2",
+   "kind": "control",
+   "eval_evidence": "0/0",
    "available": 22,
-   "taken": 6
+   "taken": 4
   }
  },
  "quota_by_kind": {
