@@ -67,6 +67,19 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         "actor_rollout_ref.actor.fsdp_config.optimizer_offload=False",
         "actor_rollout_ref.ref.fsdp_config.param_offload=False",
 
+        # ---- ★ 改动 4：FSDP 用 bf16 存参数，不存 fp32 主权重 ----
+        #
+        # verl 默认 model_dtype=fp32：4.02B × 4 字节 = 16 GB。实测第一次冒烟就死在这：
+        #     After FSDP, device memory used/total 19.35/31.36
+        #     vLLM: No available memory for the cache blocks
+        # trainer 先占掉 19 GB，vLLM 连 KV cache 都分不到。
+        #
+        # 而我们用 LoRA —— **98.4% 的参数是冻结的**，给它们存一份 fp32 主权重是纯浪费：
+        # 主权重的意义是让优化器更新不被 bf16 的舍入吃掉，而冻结参数根本不更新。
+        # 需要 fp32 的只有 LoRA 那 66M，它们的优化器状态本来就是 fp32。
+        f"actor_rollout_ref.actor.fsdp_config.model_dtype={args.fsdp_dtype}",
+        f"actor_rollout_ref.ref.fsdp_config.model_dtype={args.fsdp_dtype}",
+
         # ---- actor ----
         f"actor_rollout_ref.actor.optim.lr={args.lr}",
         f"actor_rollout_ref.actor.ppo_mini_batch_size={args.ppo_mini_batch_size}",
@@ -102,6 +115,16 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
 
         # ---- trainer ----
         f"trainer.default_local_dir={ROOT / args.save_path}",
+        # ★★★ 每步把**实际进入训练**的样本 dump 成 JSONL，连同 reward_extra_info。
+        #
+        # 两个作用，缺一不可：
+        # 1. verl 的 compute_data_metrics 只认 __num_turns__ / tool_call_counts，
+        #    我们的 cap/* 和 subscore/* 训练时**根本不上 wandb**。这份 dump 是唯一的来源。
+        # 2. 它是「下发分布 vs 训练分布」漂移的度量基准：
+        #    dump 里是**训练到的**，我们 artifact 里是**下发过的**，两者的差就是漂移。
+        #    sync 下这个差恒为 0（有 barrier）；async 下短任务先回、长任务被
+        #    partial_rollout 切断，差就出来了 —— 而长链正是 agentic 的核心能力。
+        f"trainer.rollout_data_dir={ROOT / args.save_path / 'rollout_dumps'}",
         f"trainer.project_name={args.project}",
         f"trainer.experiment_name={args.experiment}",
         f"trainer.logger=[{args.logger}]",
@@ -159,7 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-response-length", type=int, default=2048)
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--agent-workers", type=int, default=1)
-    parser.add_argument("--rollout-gpu-util", type=float, default=0.40)
+    parser.add_argument("--rollout-gpu-util", type=float, default=0.55,
+                        help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
+                             "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache")
+    parser.add_argument("--fsdp-dtype", default="bf16", choices=["bf16", "fp32"],
+                        help="FSDP 持有参数的精度。LoRA 下 98.4%% 的参数冻结，"
+                             "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")
     parser.add_argument("--lora-rank", type=int, default=0, help="0 = 全参；4B 必须给 32")
     parser.add_argument("--lr", default="1e-6")
     parser.add_argument("--remove-padding", default="False", choices=["True", "False"],
