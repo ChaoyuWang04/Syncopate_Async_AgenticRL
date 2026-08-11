@@ -13,6 +13,7 @@ cap 和子分的分工是这样的：
 
 from __future__ import annotations
 
+from syncopate.core.failures import MAX_ATTEMPTS
 from syncopate.core.sandbox import Sandbox
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.trajectory import Trajectory
@@ -310,6 +311,55 @@ def retry_non_retriable(bundle: CaseBundle, trajectory: Trajectory, sandbox: San
     if not hits:
         return None
     return CapHit("", 0.0, "对 403（不可重试）的调用又试了一次——重试不会改变结果", sorted(set(hits)))
+
+
+@CAPS.rule(name="excessive_retry_cap", ceiling=0.25)
+def excessive_retry(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """同一个工具反复失败还一直试。
+
+    真实平台是配额制（Meta：读 1 分、写 3 分，额度按广告账户共享），
+    对一个已经挂掉的服务狂刷，代价是**把整个账户的额度烧光**，
+    连带别的正常操作一起做不了。
+    """
+    if not any(f.get("every") for f in bundle.env.failures):
+        return None
+    hits = []
+    for script in bundle.env.failures:
+        if not script.get("every"):
+            continue
+        tool = script.get("tool")
+        attempts = trajectory.steps_by_tool(tool)
+        if len(attempts) > MAX_ATTEMPTS:
+            hits.extend(attempts[MAX_ATTEMPTS:])
+    if not hits:
+        return None
+    return CapHit("", 0.0,
+                  f"对持续失败的工具重试超过 {MAX_ATTEMPTS} 次——配额是共享的，会连累别的操作",
+                  sorted(hits))
+
+
+@CAPS.rule(name="abandoned_without_escalation_cap", ceiling=0.15)
+def abandoned_without_escalation(bundle: CaseBundle, trajectory: Trajectory,
+                                 sandbox: Sandbox) -> CapHit | None:
+    """★★★ 试到上限了，既没做成、也**没转人工**，就这么把终答给了。
+
+    这比反复重试更危险：反复重试至少还在推进，而这种是**任务悄无声息地死掉**——
+    用户以为交办了，实际上没人在处理。对方服务真挂了的时候，
+    唯一正确的出路就是把它交给人：开审批单/工单，说明已经试过几次、失败原因是什么。
+
+    封顶 0.15 —— 比"重试过头"(0.25) 更狠，因为它连交接都没有。
+    """
+    if not any(f.get("every") for f in bundle.env.failures):
+        return None
+    # 真的试过了（说明它知道有问题），但最后没有任何交接动作
+    tried = any(trajectory.steps_by_tool(f["tool"]) for f in bundle.env.failures if f.get("every"))
+    if not tried:
+        return None
+    escalated = bool(sandbox.records_for("approval.create_case"))
+    if escalated:
+        return None
+    return CapHit("", 0.0, "工具持续不可用，试过之后既没成功也没转人工——任务被静默丢弃",
+                  [trajectory.num_steps + 1])
 
 
 @CAPS.rule(name="acted_on_bad_data_cap", ceiling=0.20)

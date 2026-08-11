@@ -1,0 +1,161 @@
+{
+ "batch_dir": "data/batches/v6",
+ "mode": "dead_grid",
+ "counts": {
+  "eval": 92,
+  "sft": 122,
+  "rl": 561
+ },
+ "strata_count": 46,
+ "overlaps_by_content_sha256": {
+  "eval∩sft": 0,
+  "eval∩rl": 0,
+  "sft∩rl": 0
+ },
+ "duplicate_content_pairs": 0,
+ "eval_strata_coverage": {
+  "BUD|tool_call|denied|id_given": 14,
+  "BUD|tool_call|denied|must_discover": 12,
+  "BUD|tool_call|escalated|id_given": 43,
+  "BUD|tool_call|escalated|must_discover": 41,
+  "BUD|tool_call|executed|id_given": 16,
+  "BUD|tool_call|executed|must_discover": 14,
+  "CLAR|clarify|-|id_given": 27,
+  "CLAR|clarify|-|must_discover": 23,
+  "CRE|tool_call|block|id_given": 32,
+  "CRE|tool_call|block|must_discover": 30,
+  "CRE|tool_call|launch|id_given": 14,
+  "CRE|tool_call|launch|must_discover": 14,
+  "DIA|tool_call|default_plan|id_given": 19,
+  "DIA|tool_call|default_plan|must_discover": 17,
+  "DIA|tool_call|switch_plan|id_given": 27,
+  "DIA|tool_call|switch_plan|must_discover": 27,
+  "FAIL|tool_call|absurd_value|id_given": 10,
+  "FAIL|tool_call|absurd_value|must_discover": 5,
+  "FAIL|tool_call|forbidden|id_given": 6,
+  "FAIL|tool_call|forbidden|must_discover": 9,
+  "FAIL|tool_call|injection|id_given": 6,
+  "FAIL|tool_call|injection|must_discover": 9,
+  "FAIL|tool_call|outage|id_given": 8,
+  "FAIL|tool_call|outage|must_discover": 7,
+  "FAIL|tool_call|rate_limited|id_given": 9,
+  "FAIL|tool_call|rate_limited|must_discover": 6,
+  "FAIL|tool_call|timeout_applied|id_given": 7,
+  "FAIL|tool_call|timeout_applied|must_discover": 8,
+  "FAIL|tool_call|timeout_lost|id_given": 7,
+  "FAIL|tool_call|timeout_lost|must_discover": 8,
+  "FRESH|defer|immature|id_given": 16,
+  "FRESH|defer|immature|must_discover": 13,
+  "FRESH|tool_call|mature|id_given": 16,
+  "FRESH|tool_call|mature|must_discover": 15,
+  "FRESH|tool_call|partial|id_given": 16,
+  "FRESH|tool_call|partial|must_discover": 14,
+  "HIGH|tool_call|-|id_given": 16,
+  "HIGH|tool_call|-|must_discover": 14,
+  "LONG|tool_call|-|id_given": 26,
+  "LONG|tool_call|-|must_discover": 24,
+  "LOW|tool_call|-|id_given": 26,
+  "LOW|tool_call|-|must_discover": 24,
+  "MISS|tool_call|-|id_given": 16,
+  "MISS|tool_call|-|must_discover": 14,
+  "REJ|reject|-|id_given": 26,
+  "REJ|reject|-|must_discover": 24
+ },
+ "dead_grid_selection": {
+  "BUD|tool_call|denied|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 12,
+   "taken": 10
+  },
+  "BUD|tool_call|denied|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 10,
+   "taken": 10
+  },
+  "BUD|tool_call|escalated|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 41,
+   "taken": 10
+  },
+  "BUD|tool_call|escalated|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 39,
+   "taken": 10
+  },
+  "BUD|tool_call|executed|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "CLAR|clarify|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 25,
+   "taken": 6
+  },
+  "CLAR|clarify|-|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 21,
+   "taken": 6
+  },
+  "CRE|tool_call|block|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 30,
+   "taken": 10
+  },
+  "CRE|tool_call|block|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 28,
+   "taken": 10
+  },
+  "CRE|tool_call|launch|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 12,
+   "taken": 10
+  },
+  "CRE|tool_call|launch|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 12,
+   "taken": 10
+  },
+  "LOW|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 24,
+   "taken": 4
+  },
+  "LOW|tool_call|-|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 22,
+   "taken": 10
+  },
+  "REJ|reject|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 6
+  },
+  "REJ|reject|-|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "1/2",
+   "available": 22,
+   "taken": 6
+  }
+ },
+ "quota_by_kind": {
+  "convention": 6,
+  "shortcut": 10,
+  "control": 4
+ }
+}

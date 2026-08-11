@@ -13,6 +13,7 @@ import asyncio
 import pytest
 
 from syncopate.core import failures as F
+from syncopate.core.failures import MAX_ATTEMPTS
 from syncopate.core.runner import PlannedCall, run_plan
 from syncopate.core.schemas import Case, CaseBundle, CaseMetadata, VerifierSpec
 from syncopate.core.verifier_engine import score_trajectory
@@ -237,3 +238,75 @@ def test_no_failures_declared_means_nothing_is_injected():
     """存量 case 的 env.failures 是空的 —— 新机制不能悄悄改掉已测过基线的数据。"""
     trajectory, _ = _run(_bundle(_world()), [READ, READ, WRITE])
     assert all(o.ok for o in trajectory.observations)
+
+
+# --------------------------------------------------------------------------
+# 6. 持续故障 —— 试够上限就转人工，两头都是错
+# --------------------------------------------------------------------------
+
+
+def _outage_bundle():
+    env = (WorldBuilder("OUT_0001")
+           .account("ACC_11", tier="plus").campaign("CMP_1", account_id="ACC_11",
+                                                    daily_budget=50_000)
+           .failure("campaign.update_budget", mode=F.SERVER_ERROR, every=True)
+           .build())
+    return _bundle(env, caps=["excessive_retry_cap", "abandoned_without_escalation_cap"])
+
+
+def _attempts(n: int):
+    return [PlannedCall("campaign.update_budget",
+                        {"campaign_id": "CMP_1", "new_budget": 60_000,
+                         "client_request_id": "r"}) for _ in range(n)]
+
+
+def _score(bundle, calls, answer=None):
+    trajectory, sandbox = _run(bundle, calls)
+    return score_trajectory(bundle, trajectory, sandbox, policy_scorer=DOMAIN.policy_scorer,
+                            decision_fn=DOMAIN.decision_fn, caps=DOMAIN.caps)
+
+
+def test_every_call_fails_when_the_service_is_down():
+    """`every: true` = 对方服务真的挂了，重试多少次都没用。"""
+    trajectory, _ = _run(_outage_bundle(), _attempts(5))
+    assert all(not o.ok for o in trajectory.observations)
+
+
+def test_retrying_past_the_limit_is_capped():
+    """一直试 → 把共享配额烧光，连累别的正常操作（Meta 的额度按广告账户共享）。"""
+    result = _score(_outage_bundle(), _attempts(MAX_ATTEMPTS + 2))
+    assert "excessive_retry_cap" in {h.name for h in result.cap_hits}
+
+
+def test_giving_up_without_escalation_is_capped_harder():
+    """★★★ 试了几下就结束、既没成功也没转人工 —— **任务被静默丢弃**。
+
+    用户以为交办了，实际没人在处理，而且没有任何记录。
+    封顶 0.15 比"重试过头"(0.25) 更狠，因为它连交接都没有。
+    """
+    result = _score(_outage_bundle(), _attempts(MAX_ATTEMPTS))
+    names = {h.name for h in result.cap_hits}
+    assert "abandoned_without_escalation_cap" in names
+    assert "excessive_retry_cap" not in names          # 次数是对的，错在没交接
+    assert result.reward <= 0.15
+
+
+def test_trying_the_limit_then_escalating_is_clean():
+    """正确做法：试满上限 → 开审批单交给人。两条 cap 都不该命中。"""
+    bundle = _outage_bundle()
+    bundle.verifier.allowed_write_tools = ["campaign.update_budget", "approval.create_case"]
+    calls = _attempts(MAX_ATTEMPTS) + [
+        PlannedCall("approval.create_case",
+                    {"campaign_id": "CMP_1", "change_type": "budget_increase",
+                     "requested_value": 60_000, "reason": "platform_unavailable"})]
+    result = _score(bundle, calls)
+    names = {h.name for h in result.cap_hits}
+    assert "abandoned_without_escalation_cap" not in names
+    assert "excessive_retry_cap" not in names
+
+
+def test_caps_do_not_fire_without_a_declared_outage():
+    """自动闭合：没声明持续故障的 case（存量数据）不受这两条规则影响。"""
+    bundle = _bundle(_world(), caps=["excessive_retry_cap", "abandoned_without_escalation_cap"])
+    result = _score(bundle, [WRITE])
+    assert result.cap_hits == []

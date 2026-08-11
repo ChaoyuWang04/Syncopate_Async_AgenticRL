@@ -61,11 +61,25 @@ def match(failures: list[dict[str, Any]], tool: str, call_index: int) -> dict[st
 
     `at_call` 是**该工具在本条 rollout 里的第几次调用**（1-indexed），不是第几步——
     按步匹配的话，模型多插一次读工具就会错开，剧本形同虚设。
+
+    ★ `every: true` 表示**每次都失败** —— 对方服务真的挂了，重试多少次都没用。
+    这一类的正确行为不是"再试一次"，而是**试够上限就转人工**：
+    agent 悄悄放弃、既没成功也没交接，是比反复重试更危险的失败模式，
+    因为任务死了而没有人知道。
     """
     for script in failures:
-        if script.get("tool") == tool and int(script.get("at_call", 1)) == call_index:
+        if script.get("tool") != tool:
+            continue
+        if script.get("every"):
+            return script
+        if int(script.get("at_call", 1)) == call_index:
             return script
     return None
+
+
+# 同一个工具在一条 rollout 里最多试几次。超了是浪费配额（Meta 是积分制），
+# 不到就放弃是把任务丢了 —— 两头都要罚。
+MAX_ATTEMPTS = 3
 
 
 def error_message(script: dict[str, Any], tool: str) -> str:
