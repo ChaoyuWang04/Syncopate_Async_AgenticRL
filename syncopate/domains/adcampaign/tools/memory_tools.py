@@ -62,7 +62,7 @@ def memory_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     if lane not in LANES:
         return ToolResult(ok=False, error=f"unknown_lane: {lane}")
     hits = search(
-        ctx.env.table("memory"), _now(ctx),
+        ctx.table("memory"), _now(ctx),
         lane=lane, subject=_subject_from(args), top_k=int(args.get("top_k", 5)),
     )
     return ToolResult(ok=True, data={
@@ -81,7 +81,7 @@ def memory_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     kind="read",
 )
 def memory_read(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    raw = ctx.env.table("memory").get(args.get("record_id"))
+    raw = ctx.table("memory").get(args.get("record_id"))
     if raw is None:
         return ToolResult(ok=False, error=f"memory_record_not_found: {args.get('record_id')}")
     record = build_record(raw)
@@ -167,7 +167,7 @@ def _called_risk_check(ctx: ToolContext) -> bool:
     fact_key="memory_invalidated",
 )
 def memory_invalidate(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    raw = ctx.env.table("memory").get(args.get("record_id"))
+    raw = ctx.table("memory").get(args.get("record_id"))
     if raw is None:
         return ToolResult(ok=False, error=f"memory_record_not_found: {args.get('record_id')}")
     if not (args.get("reason") or "").strip():
@@ -200,7 +200,7 @@ def memory_conflict_resolve(args: dict[str, Any], ctx: ToolContext) -> ToolResul
     ids = list(args.get("record_ids") or [])
     if len(ids) < 2:
         return ToolResult(ok=False, error="need_at_least_two_records")
-    table = ctx.env.table("memory")
+    table = ctx.table("memory")
     missing = [i for i in ids if i not in table]
     if missing:
         return ToolResult(ok=False, error=f"memory_record_not_found: {missing}")

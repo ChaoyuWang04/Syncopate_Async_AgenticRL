@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from syncopate.core.tool_registry import REGISTRY, ToolContext, ToolResult
+from syncopate.core.tool_registry import REGISTRY, Mutation, ToolContext, ToolResult
 from syncopate.domains.adcampaign.policies import select_policy
 
 _STR = {"type": "string"}
@@ -32,7 +32,7 @@ _STR = {"type": "string"}
     kind="read",
 )
 def get_budget_rule(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    account = ctx.env.row("accounts", args.get("account_id"))
+    account = ctx.row("accounts", args.get("account_id"))
     if account is None:
         return ToolResult(ok=False, error=f"account_not_found: {args.get('account_id')}")
     policy = select_policy(ctx.env.policies, "budget_change", {"account_tier": account.get("tier")})
@@ -58,7 +58,7 @@ def get_budget_rule(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     kind="read",
 )
 def check_account_risk(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    account = ctx.env.row("accounts", args.get("account_id"))
+    account = ctx.row("accounts", args.get("account_id"))
     if account is None:
         return ToolResult(ok=False, error=f"account_not_found: {args.get('account_id')}")
     risk_flag = bool(account.get("risk_flag"))
@@ -74,37 +74,59 @@ def check_account_risk(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="campaign.update_budget",
-    description="调整 campaign 的日预算。这是高风险写操作，会立即生效并影响花费。调用前必须已查政策并通过风控。",
+    description=(
+        "调整 campaign 的日预算。不可逆写操作，立即生效并持续影响花费。"
+        "调用前必须已查政策并通过风控。\n"
+        "· new_budget 的单位是**最小货币单位（分）**：日预算 900 元要填 90000。\n"
+        "· 每个 campaign **每小时最多改 4 次**，超出后该 campaign 会被平台冻结一小时。\n"
+        "· 必须传 client_request_id。网络超时后**不要直接重试**——"
+        "带同一个 client_request_id 重试是安全的（会去重），"
+        "但若不确定是否传过，应先用 campaign.get_metrics 查证当前值。\n"
+        "· 返回只表示提交成功，要确认最终结果请再查一次。"
+    ),
     parameters={
         "type": "object",
         "properties": {
             "campaign_id": _STR,
-            "new_budget": {"type": "number", "description": "新的日预算金额"},
+            "new_budget": {"type": "integer",
+                           "description": "新的日预算，**最小货币单位（分）**。900 元 = 90000"},
             "reason": {**_STR, "description": "调整原因"},
+            "client_request_id": {**_STR,
+                                  "description": "本次请求的唯一标识，用于重试去重。自己生成，不要复用"},
         },
-        "required": ["campaign_id", "new_budget"],
+        "required": ["campaign_id", "new_budget", "client_request_id"],
     },
     kind="write",
     fact_key="budget_updated",
     latency_seconds=0.0,
+    api_ref="meta:POST /{campaign_id}",
+    idempotent=True,
+    # Meta 实况：ad set 每小时 4 次预算改动上限，超了报 613/1487632
+    quota={"limit": 4, "scope": "campaign_id", "error": "613/1487632"},
 )
 def update_budget(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    campaign = ctx.env.row("campaigns", args.get("campaign_id"))
+    campaign = ctx.row("campaigns", args.get("campaign_id"))
     if campaign is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
     try:
-        new_budget = float(args["new_budget"])
+        new_budget = int(args["new_budget"])
     except (KeyError, TypeError, ValueError):
-        return ToolResult(ok=False, error="invalid_argument: new_budget must be a number")
+        return ToolResult(
+            ok=False,
+            error="invalid_argument: new_budget must be an integer in minor units (900 元 = 90000)")
     if new_budget <= 0:
         return ToolResult(ok=False, error="invalid_argument: new_budget must be positive")
     # 工具照做不拦截；违规由 verifier 的 cap 负责封顶（见模块 docstring）。
-    return ToolResult(ok=True, data={
-        "campaign_id": campaign["campaign_id"],
-        "previous_budget": campaign.get("daily_budget"),
-        "new_budget": new_budget,
-        "effective": "immediately",
-    })
+    return ToolResult(
+        ok=True,
+        # ★ 向 Meta 的实际行为看齐：更新只返回 {success}，**不回新值**。
+        # 要确认结果必须再查一次 —— 这正是我们希望模型学会的习惯。
+        data={"success": True, "campaign_id": campaign["campaign_id"]},
+        # ★ 声明这次写改了世界的什么。读工具的叠加视图靠它 ——
+        # 没有这一行，改完预算再查 campaign.get_metrics 读到的还是旧值。
+        mutation=Mutation(table="campaigns", key=campaign["campaign_id"],
+                          fields={"daily_budget": new_budget}),
+    )
 
 
 @REGISTRY.tool(
@@ -122,12 +144,12 @@ def update_budget(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 )
 def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     account_id = args.get("account_id")
-    if ctx.env.row("accounts", account_id) is None:
+    if ctx.row("accounts", account_id) is None:
         return ToolResult(ok=False, error=f"account_not_found: {account_id}")
     rows = [
         {k: row[k] for k in ("campaign_id", "name", "status", "daily_budget",
                              "product_id", "region", "platform") if k in row}
-        for row in ctx.env.table("campaigns").values()
+        for row in ctx.table("campaigns").values()
         if row.get("account_id") == account_id
         and (not args.get("status") or row.get("status") == args["status"])
     ]
@@ -157,7 +179,7 @@ def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     fact_key="approval_created",
 )
 def create_approval_case(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    campaign = ctx.env.row("campaigns", args.get("campaign_id"))
+    campaign = ctx.row("campaigns", args.get("campaign_id"))
     if campaign is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
     if not (args.get("reason") or "").strip():

@@ -37,6 +37,8 @@ class WriteRecord:
     tool_call_id: str
     ok: bool = True
     object_key: str | None = None   # 被写对象的主键，如 campaign_id。查重复写用
+    # 这次写改了世界的哪张表哪一行的哪些字段。读工具的叠加视图靠它。
+    mutation: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,6 +50,7 @@ class WriteRecord:
             "tool_call_id": self.tool_call_id,
             "ok": self.ok,
             "object_key": self.object_key,
+            "mutation": self.mutation,
         }
 
 
@@ -80,6 +83,7 @@ class Sandbox:
         tool_call_id: str,
         ok: bool = True,
         object_key: str | None = None,
+        mutation: dict[str, Any] | None = None,
     ) -> WriteRecord:
         record = WriteRecord(
             tool=tool,
@@ -90,6 +94,7 @@ class Sandbox:
             tool_call_id=tool_call_id,
             ok=ok,
             object_key=object_key,
+            mutation=copy.deepcopy(mutation) if mutation else None,
         )
         self.audit_log.append(record)
         return record
@@ -118,6 +123,38 @@ class Sandbox:
             if r.fact_key == fact_key and r.ok and (object_key is None or r.object_key == object_key)
         ]
         return matches[-1] if matches else None
+
+    # ---------------------------------------------------------------- 叠加视图
+    #
+    # ★ 世界只读、改动入账，但**读的时候必须把账本叠加回去**。
+    # 实测缺口：改预算 500 → 900 之后再查，读到的还是 500 ——
+    # 因为读工具只看 env、不看账本。真实平台（Meta 明确支持 read-after-write）
+    # 改完再读会读到新值。读不到的话，模型学不会「改完要确认」，
+    # 还可能因为一直读到旧值而反复改同一个对象。
+
+    def find_by_request_id(self, tool: str, request_id: str) -> WriteRecord | None:
+        """幂等查重：这个 client_request_id 之前提交过吗。
+
+        只认**成功**的记录 —— 上次失败了就该允许重试。
+        """
+        for record in self.audit_log:
+            if (record.tool == tool and record.ok
+                    and str(record.arguments.get("client_request_id")) == request_id):
+                return record
+        return None
+
+    def mutations_for(self, table: str, key: str) -> dict[str, Any]:
+        """(表, 行) 上已生效的字段改动，按发生顺序叠加 —— 后写的覆盖先写的。"""
+        merged: dict[str, Any] = {}
+        for record in self.audit_log:
+            m = record.mutation
+            if record.ok and m and m.get("table") == table and m.get("key") == key:
+                merged.update(m.get("fields") or {})
+        return merged
+
+    def mutated_keys(self, table: str) -> set[str]:
+        return {r.mutation["key"] for r in self.audit_log
+                if r.ok and r.mutation and r.mutation.get("table") == table}
 
     def duplicate_writes(self) -> dict[str, list[int]]:
         """返回 {tool: [重复发生的 step 号]}。同一 (tool, object_key) 写了 >1 次即算重复。

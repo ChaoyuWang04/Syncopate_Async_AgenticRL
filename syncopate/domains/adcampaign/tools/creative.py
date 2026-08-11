@@ -44,7 +44,7 @@ def _asset_id(campaign_id: str, creative_name: str) -> str:
     fact_key="creative_uploaded",
 )
 def upload_creative(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    campaign = ctx.env.row("campaigns", args.get("campaign_id"))
+    campaign = ctx.row("campaigns", args.get("campaign_id"))
     if campaign is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
 
@@ -92,7 +92,7 @@ def poll_review(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     # 审核结果由 env 决定（按素材名查预设结果），默认通过。
     # 让 case 能构造「上传了但被拒」的分支，而不是永远一路绿灯。
     creative_name = uploaded[-1].arguments.get("creative_name")
-    outcome = ctx.env.table("review_outcomes").get(str(creative_name), {})
+    outcome = ctx.table("review_outcomes").get(str(creative_name), {})
     status = outcome.get("review_status", "approved")
     return ToolResult(ok=True, data={
         "asset_id": asset_id,

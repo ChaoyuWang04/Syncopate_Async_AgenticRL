@@ -23,6 +23,21 @@ from syncopate.core.schemas import Case, EnvSnapshot
 
 
 @dataclass
+class Mutation:
+    """一次写动作对世界造成的改变。**不回给模型**，只用于叠加视图。
+
+    为什么要显式声明，而不是让写工具直接改 env：
+    `EnvSnapshot` 只读是重放和归因的基础（同一条 case 并发跑 N 条 rollout，
+    各自的写动作绝不能串台）。所以世界不变，改变记在账本里，
+    读的时候把账本**叠加**上去 —— 世界原样和本次改动始终分得开。
+    """
+
+    table: str
+    key: str
+    fields: dict[str, Any]
+
+
+@dataclass
 class ToolContext:
     """工具执行时能看到的一切。"""
 
@@ -32,6 +47,29 @@ class ToolContext:
     step: int                # 当前是第几个 assistant 轮，1-indexed
     tool_call_id: str
 
+    # ---- ★ 读工具必须走这两个方法，不要直接 ctx.env.row() ----
+    #
+    # 实测过的缺口：改预算 500 → 900 之后再查，读到的还是 500。
+    # 因为 env 只读、写只进账本，而读工具**根本不看账本**。
+    # 真实平台改完再读会读到新值（Meta 明确支持 read-after-write），
+    # 我们这里读不到 —— 模型因此学不会「改完要确认」，还可能反复改同一个对象。
+    def row(self, table: str, key: str | None) -> dict[str, Any] | None:
+        """世界的那一行，**叠加本次 rollout 已生效的写动作**。"""
+        base = self.env.row(table, key)
+        if base is None or key is None:
+            return base
+        overlay = self.sandbox.mutations_for(table, key)
+        return {**base, **overlay} if overlay else base
+
+    def table(self, name: str) -> dict[str, dict[str, Any]]:
+        """整张表的叠加视图。"""
+        rows = self.env.table(name)
+        changed = self.sandbox.mutated_keys(name)
+        if not changed:
+            return rows
+        return {k: ({**v, **self.sandbox.mutations_for(name, k)} if k in changed else v)
+                for k, v in rows.items()}
+
 
 @dataclass
 class ToolResult:
@@ -40,6 +78,8 @@ class ToolResult:
     ok: bool
     data: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    # 写工具声明它改了世界的什么。不进 observation —— 模型看到的只有 data。
+    mutation: "Mutation | None" = None
 
     def observation(self) -> dict[str, Any]:
         return dict(self.data) if self.ok else {"error": self.error or "tool_failed"}
@@ -57,6 +97,18 @@ class ToolSpec:
     fact_key: str | None = None          # 写工具翻转哪个谓词；读工具为 None
     latency_seconds: float = 0.0         # 真实等待时长
     requires: list[str] = field(default_factory=list)  # 前置工具，做依赖检查用
+
+    # ---- 真实性声明（docs/syncopate/07 §6）----
+    api_ref: str | None = None           # 对应的真实 endpoint，如 "meta:POST /{campaign_id}"
+    # ★ 幂等：写工具必须收 client_request_id。
+    # Meta Marketing API **没有**幂等机制（实查文档确认），所以现实中重试一次
+    # 就是多改一次预算。我们在沙盒里把它建成"平台支持"，是为了让模型学会**传这个键**——
+    # 真实接入时由我们自己的 runtime 兑现这层保证（设计文档 §38 三层幂等的第三层）。
+    idempotent: bool = False
+    # ★ 调用配额：Meta 实况是每个 ad set **每小时最多改 4 次预算**，
+    # 超了报 613/1487632 并封禁该 ad set 一小时。
+    # {"limit": 4, "scope": "campaign_id", "error": "613"}
+    quota: dict[str, Any] | None = None
 
     def openai_schema(self) -> dict[str, Any]:
         return {
@@ -89,6 +141,9 @@ class ToolRegistry:
         fact_key: str | None = None,
         latency_seconds: float = 0.0,
         requires: list[str] | None = None,
+        api_ref: str | None = None,
+        idempotent: bool = False,
+        quota: dict[str, Any] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if kind == "write" and not fact_key:
@@ -102,6 +157,9 @@ class ToolRegistry:
                 fact_key=fact_key,
                 latency_seconds=latency_seconds,
                 requires=requires or [],
+                api_ref=api_ref,
+                idempotent=idempotent,
+                quota=quota,
             )
             return func
 
@@ -140,6 +198,34 @@ class ToolRegistry:
         if spec is None:
             return ToolResult(ok=False, error=f"unknown_tool: {name}")
 
+        # ---- ★ 幂等去重：同一个 client_request_id 重复提交，返回上次的结果 ----
+        #
+        # 这是 F1（超时后重试）的正确形态。真实世界里超时分两种，
+        # **模型看到的现象一模一样**：请求没发出去（该重试）vs 发到了回包丢了
+        # （重试=重复扣款）。有幂等键时重试才是安全的；没有键就必须先查证。
+        if spec.kind == "write" and spec.idempotent:
+            request_id = arguments.get("client_request_id")
+            if not request_id:
+                return ToolResult(
+                    ok=False,
+                    error="missing_argument: client_request_id is required for write operations")
+            prior = ctx.sandbox.find_by_request_id(name, str(request_id))
+            if prior is not None:
+                # 不重复入账 —— 否则 duplicate_write_cap 会把**正确的重试**判成违规
+                return ToolResult(ok=True, data={**prior.result, "deduplicated": True})
+
+        # ---- ★ 调用配额：Meta 每个 ad set 每小时最多改 4 次预算 ----
+        if spec.quota:
+            scope_field = spec.quota.get("scope")
+            scope_value = arguments.get(scope_field) if scope_field else None
+            used = sum(1 for r in ctx.sandbox.records_for(name)
+                       if scope_value is None or r.object_key == scope_value)
+            if used >= int(spec.quota.get("limit", 1 << 30)):
+                return ToolResult(ok=False, error=(
+                    f"{spec.quota.get('error', 'rate_limited')}: "
+                    f"{name} 对 {scope_value} 已达上限 {spec.quota['limit']} 次/小时，"
+                    f"该对象已被平台冻结一小时"))
+
         if spec.latency_seconds > 0:
             await asyncio.sleep(spec.latency_seconds * self.latency_scale)
 
@@ -163,13 +249,20 @@ class ToolRegistry:
                 tool_call_id=ctx.tool_call_id,
                 ok=result.ok,
                 object_key=_object_key(arguments),
+                mutation=(
+                    {"table": result.mutation.table, "key": result.mutation.key,
+                     "fields": dict(result.mutation.fields)}
+                    if result.mutation else None
+                ),
             )
         return result
 
     def snapshot(self) -> list[dict[str, Any]]:
         """工具表快照，落进 artifact 用于事后复盘（老师包的 tool_schema_hash 同思路）。"""
         return [
-            {"name": s.name, "kind": s.kind, "fact_key": s.fact_key, "latency_seconds": s.latency_seconds}
+            {"name": s.name, "kind": s.kind, "fact_key": s.fact_key,
+             "latency_seconds": s.latency_seconds, "api_ref": s.api_ref,
+             "idempotent": s.idempotent, "quota": s.quota}
             for s in (self._tools[n] for n in self.names())
         ]
 

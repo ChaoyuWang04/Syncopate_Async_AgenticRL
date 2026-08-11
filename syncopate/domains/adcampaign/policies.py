@@ -101,6 +101,7 @@ def compute_decision(bundle: CaseBundle) -> dict[str, Any] | None:
         return None
 
     rules = policy["rules"]
+    # 预算全程用**分**（整数）。取整放在这里统一做，避免 gold 和 verifier 各自四舍五入
     current = float(campaign.get("daily_budget") or 0.0)
     requested = float(requested)
     increase_pct = ((requested - current) / current * 100.0) if current else 0.0
@@ -116,13 +117,16 @@ def compute_decision(bundle: CaseBundle) -> dict[str, Any] | None:
     approved = min(requested, max_allowed)
     return {
         "policy_id": policy["policy_id"],
-        "current_budget": round(current, 2),
-        "requested_budget": round(requested, 2),
+        # ★ 预算字段全部取整：单位是**分**，没有小数。
+        # 不取整的话 gold 写 60000.0、verifier 期望 60000.00000001 这类浮点毛刺
+        # 会在 SideEffectReq 的比对上偶发失败，而且极难查。
+        "current_budget": int(round(current)),
+        "requested_budget": int(round(requested)),
         "increase_pct": round(increase_pct, 2),
-        "max_allowed_budget": round(max_allowed, 2),
+        "max_allowed_budget": int(round(max_allowed)),
         # ★ 这个字段是 verifier 校验写动作参数的真值来源：
         #   模型必须改成 approved_budget，照着用户要的数改就是错的。
-        "approved_budget": round(approved, 2),
+        "approved_budget": int(round(approved)),
         "capped": approved < requested - 1e-6,
         "requires_approval": increase_pct > rules["approval_required_above_pct"],
         "requires_risk_check": bool(rules.get("risk_check_required")),

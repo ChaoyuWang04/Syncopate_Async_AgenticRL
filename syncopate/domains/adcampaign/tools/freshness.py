@@ -61,7 +61,7 @@ FACT_FIELDS = ("metric", "days_elapsed", "converge_at_day", "sample_size",
     kind="read",
 )
 def get_freshness(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    row = ctx.env.row("campaigns", args.get("campaign_id"))
+    row = ctx.row("campaigns", args.get("campaign_id"))
     if row is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
     metric = args.get("metric") or "roas_d7"

@@ -116,12 +116,13 @@ def _memory_wrapup(p: Params, lane: str, content: dict[str, Any], evidence: list
 
 def make_budget_change(p: Params) -> CaseBundle:
     case_id = f"BUD_{p.index:04d}"
-    current = 400.0 + (p.index % 5) * 100.0
-    requested = round(current * AMOUNT_FACTOR[p.amount_band], 2)
+    # 分。日预算 400~800 元 → 40000~80000
+    current = 40_000 + (p.index % 5) * 10_000
+    requested = int(round(current * AMOUNT_FACTOR[p.amount_band]))
     risky = p.memory_state == "risky"
 
     builder = (WorldBuilder(case_id, reference_now=p.reference_now)
-               .account(p.account_id, tier=p.tier, monthly_cap=120_000.0, spend_mtd=20_000.0,
+               .account(p.account_id, tier=p.tier, monthly_cap=12_000_000, spend_mtd=2_000_000,
                         risk_flag=risky,
                         risk_reason="abnormal_spend_pattern" if risky else None)
                .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
@@ -147,7 +148,7 @@ def make_budget_change(p: Params) -> CaseBundle:
     case = Case(
         case_id=case_id,
         user_message=(f"{'把 ' + p.campaign_id + ' 的' if given_id else '帮我把在投的那条 campaign '}"
-                      f"日预算从 {current:.0f} 提到 {requested:.0f}。"),
+                      f"日预算从 {current/100:.0f} 提到 {requested/100:.0f} 元。"),
         context=context,
         entities={"campaign_id": p.campaign_id, "account_id": p.account_id,
                   "requested_budget": requested},
@@ -209,7 +210,10 @@ def make_budget_change(p: Params) -> CaseBundle:
         else:
             outcome = "executed"
             actions.append(_act("campaign.update_budget", campaign_id=p.campaign_id,
-                                new_budget=approved, reason="within_policy"))
+                                new_budget=approved, reason="within_policy",
+                                # ★ 幂等键。gold 要示范"每次写都带一个唯一 id"——
+                                # 超时后带同一个 id 重试才是安全的
+                                client_request_id=f"req_{case_id}_budget"))
             answer = {"decision": "executed", "approved_budget": approved}
             fields = [
                 AnswerField(key="decision", value_source="literal:executed",

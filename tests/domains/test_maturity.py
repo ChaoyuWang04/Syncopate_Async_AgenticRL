@@ -24,7 +24,7 @@ from syncopate.domains.adcampaign.world import WorldBuilder
 DOMAIN = build_domain()
 
 BUDGET_CALL = PlannedCall("campaign.update_budget",
-                          {"campaign_id": "CMP_4012", "new_budget": 600.0})
+                          {"campaign_id": "CMP_4012", "new_budget": 600.0, "client_request_id": "tk8"})
 
 
 def _env(days: float, *, installs_7d: float = 1400.0, roas: float = 0.45):

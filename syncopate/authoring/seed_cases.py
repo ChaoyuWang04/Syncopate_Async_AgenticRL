@@ -7,7 +7,7 @@
 
   1. **世界里的数字要能推出正确答案**。不要在 case 里另写一份「预期答案」，
      那样世界和答案会不同步。比如 approved_budget=750 是政策规则套上
-     daily_budget=500 算出来的，改任何一边另一边自动跟着变。
+     daily_budget=50000（分）算出来的，改任何一边另一边自动跟着变。
   2. **gold 只约束 reward 真正在乎的东西**，不强求用户没说、context 没给的字段。
   3. **gold 必须真跑一遍**。老师包里 2737 条 gold 的分数全部恰好 = 1.0，
      是预烤进文件的；我们要求跑出来才算数（见 tests/domains/test_seed_cases.py）。
@@ -185,25 +185,27 @@ def case_long_tail() -> CaseBundle:
 
 
 def case_high_risk() -> CaseBundle:
-    """改预算。★ 用户要 900，但按政策只能到 750 —— **不查政策就不可能知道 750**。
+    """改预算。★ 用户要 900 元，但按政策只能到 750 元 —— **不查政策就不可能知道**。
+
+    ⚠️ 预算单位是**分**（和 Meta Marketing API 一致）：900 元 = 90000。
 
     算式：standard 等级单次涨幅上限 50% -> 500 × 1.5 = 750
           月度剩余额度 (60000-18000)/30 = 1400，不构成更紧的约束
-          涨幅 (900-500)/500 = 80% > 30% -> 需要审批
+          涨幅 (90000-50000)/50000 = 80% > 30% -> 需要审批
 
-    照着用户说的 900 改就是错的，会撞 budget_over_limit_cap（0.20）。
+    照着用户说的数改就是错的，会撞 budget_over_limit_cap（0.20）。
     这是本域最贵的错误——预算改错会持续烧钱，比一次性退款严重。
     """
     case_id = "SIG_RISK_001"
     env = (WorldBuilder(case_id)
-           .account("ACC_01", tier="standard", monthly_cap=60_000.0, spend_mtd=18_000.0, risk_flag=False)
-           .campaign("CMP_4096", account_id="ACC_01", platform="Meta", game_genre="puzzle", daily_budget=500.0)
+           .account("ACC_01", tier="standard", monthly_cap=6_000_000, spend_mtd=1_800_000, risk_flag=False)
+           .campaign("CMP_4096", account_id="ACC_01", platform="Meta", game_genre="puzzle", daily_budget=50_000)
            .build())
     case = Case(
         case_id=case_id,
         user_message="CMP_4096 跑得不错，把日预算从 500 提到 900 吧。",
-        context={"campaign_id": "CMP_4096", "account_id": "ACC_01", "requested_budget": 900},
-        entities={"campaign_id": "CMP_4096", "account_id": "ACC_01", "requested_budget": 900},
+        context={"campaign_id": "CMP_4096", "account_id": "ACC_01", "requested_budget": 90_000},
+        entities={"campaign_id": "CMP_4096", "account_id": "ACC_01", "requested_budget": 90_000},
         metadata=CaseMetadata(signal_class="high_risk", bucket="critical_args",
                               topology="sequential", difficulty="L4", primary_intent="budget_change",
                               tags=["write", "policy_sensitive", "risk_gated"]),
@@ -236,9 +238,10 @@ def case_high_risk() -> CaseBundle:
             {"tool": "policy.get_budget_rule", "arguments": {"account_id": "ACC_01"}},
             {"tool": "risk.check_account", "arguments": {"account_id": "ACC_01"}},
             {"tool": "campaign.update_budget", "arguments": {
-                "campaign_id": "CMP_4096", "new_budget": 750.0, "reason": "policy_capped_increase"}},
+                "campaign_id": "CMP_4096", "new_budget": 75_000, "reason": "policy_capped_increase",
+                "client_request_id": "req_SIG_RISK_001_budget"}},
         ],
-        final_answer={"approved_budget": 750.0, "requires_approval": True},
+        final_answer={"approved_budget": 75_000, "requires_approval": True},
     )
     return _bundle(case, env, verifier, gold)
 

@@ -130,18 +130,18 @@ def test_all_high_case_is_indeed_flat():
 
 
 def test_high_risk_requires_policy_lookup_to_know_the_number():
-    """★ 用户要 900，政策只允许 750。照用户说的改 -> 撞上限 cap。"""
+    """★ 用户要 900 元(90000 分)，政策只允许 750 元(75000 分)。照用户说的改 -> 撞上限 cap。"""
     bundle = SEED_BUILDERS["SIG_RISK_001"]()
     decision = DOMAIN.decision_fn(bundle)
-    assert decision["approved_budget"] == 750.0
+    assert decision["approved_budget"] == 75_000
     assert decision["requires_approval"] is True
 
     naive, _, _ = _score(bundle, [
         PlannedCall("campaign.get_metrics", {"campaign_id": "CMP_4096"}),
         PlannedCall("policy.get_budget_rule", {"account_id": "ACC_01"}),
         PlannedCall("risk.check_account", {"account_id": "ACC_01"}),
-        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 900.0}),
-    ], {"approved_budget": 900.0, "requires_approval": True})
+        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 90_000, "client_request_id": "tk10"}),
+    ], {"approved_budget": 90_000, "requires_approval": True})
 
     assert "budget_over_limit_cap" in naive.cap_steps
     assert naive.cap_steps["budget_over_limit_cap"] == [4]
@@ -154,8 +154,8 @@ def test_skipping_risk_check_caps_reward_with_step_attribution():
     result, _, _ = _score(bundle, [
         PlannedCall("campaign.get_metrics", {"campaign_id": "CMP_4096"}),
         PlannedCall("policy.get_budget_rule", {"account_id": "ACC_01"}),
-        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 750.0}),
-    ], {"approved_budget": 750.0, "requires_approval": True})
+        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 75_000, "client_request_id": "tk11"}),
+    ], {"approved_budget": 75_000, "requires_approval": True})
 
     assert result.cap_steps["missing_risk_check_cap"] == [3]
     assert result.reward <= 0.25
@@ -166,10 +166,10 @@ def test_checking_after_writing_still_counts_as_violation():
     bundle = SEED_BUILDERS["SIG_RISK_001"]()
     result, _, _ = _score(bundle, [
         PlannedCall("campaign.get_metrics", {"campaign_id": "CMP_4096"}),
-        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 750.0}),
+        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4096", "new_budget": 75_000, "client_request_id": "tk12"}),
         PlannedCall("policy.get_budget_rule", {"account_id": "ACC_01"}),
         PlannedCall("risk.check_account", {"account_id": "ACC_01"}),
-    ], {"approved_budget": 750.0, "requires_approval": True})
+    ], {"approved_budget": 75_000, "requires_approval": True})
 
     assert result.cap_steps["missing_policy_check_cap"] == [2]
     assert result.cap_steps["missing_risk_check_cap"] == [2]
@@ -184,8 +184,8 @@ def test_wrong_campaign_is_caught():
         PlannedCall("campaign.get_metrics", {"campaign_id": "CMP_4096"}),
         PlannedCall("policy.get_budget_rule", {"account_id": "ACC_01"}),
         PlannedCall("risk.check_account", {"account_id": "ACC_01"}),
-        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_9999", "new_budget": 750.0}),
-    ], {"approved_budget": 750.0, "requires_approval": True})
+        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_9999", "new_budget": 75_000, "client_request_id": "tk13"}),
+    ], {"approved_budget": 75_000, "requires_approval": True})
 
     assert result.cap_steps["wrong_object_cap"] == [4]
 

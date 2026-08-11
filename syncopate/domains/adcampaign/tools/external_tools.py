@@ -42,7 +42,7 @@ _STR = {"type": "string"}
 )
 def get_safety_line(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     key = f"{args.get('product_id')}|{args.get('region')}"
-    row = ctx.env.table("safety_lines").get(key)
+    row = ctx.table("safety_lines").get(key)
     if row is None:
         return ToolResult(ok=False, error=f"safety_line_not_found: {key}")
     return ToolResult(ok=True, data=dict(row))
@@ -72,7 +72,7 @@ def get_seasonal_context(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     region = args.get("region")
     wanted = args.get("event")
     upcoming, active = [], []
-    for event in ctx.env.table("seasonal_events").values():
+    for event in ctx.table("seasonal_events").values():
         if region and region not in event.get("regions", []):
             continue
         if wanted and event["event"] != wanted:
@@ -112,7 +112,7 @@ def get_seasonal_context(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     kind="read",
 )
 def get_asset_tags(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    catalog = ctx.env.table("creative_catalog")
+    catalog = ctx.table("creative_catalog")
     creative_id, name = args.get("creative_id"), args.get("creative_name")
     row = catalog.get(creative_id) if creative_id else None
     if row is None and name:
@@ -147,7 +147,7 @@ def search_similar(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         return ToolResult(ok=False, error="visual_tags_required")
     min_ipm = float(args.get("min_ipm", 0.0))
     hits = []
-    for row in ctx.env.table("creative_catalog").values():
+    for row in ctx.table("creative_catalog").values():
         tags = {t.lower() for t in row.get("visual_tags", [])}
         if not (wanted & tags):
             continue

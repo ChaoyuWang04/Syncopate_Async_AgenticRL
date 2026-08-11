@@ -38,7 +38,7 @@ _STR = {"type": "string"}
     kind="read",
 )
 def get_campaign_metrics(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    row = ctx.env.row("campaigns", args.get("campaign_id"))
+    row = ctx.row("campaigns", args.get("campaign_id"))
     if row is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
     # 只回投放指标，不回 account_id 这类内部字段——模型要拿账户信息得另外查。
@@ -65,7 +65,7 @@ def get_campaign_metrics(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     kind="read",
 )
 def get_creative_performance(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    table = ctx.env.table("creatives")
+    table = ctx.table("creatives")
     creative_id, campaign_id = args.get("creative_id"), args.get("campaign_id")
     if creative_id:
         row = table.get(creative_id)
@@ -107,7 +107,7 @@ def _ratio(row: dict[str, Any], actual_key: str, baseline_key: str) -> float:
     kind="read",
 )
 def detect_anomalies(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-    row = ctx.env.row("campaigns", args.get("campaign_id"))
+    row = ctx.row("campaigns", args.get("campaign_id"))
     if row is None:
         return ToolResult(ok=False, error=f"campaign_not_found: {args.get('campaign_id')}")
     hits = [name for name, predicate in _ANOMALY_RULES if predicate(row)]
@@ -138,7 +138,7 @@ def detect_anomalies(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 )
 def query_benchmark(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     key = f"{args.get('platform')}|{args.get('game_genre')}|{args.get('metric')}"
-    row = ctx.env.table("benchmarks").get(key)
+    row = ctx.table("benchmarks").get(key)
     if row is None:
         return ToolResult(ok=False, error=f"benchmark_not_found: {key}")
     return ToolResult(ok=True, data=row)

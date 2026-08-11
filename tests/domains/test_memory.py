@@ -134,7 +134,7 @@ def test_skipping_memory_when_it_matters_hits_cap():
     result = _score(bundle, [
         PlannedCall("campaign.get_metrics", {"campaign_id": "CMP_4012"}),
         PlannedCall("policy.get_budget_rule", {"account_id": "ACC_11"}),
-        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4012", "new_budget": 750.0}),
+        PlannedCall("campaign.update_budget", {"campaign_id": "CMP_4012", "new_budget": 750.0, "client_request_id": "tk9"}),
     ], {})
     assert "missing_memory_check_cap" in result.cap_steps
     assert result.cap_steps["missing_memory_check_cap"] == [3]

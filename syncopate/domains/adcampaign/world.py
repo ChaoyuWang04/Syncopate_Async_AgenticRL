@@ -44,7 +44,7 @@ _CAMPAIGN_DEFAULTS: dict[str, Any] = {
     # 默认 30 = 早已收敛，这样存量 case 的世界一个字节都不变——
     # 新增机制不该悄悄改掉已经测过基线的那批 case。
     "started_days_ago": 30,
-    "daily_budget": 500.0,
+    "daily_budget": 50_000,      # 分。真实 Meta API 就是最小货币单位
     "spend_7d": 3200.0,
     "installs_7d": 1280,
     "cpi": 2.10,
@@ -71,8 +71,13 @@ _ACCOUNT_DEFAULTS: dict[str, Any] = {
     "status": "active",
     "risk_flag": False,
     "risk_reason": None,
-    "monthly_cap": 60_000.0,
-    "spend_mtd": 18_000.0,
+    # ★ 预算类字段统一用**分**（和 daily_budget 同口径）。
+    # 只改 daily_budget 不改这两个，monthly_cap 的约束会把预算掐到 1/100 ——
+    # 正是这次要消灭的那种单位混用 bug。
+    # 注意 spend_7d 留在"元"：它是 insights 指标，Meta 那边也是十进制字符串，
+    # **真实世界的单位就是混的**，这一点如实建模。
+    "monthly_cap": 6_000_000,
+    "spend_mtd": 1_800_000,
 }
 
 # 行业基准表：**全组合覆盖**，key 形如 "Meta|puzzle|cpi"。
