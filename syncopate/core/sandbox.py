@@ -69,6 +69,17 @@ class Sandbox:
         self.namespace_id = namespace_id
         # 唯一真相：append-only，任何写动作（成功或失败）都留痕
         self.audit_log: list[WriteRecord] = []
+        # 每个工具被调用了几次。失败剧本按「该工具的第几次调用」匹配 ——
+        # 按 step 匹配的话，模型多插一次读工具就会错开，剧本形同虚设。
+        self.call_counts: dict[str, int] = {}
+        # 出现在工具返回里的对象主键。★ 防注入用（设计文档 §37 的 param_source）：
+        # 「拿工具返回里读来的 id 去做写动作」是一条可判定的规则。
+        self.ids_seen_in_output: set[str] = set()
+
+    def note_call(self, tool: str) -> int:
+        """记一次调用，返回这是该工具的第几次（1-indexed）。"""
+        self.call_counts[tool] = self.call_counts.get(tool, 0) + 1
+        return self.call_counts[tool]
 
     # ---------------------------------------------------------------- 写入
 

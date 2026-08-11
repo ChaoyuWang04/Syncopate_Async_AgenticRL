@@ -143,7 +143,22 @@ class WorldBuilder:
             "seasonal_events": {e["event"]: e for e in external.get("seasonal_events", [])},
         }
         self._policies: list[dict[str, Any]] = [*BUDGET_POLICIES, *PLATFORM_POLICIES]
+        self._failures: list[dict[str, Any]] = []
         self._memory_seq = 0
+
+    def failure(self, tool: str, *, mode: str, at_call: int = 1, **extra: Any) -> WorldBuilder:
+        """声明一条失败剧本：这个工具的第 at_call 次调用会怎么失败。
+
+        ★ 必须由 case 声明，不能运行时随机 —— GRPO 是组内比较，
+        失败若随机，reward 差异就分不清是「模型做得不同」还是「运气不同」。
+        见 core/failures.py 的模块 docstring。
+        """
+        from syncopate.core.failures import MODES
+
+        if mode not in MODES:
+            raise ValueError(f"未知失败模式: {mode}（可选 {MODES}）")
+        self._failures.append({"tool": tool, "mode": mode, "at_call": at_call, **extra})
+        return self
 
     def account(self, account_id: str, **overrides: Any) -> WorldBuilder:
         self._tables["accounts"][account_id] = {
@@ -206,4 +221,5 @@ class WorldBuilder:
             reference_now=self.reference_now,
             readonly_tables={k: v for k, v in self._tables.items()},
             policies=list(self._policies),
+            failures=list(self._failures),
         )

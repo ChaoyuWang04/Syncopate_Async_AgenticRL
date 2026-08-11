@@ -105,6 +105,26 @@ class EnvSnapshot:
     readonly_tables: dict[str, dict[str, Any]] = field(default_factory=dict)
     # 政策库：条件规则，verifier 用它算「本 case 的正确决策应该是什么」
     policies: list[dict[str, Any]] = field(default_factory=list)
+
+    # ---- ★★★ 失败剧本：这条 case 里哪个工具的第几次调用会怎么失败 ----
+    #
+    # 为什么由 case 声明，而不是运行时随机注入：
+    #
+    #   GRPO 是**组内比较** —— 同一条 case 跑 N 遍，比谁好谁坏。
+    #   失败若随机，rollout 1 撞上超时、rollout 2 一路顺风，
+    #   reward 差异就分不清是「模型做得不同」还是「运气不同」。**advantage 被污染。**
+    #
+    # 所以训练/评测用确定性剧本；压测才用随机注入（那时不产生梯度）。
+    # 同源的坑：rollout_id 固定导致 artifact 互相覆盖 ——
+    # **RL 里任何跨 rollout 的随机性都是污染。**
+    #
+    #   [{"tool": "campaign.update_budget", "at_call": 1, "mode": "timeout",
+    #     "side_effect_applied": true}]
+    #
+    # ★ side_effect_applied 是这套机制的灵魂：超时分两种，模型看到的现象**一模一样**
+    #   —— 请求没发出去（该重试）vs 到了但回包丢了（重试=重复扣款）。
+    #   构造不出后者，模型学到的就是「超时=没做成」，那是错的。
+    failures: list[dict[str, Any]] = field(default_factory=list)
     version: str = SCHEMA_VERSION
 
     def table(self, name: str) -> dict[str, Any]:

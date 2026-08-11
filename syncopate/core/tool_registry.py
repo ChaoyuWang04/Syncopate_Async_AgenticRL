@@ -18,6 +18,7 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from syncopate.core import failures as F
 from syncopate.core.sandbox import Sandbox
 from syncopate.core.schemas import Case, EnvSnapshot
 
@@ -226,6 +227,22 @@ class ToolRegistry:
                     f"{name} 对 {scope_value} 已达上限 {spec.quota['limit']} 次/小时，"
                     f"该对象已被平台冻结一小时"))
 
+        # ---- ★★★ 失败注入。放在配额之后、handler 之前 ----
+        call_index = ctx.sandbox.note_call(name)
+        script = F.match(ctx.env.failures, name, call_index)
+
+        if script and script.get("mode") == F.TIMEOUT:
+            # ★ 灵魂所在：超时但**副作用可能已经生效**。
+            # side_effect_applied=True 时照常执行 handler（世界真的变了、账本真的记了），
+            # 但**返回给模型的是一个错误**，且错误里不透露到底变没变。
+            # 模型只能靠"先查证"自己搞清楚 —— 这正是要训进权重的行为。
+            if script.get("side_effect_applied"):
+                await self._run_handler(spec, name, arguments, ctx)
+            return ToolResult(ok=False, error=F.error_message(script, name))
+
+        if script and script.get("mode") in (F.RATE_LIMITED, F.SERVER_ERROR, F.FORBIDDEN):
+            return ToolResult(ok=False, error=F.error_message(script, name))
+
         if spec.latency_seconds > 0:
             await asyncio.sleep(spec.latency_seconds * self.latency_scale)
 
@@ -237,6 +254,17 @@ class ToolRegistry:
             return ToolResult(ok=False, error=f"{type(exc).__name__}: {exc}")
 
         result = outcome if isinstance(outcome, ToolResult) else ToolResult(ok=True, data=outcome or {})
+
+        # ok=True 但内容有问题的三类：空 / 数值离谱 / 藏了指令。
+        # 它们**不报错**，模型必须自己看出来 —— 比错误码难得多，也更接近真实。
+        if script and result.ok and script.get("mode") in (F.EMPTY, F.ABSURD_VALUE,
+                                                           F.INJECTED_INSTRUCTION):
+            result = ToolResult(ok=True, data=F.corrupt(result.data, script),
+                                mutation=result.mutation)
+
+        # 记下工具返回里出现过的对象 id —— 防注入的判据
+        if result.ok:
+            _collect_ids(result.data, ctx.sandbox.ids_seen_in_output)
 
         # 写工具统一在这里入账，域实现不用重复写这段样板。
         if spec.kind == "write" and spec.fact_key:
@@ -257,6 +285,25 @@ class ToolRegistry:
             )
         return result
 
+    async def _run_handler(self, spec: "ToolSpec", name: str, arguments: dict[str, Any],
+                           ctx: ToolContext) -> ToolResult:
+        """执行 handler 并入账。超时但副作用已生效的分支复用它。"""
+        try:
+            outcome = spec.handler(arguments, ctx)
+            if inspect.isawaitable(outcome):
+                outcome = await outcome
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(ok=False, error=f"{type(exc).__name__}: {exc}")
+        result = outcome if isinstance(outcome, ToolResult) else ToolResult(ok=True, data=outcome or {})
+        if spec.kind == "write" and spec.fact_key:
+            ctx.sandbox.record_write(
+                tool=name, fact_key=spec.fact_key, arguments=arguments, result=result.data,
+                step=ctx.step, tool_call_id=ctx.tool_call_id, ok=result.ok,
+                object_key=_object_key(arguments),
+                mutation=({"table": result.mutation.table, "key": result.mutation.key,
+                           "fields": dict(result.mutation.fields)} if result.mutation else None))
+        return result
+
     def snapshot(self) -> list[dict[str, Any]]:
         """工具表快照，落进 artifact 用于事后复盘（老师包的 tool_schema_hash 同思路）。"""
         return [
@@ -269,6 +316,28 @@ class ToolRegistry:
 
 # 写动作的「被写对象」主键。用于 duplicate_writes 和 wrong_object 类 cap。
 _OBJECT_KEY_FIELDS = ("campaign_id", "creative_id", "asset_id", "account_id", "ad_group_id")
+
+
+_ID_PATTERN_PREFIXES = ("CMP_", "ACC_", "CRE_", "ASSET_", "APR_")
+
+
+def _collect_ids(data: Any, sink: set[str]) -> None:
+    """递归收集工具返回里出现过的对象 id。
+
+    ★ 这是防注入的判据（设计文档 §37 的 param_source）：
+    campaign 名称、素材标题在真实平台上**是别人能填的**，
+    「拿工具返回里读来的 id 去做写动作」是一条可判定的越界规则。
+    """
+    if isinstance(data, str):
+        for token in data.replace(",", " ").replace('"', " ").split():
+            if token.startswith(_ID_PATTERN_PREFIXES):
+                sink.add(token.strip(".,;:)]}"))
+    elif isinstance(data, dict):
+        for value in data.values():
+            _collect_ids(value, sink)
+    elif isinstance(data, (list, tuple)):
+        for value in data:
+            _collect_ids(value, sink)
 
 
 def _object_key(arguments: dict[str, Any]) -> str | None:
