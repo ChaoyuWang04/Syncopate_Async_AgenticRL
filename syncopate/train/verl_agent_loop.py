@@ -215,9 +215,22 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             return Generation(token_ids=list(token_output.token_ids),
                               log_probs=list(token_output.log_probs or []) or None)
 
+        # ★★★ max_prompt_length 必须用**显式配置的那个**，不能拿 max_model_len 折半。
+        #
+        # 旧写法是 `max_model_len // 2`——一个凭空的一半。实测后果：
+        #     真实 prompt 长度   4170–4210 token
+        #     max_model_len=4608 → 上限 2304 → **100% 被左截断，砍掉近 1900 token**
+        # 而左截断砍掉的正是 system prompt 的**开头**：工具调用规则、调查规则、
+        # 以及最终结论格式里 clarify/reject/defer 那份枚举。
+        # 模型看不到「可以反问、可以拒绝」，就只会一路调工具撞到步数上限——
+        # 实测 CLAR/REJ 从第 1 步起 reward 恒为 0.000、截断率 92–94%，
+        # 而同一个 ckpt 在 eval 上是 0.906 / 0.828。
+        #
+        # ⇒ 这条把训练和评测拉到了两个不同的输入分布上（设计文档 §33 训推一致性）。
+        max_prompt_length = int(self.config.data.max_prompt_length)
         config = RolloutConfig(
             max_assistant_turns=int(extra_info.get("max_assistant_turns", 8)),
-            max_prompt_length=int(self.config.actor_rollout_ref.rollout.get("max_model_len", 12288)) // 2,
+            max_prompt_length=max_prompt_length,
             max_response_length=int(self.config.data.max_response_length),
         )
 

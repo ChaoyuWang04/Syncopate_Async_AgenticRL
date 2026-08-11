@@ -194,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout-gpu-util", type=float, default=0.55,
                         help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
                              "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache")
+    parser.add_argument("--object-store-gb", type=int, default=2,
+                        help="Ray 对象存储上限(GB)。默认按 RAM 的 30%% 预留，在 30GB 机器上会把 vLLM 和 trainer 挤死")
     parser.add_argument("--max-num-seqs", type=int, default=64,
                         help="vLLM 并发槽位。默认 1024 远超实际需要"
                              "（colocate 单卡上就是 train_batch_size × rollout_n）")
@@ -252,6 +254,15 @@ def main(argv: list[str] | None = None) -> int:
     # 参见 pytorch/pytorch#147851。抄配置时最容易连这种坑一起抄过来。
     env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
     env.setdefault("VLLM_USE_V1", "1")
+    # ★ Ray 的对象存储默认占 RAM 的 30%（本机 /dev/shm 有 16GB 可用，它就敢要 9GB）。
+    #
+    # 实测：本机 30.9GB 内存，Ray 报 29.78GB 用满后直接杀 worker，**param_offload
+    # 关着也照样爆**。我们的 batch 很小，对象存储根本用不了那么多——
+    # 它只是按比例预留，然后把真正需要内存的 vLLM 和 trainer 挤死。
+    env.setdefault("RAY_object_store_memory", str(args.object_store_gb * 1024**3))
+    # 内存吃紧时 Ray 会提前杀 worker。放宽一点，让真正的分配失败自己暴露出来，
+    # 而不是被 Ray 的保护机制提前打断（真 OOM 有堆栈，被 Ray 杀掉只有一句话）
+    env.setdefault("RAY_memory_usage_threshold", "0.97")
     return subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode
 
 

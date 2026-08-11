@@ -35,6 +35,15 @@ from syncopate.prompts import load_prompt, prompt_hash, render_prompt
 # 所以增量拼接时要显式补回来（见 run_rollout 里的说明）。
 ASSISTANT_TURN_END = "<|im_end|>"
 
+# ★★★ prompt 预算的**唯一来源**。训练侧和评测侧必须用同一个值。
+#
+# 实测真实 prompt 是 4170–4210 token（system 规则书 + 22 个工具的 schema + 任务）。
+# 之前 eval 硬编码 4096、RL 侧用 `max_model_len // 2` 算出 2304 ——
+# 两边都在截，而且截得不一样，等于训练和评测跑在两个不同的输入分布上。
+# 左截断砍掉的是 system 规则书的**开头**（工具规则 + clarify/reject/defer 枚举），
+# 实测让 CLAR/REJ 的 reward 从 0.9 掉到恒等于 0。
+MAX_PROMPT_LENGTH = 5120
+
 # ★ 显式关掉 thinking，SFT / RL / gold 回放三处必须完全一致。
 #
 # 老师包里 SFT 侧硬编码 enable_thinking=False，RL 侧**从不传**（走模板默认 = 允许
@@ -147,9 +156,12 @@ async def run_rollout(
     prompt_ids: list[int] = tokenizer.apply_chat_template(
         messages, tools=tools, add_generation_prompt=True, tokenize=True, **CHAT_TEMPLATE_KWARGS,
     )
-    if len(prompt_ids) > config.max_prompt_length:
-        # 左截断：砍掉的是 system 规则书的开头，被监督的部分在右边，侥幸幸存。
-        # 老师包 T9 实测 37.2% 样本会走到这一步——这是个必须盯着的指标。
+    prompt_truncated = len(prompt_ids) - config.max_prompt_length
+    if prompt_truncated > 0:
+        # 左截断：砍掉的是 system 规则书的开头。
+        # ⚠️ 这不是"侥幸幸存"——砍掉的正是输出格式和 behavior 枚举，
+        # 模型会因此不知道 clarify/reject/defer 存在。必须当成事故指标盯着，
+        # 不能静默发生（实测就是这么让整轮 RL 白跑的）。
         prompt_ids = prompt_ids[-config.max_prompt_length:]
 
     response_ids: list[int] = []
@@ -297,6 +309,8 @@ async def run_rollout(
             "tool_errors": tool_errors,
             "parse_errors": parse_errors,
             "truncated": trajectory.truncated,
+            # >0 就是事故：system 规则书的开头被砍掉了
+            "prompt_truncated_tokens": max(0, prompt_truncated),
             # ★ 把「生成耗时」和「工具耗时」分开记。长尾 case 的时间全在 tool_seconds 上，
             #   这两个数是后面做异步对照实验的基础观测量。
             "generate_seconds": round(generate_seconds, 4),

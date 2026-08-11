@@ -39,7 +39,9 @@ from syncopate.core.schemas import CaseBundle
 from syncopate.domains.adcampaign import build_domain
 from syncopate.pipeline.split import load_bucket
 from syncopate.train.eval_local import load_model
-from syncopate.train.rollout_loop import CHAT_TEMPLATE_KWARGS, build_messages
+from syncopate.train.rollout_loop import (
+    CHAT_TEMPLATE_KWARGS, MAX_PROMPT_LENGTH, build_messages,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 print = functools.partial(builtins.print, flush=True)  # noqa: A001
@@ -103,7 +105,7 @@ def measure(model, tokenizer, bundles, domain, max_new_tokens: int,
             temperature: float) -> dict[str, Any]:
     import asyncio
 
-    from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+    from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
 
     engine = RecordingEngine(model, tokenizer, max_new_tokens, temperature)
     domain.registry.latency_scale = 0.0
@@ -113,7 +115,7 @@ def measure(model, tokenizer, bundles, domain, max_new_tokens: int,
         asyncio.run(run_rollout(
             bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
             config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                 max_prompt_length=4096, max_response_length=2048),
+                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
             rollout_id="entropy"))
         chunk = engine.entropy[before:]
         per_case.append({"case_id": bundle.case_id, "tokens": len(chunk),

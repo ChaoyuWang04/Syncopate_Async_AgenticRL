@@ -34,7 +34,7 @@ import torch
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
-from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
             output = asyncio.run(run_rollout(
                 bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
                 config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                     max_prompt_length=4096, max_response_length=2048),
+                                     max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
                 rollout_id=f"eval{k}",
             ))
             result = score_trajectory(

@@ -67,7 +67,7 @@ def template_mix(rows: list[dict[str, Any]]) -> dict[str, float]:
     return {f"mix_trained/{k}": v / total for k, v in counts.items()}
 
 
-def dispatched_mix(log_path: Path) -> dict[str, float] | None:
+def dispatched_mix(log_path: Path, limit: int | None = None) -> dict[str, float] | None:
     """**下发并跑完**的任务类型构成（由 agent loop 逐条追加）。
 
     ★ 它和 mix_trained 的差就是「分布漂移」：
@@ -76,10 +76,15 @@ def dispatched_mix(log_path: Path) -> dict[str, float] | None:
     """
     if not log_path.exists():
         return None
+    lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    # ⚠️ 必须按条数截齐。sync 下第 N+1 步的 rollout 在第 N 步的 dump 写出来之前
+    # 就已经生成完了，读文件的那一刻下发天然比训练多一个 batch（实测 160 vs 128）。
+    # 不截齐的话，这个**快照错位**会被读成 0.088 的假漂移。
+    if limit is not None:
+        lines = lines[:limit]
     counts: collections.Counter = collections.Counter()
-    for line in log_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            counts[json.loads(line)["case_id"].split("_")[0]] += 1
+    for line in lines:
+        counts[json.loads(line)["case_id"].split("_")[0]] += 1
     total = sum(counts.values()) or 1
     return {f"mix_dispatched/{k}": v / total for k, v in counts.items()}
 
@@ -101,20 +106,28 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     log_path = Path(args.rollout_log) if args.rollout_log else run_dir / "dispatched.jsonl"
-    disp = dispatched_mix(log_path)
+    trained_total = sum(len(rows) for rows in steps.values())
+    disp = dispatched_mix(log_path, limit=trained_total)
 
-    per_step = {}
-    for step, rows in steps.items():
-        metrics = {**aggregate(rows), **template_mix(rows)}
-        if disp:
-            # 漂移 = 训练分布 − 下发分布，逐类型报，并给一个总量（L1 距离的一半）
-            drift = {}
-            for key, trained in ((k, v) for k, v in metrics.items() if k.startswith("mix_trained/")):
-                tpl = key.split("/", 1)[1]
-                drift[f"mix_drift/{tpl}"] = trained - disp.get(f"mix_dispatched/{tpl}", 0.0)
-            metrics.update(drift)
-            metrics["mix_drift/total_variation"] = sum(abs(v) for v in drift.values()) / 2
-        per_step[step] = metrics
+    per_step = {step: {**aggregate(rows), **template_mix(rows)} for step, rows in steps.items()}
+
+    # ★★★ 漂移必须**累计对累计**，不能拿单步的训练分布去比累计的下发分布。
+    #
+    # 第一版就是这么错的：dispatched.jsonl 是整个 run 追加的（累计），
+    # 而 template_mix 是单步的。两者口径不同，sync 下算出来 0.188 的假漂移 ——
+    # 而预测 P9 明写「sync 有 barrier，漂移必须恒等于 0」。
+    # **是这条预测把尺子的 bug 抓出来的**，不是把现象抓出来的。
+    drift_total = None
+    if disp:
+        all_rows = [r for rows in steps.values() for r in rows]
+        trained = template_mix(all_rows)
+        drift = {}
+        for key, share in trained.items():
+            tpl = key.split("/", 1)[1]
+            drift[f"mix_drift/{tpl}"] = share - disp.get(f"mix_dispatched/{tpl}", 0.0)
+        drift_total = sum(abs(v) for v in drift.values()) / 2
+        per_step[max(per_step)].update(drift)
+        per_step[max(per_step)]["mix_drift/total_variation"] = drift_total
 
     print(f"{'step':>5}{'n':>5}{'reward':>9}{'步数':>7}{'墙钟':>8}{'最慢/均':>9}{'cap数':>7}")
     for step, m in sorted(per_step.items()):
@@ -126,9 +139,9 @@ def main(argv: list[str] | None = None) -> int:
     last = per_step[max(per_step)]
     caps = {k.split("/", 2)[-1]: v for k, v in last.items() if k.startswith("syncopate/cap/") and v}
     print(f"\n末步 cap 命中率: {({k: round(v, 2) for k, v in sorted(caps.items())}) or '无'}")
-    if disp:
-        print(f"末步分布漂移(total variation): {last.get('mix_drift/total_variation', 0):.3f}"
-              "   （sync 下应恒为 0；显著大于 0 = 训练分布已经偏离下发分布）")
+    if drift_total is not None:
+        verdict = "✅ 与 sync 的 barrier 一致" if drift_total < 0.02 else "⚠️ 训练分布已偏离下发分布"
+        print(f"分布漂移(累计对累计, total variation): {drift_total:.3f}   {verdict}")
     else:
         print(f"（没找到 {log_path}，跳过分布漂移；async 跑之前要确认它在）")
 
