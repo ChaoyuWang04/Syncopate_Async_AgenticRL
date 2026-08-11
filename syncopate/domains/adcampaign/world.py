@@ -44,6 +44,10 @@ _CAMPAIGN_DEFAULTS: dict[str, Any] = {
     # 默认 30 = 早已收敛，这样存量 case 的世界一个字节都不变——
     # 新增机制不该悄悄改掉已经测过基线的那批 case。
     "started_days_ago": 30,
+    # MMP 侧配置的归因窗口。和 Meta 默认（7d_click_1d_view）一致时两个源对得上；
+    # 配成更短的窗口就会出现**可解释的**差异（见 tools/mmp.py）。
+    # 默认与平台一致 —— 存量 case 的世界不受影响。
+    "mmp_attribution_window": "7d_click_1d_view",
     "daily_budget": 50_000,      # 分。真实 Meta API 就是最小货币单位
     "spend_7d": 3200.0,
     "installs_7d": 1280,

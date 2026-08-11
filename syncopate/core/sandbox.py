@@ -75,6 +75,9 @@ class Sandbox:
         # 出现在工具返回里的对象主键。★ 防注入用（设计文档 §37 的 param_source）：
         # 「拿工具返回里读来的 id 去做写动作」是一条可判定的规则。
         self.ids_seen_in_output: set[str] = set()
+        # 本条 rollout 累计主动等待了多少秒。轮询类工具靠它判断"够不够时间出结果"——
+        # 这样"什么时候去查"就成了模型的决策，而不是被工具替它做掉。
+        self.waited_seconds: float = 0.0
 
     def note_call(self, tool: str) -> int:
         """记一次调用，返回这是该工具的第几次（1-indexed）。"""

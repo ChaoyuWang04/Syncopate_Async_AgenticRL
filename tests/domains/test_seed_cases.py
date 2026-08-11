@@ -241,8 +241,8 @@ def test_tool_missing_case_hides_the_tool():
 
 
 def test_domain_tool_menu_is_complete():
-    """菜单 23 个：12 投放治理 + 4 外部资料 + 5 记忆 + 1 数据成熟度 + 1 runtime(system.wait)。"""
-    assert len(DOMAIN.default_tool_menu) == 23
+    """菜单 24 个：12 投放治理 + 4 外部 + 5 记忆 + 1 成熟度 + 1 MMP + 1 runtime。"""
+    assert len(DOMAIN.default_tool_menu) == 24
     assert "system.wait" in DOMAIN.default_tool_menu
     assert "metrics.get_freshness" in DOMAIN.default_tool_menu
     assert set(DOMAIN.default_tool_menu) <= set(DOMAIN.registry.names())

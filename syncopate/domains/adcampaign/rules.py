@@ -313,6 +313,32 @@ def retry_non_retriable(bundle: CaseBundle, trajectory: Trajectory, sandbox: San
     return CapHit("", 0.0, "对 403（不可重试）的调用又试了一次——重试不会改变结果", sorted(set(hits)))
 
 
+@CAPS.rule(name="single_source_cap", ceiling=0.25)
+def single_source(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """两个数据源口径不一致时，只查了一个就下结论（附录 A4 #8）。
+
+    ★ 自动闭合：只在本 case 的归因窗口**真的不一致**时生效。
+    两边配置一样的 case（存量数据默认如此）差异为 0，查一个和查两个没区别。
+
+    ⚠️ 差异本身就是信号 —— 可能是配置错了，也可能有作弊。不查就发现不了。
+    平台后台是**自归因**的（既投放又记账），拿它单方面的数当结论，
+    等于让被审计方自己出审计报告。
+    """
+    from syncopate.domains.adcampaign.tools.mmp import DISCREPANCY_THRESHOLD, discrepancy
+
+    row = _target_campaign(bundle)
+    if row is None:
+        return None
+    if abs(discrepancy(row.get("mmp_attribution_window", ""))) < DISCREPANCY_THRESHOLD:
+        return None
+    called = set(trajectory.called_tools())
+    if "mmp.get_attribution" in called or "campaign.get_metrics" not in called:
+        return None
+    return CapHit("", 0.0,
+                  "两个数据源口径不一致（归因窗口配置不同），却只查了平台后台一侧",
+                  [trajectory.num_steps + 1])
+
+
 @CAPS.rule(name="excessive_retry_cap", ceiling=0.25)
 def excessive_retry(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
     """同一个工具反复失败还一直试。

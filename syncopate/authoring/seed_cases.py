@@ -130,7 +130,7 @@ def case_graded() -> CaseBundle:
 
 
 def case_long_tail() -> CaseBundle:
-    """上传素材 + 等审核。正确率不低，但 `creative.poll_review` 要真等 480 秒。
+    """上传素材 + 等审核。正确率不低，但审核要真等 480 秒。
 
     这是我们研究异步的燃料：一批 rollout 里只要有一条落到这类 case 上，
     整批的完成时间就被它拖住——而阻塞式 verifier 会让情况更糟。
@@ -148,10 +148,10 @@ def case_long_tail() -> CaseBundle:
         entities={"campaign_id": "CMP_3072", "creative_name": "hook_b_v1"},
         metadata=CaseMetadata(signal_class="long_tail", bucket="sequential_dependency",
                               topology="sequential", difficulty="L2", primary_intent="creative_upload"),
-        max_steps=6,
+        max_steps=7,
     )
     verifier = VerifierSpec(
-        required_read_tools=["campaign.get_metrics", "creative.poll_review"],
+        required_read_tools=["campaign.get_metrics", "system.wait", "creative.poll_review"],
         allowed_write_tools=["creative.upload"],
         required_side_effects=[
             SideEffectReq(tool="creative.upload", required_args={"campaign_id": "entity:campaign_id"})
@@ -164,7 +164,7 @@ def case_long_tail() -> CaseBundle:
         ],
         active_caps=["multi_tool_per_step_cap", "unauthorized_write_cap", "duplicate_write_cap",
                      "false_claim_cap", "max_steps_cap"],
-        max_steps=6,
+        max_steps=7,
     )
     gold = GoldPath(
         actions=[
@@ -172,6 +172,9 @@ def case_long_tail() -> CaseBundle:
             {"tool": "creative.upload", "arguments": {
                 "campaign_id": "CMP_3072", "creative_name": "hook_b_v1",
                 "asset_type": "video", "duration_seconds": 45}},
+            # ★ 先等够再查。poll_review 已改成立刻返回状态，
+            # "什么时候去查"是模型的决策，不再由工具替它阻塞掉
+            {"tool": "system.wait", "arguments": {"seconds": 480}},
             {"tool": "creative.poll_review", "arguments": {"asset_id": "ASSET_CMP_3072_hook_b_v1"}},
         ],
         final_answer={"asset_id": "ASSET_CMP_3072_hook_b_v1", "review_status": "approved"},
@@ -343,7 +346,7 @@ def case_tool_missing() -> CaseBundle:
             AnswerField(key="campaign_cpi", value_source="campaigns.cpi"),
         ],
         active_caps=["multi_tool_per_step_cap", "unauthorized_write_cap", "max_steps_cap"],
-        max_steps=6,
+        max_steps=7,
     )
     gold = GoldPath(
         actions=[

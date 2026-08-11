@@ -19,7 +19,7 @@ from syncopate.core.verifier_engine import CAPS, CapRegistry
 
 # 副作用 import：这四行触发工具注册，不能删
 from syncopate.domains.adcampaign.tools import (  # noqa: F401
-    analytics, creative, external_tools, freshness, governance, memory_tools, playbook,
+    analytics, creative, external_tools, freshness, governance, memory_tools, mmp, playbook,
     system_tools,
 )
 from syncopate.domains.adcampaign import rules  # noqa: F401
@@ -37,6 +37,7 @@ DEFAULT_TOOL_MENU: list[str] = [
     "campaign.detect_anomalies",
     "playbook.get_optimization",
     "benchmark.get_industry_baseline",
+    "mmp.get_attribution",
     "policy.get_budget_rule",
     "risk.check_account",
     "campaign.list",

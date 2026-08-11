@@ -73,14 +73,24 @@ def upload_creative(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="creative.poll_review",
-    description="查询已上传素材的审核结果。审核需要时间，这个调用会阻塞等待直到出结果。",
+    description=(
+        "查询已上传素材的审核结果。**立刻返回**当前状态，不会替你等待。\n"
+        f"· 审核通常需要 {int(REVIEW_LATENCY_SECONDS)} 秒；还没出结果时返回 pending 并告诉你还差多久。\n"
+        "· 结果没出就再查一遍是没有意义的（状态不会变），应当先用 system.wait 等够再查。"
+    ),
     parameters={
         "type": "object",
         "properties": {"asset_id": {**_STR, "description": "creative.upload 返回的 asset_id"}},
         "required": ["asset_id"],
     },
     kind="read",
-    latency_seconds=REVIEW_LATENCY_SECONDS,   # ← 真实等待，长尾轨迹的来源
+    # ★ 不再是阻塞等待。
+    #
+    # 旧实现 latency_seconds=480：调用它就睡 480 秒然后直接给答案 ——
+    # 名字叫 poll，行为却是 block，**把"什么时候该去查"这个决策从模型手里拿走了**。
+    # 真实平台是：上传返回 pending，你自己决定隔多久查一次、查几次、什么时候放弃。
+    # 现在等待由 system.wait 表达，这里只报当前状态。长尾依然存在（总时长没变），
+    # 但它变成了模型的选择而不是工具的强制。
 )
 def poll_review(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     asset_id = args.get("asset_id")
@@ -88,6 +98,14 @@ def poll_review(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     uploaded = [r for r in ctx.sandbox.records_for("creative.upload") if r.result.get("asset_id") == asset_id]
     if not uploaded:
         return ToolResult(ok=False, error=f"asset_not_found: {asset_id} (upload it first)")
+
+    # ★ 时间没到就是 pending。已等待时长由 system.wait 累计而来。
+    remaining = REVIEW_LATENCY_SECONDS - ctx.sandbox.waited_seconds
+    if remaining > 0:
+        return ToolResult(ok=True, data={
+            "asset_id": asset_id, "review_status": "pending",
+            "remaining_seconds": int(remaining),
+            "hint": "结果尚未出来，再查一次状态也不会变；请先等待"})
 
     # 审核结果由 env 决定（按素材名查预设结果），默认通过。
     # 让 case 能构造「上传了但被拒」的分支，而不是永远一路绿灯。

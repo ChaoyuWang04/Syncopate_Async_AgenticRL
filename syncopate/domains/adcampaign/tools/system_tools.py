@@ -61,4 +61,6 @@ async def wait(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
             error=f"wait_too_long: {seconds}s > {MAX_WAIT_SECONDS}s。"
                   "需要等这么久的事情应当走审批或改期，不要在会话里干等")
     await asyncio.sleep(seconds * ctx.latency_scale)
-    return ToolResult(ok=True, data={"waited_seconds": seconds})
+    ctx.sandbox.waited_seconds += seconds
+    return ToolResult(ok=True, data={"waited_seconds": seconds,
+                                     "total_waited_seconds": ctx.sandbox.waited_seconds})
