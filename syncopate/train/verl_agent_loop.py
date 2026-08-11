@@ -37,6 +37,23 @@ from syncopate.train.rollout_loop import Generation, RolloutConfig, RolloutOutpu
 #   "0"         —— 复现老师那套的阻塞行为，作为对照组
 ASYNC_VERIFIER = os.environ.get("SYNCOPATE_ASYNC_VERIFIER", "1") not in {"0", "false", "False"}
 
+# ★★★ 长尾比例的旋钮。设计文档 §35.4：长尾比例是异步 vs 同步实验的**核心自变量**，
+# 必须能调。
+#
+# ⚠️ 在此之前这里从没设过 latency_scale，于是 RL 用的是 registry 默认的 1.0 ——
+# `creative.poll_review` 会**真的 sleep 480 秒**。RL 池里 LONG 占 9.4%，
+# train_batch_size=2 时约 18% 的 step 会撞上，每撞一次这一步就是 8 分钟起。
+# 冒烟阶段跑 10 步，光睡觉就是十几分钟；正式跑 100 步是两个多小时。
+#
+#   1.0   真实世界（正式做异步对照实验时用）
+#   0.01  480 秒 → 4.8 秒，保留长尾的**相对结构**，成本降两个数量级
+#   0.0   完全没有长尾（测纯算法效果时用，但这会把第二目标的自变量抹掉）
+LATENCY_SCALE = float(os.environ.get("SYNCOPATE_LATENCY_SCALE", "1.0"))
+
+# cap 名单在 import 时固定下来，保证每条 rollout 回给 verl 的 key 集合完全一致——
+# verl 用第一条样本的 keys 去 stack 整个 batch，key 集合不齐会在 collate 时炸。
+CAP_NAMES: tuple[str, ...] = tuple(build_domain().caps.names())
+
 
 def load_bundle(extra_info: dict[str, Any]) -> CaseBundle:
     """从 parquet 行的 extra_info 把四件套读回来。
@@ -62,10 +79,17 @@ def reward_extra_info(result: ScoreResult, output: RolloutOutput) -> dict[str, A
     子分明细）放 artifact 文件里，塞进 batch 会在 collate 时炸。
     """
     metrics = output.metrics
+    hit = {h.name for h in result.cap_hits}
     return {
         "reward": result.reward,
         "raw_reward": result.raw_reward,
         **{f"subscore/{k}": v for k, v in result.subscores.items()},
+        # ★ 逐条 cap 展开，不能只报个数。
+        #
+        # reward hacking 的指纹是「**reward 涨了但 cap 没降**」——
+        # 只有 num_active_caps 一个总数的话，「少踩了两条、多踩了两条」和
+        # 「真的改好了」在曲线上一模一样。设计文档 §31.3 要的就是这个分解。
+        **{f"cap/{name}": int(name in hit) for name in CAP_NAMES},
         "num_active_caps": len(result.cap_hits),
         "num_steps": metrics["num_steps"],
         "tool_errors": metrics["tool_errors"],
@@ -141,6 +165,7 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
     async def run(self, sampling_params: dict[str, Any], **kwargs: Any) -> "AgentLoopOutput":
         extra_info = kwargs["extra_info"]
         domain = build_domain()
+        domain.registry.latency_scale = LATENCY_SCALE
         bundle = load_bundle(extra_info)
 
         # 把 verl 的 server_manager 包装成核心循环要的接口。

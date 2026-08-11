@@ -172,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"])
     parser.add_argument("--rollout-is-threshold", type=float, default=2.0)
 
+    parser.add_argument("--latency-scale", type=float, default=0.01,
+                        help="工具真实延迟的缩放。★ 长尾比例是异步对照实验的核心自变量。"
+                             "1.0=真实（poll_review 睡 480 秒，约 18%% 的 step 会变成 8 分钟）；"
+                             "0.01=保留长尾相对结构、成本降两个数量级；0=没有长尾")
     parser.add_argument("--async-verifier", default="1", choices=["0", "1"],
                         help="1=verifier 走线程池；0=复现老师那套的阻塞行为（对照组）")
     parser.add_argument("--dry-run", action="store_true")
@@ -187,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     env["PYTHONPATH"] = f"{ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
     env["SYNCOPATE_ASYNC_VERIFIER"] = args.async_verifier
     env["SYNCOPATE_RUN_ID"] = args.experiment
+    env["SYNCOPATE_LATENCY_SCALE"] = str(args.latency_scale)
+    # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
+    print(f"[实验设定] latency_scale={args.latency_scale}  async_verifier={args.async_verifier}"
+          f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})")
     env["WANDB_MODE"] = args.wandb_mode
     env.setdefault("WANDB_PROJECT", args.project)
     # ⚠️ 不要设 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True。
