@@ -241,14 +241,19 @@ def test_tool_missing_case_hides_the_tool():
 
 
 def test_domain_tool_menu_is_complete():
-    """菜单 24 个：12 投放治理 + 4 外部 + 5 记忆 + 1 成熟度 + 1 MMP + 1 runtime。"""
-    assert len(DOMAIN.default_tool_menu) == 24
+    """菜单 28 个：v8 的 24 + M3 两个分析 + M4 两个扩量动作。"""
+    assert len(DOMAIN.default_tool_menu) == 28
     assert "system.wait" in DOMAIN.default_tool_menu
     assert "metrics.get_freshness" in DOMAIN.default_tool_menu
     assert set(DOMAIN.default_tool_menu) <= set(DOMAIN.registry.names())
+    # ★ 写工具清单是这条测试真正的价值：**每加一个写工具，都要有人回头确认
+    # 它该落在哪个自动化档**（设计文档 §120 的 A/B/C/D 四档）。
+    # M4 加的三个里，campaign.create 是 C 档（不可逆，必须先走 approval），
+    # scale_budget 小幅 B 档、大幅 C 档，set_status 是 B 档（可逆）。
     assert set(DOMAIN.registry.write_tools()) == {
         "campaign.update_budget", "creative.upload", "approval.create_case",
-        "memory.write_proposal", "memory.invalidate", "memory.conflict_resolve"}
+        "memory.write_proposal", "memory.invalidate", "memory.conflict_resolve",
+        "campaign.create", "campaign.scale_budget"}
 
 
 def test_bundle_roundtrip_for_every_seed(tmp_path):

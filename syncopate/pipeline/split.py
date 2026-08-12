@@ -103,6 +103,20 @@ def load_bundles(batch_dir: Path) -> dict[str, CaseBundle]:
     return {e["case_id"]: CaseBundle.read(batch_dir, e["case_id"]) for e in entries}
 
 
+# ★ 稀有行为在 EVAL 里要加厚，否则那个指标没有分辨力。
+#
+# 实测（v10）：EVAL 里 tool_call 156 条，而 clarify / defer / reject **各只有 4 条**。
+# M6 的毕业条件之一是「行为分类准确率 ≥ 90%」—— 4 条样本下，**答错一条就掉 25 个
+# 百分点**，这个数根本区分不出 0.88 和 0.92。
+#
+# 尤其是 defer：M1 花了整整一个里程碑建它（数据成熟度 + premature_decision_cap），
+# 考试时只有 4 道题。「训练里没有 ⇒ 评测里也没有 ⇒ 失败模式不可见」这句话，
+# 对**量太少**同样成立。
+#
+# ⚠️ 加厚只动 EVAL 的取样数，不造新数据 —— 池子里本来就有，只是没被取上来。
+RARE_BEHAVIOR_EVAL_QUOTA = {"clarify": 4, "reject": 4, "defer": 4, "answer": 3}
+
+
 def split(
     batch_dir: Path,
     *,
@@ -127,7 +141,9 @@ def split(
         strata.setdefault(stratum(cid, b), []).append(cid)
     buckets = Buckets()
     for key in sorted(strata):
-        buckets.eval.extend(sorted(strata[key])[:eval_per_stratum])
+        # key[1] 是 expected_behavior。稀有行为多取几条，见 RARE_BEHAVIOR_EVAL_QUOTA。
+        take = max(eval_per_stratum, RARE_BEHAVIOR_EVAL_QUOTA.get(key[1], 0))
+        buckets.eval.extend(sorted(strata[key])[:take])
     eval_set = set(buckets.eval)
 
     # ---- 2. 剩余池 → SFT（最难的）/ RL ----

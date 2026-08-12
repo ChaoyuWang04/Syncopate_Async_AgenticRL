@@ -253,3 +253,57 @@ def feature_lift(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         "baseline_roas_d7": round(mean_c, 4),
         "min_sample_for_conclusion": MIN_FEATURE_SAMPLE,
     })
+
+
+@REGISTRY.tool(
+    name="analysis.geo_breakdown",
+    description=(
+        "按地域拆某个产品的投放表现：各地域的 d7 ROAS、d7 CPI、素材条数。"
+        "地域扩展前用它挑候选地域。\n"
+        "· ★ 它只告诉你**各地域现在跑成什么样**，不告诉你能不能扩 ——"
+        "能不能扩要逐个地域查 benchmark.get_safety_line（每个地域一条线）。\n"
+        "· 素材条数少的地域，其数字本身就不可信，别当成「这个地域不行」的证据。"
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "product_id": {"type": "string"},
+            "regions": {"type": "array", "items": {"type": "string"},
+                        "description": "只看这几个地域；不给则返回全部"},
+        },
+        "required": ["product_id"],
+    },
+    kind="read",
+)
+def geo_breakdown(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    """★ 和 feature_lift 一样：**真算，不读预置答案**。
+
+    数字从素材库（creative_catalog）按地域聚合出来，所以改一条素材的表现，
+    这里的地域排名就自然跟着变 —— 不用手工维护一张"哪个地域好"的表。
+    """
+    product_id = args.get("product_id")
+    if not product_id:
+        return ToolResult(ok=False, error="invalid_argument: product_id is required")
+    wanted = set(args.get("regions") or [])
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in ctx.table("creative_catalog").values():
+        if row.get("product_id") != product_id:
+            continue
+        region = row.get("region")
+        if wanted and region not in wanted:
+            continue
+        buckets.setdefault(region, []).append(row)
+    if not buckets:
+        return ToolResult(ok=False, error=f"no_data: {product_id}")
+    rows = []
+    for region, items in sorted(buckets.items()):
+        roas = [float(r["roas_d7"]) for r in items if r.get("roas_d7") is not None]
+        cpi = [float(r["d7_cpi"]) for r in items if r.get("d7_cpi") is not None]
+        rows.append({
+            "region": region,
+            "roas_d7": round(sum(roas) / len(roas), 4) if roas else None,
+            "d7_cpi": round(sum(cpi) / len(cpi), 3) if cpi else None,
+            "creative_count": len(items),
+        })
+    rows.sort(key=lambda r: r["roas_d7"] or 0, reverse=True)
+    return ToolResult(ok=True, data={"product_id": product_id, "regions": rows})

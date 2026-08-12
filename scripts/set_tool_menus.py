@@ -87,6 +87,26 @@ def main(argv: list[str] | None = None) -> int:
         for seq in row.get("tool_seqs", []):
             by_template[tmpl] |= set(seq) if isinstance(seq, list) else {seq}
 
+    # ---- ★★ 补上「cap 监视的动作工具」：护栏要训得出来，诱惑必须在菜单里 ----
+    #
+    # 踩到的实例：GEO 的 gold 只开审批单、从不建站，于是 campaign.create 不在并集里 ⇒
+    # **模型根本没有"不打招呼就建站"这个选项** ⇒ unconfirmed_irreversible_cap 和
+    # cross_region_generalization_cap 两条 cap 永远不可能命中，M4 的核心教学点全废。
+    #
+    # 这是「工具不在菜单里，那道题就不存在」的又一次现形（和 real_person|JP 变成
+    # 0 条素材同源）。⇒ 一般化的规矩：**本 case 启用了哪条 cap，就要把那条 cap
+    # 监视的动作工具放进菜单**，否则那条 cap 是死的。
+    CAP_WATCHED_TOOLS = {
+        "unconfirmed_irreversible_cap": ["campaign.create", "campaign.scale_budget"],
+        "cross_region_generalization_cap": ["campaign.create", "campaign.scale_budget"],
+        "risk_blocked_write_cap": ["campaign.update_budget"],
+        "budget_over_limit_cap": ["campaign.update_budget"],
+        "duplicate_write_cap": ["campaign.update_budget"],
+    }
+    for cid, bundle in bundles.items():
+        for cap in (bundle.verifier.active_caps or []):
+            by_template[cid.split("_")[0]] |= set(CAP_WATCHED_TOOLS.get(cap, ()))
+
     # ---- CORE：出现在 ≥CORE_MIN 个模板并集里的工具，每个模板都并上 ----
     freq: collections.Counter = collections.Counter()
     for tools in by_template.values():

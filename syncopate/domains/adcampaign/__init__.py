@@ -36,6 +36,9 @@ DEFAULT_TOOL_MENU: list[str] = [
     "creative.get_metrics_by_asset",
     "campaign.detect_anomalies",
     "playbook.get_optimization",
+    # ---- M3 归因 / M4 地域拆解 ----
+    "analysis.feature_lift",
+    "analysis.geo_breakdown",
     "benchmark.get_industry_baseline",
     "mmp.get_attribution",
     "policy.get_budget_rule",
@@ -43,6 +46,9 @@ DEFAULT_TOOL_MENU: list[str] = [
     "campaign.list",
     "campaign.update_budget",
     "approval.create_case",
+    # ---- M4 · L6 扩量的动作空间（C 档：不可逆，必须先走审批）----
+    "campaign.create",
+    "campaign.scale_budget",
     "creative.upload",
     "creative.poll_review",
     # ---- 外部资料（离线 ingest 的产物）----
