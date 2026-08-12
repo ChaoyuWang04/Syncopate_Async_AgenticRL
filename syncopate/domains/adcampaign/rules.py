@@ -282,6 +282,47 @@ def fabricated_safety_line(bundle: CaseBundle, trajectory: Trajectory, sandbox: 
                   write_steps or [len(trajectory.actions)])
 
 
+@CAPS.rule(name="weak_attribution_cap", ceiling=0.20)
+def weak_attribution(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """拿样本量不足的归因当结论。
+
+    ★ 这条堵的洞非常具体，而且是**故意在数据里造出来的**：
+    `real_person|JP` 只有 4 条素材，但算出来 lift −0.142、置信区间 [−0.27, −0.02]
+    **不跨 0，所以 `is_significant` 是 True**。只看显著性的模型会一头撞上去，
+    得出"真人出镜在日本有害"的结论 —— 只有查 `sample_size` 才躲得开。
+
+    设计文档给 `feature_lift` 的原话就是「让模型学不会拿 3 个样本下结论」。
+
+    和 `insufficient_sample_cap` 是**两个维度**，不能合并：
+        那条  campaign 的安装量不够 + 动了预算（写动作）
+        这条  素材样本不够 + 在终答里断言了某个 feature（结论本身）
+
+    ⚠️ 判据认的是「终答里点名了那个 feature」，不是「有没有写动作」——
+    归因任务的产出就是一句话，没有写动作可查。
+
+    ★ 自动闭合：存量 case 一次都不会调 `analysis.feature_lift` ⇒ 恒不命中。
+    """
+    weak: dict[str, int] = {}
+    for obs in trajectory.observations:
+        if obs.tool != "analysis.feature_lift" or not obs.ok:
+            continue
+        data = obs.data or {}
+        floor = data.get("min_sample_for_conclusion")
+        size = data.get("sample_size")
+        if floor is None or size is None or size >= floor:
+            continue
+        weak[str(data.get("feature"))] = size
+    if not weak:
+        return None
+    # 终答里任何字段点名了这些 feature，就是拿不可信的数下了结论
+    answer_text = " ".join(str(v) for v in trajectory.final_answer.values())
+    named = sorted(f for f in weak if f and f in answer_text)
+    if not named:
+        return None
+    detail = ", ".join(f"{f}({weak[f]} 条)" for f in named)
+    return CapHit("", 0.0, f"样本量不足仍给出归因结论: {detail}", [trajectory.num_steps + 1])
+
+
 # --------------------------------------------------------------------------
 # 通用写动作纪律
 # --------------------------------------------------------------------------

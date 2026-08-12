@@ -1,0 +1,45 @@
+# v9 = v8 + M2（RAG v0 · 安全线）+ M3（I07 feature 归因）。
+#
+# ★ 为什么 v8 的十一项配额一个字都不改
+#
+# 生成器的 index 是**每个模板独立**从 0 开始的，`seen` 去重按内容指纹跨模板。
+# 只要 v8 的十一项保持原顺序原数量，它们生成出来的 case 结构就和 v8 一致 ——
+# 新增意图不该扰动已有的那批。
+#
+# （prompt 还是会变，而且这次变得更多：加了 `当前时间：`、工具菜单裁剪过、
+#   BUD 的调查链多了一步查安全线。**基线必须重测，这笔账躲不掉，也不该躲**
+#   —— 基线是里程碑的产物，不是要维护的资产。）
+name: seed_v9
+
+quotas:
+  budget_change:    140   # 主分支：风控 × 记忆 × 政策 三者决定结局
+  creative_launch:   90   # 记忆 + 时令双轴
+  diagnosis:         90   # 记忆决定方案是否复用
+  portfolio_review:  50   # 长链，需要 curriculum
+  long_tail:         50   # 480 秒审核，异步实验的燃料
+  clarify:           50   # 和 budget_change 成对
+  reject:            50
+  all_high:          30   # 弱信号反例
+  tool_missing:      30
+  freshness_check:   90   # I02 三档成熟度
+  failure_drill:    150   # F 类十个失败变体
+
+  # ---- M2 · RAG v0（安全线三档）----
+  # 90 条 = 3 档 × 2 entry_mode × 15。
+  # ★ 单开模板而不是把新轴接进 budget_change：三档均匀分布的话，
+  #   2/3 的预算题会变成「因安全线不可用而转人工」，把 BUD 原有的
+  #   denied/escalated/executed 三结局冲垮。和 F 类同一个套路。
+  # ★ current 档是**对照档**：只装 stale/missing 会让模型学成
+  #   「见到查安全线就转人工」。
+  safety_line_drill: 90
+
+  # ---- M3 · I07 feature 归因 ----
+  # 100 条铺 10 个 (feature × 地域) 格子，三档：
+  #   conclusive 7 格（样本足+显著，该下结论）
+  #   insufficient 3 格（样本不足，该拒绝）—— 含 real_person|JP 那个陷阱：
+  #                      4 条素材、lift −0.142、**统计上显著**
+  #   flat 2 格（样本足但不显著，该说"没有可靠证据"）
+  # ★ 这是全项目第一类**结论是一个判断、不是一条流程**的任务。
+  #   规律预埋在素材 ROAS 的生成公式里，analysis.feature_lift 真算出来，
+  #   gold 用同一个函数推导 —— 标准答案可推导，不需要 LLM judge。
+  feature_attribution: 100

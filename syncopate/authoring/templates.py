@@ -1292,8 +1292,12 @@ def make_safety_line_drill(p: Params) -> CaseBundle:
                           required_args={"campaign_id": "entity:campaign_id",
                                          "new_budget": "decision.approved_budget"})]
     else:
-        outcome = "escalated"
+        # ★ outcome 进分层键（split.stratum 认 tags 里的 outcome:）。
+        # 写成统一的 "escalated" 的话，stale 和 missing 会塌进同一个格子 ——
+        # EVAL 分不出两种失败、dead_grid 也没法单独瞄准其中一种。
+        # FAIL 模板用 outcome:{变体名} 就是这个先例。
         reason = "safety_line_stale" if state == "stale" else "safety_line_missing"
+        outcome = f"escalated_{state}"
         actions.append(_act("approval.create_case", campaign_id=p.campaign_id,
                             change_type="budget_increase", requested_value=requested,
                             reason=reason))
@@ -1342,9 +1346,191 @@ def make_safety_line_drill(p: Params) -> CaseBundle:
                                     expected_reward_min=0.88))
 
 
+# ==========================================================================
+# M3 · I07 feature 归因
+# ==========================================================================
+#
+# ★ 每个格子都对应 data/external/creative_tags.json 里**真实存在**的样本情况。
+# 不是编的：`scripts/make_test_external_data.py` 把规律埋进 roas 的生成公式，
+# `analysis.feature_lift` 从数据重新算出来，这里的 expect 是拿那个函数跑出来的。
+#
+#   conclusive   样本足 + 显著        ⇒ 给出结论
+#   insufficient 样本不足            ⇒ **拒绝下结论**，哪怕算出来的 lift 很唬人
+#   flat         样本足但不显著      ⇒ 说"没有可靠证据"，别硬找一个赢家
+#
+# ★★ real_person 那三行是这个模板的灵魂：
+#   US +0.227（20 条，该下结论）/ JP −0.142（**4 条，显著但不可信**）
+#   ⇒ 同一个 feature 跨地域符号相反，且弱的那一侧样本不足。
+#   把五个地域混起来算的模型会得到"微弱正向"，而那个结论在 JP 是反的 ——
+#   照着它扩量就是真金白银的亏损。
+_FEATURE_CN = {
+    "real_person": "真人出镜", "before_after": "前后对比开场",
+    "dark_palette": "暗色调", "fast_cut": "快剪", "ugc_style": "UGC 风格",
+}
+
+
+def _lift_from_catalog(case: Case, env: Any, feature: str, region: str) -> dict[str, Any]:
+    """离线复算一遍 `analysis.feature_lift`，用来推 gold 的结论。
+
+    ★ 刻意直接调工具的实现函数，而不是在这里重写一遍统计。
+    两套实现早晚会漂 —— 而一旦漂了，gold 的结论和工具返回的数就对不上，
+    模型照着工具的数答反而被判错。这是「训练和评测跑在不同东西上」的又一种形态。
+    """
+    from syncopate.core.tool_registry import ToolContext
+    from syncopate.core.sandbox import Sandbox
+    from syncopate.domains.adcampaign.tools.analytics import feature_lift
+
+    sandbox = Sandbox(env, namespace_id=f"gold:{env.case_id}")
+    ctx = ToolContext(case=case, env=env, sandbox=sandbox, step=0, tool_call_id="gold")
+    result = feature_lift({"feature": feature, "region": region}, ctx)
+    if not result.ok:
+        raise RuntimeError(f"gold 推导失败 {feature}|{region}: {result.error}")
+    return result.data
+
+
+ATTRIBUTION_CELLS: list[dict[str, Any]] = [
+    {"feature": "real_person", "region": "US", "state": "conclusive"},
+    {"feature": "real_person", "region": "JP", "state": "insufficient"},
+    {"feature": "real_person", "region": "GB", "state": "conclusive"},
+    {"feature": "dark_palette", "region": "JP", "state": "conclusive"},
+    {"feature": "dark_palette", "region": "BR", "state": "insufficient"},
+    {"feature": "fast_cut", "region": "BR", "state": "conclusive"},
+    {"feature": "fast_cut", "region": "DE", "state": "insufficient"},
+    {"feature": "before_after", "region": "DE", "state": "conclusive"},
+    {"feature": "ugc_style", "region": "US", "state": "flat"},
+    {"feature": "dark_palette", "region": "GB", "state": "flat"},
+]
+
+
+def make_feature_attribution(p: Params) -> CaseBundle:
+    """M3 · I07：某个素材 feature 在某个地域到底有没有用。
+
+    ★★ 和前面所有模板的根本不同：**结论是一个判断，不是一条流程**
+
+    BUD/CRE/FRESH 的"正确做法"都是流程性的（先查什么、再查什么、什么条件走哪个
+    分支），判据可以逐步核对。归因的产出是一句话——"真人出镜在美国有效"——
+    这句话对不对，没法从流程里推出来。
+
+    ⇒ 所以规律**预埋在沙盒里**：`_roas_for` 决定每条素材的 ROAS，
+    `analysis.feature_lift` 从数据里重新算，gold 的结论用同一个函数推导。
+    标准答案因此是**可推导**的，不需要 LLM judge（项目一开始就定了不用）。
+
+    ★ 三档正确动作（由数据里真实的样本量和显著性决定，不是编的）：
+
+        conclusive    样本足 + 显著   ⇒ 给出结论，标明 lift 和样本量
+        insufficient  样本不足        ⇒ **拒绝下结论**
+        flat          样本足但不显著  ⇒ 说"没有可靠证据"，别硬找赢家
+
+    第二档是核心：`real_person|JP` 只有 4 条素材，但 lift −0.142、CI 不跨 0，
+    **`is_significant` 是 True**。只看显著性会一头撞上去，看样本量才躲得开。
+
+    第三档是**对照档**，防止模型学成"见到归因就说样本不足"——
+    dead_grid 只装难例导致 defer 97%→0% 的教训。
+    """
+    case_id = f"ATTR_{p.index:04d}"
+    cell = ATTRIBUTION_CELLS[_mix(p.index, len(ATTRIBUTION_CELLS), 7)]
+    feature, region, state = cell["feature"], cell["region"], cell["state"]
+
+    env = (WorldBuilder(case_id, reference_now=p.reference_now)
+           .account(p.account_id, tier=p.tier, risk_flag=False)
+           # 归因看的是素材库（只读的 creative_catalog），campaign 只是入口
+           .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
+                     game_genre=p.genre, daily_budget=50_000,
+                     product_id=p.product, region=region,
+                     started_days_ago=21.0, installs_7d=4200.0)
+           .safety_line_state("current", product_id=p.product, region=region)
+           .build())
+
+    case = Case(
+        case_id=case_id,
+        user_message=(f"我们在 {region} 想扩量。{_FEATURE_CN[feature]}这个素材特点"
+                      f"到底有没有用？值不值得照这个方向多做一批？"),
+        context={"account_id": p.account_id, "campaign_id": p.campaign_id,
+                 "region": region, "product_id": p.product, "feature": feature},
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id,
+                  "region": region, "feature": feature},
+        metadata=_meta("graded", "reasoning", p, topology="sequential",
+                       difficulty="L5", primary_intent="feature_attribution",
+                       # ★ outcome 进分层键：三档不写进去就全塌成一格，
+                       # 「样本不足该拒绝」这个核心教学点对分层机制就是隐形的。
+                       tags=["attribution", f"outcome:{state}",
+                             f"attr:{state}", f"feature:{feature}"]),
+        max_steps=10,
+    )
+
+    # ---- 调查段：归因链 ----
+    # ★ 不逐条查 50 个素材的标签 —— feature_lift 内部就是按 features 字段分组的。
+    # 设计文档 §303 画的链里有 get_asset_tags(逐素材)，那在 50 条素材的规模下
+    # 是不现实的；真实做法是先算 lift，再按需看个别素材。
+    reads = ["analysis.feature_lift", "metrics.get_freshness", "memory.search"]
+    actions = [
+        _act("analysis.feature_lift", feature=feature, region=region),
+        # ★ M1 的东西在这里用上：算出来的 lift 可不可信，还要看数据成熟没成熟
+        _act("metrics.get_freshness", campaign_id=p.campaign_id, metric="roas_d7"),
+        _act("memory.search", lane="business", account_id=p.account_id,
+             campaign_id=p.campaign_id),
+    ]
+
+    lift = _lift_from_catalog(case, env, feature, region)
+    if state == "insufficient":
+        answer = {"conclusion": "insufficient_evidence",
+                  "reason": f"only_{lift['sample_size']}_creatives",
+                  "sample_size": lift["sample_size"]}
+        fields = [
+            AnswerField(key="conclusion", value_source="literal:insufficient_evidence",
+                        evidence_tool="analysis.feature_lift"),
+            AnswerField(key="sample_size", value_source=f"literal:{lift['sample_size']}",
+                        evidence_tool="analysis.feature_lift"),
+        ]
+    elif state == "flat":
+        answer = {"conclusion": "no_significant_effect", "lift": lift["lift"],
+                  "sample_size": lift["sample_size"]}
+        fields = [
+            AnswerField(key="conclusion", value_source="literal:no_significant_effect",
+                        evidence_tool="analysis.feature_lift"),
+            AnswerField(key="lift", value_source=f"literal:{lift['lift']}",
+                        evidence_tool="analysis.feature_lift"),
+        ]
+    else:
+        verdict = "positive" if lift["lift"] > 0 else "negative"
+        answer = {"conclusion": verdict, "feature": feature, "region": region,
+                  "lift": lift["lift"], "sample_size": lift["sample_size"]}
+        fields = [
+            AnswerField(key="conclusion", value_source=f"literal:{verdict}",
+                        evidence_tool="analysis.feature_lift"),
+            AnswerField(key="lift", value_source=f"literal:{lift['lift']}",
+                        evidence_tool="analysis.feature_lift"),
+            AnswerField(key="sample_size", value_source=f"literal:{lift['sample_size']}",
+                        evidence_tool="analysis.feature_lift"),
+        ]
+
+    # ⚠️ allowed_writes 必须是**变量**：_memory_wrapup 就地往里 append
+    # （propose 档会追加一步 memory.write_proposal）。传字面量 [] 的话改动直接丢，
+    # gold 写了却没权限，unauthorized_write_cap 当场命中自己。
+    allowed_writes: list[str] = []
+    wrapup = _memory_wrapup(
+        p, "business", {"feature": feature, "region": region, "conclusion": answer["conclusion"]},
+        ["analysis.feature_lift", "metrics.get_freshness"], reads, actions, allowed_writes)
+    case.metadata.tags.append(f"wrapup:{wrapup}")
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        active_caps=["false_claim_cap", "missing_memory_check_cap", "multi_tool_per_step_cap",
+                     "max_steps_cap", "unauthorized_write_cap", "memory_write_unverified_cap",
+                     # ★ M3 的主角：拿样本量不足的归因当结论
+                     "weak_attribution_cap"],
+        max_steps=10,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.88))
+
+
 TEMPLATES: dict[str, Callable[[Params], CaseBundle]] = {
     "budget_change": make_budget_change,
     "safety_line_drill": make_safety_line_drill,
+    "feature_attribution": make_feature_attribution,
     "creative_launch": make_creative_launch,
     "diagnosis": make_diagnosis,
     "portfolio_review": make_portfolio_review,

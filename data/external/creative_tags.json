@@ -19,13 +19,19 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": true,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9000.png"
+   "image_path": "data/external/creatives/CRV_9000.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6678
   },
   {
    "creative_id": "CRV_9001",
@@ -44,13 +50,18 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9001.png"
+   "image_path": "data/external/creatives/CRV_9001.png",
+   "features": [
+    "before_after",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6323
   },
   {
    "creative_id": "CRV_9002",
@@ -69,13 +80,17 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": false,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9002.png"
+   "image_path": "data/external/creatives/CRV_9002.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5476
   },
   {
    "creative_id": "CRV_9003",
@@ -93,13 +108,17 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": true,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9003.png"
+   "image_path": "data/external/creatives/CRV_9003.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6009
   },
   {
    "creative_id": "CRV_9004",
@@ -118,13 +137,17 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9004.png"
+   "image_path": "data/external/creatives/CRV_9004.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.478
   },
   {
    "creative_id": "CRV_9005",
@@ -143,13 +166,20 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": false,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9005.png"
+   "image_path": "data/external/creatives/CRV_9005.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6794
   },
   {
    "creative_id": "CRV_9006",
@@ -168,13 +198,15 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": true,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9006.png"
+   "image_path": "data/external/creatives/CRV_9006.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6571
   },
   {
    "creative_id": "CRV_9007",
@@ -193,13 +225,17 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": false,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9007.png"
+   "image_path": "data/external/creatives/CRV_9007.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.3601
   },
   {
    "creative_id": "CRV_9008",
@@ -217,13 +253,18 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": false,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9008.png"
+   "image_path": "data/external/creatives/CRV_9008.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5027
   },
   {
    "creative_id": "CRV_9009",
@@ -242,13 +283,18 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": true,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9009.png"
+   "image_path": "data/external/creatives/CRV_9009.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5023
   },
   {
    "creative_id": "CRV_9010",
@@ -267,13 +313,19 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": false,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9010.png"
+   "image_path": "data/external/creatives/CRV_9010.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5914
   },
   {
    "creative_id": "CRV_9011",
@@ -292,13 +344,15 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9011.png"
+   "image_path": "data/external/creatives/CRV_9011.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5382
   },
   {
    "creative_id": "CRV_9012",
@@ -317,13 +371,17 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": true,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9012.png"
+   "image_path": "data/external/creatives/CRV_9012.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4792
   },
   {
    "creative_id": "CRV_9013",
@@ -341,13 +399,18 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": false,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9013.png"
+   "image_path": "data/external/creatives/CRV_9013.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5336
   },
   {
    "creative_id": "CRV_9014",
@@ -366,13 +429,18 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9014.png"
+   "image_path": "data/external/creatives/CRV_9014.png",
+   "features": [
+    "dark_palette",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.8643
   },
   {
    "creative_id": "CRV_9015",
@@ -391,13 +459,19 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": true,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9015.png"
+   "image_path": "data/external/creatives/CRV_9015.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.3842
   },
   {
    "creative_id": "CRV_9016",
@@ -416,13 +490,15 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9016.png"
+   "image_path": "data/external/creatives/CRV_9016.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3996
   },
   {
    "creative_id": "CRV_9017",
@@ -441,13 +517,18 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": false,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9017.png"
+   "image_path": "data/external/creatives/CRV_9017.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6771
   },
   {
    "creative_id": "CRV_9018",
@@ -465,13 +546,17 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": true,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9018.png"
+   "image_path": "data/external/creatives/CRV_9018.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5643
   },
   {
    "creative_id": "CRV_9019",
@@ -490,13 +575,17 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9019.png"
+   "image_path": "data/external/creatives/CRV_9019.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5076
   },
   {
    "creative_id": "CRV_9020",
@@ -515,13 +604,19 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": false,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9020.png"
+   "image_path": "data/external/creatives/CRV_9020.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5537
   },
   {
    "creative_id": "CRV_9021",
@@ -540,13 +635,17 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": true,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9021.png"
+   "image_path": "data/external/creatives/CRV_9021.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.49
   },
   {
    "creative_id": "CRV_9022",
@@ -565,13 +664,18 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": false,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9022.png"
+   "image_path": "data/external/creatives/CRV_9022.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5795
   },
   {
    "creative_id": "CRV_9023",
@@ -589,13 +693,17 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": false,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9023.png"
+   "image_path": "data/external/creatives/CRV_9023.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.613
   },
   {
    "creative_id": "CRV_9024",
@@ -614,13 +722,17 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": true,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9024.png"
+   "image_path": "data/external/creatives/CRV_9024.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.3942
   },
   {
    "creative_id": "CRV_9025",
@@ -639,13 +751,21 @@
    ],
    "hook_type": "before_after",
    "dominant_color": "orange",
-   "has_face": false,
    "text_overlay_ratio": 0.15,
    "ipm": 10.0,
    "ctr": 0.025,
    "d7_cpi": 2.2,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9025.png"
+   "image_path": "data/external/creatives/CRV_9025.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.7718
   },
   {
    "creative_id": "CRV_9026",
@@ -664,13 +784,15 @@
    ],
    "hook_type": "gameplay_first_3s",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.23,
    "ipm": 4.6,
    "ctr": 0.0169,
    "d7_cpi": 2.85,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9026.png"
+   "image_path": "data/external/creatives/CRV_9026.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5026
   },
   {
    "creative_id": "CRV_9027",
@@ -689,13 +811,17 @@
    ],
    "hook_type": "fail_then_win",
    "dominant_color": "cyan",
-   "has_face": true,
    "text_overlay_ratio": 0.31,
    "ipm": 5.2,
    "ctr": 0.0178,
    "d7_cpi": 2.78,
    "week_launched": "2026-W32",
-   "image_path": "data/external/creatives/CRV_9027.png"
+   "image_path": "data/external/creatives/CRV_9027.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6389
   },
   {
    "creative_id": "CRV_9028",
@@ -713,13 +839,17 @@
    ],
    "hook_type": "ugc_testimonial",
    "dominant_color": "blue",
-   "has_face": false,
    "text_overlay_ratio": 0.39,
    "ipm": 5.8,
    "ctr": 0.0187,
    "d7_cpi": 2.7,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9028.png"
+   "image_path": "data/external/creatives/CRV_9028.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5225
   },
   {
    "creative_id": "CRV_9029",
@@ -738,13 +868,6415 @@
    ],
    "hook_type": "tutorial",
    "dominant_color": "red",
-   "has_face": false,
    "text_overlay_ratio": 0.47,
    "ipm": 6.4,
    "ctr": 0.0196,
    "d7_cpi": 2.63,
    "week_launched": "2026-W29",
-   "image_path": "data/external/creatives/CRV_9029.png"
+   "image_path": "data/external/creatives/CRV_9029.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5942
+  },
+  {
+   "creative_id": "CRV_9030",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9030.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6899
+  },
+  {
+   "creative_id": "CRV_9031",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9031.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.569
+  },
+  {
+   "creative_id": "CRV_9032",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9032.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4182
+  },
+  {
+   "creative_id": "CRV_9033",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9033.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5366
+  },
+  {
+   "creative_id": "CRV_9034",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9034.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4701
+  },
+  {
+   "creative_id": "CRV_9035",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9035.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.675
+  },
+  {
+   "creative_id": "CRV_9036",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9036.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5926
+  },
+  {
+   "creative_id": "CRV_9037",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9037.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5341
+  },
+  {
+   "creative_id": "CRV_9038",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9038.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5336
+  },
+  {
+   "creative_id": "CRV_9039",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9039.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7082
+  },
+  {
+   "creative_id": "CRV_9040",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9040.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4502
+  },
+  {
+   "creative_id": "CRV_9041",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9041.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4535
+  },
+  {
+   "creative_id": "CRV_9042",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9042.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6691
+  },
+  {
+   "creative_id": "CRV_9043",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9043.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6942
+  },
+  {
+   "creative_id": "CRV_9044",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9044.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4347
+  },
+  {
+   "creative_id": "CRV_9045",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9045.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6336
+  },
+  {
+   "creative_id": "CRV_9046",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9046.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4636
+  },
+  {
+   "creative_id": "CRV_9047",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9047.png",
+   "features": [
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5129
+  },
+  {
+   "creative_id": "CRV_9048",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9048.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7108
+  },
+  {
+   "creative_id": "CRV_9049",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9049.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4349
+  },
+  {
+   "creative_id": "CRV_9050",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9050.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6987
+  },
+  {
+   "creative_id": "CRV_9051",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9051.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5251
+  },
+  {
+   "creative_id": "CRV_9052",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9052.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5588
+  },
+  {
+   "creative_id": "CRV_9053",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9053.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6224
+  },
+  {
+   "creative_id": "CRV_9054",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9054.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4572
+  },
+  {
+   "creative_id": "CRV_9055",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9055.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.8593
+  },
+  {
+   "creative_id": "CRV_9056",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9056.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6411
+  },
+  {
+   "creative_id": "CRV_9057",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9057.png",
+   "features": [
+    "before_after",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5071
+  },
+  {
+   "creative_id": "CRV_9058",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9058.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4698
+  },
+  {
+   "creative_id": "CRV_9059",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9059.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4647
+  },
+  {
+   "creative_id": "CRV_9060",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9060.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6125
+  },
+  {
+   "creative_id": "CRV_9061",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9061.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5488
+  },
+  {
+   "creative_id": "CRV_9062",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9062.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4629
+  },
+  {
+   "creative_id": "CRV_9063",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9063.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5544
+  },
+  {
+   "creative_id": "CRV_9064",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9064.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.8787
+  },
+  {
+   "creative_id": "CRV_9065",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9065.png",
+   "features": [
+    "before_after",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5118
+  },
+  {
+   "creative_id": "CRV_9066",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9066.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4094
+  },
+  {
+   "creative_id": "CRV_9067",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9067.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6266
+  },
+  {
+   "creative_id": "CRV_9068",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9068.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5901
+  },
+  {
+   "creative_id": "CRV_9069",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9069.png",
+   "features": [
+    "dark_palette",
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5759
+  },
+  {
+   "creative_id": "CRV_9070",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9070.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5429
+  },
+  {
+   "creative_id": "CRV_9071",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9071.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5923
+  },
+  {
+   "creative_id": "CRV_9072",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9072.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6095
+  },
+  {
+   "creative_id": "CRV_9073",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9073.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6608
+  },
+  {
+   "creative_id": "CRV_9074",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9074.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4103
+  },
+  {
+   "creative_id": "CRV_9075",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9075.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6251
+  },
+  {
+   "creative_id": "CRV_9076",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9076.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5276
+  },
+  {
+   "creative_id": "CRV_9077",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9077.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6326
+  },
+  {
+   "creative_id": "CRV_9078",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9078.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5945
+  },
+  {
+   "creative_id": "CRV_9079",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9079.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5194
+  },
+  {
+   "creative_id": "CRV_9080",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9080.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.9066
+  },
+  {
+   "creative_id": "CRV_9081",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9081.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6214
+  },
+  {
+   "creative_id": "CRV_9082",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9082.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4156
+  },
+  {
+   "creative_id": "CRV_9083",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9083.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4071
+  },
+  {
+   "creative_id": "CRV_9084",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9084.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4925
+  },
+  {
+   "creative_id": "CRV_9085",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9085.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.661
+  },
+  {
+   "creative_id": "CRV_9086",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9086.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4675
+  },
+  {
+   "creative_id": "CRV_9087",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9087.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5389
+  },
+  {
+   "creative_id": "CRV_9088",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9088.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5096
+  },
+  {
+   "creative_id": "CRV_9089",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9089.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7794
+  },
+  {
+   "creative_id": "CRV_9090",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9090.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4543
+  },
+  {
+   "creative_id": "CRV_9091",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9091.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4056
+  },
+  {
+   "creative_id": "CRV_9092",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9092.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.7793
+  },
+  {
+   "creative_id": "CRV_9093",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9093.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6089
+  },
+  {
+   "creative_id": "CRV_9094",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9094.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4488
+  },
+  {
+   "creative_id": "CRV_9095",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9095.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6358
+  },
+  {
+   "creative_id": "CRV_9096",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9096.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4465
+  },
+  {
+   "creative_id": "CRV_9097",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9097.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6565
+  },
+  {
+   "creative_id": "CRV_9098",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9098.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6867
+  },
+  {
+   "creative_id": "CRV_9099",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9099.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.3908
+  },
+  {
+   "creative_id": "CRV_9100",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9100.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.7182
+  },
+  {
+   "creative_id": "CRV_9101",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9101.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5153
+  },
+  {
+   "creative_id": "CRV_9102",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9102.png",
+   "features": [
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6591
+  },
+  {
+   "creative_id": "CRV_9103",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9103.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6028
+  },
+  {
+   "creative_id": "CRV_9104",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9104.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4465
+  },
+  {
+   "creative_id": "CRV_9105",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9105.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.9432
+  },
+  {
+   "creative_id": "CRV_9106",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9106.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7056
+  },
+  {
+   "creative_id": "CRV_9107",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9107.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.365
+  },
+  {
+   "creative_id": "CRV_9108",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9108.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4761
+  },
+  {
+   "creative_id": "CRV_9109",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9109.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4583
+  },
+  {
+   "creative_id": "CRV_9110",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9110.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6428
+  },
+  {
+   "creative_id": "CRV_9111",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9111.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5239
+  },
+  {
+   "creative_id": "CRV_9112",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9112.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.46
+  },
+  {
+   "creative_id": "CRV_9113",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9113.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6718
+  },
+  {
+   "creative_id": "CRV_9114",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9114.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7279
+  },
+  {
+   "creative_id": "CRV_9115",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9115.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4148
+  },
+  {
+   "creative_id": "CRV_9116",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9116.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4084
+  },
+  {
+   "creative_id": "CRV_9117",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9117.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6247
+  },
+  {
+   "creative_id": "CRV_9118",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9118.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6189
+  },
+  {
+   "creative_id": "CRV_9119",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9119.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4807
+  },
+  {
+   "creative_id": "CRV_9120",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9120.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5494
+  },
+  {
+   "creative_id": "CRV_9121",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9121.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5176
+  },
+  {
+   "creative_id": "CRV_9122",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9122.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5814
+  },
+  {
+   "creative_id": "CRV_9123",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9123.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6588
+  },
+  {
+   "creative_id": "CRV_9124",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9124.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4674
+  },
+  {
+   "creative_id": "CRV_9125",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9125.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6328
+  },
+  {
+   "creative_id": "CRV_9126",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9126.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5499
+  },
+  {
+   "creative_id": "CRV_9127",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9127.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.675
+  },
+  {
+   "creative_id": "CRV_9128",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9128.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5365
+  },
+  {
+   "creative_id": "CRV_9129",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9129.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5232
+  },
+  {
+   "creative_id": "CRV_9130",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9130.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7991
+  },
+  {
+   "creative_id": "CRV_9131",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9131.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6214
+  },
+  {
+   "creative_id": "CRV_9132",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9132.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4026
+  },
+  {
+   "creative_id": "CRV_9133",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9133.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5214
+  },
+  {
+   "creative_id": "CRV_9134",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9134.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5687
+  },
+  {
+   "creative_id": "CRV_9135",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9135.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6975
+  },
+  {
+   "creative_id": "CRV_9136",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9136.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.487
+  },
+  {
+   "creative_id": "CRV_9137",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9137.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5343
+  },
+  {
+   "creative_id": "CRV_9138",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9138.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4959
+  },
+  {
+   "creative_id": "CRV_9139",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9139.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7771
+  },
+  {
+   "creative_id": "CRV_9140",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9140.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4356
+  },
+  {
+   "creative_id": "CRV_9141",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9141.png",
+   "features": [
+    "before_after",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5061
+  },
+  {
+   "creative_id": "CRV_9142",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9142.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.7075
+  },
+  {
+   "creative_id": "CRV_9143",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9143.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.565
+  },
+  {
+   "creative_id": "CRV_9144",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9144.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4707
+  },
+  {
+   "creative_id": "CRV_9145",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9145.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6211
+  },
+  {
+   "creative_id": "CRV_9146",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9146.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4948
+  },
+  {
+   "creative_id": "CRV_9147",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9147.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6493
+  },
+  {
+   "creative_id": "CRV_9148",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9148.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7528
+  },
+  {
+   "creative_id": "CRV_9149",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9149.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4662
+  },
+  {
+   "creative_id": "CRV_9150",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9150.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.7191
+  },
+  {
+   "creative_id": "CRV_9151",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9151.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4827
+  },
+  {
+   "creative_id": "CRV_9152",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9152.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6122
+  },
+  {
+   "creative_id": "CRV_9153",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9153.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5931
+  },
+  {
+   "creative_id": "CRV_9154",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9154.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.45
+  },
+  {
+   "creative_id": "CRV_9155",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9155.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.9215
+  },
+  {
+   "creative_id": "CRV_9156",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9156.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5847
+  },
+  {
+   "creative_id": "CRV_9157",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9157.png",
+   "features": [
+    "fast_cut",
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5665
+  },
+  {
+   "creative_id": "CRV_9158",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9158.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4692
+  },
+  {
+   "creative_id": "CRV_9159",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9159.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4356
+  },
+  {
+   "creative_id": "CRV_9160",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9160.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6712
+  },
+  {
+   "creative_id": "CRV_9161",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9161.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5109
+  },
+  {
+   "creative_id": "CRV_9162",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9162.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5518
+  },
+  {
+   "creative_id": "CRV_9163",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9163.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5805
+  },
+  {
+   "creative_id": "CRV_9164",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9164.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6978
+  },
+  {
+   "creative_id": "CRV_9165",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9165.png",
+   "features": [
+    "before_after",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5574
+  },
+  {
+   "creative_id": "CRV_9166",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9166.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3969
+  },
+  {
+   "creative_id": "CRV_9167",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9167.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6043
+  },
+  {
+   "creative_id": "CRV_9168",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9168.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.64
+  },
+  {
+   "creative_id": "CRV_9169",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9169.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5324
+  },
+  {
+   "creative_id": "CRV_9170",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9170.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5709
+  },
+  {
+   "creative_id": "CRV_9171",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9171.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5151
+  },
+  {
+   "creative_id": "CRV_9172",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9172.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5638
+  },
+  {
+   "creative_id": "CRV_9173",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9173.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7251
+  },
+  {
+   "creative_id": "CRV_9174",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9174.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3872
+  },
+  {
+   "creative_id": "CRV_9175",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9175.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6234
+  },
+  {
+   "creative_id": "CRV_9176",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9176.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6285
+  },
+  {
+   "creative_id": "CRV_9177",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9177.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5764
+  },
+  {
+   "creative_id": "CRV_9178",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9178.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5621
+  },
+  {
+   "creative_id": "CRV_9179",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9179.png",
+   "features": [
+    "dark_palette",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5743
+  },
+  {
+   "creative_id": "CRV_9180",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9180.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7874
+  },
+  {
+   "creative_id": "CRV_9181",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9181.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6791
+  },
+  {
+   "creative_id": "CRV_9182",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9182.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.3841
+  },
+  {
+   "creative_id": "CRV_9183",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9183.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4662
+  },
+  {
+   "creative_id": "CRV_9184",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9184.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5103
+  },
+  {
+   "creative_id": "CRV_9185",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9185.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6058
+  },
+  {
+   "creative_id": "CRV_9186",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9186.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5113
+  },
+  {
+   "creative_id": "CRV_9187",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9187.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5167
+  },
+  {
+   "creative_id": "CRV_9188",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9188.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4976
+  },
+  {
+   "creative_id": "CRV_9189",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9189.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.8398
+  },
+  {
+   "creative_id": "CRV_9190",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9190.png",
+   "features": [
+    "before_after",
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4813
+  },
+  {
+   "creative_id": "CRV_9191",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9191.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3716
+  },
+  {
+   "creative_id": "CRV_9192",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9192.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6999
+  },
+  {
+   "creative_id": "CRV_9193",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9193.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5676
+  },
+  {
+   "creative_id": "CRV_9194",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9194.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4924
+  },
+  {
+   "creative_id": "CRV_9195",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9195.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5948
+  },
+  {
+   "creative_id": "CRV_9196",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9196.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4512
+  },
+  {
+   "creative_id": "CRV_9197",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9197.png",
+   "features": [
+    "before_after",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7955
+  },
+  {
+   "creative_id": "CRV_9198",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9198.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6263
+  },
+  {
+   "creative_id": "CRV_9199",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9199.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3821
+  },
+  {
+   "creative_id": "CRV_9200",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9200.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.701
+  },
+  {
+   "creative_id": "CRV_9201",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9201.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5673
+  },
+  {
+   "creative_id": "CRV_9202",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9202.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6347
+  },
+  {
+   "creative_id": "CRV_9203",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9203.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.554
+  },
+  {
+   "creative_id": "CRV_9204",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9204.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5456
+  },
+  {
+   "creative_id": "CRV_9205",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9205.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.9666
+  },
+  {
+   "creative_id": "CRV_9206",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9206.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5652
+  },
+  {
+   "creative_id": "CRV_9207",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9207.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4003
+  },
+  {
+   "creative_id": "CRV_9208",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9208.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4519
+  },
+  {
+   "creative_id": "CRV_9209",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9209.png",
+   "features": [
+    "dark_palette",
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4533
+  },
+  {
+   "creative_id": "CRV_9210",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9210.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6872
+  },
+  {
+   "creative_id": "CRV_9211",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9211.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5444
+  },
+  {
+   "creative_id": "CRV_9212",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9212.png",
+   "features": [
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5526
+  },
+  {
+   "creative_id": "CRV_9213",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9213.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.571
+  },
+  {
+   "creative_id": "CRV_9214",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9214.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6848
+  },
+  {
+   "creative_id": "CRV_9215",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9215.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4542
+  },
+  {
+   "creative_id": "CRV_9216",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9216.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3791
+  },
+  {
+   "creative_id": "CRV_9217",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9217.png",
+   "features": [
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6396
+  },
+  {
+   "creative_id": "CRV_9218",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9218.png",
+   "features": [
+    "before_after",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.723
+  },
+  {
+   "creative_id": "CRV_9219",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9219.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4395
+  },
+  {
+   "creative_id": "CRV_9220",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9220.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5995
+  },
+  {
+   "creative_id": "CRV_9221",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9221.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.4997
+  },
+  {
+   "creative_id": "CRV_9222",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9222.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5633
+  },
+  {
+   "creative_id": "CRV_9223",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9223.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.7128
+  },
+  {
+   "creative_id": "CRV_9224",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9224.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.3687
+  },
+  {
+   "creative_id": "CRV_9225",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "US",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9225.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "fast_cut",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6683
+  },
+  {
+   "creative_id": "CRV_9226",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9226.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5571
+  },
+  {
+   "creative_id": "CRV_9227",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9227.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5492
+  },
+  {
+   "creative_id": "CRV_9228",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9228.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5888
+  },
+  {
+   "creative_id": "CRV_9229",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9229.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.492
+  },
+  {
+   "creative_id": "CRV_9230",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "JP",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9230.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.801
+  },
+  {
+   "creative_id": "CRV_9231",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9231.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6586
+  },
+  {
+   "creative_id": "CRV_9232",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9232.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4073
+  },
+  {
+   "creative_id": "CRV_9233",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9233.png",
+   "features": [
+    "fast_cut",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5637
+  },
+  {
+   "creative_id": "CRV_9234",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9234.png",
+   "features": [
+    "dark_palette",
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.574
+  },
+  {
+   "creative_id": "CRV_9235",
+   "creative_name": "halloween_before_after_v2",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "GB",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9235.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.5867
+  },
+  {
+   "creative_id": "CRV_9236",
+   "creative_name": "christmas_gameplay_first_3s_v3",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "GB",
+   "platform": "Unity",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9236.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.5314
+  },
+  {
+   "creative_id": "CRV_9237",
+   "creative_name": "summer_fail_then_win_v1",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9237.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.4927
+  },
+  {
+   "creative_id": "CRV_9238",
+   "creative_name": "generic_ugc_testimonial_v2",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "DE",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9238.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5141
+  },
+  {
+   "creative_id": "CRV_9239",
+   "creative_name": "lunar_new_year_tutorial_v3",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9239.png",
+   "features": [
+    "before_after",
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.9222
+  },
+  {
+   "creative_id": "CRV_9240",
+   "creative_name": "halloween_before_after_v1",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "BR",
+   "platform": "AppLovin",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9240.png",
+   "features": [
+    "before_after",
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.3999
+  },
+  {
+   "creative_id": "CRV_9241",
+   "creative_name": "christmas_gameplay_first_3s_v2",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "BR",
+   "platform": "Meta",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9241.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.4993
+  },
+  {
+   "creative_id": "CRV_9242",
+   "creative_name": "summer_fail_then_win_v3",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "US",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9242.png",
+   "features": [
+    "real_person"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6758
+  },
+  {
+   "creative_id": "CRV_9243",
+   "creative_name": "generic_ugc_testimonial_v1",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "US",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9243.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5544
+  },
+  {
+   "creative_id": "CRV_9244",
+   "creative_name": "lunar_new_year_tutorial_v2",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "GB",
+   "platform": "Google",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9244.png",
+   "features": [
+    "dark_palette"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5057
+  },
+  {
+   "creative_id": "CRV_9245",
+   "creative_name": "halloween_before_after_v3",
+   "product_id": "PUZ_QUEST",
+   "genre": "puzzle",
+   "region": "DE",
+   "platform": "Unity",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "halloween",
+    "pumpkin",
+    "dark_palette",
+    "spooky"
+   ],
+   "hook_type": "before_after",
+   "dominant_color": "orange",
+   "text_overlay_ratio": 0.15,
+   "ipm": 10.0,
+   "ctr": 0.025,
+   "d7_cpi": 2.2,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9245.png",
+   "features": [
+    "before_after",
+    "dark_palette",
+    "real_person",
+    "ugc_style"
+   ],
+   "has_face": true,
+   "roas_d7": 0.6347
+  },
+  {
+   "creative_id": "CRV_9246",
+   "creative_name": "christmas_gameplay_first_3s_v1",
+   "product_id": "MERGE_FARM",
+   "genre": "casual",
+   "region": "DE",
+   "platform": "Google",
+   "asset_type": "video",
+   "duration_seconds": 35,
+   "visual_tags": [
+    "christmas",
+    "snow",
+    "gift_box",
+    "warm_light"
+   ],
+   "hook_type": "gameplay_first_3s",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.23,
+   "ipm": 4.6,
+   "ctr": 0.0169,
+   "d7_cpi": 2.85,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9246.png",
+   "features": [
+    "before_after"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5514
+  },
+  {
+   "creative_id": "CRV_9247",
+   "creative_name": "summer_fail_then_win_v2",
+   "product_id": "IDLE_HERO",
+   "genre": "rpg",
+   "region": "JP",
+   "platform": "AppLovin",
+   "asset_type": "video",
+   "duration_seconds": 45,
+   "visual_tags": [
+    "summer",
+    "beach",
+    "bright_palette",
+    "water"
+   ],
+   "hook_type": "fail_then_win",
+   "dominant_color": "cyan",
+   "text_overlay_ratio": 0.31,
+   "ipm": 5.2,
+   "ctr": 0.0178,
+   "d7_cpi": 2.78,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9247.png",
+   "features": [],
+   "has_face": false,
+   "roas_d7": 0.6503
+  },
+  {
+   "creative_id": "CRV_9248",
+   "creative_name": "generic_ugc_testimonial_v3",
+   "product_id": "TAP_RUSH",
+   "genre": "hyper_casual",
+   "region": "JP",
+   "platform": "Meta",
+   "asset_type": "image",
+   "duration_seconds": 15,
+   "visual_tags": [
+    "generic",
+    "ui_showcase",
+    "neutral_palette"
+   ],
+   "hook_type": "ugc_testimonial",
+   "dominant_color": "blue",
+   "text_overlay_ratio": 0.39,
+   "ipm": 5.8,
+   "ctr": 0.0187,
+   "d7_cpi": 2.7,
+   "week_launched": "2026-W29",
+   "image_path": "data/external/creatives/CRV_9248.png",
+   "features": [
+    "ugc_style"
+   ],
+   "has_face": false,
+   "roas_d7": 0.6122
+  },
+  {
+   "creative_id": "CRV_9249",
+   "creative_name": "lunar_new_year_tutorial_v1",
+   "product_id": "WAR_THRONE",
+   "genre": "strategy",
+   "region": "BR",
+   "platform": "TikTok",
+   "asset_type": "video",
+   "duration_seconds": 25,
+   "visual_tags": [
+    "lunar_new_year",
+    "lantern",
+    "red_envelope",
+    "festive"
+   ],
+   "hook_type": "tutorial",
+   "dominant_color": "red",
+   "text_overlay_ratio": 0.47,
+   "ipm": 6.4,
+   "ctr": 0.0196,
+   "d7_cpi": 2.63,
+   "week_launched": "2026-W32",
+   "image_path": "data/external/creatives/CRV_9249.png",
+   "features": [
+    "fast_cut"
+   ],
+   "has_face": false,
+   "roas_d7": 0.5111
   }
  ]
 }

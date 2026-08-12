@@ -139,18 +139,132 @@ _THEMES = [
 ]
 _HOOKS = ["before_after", "gameplay_first_3s", "fail_then_win", "ugc_testimonial", "tutorial"]
 
+# ==========================================================================
+# ★★★ M3 · feature 归因的地基：把"规律"埋进素材表现的生成方式里
+# ==========================================================================
+#
+# 归因任务和前面几类的根本不同：前面的"正确做法"是**流程性**的（先查什么再查什么），
+# 判据可以逐步核对；归因的结论是**一个判断**（"真人出镜在美国有效"），
+# 这句话对不对没法从流程里推出来。
+#
+# 两条路：(A) 沙盒里预埋真实规律，工具把它算出来；(B) 上 LLM judge。
+# 选 A —— 项目一开始就定了不用 judge（终答必须是可解析的 dict，false_claim_cap
+# 那套全靠这个）。而且 A 让标准答案**可推导**，不需要人来标。
+#
+# ★ 但"预埋"不等于"把答案写进表里"。沿用同文件 detect_anomalies 的做法：
+#   **真算，不读预置答案** —— 规律埋在 roas 的生成公式里，
+#   `analysis.feature_lift` 从素材表现里重新算出来。
+#   于是改一条素材的数值，归因结论就自然跟着变，不用手工维护一张"正确答案表"。
+
+# 归因看的五个 feature（都是二值的，从视觉标签派生）
+FEATURES = ["real_person", "before_after", "dark_palette", "fast_cut", "ugc_style"]
+
+# ★★ feature × 地域 的真实效应（对 d7 ROAS 的相对提升）。
+#
+# 刻意做成**跨地域不一致**：real_person 在 US 强正、在 JP 负、在 BR 几乎没用。
+# 这样"按地域分别归因"就成了必须做的事，而不是可以偷懒平均掉的 ——
+# 一个把五个地域混在一起算的模型，会得出 real_person 微弱正向的结论，
+# 而那个结论在 JP 是**反的**，照着它扩量就是真金白银的亏损。
+_FEATURE_EFFECT: dict[tuple[str, str], float] = {
+    ("real_person", "US"): 0.26, ("real_person", "GB"): 0.19,
+    ("real_person", "DE"): 0.04, ("real_person", "JP"): -0.21, ("real_person", "BR"): 0.02,
+    ("before_after", "US"): 0.12, ("before_after", "GB"): 0.14,
+    ("before_after", "DE"): 0.17, ("before_after", "JP"): 0.15, ("before_after", "BR"): 0.11,
+    ("dark_palette", "US"): -0.09, ("dark_palette", "GB"): -0.06,
+    ("dark_palette", "DE"): 0.01, ("dark_palette", "JP"): 0.22, ("dark_palette", "BR"): -0.03,
+    ("fast_cut", "US"): 0.03, ("fast_cut", "GB"): 0.02,
+    ("fast_cut", "DE"): 0.01, ("fast_cut", "JP"): 0.05, ("fast_cut", "BR"): 0.28,
+    ("ugc_style", "US"): 0.15, ("ugc_style", "GB"): 0.13,
+    ("ugc_style", "DE"): 0.12, ("ugc_style", "JP"): 0.09, ("ugc_style", "BR"): 0.16,
+}
+
+# ★ 每个 (feature, 地域) 在素材库里有多少条 —— 决定"样本够不够下结论"。
+#
+# 这是 M3 的第二个教学目标，和第一个同等重要：
+#   样本足 + 效应大  ⇒ 该下结论
+#   样本不足        ⇒ **该拒绝下结论**，哪怕算出来的 lift 看着很漂亮
+# 设计文档给 feature_lift 的原话是"让模型学不会拿 3 个样本下结论"。
+#
+# 所以刻意留几个**样本稀少但效应巨大**的格子（JP 的 real_person 只有 4 条，
+# 效应 -0.21）—— 只看 lift 的模型会一头撞上去，看样本量的才躲得开。
+_SPARSE_CELLS = {("real_person", "JP"), ("dark_palette", "BR"), ("fast_cut", "DE")}
+# 稀疏格子留几条。4 条：足够算出一个数（不是空的），又明显不够下结论。
+SPARSE_COUNT = 4
+
+# 素材库规模。250 条 / 5 地域 = 每地域 50 条，一个 feature 出现率 ~40% ⇒ 约 20 条样本，
+# 够做归因；稀疏格子压到 4 条，明确不够。
+CATALOG_SIZE = 250
+# 少于这么多条素材就不该下归因结论。和 maturity.MIN_SAMPLE_INSTALLS 是同一个思路的
+# 另一个维度：那个管"时间够不够"，这个管"样本够不够"。
+MIN_FEATURE_SAMPLE = 12
+# 地域基准 ROAS（不带任何 feature 的素材大致落在这里）
+_REGION_BASE_ROAS = {"US": 0.52, "GB": 0.50, "DE": 0.48, "JP": 0.61, "BR": 0.38}
+
+
+def _features_for(index: int, theme: str, hook: str) -> dict[str, bool]:
+    """这条素材天然带哪几个 feature（不考虑稀疏格子，那个在第二遍处理）。"""
+    return {
+        "real_person": index % 5 in (0, 2),
+        "before_after": hook == "before_after" or index % 7 == 1,
+        "dark_palette": theme in ("halloween", "lunar_new_year"),
+        "fast_cut": index % 4 == 1,
+        "ugc_style": hook == "ugc_testimonial" or index % 11 == 3,
+    }
+
+
+def _thin_sparse_cells(rows: list[dict]) -> None:
+    """把 `_SPARSE_CELLS` 里的 (feature, 地域) 削到恰好 SPARSE_COUNT 条。**原地改**。
+
+    ★ 为什么要第二遍，不能在 _features_for 里按 index 取模搞定
+
+    地域是按 `(index*3)//5 % 5` 分配的 —— 同一个地域的 index 是**分段连续**的，
+    再叠一层取模，落到某一格的条数完全不可控。第一版就是这么写的，实测
+    `real_person|JP` 变成 **0 条**、`dark_palette|BR` 剩 1 条。
+
+    而 0 条意味着那道题**根本不存在** —— 我们想要的恰恰是
+    「样本少（4 条）但算出来的 lift 很唬人（-0.21）」这个陷阱：
+    只看 lift 的模型会一头撞上去，看样本量的才躲得开。
+    ⇒ 需要精确控制的量，就别靠取模碰运气，直接数出来。
+    """
+    for feature, region in sorted(_SPARSE_CELLS):
+        carriers = [r for r in rows if r["region"] == region and feature in r["_features"]]
+        for row in carriers[SPARSE_COUNT:]:
+            row["_features"].discard(feature)
+
+
+def _roas_for(region: str, features: dict[str, bool], index: int) -> float:
+    """★ 规律埋在这里：ROAS = 地域基准 × Π(1 + 该 feature 在该地域的效应) × 个体扰动。
+
+    个体扰动是**确定性**的（由 index 算出），不是随机数 ——
+    数据必须可复现，而且 GRPO 是组内比较，任何随机性都会污染 advantage。
+    扰动幅度 ±8%，明显小于我们要检出的效应（0.12–0.28），
+    但足以让"样本量小的时候噪声淹没信号"这件事真的发生 —— 这正是要教的东西。
+    """
+    value = _REGION_BASE_ROAS[region]
+    for feature, on in features.items():
+        if on:
+            value *= 1.0 + _FEATURE_EFFECT.get((feature, region), 0.0)
+    jitter = 1.0 + 0.08 * math.sin(index * 2.399963)      # 黄金角，铺得均匀且确定
+    return round(value * jitter, 4)
+
 
 def creative_catalog() -> list[dict]:
     """素材库 + 离线标签 + 历史表现。"""
     items = []
-    for index in range(30):
+    for index in range(CATALOG_SIZE):
         theme, tags, color = _THEMES[index % len(_THEMES)]
         product, genre = PRODUCTS[index % len(PRODUCTS)]
         region = REGIONS[(index * 3) // 5 % len(REGIONS)]
         platform = PLATFORMS[(index * 2 + index // 5) % len(PLATFORMS)]
         # 让时令素材在对应节日附近表现好——这是"万圣节素材出量"要能被推出来的依据
         ipm = round(4.0 + (6.0 if theme == "halloween" else 0.0) + (index % 5) * 0.6, 2)
+        hook = _HOOKS[index % len(_HOOKS)]
+        features = _features_for(index, theme, hook)
         items.append({
+            # 第二遍（_thin_sparse_cells）要改它，roas 也要等它定下来才能算 ——
+            # 下划线开头，落盘前删掉
+            "_features": {f for f, on in features.items() if on},
+            "_index": index,
             "creative_id": f"CRV_{9000 + index}",
             "creative_name": f"{theme}_{_HOOKS[index % len(_HOOKS)]}_v{1 + index % 3}",
             "product_id": product,
@@ -161,9 +275,8 @@ def creative_catalog() -> list[dict]:
             "duration_seconds": 15 + (index % 4) * 10,
             # ---- 离线视觉标签（模拟 VLM 输出）----
             "visual_tags": [theme, *tags],
-            "hook_type": _HOOKS[index % len(_HOOKS)],
+            "hook_type": hook,
             "dominant_color": color,
-            "has_face": index % 3 == 0,
             "text_overlay_ratio": round(0.15 + (index % 5) * 0.08, 2),
             # ---- 历史表现（用于"这条素材以前跑过且低于安全线"的提醒）----
             "ipm": ipm,
@@ -172,6 +285,19 @@ def creative_catalog() -> list[dict]:
             "week_launched": CURRENT_WEEK if index % 3 == 0 else "2026-W29",
             "image_path": f"data/external/creatives/CRV_{9000 + index}.png",
         })
+
+    # ---- 第二遍：削稀疏格子，然后才能算 roas（它依赖最终的 feature 集合）----
+    _thin_sparse_cells(items)
+    for row in items:
+        features = {f: f in row["_features"] for f in FEATURES}
+        # ★ M3 归因的输入：五个二值 feature，摊平成独立字段而不是塞进 visual_tags ——
+        # 归因要按 feature 分组，从一个混着主题词的标签数组里挑"哪些算 feature"
+        # 是模型不该承担的负担。
+        row["features"] = sorted(row["_features"])
+        row["has_face"] = features["real_person"]
+        # ★ 归因的被解释变量。规律埋在 _roas_for 里，工具**重新算**出来，不读预置答案
+        row["roas_d7"] = _roas_for(row["region"], features, row["_index"])
+        del row["_features"], row["_index"]
     return items
 
 
