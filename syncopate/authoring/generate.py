@@ -99,6 +99,9 @@ async def verify_gold(bundle: CaseBundle, domain) -> tuple[bool, str]:
     # 就是示范"失败之后怎么办"。这道检查写于"任何工具报错都是世界坏了"的年代，
     # 现在有些错误就是题目本身。
     injected = {f.get("tool") for f in bundle.env.failures}
+    # 第二个口子：case 显式声明"这个工具本来就会报错"（见 VerifierSpec.expected_tool_errors）。
+    # M2 的 safety_line:missing 走这条 —— 表里没这行不是注入的失败，是世界的状态。
+    injected |= set(bundle.verifier.expected_tool_errors)
     failed = [(o.tool, o.error) for o in trajectory.observations
               if not o.ok and o.tool not in injected]
     if failed:

@@ -127,6 +127,20 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> lis
     # 那意味着换个构造写法，模型看到的题面就变了。
     system_text = load_prompt("system.txt")
     user_text = render_prompt("step_user.txt", {
+        # ★ M2：把「今天是几号」给模型。
+        #
+        # 在此之前模型**根本不知道今天几号** —— 只能靠调 calendar.get_seasonal_context
+        # 顺带读到，而那个工具只在 CRE 的菜单里。于是「这份安全线过期了没有」这道题
+        # 对它是不公平的：没有比较的基准。
+        #
+        # ⚠️ 这和当初砍掉 metrics.get_freshness 的 `as_of` 参数不矛盾。
+        # 那条禁的是「模型**自己声明**今天是哪天」（它可以填个假日期，把
+        # premature_decision_cap 整个架空）；**读到**今天是哪天没有任何问题。
+        # 区别是**只读**还是**可写**。真实世界里 agent 的运行时当然知道系统时间。
+        #
+        # 放在模板变量而不是塞进 context：context 参与内容哈希（去重 / 泄漏检测），
+        # 往里加 key 会让所有已有 case 的指纹变化，两件事就纠缠在一起了。
+        "reference_now": bundle.env.reference_now,
         "context": bundle.case.context,
         "user_message": bundle.case.user_message,
         "answer_fields": bundle.verifier.required_answer_fields,

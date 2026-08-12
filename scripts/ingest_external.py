@@ -28,13 +28,19 @@ EXTERNAL = ROOT / "data" / "external"
 OUTPUT = EXTERNAL / "ingested.json"
 
 
-def latest_safety_line_file() -> Path:
-    """只取最新一周。按你的要求不做趋势分析，所以不需要时间轴。"""
+def safety_line_files() -> list[Path]:
+    """按周排序的全部安全线表。
+
+    ★ M2 之前这里只取最新一周（"不做趋势分析所以不需要时间轴"）。改成全取，
+    是因为**过期检出需要一个"旧版本"真实存在** —— 用代码把当周的表改个日期
+    伪造成旧表，伪造出来的东西数值和当周一样，模型用旧线和用新线得出同一个结论，
+    判据分辨不出它有没有真的看有效期。必须是两份**数值真的不同**的表。
+    """
     files = sorted((EXTERNAL / "safety_lines").glob("*.xlsx"))
     if not files:
         raise FileNotFoundError("data/external/safety_lines/ 下没有 xlsx，"
                                 "先跑 scripts/make_test_external_data.py")
-    return files[-1]
+    return files
 
 
 def load_safety_lines(path: Path) -> dict[str, dict[str, Any]]:
@@ -59,21 +65,28 @@ def load_calendar() -> list[dict[str, Any]]:
 
 
 def main() -> int:
-    source = latest_safety_line_file()
+    files = safety_line_files()
+    source = files[-1]
     safety = load_safety_lines(source)
+    # 按周留一份完整快照。WorldBuilder 造「过期」类 case 时从这里取旧的那一份，
+    # 注进 env 的 safety_lines 表 —— 对工具来说它就是"表里现在只有这份"，
+    # 和真实世界里"运营忘了更新"完全同构。
+    by_week = {path.stem: load_safety_lines(path) for path in files}
     tags = load_creative_tags()
     events = load_calendar()
 
     OUTPUT.write_text(json.dumps({
-        "version": "external_v1",
+        "version": "external_v2",          # v2：安全线带 valid_from/valid_to + 多周快照
         "safety_line_source": source.name,
         "safety_lines": safety,
+        "safety_lines_by_week": by_week,
         "creative_catalog": tags,
         "seasonal_events": events,
     }, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
 
     print(f"[OK] -> {OUTPUT.relative_to(ROOT)}")
-    print(f"     安全线   {len(safety)} 条（来源 {source.name}）")
+    print(f"     安全线   {len(safety)} 条（当周 {source.name}）"
+          f"，另存 {len(by_week)} 周快照：{', '.join(sorted(by_week))}")
     print(f"     素材目录 {len(tags)} 条")
     print(f"     时令事件 {len(events)} 个")
     return 0

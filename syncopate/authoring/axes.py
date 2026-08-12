@@ -53,6 +53,21 @@ AMOUNT_BANDS = ["below", "boundary", "above"]
 # 它是全项目唯一一条能长出 `defer` 行为的轴。
 DATA_MATURITIES = ["mature", "partial", "immature"]
 
+# ★ M2 新增：安全线（外部资料）的状态。这条轴长出 RAG 侧的两个核心失败模式
+#   current  —— 表里是当周的线，有效，正常拿来判断
+#   stale    —— 表里只有旧版（运营忘更新），已过期 ⇒ **不能拿它当决策依据**
+#   missing  —— 表里根本没有这个 产品×地域 ⇒ 查不到，**不许编一个数出来**
+#
+# ⚠️ 两条设计纪律，缺一条这条轴就是摆设：
+#
+# 1. **旧线和新线的数值必须真的不同**（`scripts/make_test_external_data.py` 的
+#    `_WEEK_DRIFT`）。数值一样的话，用旧线和用新线得出同一个结论，判据分辨不出
+#    模型有没有真的看有效期 —— 那就成了"能被什么都不做骗过"的指标。
+# 2. **工具不替模型判断过没过期**，只如实返回 `valid_to`。真实世界里没人会在
+#    返回里塞一个 `expired: true`。模型必须自己拿它和今天比 ——
+#    所以 `reference_now` 必须进 prompt，否则这道题没有比较基准、不公平。
+SAFETY_LINE_STATES = ["current", "stale", "missing"]
+
 # 各成熟度对应的开投天数（ROAS 7 天收敛）。
 # 安装量统一给足，是为了让这条轴**只由时间驱动**——
 # 样本量不足是另一种不可信（insufficient_sample），混进来会让两条 cap 同时命中，归因就糊了。
@@ -94,6 +109,7 @@ class Params:
     amount_band: str
     memory_action: str
     data_maturity: str
+    safety_line_state: str
 
     @property
     def campaign_id(self) -> str:
@@ -141,6 +157,8 @@ def params_for(index: int) -> Params:
         amount_band=AMOUNT_BANDS[(index // 11 + index % 3) % 3],
         memory_action=MEMORY_ACTIONS[(index // 4 + index % 2) % 2],
         data_maturity=DATA_MATURITIES[(index // 3 + index % 5) % 3],
+        # 用 //13 和 %7 这对互不整除的因子，避免和 data_maturity(//3,%5) 同步变化
+        safety_line_state=SAFETY_LINE_STATES[(index // 13 + index % 7) % 3],
     )
 
 
@@ -148,7 +166,8 @@ def axis_summary(params: list[Params]) -> dict[str, dict[str, int]]:
     """各轴的取值分布，用来确认组合是真的铺开了。"""
     out: dict[str, dict[str, int]] = {}
     for axis in ("platform", "genre", "region", "entry_mode", "memory_state",
-                 "season_phase", "amount_band", "tier", "memory_action", "data_maturity"):
+                 "season_phase", "amount_band", "tier", "memory_action", "data_maturity",
+                 "safety_line_state"):
         counts: dict[str, int] = {}
         for p in params:
             key = str(getattr(p, axis))

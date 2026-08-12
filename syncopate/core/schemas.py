@@ -214,6 +214,17 @@ class VerifierSpec:
     # ---- efficiency 子分 ----
     max_steps: int = 10
 
+    # ★ 本 case **预期之内**的工具报错。
+    #
+    # `verify_gold` 默认「任何工具报错 = 世界坏了」，那道检查写于只有顺风局的年代。
+    # 后来 F 类用 `env.failures` 开了第一个口子（超时/限流本来就是题目）。
+    # M2 又撞上第二种：安全线表里没有这一行 ⇒ `safety_line_not_found` ——
+    # 它不是注入的失败，是**世界的状态**，`env.failures` 里没有它。
+    #
+    # 与其每来一种就打一个特例补丁，不如让 case 显式声明。原则是：
+    # **一个错误只有在世界没为它给出理由时才算 bug。**
+    expected_tool_errors: list[str] = field(default_factory=list)
+
     # ---- caps：本 case 启用的封顶规则名（域相关，定义在 domains/*/rules.py）----
     # None = 启用全部已注册规则（默认从严：忘了声明会被 gold 验证当场抓出来）
     # []   = 明确不启用任何 cap

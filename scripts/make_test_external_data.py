@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,43 +41,78 @@ PLATFORMS = ["Meta", "Google", "TikTok", "AppLovin", "Unity"]
 
 CURRENT_WEEK = "2026-W32"
 
+# ★ M2：安全线是**有有效期**的资料，不是永久真理。
+#
+# 运营每周更新一次，一份表的有效期就是那一周（周一到周日）+ 一点宽限。
+# 没有有效期，「模型拿着上上周的线做决策」这类错误就构造不出来，
+# 而设计文档 §14 把「过期检出率」列为本业务 RAG 最重要的两项之一
+# （理由：政策/安全线错了是合规事故，不是分数低一点的问题）。
+#
+# ⚠️ 有效期只是**一个普通字段**，工具不会替模型判断过没过期 ——
+# 真实世界里没人会在返回里塞一个 `expired: true`。模型必须自己拿它和今天比。
+# 这是「沙盒不能比真实世界更友好」那条纪律的又一次应用。
+WEEK_DATES = {
+    "2026-W30": ("2026-07-20", "2026-07-26"),
+    "2026-W31": ("2026-07-27", "2026-08-02"),
+    "2026-W32": ("2026-08-03", "2026-08-09"),
+}
+# 宽限期：过了有效期不是立刻作废，运营常常晚一两天才更新。
+# 给 3 天，让「刚过期」和「过期两周」成为两种不同难度的题。
+GRACE_DAYS = 3
+# 除了当周，再生成一份两周前的旧表 —— 有它才能构造「拿着旧线做决策」的 case。
+STALE_WEEK = "2026-W30"
+# 旧周的线整体松一档。松紧方向和真实业务一致：产品早期跑得差、线定得松，后来收紧。
+# **数值必须真的不同**，否则用旧线和用新线得出同一个结论，这类题就成了摆设。
+_WEEK_DRIFT = {"2026-W30": 1.18, "2026-W31": 1.09, "2026-W32": 1.00}
+
 # 地域的获客成本系数（成熟市场贵、新兴市场便宜）
 _REGION_COST = {"US": 1.00, "GB": 0.88, "DE": 0.82, "JP": 1.35, "BR": 0.35}
 # 品类系数
 _GENRE_COST = {"puzzle": 1.00, "casual": 0.80, "rpg": 1.85, "hyper_casual": 0.45, "strategy": 1.60}
 
 
-def safety_lines() -> list[dict]:
-    """产品 × 地域 的安全线。只有最新一周——不看趋势，所以不需要时间轴。"""
+def safety_lines(week: str = CURRENT_WEEK) -> list[dict]:
+    """产品 × 地域 的安全线，带有效期。
+
+    ★ 不同周的数值必须**真的不一样**，否则「用了旧线」和「用了新线」得出同一个结论，
+    这类题就成了摆设 —— 判据分辨不出模型有没有真的看有效期。
+    这里让旧周的线整体松一档（`_WEEK_DRIFT`），松紧方向和真实业务一致：
+    产品早期跑得差、线定得松，后来收紧。
+    """
+    start, end = WEEK_DATES[week]
+    valid_to = (date.fromisoformat(end) + timedelta(days=GRACE_DAYS)).isoformat()
+    drift = _WEEK_DRIFT[week]
     rows = []
     for product, genre in PRODUCTS:
         for region in REGIONS:
             factor = _REGION_COST[region] * _GENRE_COST[genre]
-            cpi_ceiling = round(2.20 * factor, 2)
+            cpi_ceiling = round(2.20 * factor * drift, 2)
             # ROAS 和成本反向：贵的市场回收要求相对低一点
-            roas_floor = round(0.42 / math.sqrt(factor), 3)
+            roas_floor = round(0.42 / math.sqrt(factor) / drift, 3)
             rows.append({
                 "product_id": product,
                 "genre": genre,
                 "region": region,
-                "week": CURRENT_WEEK,
+                "week": week,
+                "valid_from": start,
+                "valid_to": valid_to,               # ★ 过了这天就不该再拿它当依据
                 "d7_cpi_ceiling": cpi_ceiling,      # 超过这条线要告警
                 "d7_roas_floor": roas_floor,        # 低于这条线要告警
                 "d1_retention_floor": round(0.34 - 0.03 * math.log(factor + 1), 3),
-                "daily_budget_cap": int(3000 * factor / 100) * 100,
+                "daily_budget_cap": int(3000 * factor * drift / 100) * 100,
                 "updated_by": "ua_ops",
             })
     return rows
 
 
-def write_excel(rows: list[dict], path: Path) -> None:
+def write_excel(rows: list[dict], path: Path, week: str = CURRENT_WEEK) -> None:
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
     path.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = f"safety_lines_{CURRENT_WEEK}"
+    sheet.title = f"safety_lines_{week}"
     headers = list(rows[0])
     sheet.append(headers)
     for cell in sheet[1]:
@@ -183,11 +219,14 @@ def seasonal_calendar() -> list[dict]:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
-    lines = safety_lines()
-    excel_path = OUT / "safety_lines" / f"{CURRENT_WEEK}.xlsx"
-    write_excel(lines, excel_path)
-    print(f"[OK] 安全线 Excel  -> {excel_path.relative_to(ROOT)}  ({len(lines)} 行 = "
-          f"{len(PRODUCTS)} 产品 × {len(REGIONS)} 地域)")
+    # ★ 两周都生成：当周 + 两周前的旧版。有旧版才能构造「拿着过期的线做决策」。
+    for week in (STALE_WEEK, CURRENT_WEEK):
+        lines = safety_lines(week)
+        excel_path = OUT / "safety_lines" / f"{week}.xlsx"
+        write_excel(lines, excel_path, week)
+        tag = "（当周）" if week == CURRENT_WEEK else "（旧版，用来造过期题）"
+        print(f"[OK] 安全线 Excel  -> {excel_path.relative_to(ROOT)}  ({len(lines)} 行 = "
+              f"{len(PRODUCTS)} 产品 × {len(REGIONS)} 地域) 有效至 {lines[0]['valid_to']} {tag}")
 
     items = creative_catalog()
     (OUT / "creative_tags.json").write_text(

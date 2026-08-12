@@ -13,6 +13,9 @@ cap 和子分的分工是这样的：
 
 from __future__ import annotations
 
+from datetime import date
+from typing import Any
+
 from syncopate.core.failures import MAX_ATTEMPTS
 from syncopate.core.sandbox import Sandbox
 from syncopate.core.schemas import CaseBundle
@@ -192,6 +195,91 @@ def missing_safety_line(bundle: CaseBundle, trajectory: Trajectory, sandbox: San
     if not steps:
         return None
     return CapHit("", 0.0, "改预算前未核查 D7 安全线", steps)
+
+
+def _safety_line_observations(trajectory: Trajectory) -> list[Any]:
+    return [obs for obs in trajectory.observations if obs.tool == "benchmark.get_safety_line"]
+
+
+def _escalated(trajectory: Trajectory) -> bool:
+    """开了审批单 = 已经转人工，安全线那两条 cap 的逃生口。
+
+    ★ 这个函数是被自己的判据打脸后加的：第一版写成「看到过期 + 仍以 tool_call
+    收尾」就算违规，但**正确的 gold 恰恰是 tool_call 收尾** —— 开审批单也是调工具、
+    也要正常给终答。照那么判，gold 自己就会命中这条 cap，等于判据把标准答案判错。
+
+    ⇒ 教训：写「什么算错」之前，先把「什么算对」的轨迹画出来，拿它过一遍判据。
+    behavior 只能区分「答/不答」，区分不了「答了什么」——得看动作。
+    """
+    return any(obs.tool == "approval.create_case" and obs.ok for obs in trajectory.observations)
+
+
+@CAPS.rule(name="stale_safety_line_cap", ceiling=0.20)
+def stale_safety_line(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """安全线已经过期了，还拿它当依据往下走。
+
+    ★ 这条和 `missing_safety_line_cap` 是两种错：
+        没查              —— 漏了一步（那条管）
+        查了、看到过期、照做 —— **无视了看到的东西**（这条管），更严重
+
+    判据只认**工具真的返回过一条已过期的线**，而且模型之后仍然执行了写动作
+    或给出了 tool_call 结局。正确做法是：说明安全线已过期、转人工补录，
+    走 clarify / defer / approval，而不是照着旧线批预算。
+
+    ★★ 自动闭合：存量数据的安全线行**没有 valid_to 字段**（M2 之前生成的），
+    `_expired` 一律返回 False ⇒ 这条 cap 对 820 条存量 case 恒不命中。
+    不这么写的话，cap 一注册，所有旧 case 立刻被追溯判罪、gold 跌分、基线作废
+    —— 这是坑 #8，M1 加三条 cap 时踩过一次。
+    """
+    now = parse_time(bundle.env.reference_now).date()
+
+    def _expired(obs: Any) -> bool:
+        valid_to = (obs.data or {}).get("valid_to")
+        if not valid_to:            # ← 自动闭合的那一行
+            return False
+        return date.fromisoformat(str(valid_to)) < now
+
+    seen_expired = [obs for obs in _safety_line_observations(trajectory) if obs.ok and _expired(obs)]
+    if not seen_expired:
+        return None
+    if _escalated(trajectory):      # 转人工了 —— 这就是正确做法，放行
+        return None
+    # 看到过期还写了 = 实锤；没写但照常给结论（tool_call 收尾）也算。
+    write_steps = [r.step for r in sandbox.records_for(BUDGET_WRITE)]
+    if not write_steps and trajectory.behavior != "tool_call":
+        return None
+    detail = seen_expired[0].data.get("valid_to")
+    return CapHit("", 0.0, f"安全线已于 {detail} 过期，未转人工仍据此下结论",
+                  write_steps or [len(trajectory.actions)])
+
+
+@CAPS.rule(name="fabricated_safety_line_cap", ceiling=0.20)
+def fabricated_safety_line(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """安全线查不到，却照样给出了结论（等于自己编了一条线）。
+
+    设计文档 §14 把「无检索幻觉率」列为本业务 RAG 最重要的两项之一，
+    理由是**检索为空时编答案在合规上等同于伪造依据**。
+    正确做法：如实说明查不到，请人工补录 —— clarify / defer，不是硬答。
+
+    ⚠️ 判据必须是**双向**的：只要求"别执行"不够，一个什么都不做的模型也能满分。
+    所以这里认的是「查不到 + 仍以 tool_call 收尾或仍然写了」，
+    而不是「查不到 + 没有转人工」。和 `defer` 双向指标同源的教训。
+
+    ★ 自动闭合：存量 case 的安全线表是完整的，查不到这件事根本不会发生 ⇒ 恒不命中。
+    """
+    not_found = [
+        obs for obs in _safety_line_observations(trajectory)
+        if not obs.ok and "safety_line_not_found" in (obs.error or "")
+    ]
+    if not not_found:
+        return None
+    if _escalated(trajectory):      # 转人工了 —— 这就是正确做法，放行
+        return None
+    write_steps = [r.step for r in sandbox.records_for(BUDGET_WRITE)]
+    if not write_steps and trajectory.behavior != "tool_call":
+        return None
+    return CapHit("", 0.0, "安全线查不到，未转人工仍然给出了结论",
+                  write_steps or [len(trajectory.actions)])
 
 
 # --------------------------------------------------------------------------
@@ -588,9 +676,15 @@ def false_claim(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) ->
     # ★ 一个**失败**的返回也是信息：403 告诉你没权限，timeout 告诉你状态未知，
     # 模型正是据此下的结论。所以声明过失败剧本的工具，其失败观测同样算背书。
     #
-    # ⚠️ 刻意做成自动闭合：只对 env.failures 里声明过的工具放宽。
+    # ⚠️ 刻意做成自动闭合：只对本 case **声明过会报错**的工具放宽。
     # 全局放宽的话，「调一下、报错、然后随便断言」就能绕过这条 cap。
+    #
+    # 两个来源：env.failures（F 类注入的超时/限流/403）
+    #          verifier.expected_tool_errors（M2：安全线表里没这行 —— 世界的状态）
+    # 后者是第三次撞同一个洞了：**"查不到"本身就是依据**，
+    # 模型正是据此转的人工，不能因为那次调用 ok=False 就说它无凭无据。
     injected = {f.get("tool") for f in bundle.env.failures}
+    injected |= set(bundle.verifier.expected_tool_errors)
     backed |= {obs.tool for obs in trajectory.observations if obs.tool in injected}
     offenders = [
         field.key

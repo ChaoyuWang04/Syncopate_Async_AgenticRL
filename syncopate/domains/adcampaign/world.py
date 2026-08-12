@@ -23,6 +23,12 @@ from syncopate.domains.adcampaign.policies import BUDGET_POLICIES, PLATFORM_POLI
 
 _EXTERNAL_PATH = Path(__file__).resolve().parents[3] / "data" / "external" / "ingested.json"
 
+# ★ M2：造「安全线过期」类 case 时换成哪一周的快照。
+# 定义在这里（domains 层）而不是 axes.py（authoring 层）——authoring 依赖 domains，
+# 反过来就是层级倒置。W30 的有效期到 2026-07-29，而 off 相位的今天是 2026-08-10，
+# **过期 12 天，不是擦边**：擦边会让"到底算不算过期"变成判据的灰区。
+STALE_SAFETY_WEEK = "2026-W30"
+
 
 @functools.lru_cache(maxsize=1)
 def load_external() -> dict[str, Any]:
@@ -185,6 +191,58 @@ class WorldBuilder:
             "name": overrides.pop("name", creative_id.lower()),
             **_CREATIVE_DEFAULTS, **overrides,
         }
+        return self
+
+    def safety_line_state(self, state: str, *, product_id: str, region: str) -> WorldBuilder:
+        """★ M2：把安全线表调成三种状态之一。这条轴改变的是**正确动作本身**。
+
+            current —— 表里是当周的线，有效，照常拿来判断
+            stale   —— 表里只剩两周前的旧版（运营忘了更新）⇒ 已过期，**不能当依据**
+            missing —— 表里根本没有这个 产品×地域 ⇒ 查不到，**不许编一个数**
+
+        ★★ 为什么 stale 要换成"真的旧那一份"，而不是把当周的 `valid_to` 改早
+
+        改日期是最省事的做法，但那样旧线和新线的**数值一模一样** ——
+        模型用旧线和用新线得出同一个结论，判据分辨不出它有没有真的看有效期。
+        这就成了"能被什么都不做骗过"的指标，和 `defer` 只测单向是同一个病。
+        所以 `ingest_external.py` 保留了每周的完整快照，这里整份换掉：
+        W30 的 CPI 上限 2.60 / 预算上限 3500，W32 是 2.20 / 3000 ——
+        **拿旧线会批准一个新线不允许的预算**，这才是可验证的失败。
+
+        ⚠️ missing 档只删这一行，不清空整张表 ——
+        整张表空了，模型可以靠"一条都查不到"猜出这是道陷阱题。
+        """
+        key = f"{product_id}|{region}"
+        if state == "missing":
+            self._tables["safety_lines"].pop(key, None)
+            return self
+
+        # ★★ 有效期必须**相对于这条 case 自己的今天**算，不能用 Excel 里钉死的日期。
+        #
+        # 踩过：Excel 的当周表有效至 2026-08-12，而 `reference_now` 由 season_phase
+        # 决定（off=8/10、approaching=10/5、peak=10/25）。于是 10 月那批 case 的
+        # "当周"安全线其实过期了两个多月，`current` 档也会命中 stale cap。
+        # 真实语义本来就是「表每周更新」——**"当周"是相对于那条 case 的今天而言的**。
+        today = parse_time(self.reference_now).date()
+        row = dict(self._tables["safety_lines"].get(key) or {})
+        if state == "current":
+            row.update(valid_from=(today - timedelta(days=3)).isoformat(),
+                       valid_to=(today + timedelta(days=4)).isoformat())
+        elif state == "stale":
+            # 数值换成真正的旧快照（W30 的线更松），日期钉在明确的过去 ——
+            # 差 10 天不是擦边，避免"到底算不算过期"变成判据的灰区。
+            snapshots = load_external().get("safety_lines_by_week", {})
+            old = snapshots.get(STALE_SAFETY_WEEK, {}).get(key)
+            if old is None:
+                raise KeyError(
+                    f"{STALE_SAFETY_WEEK} 的快照里没有 {key} —— 先跑 "
+                    "scripts/make_test_external_data.py && scripts/ingest_external.py")
+            row = dict(old)
+            row.update(valid_from=(today - timedelta(days=17)).isoformat(),
+                       valid_to=(today - timedelta(days=10)).isoformat())
+        else:
+            raise ValueError(f"未知的 safety_line_state: {state}")
+        self._tables["safety_lines"][key] = row
         return self
 
     def benchmark(self, platform: str, genre: str, metric: str, **row: Any) -> WorldBuilder:

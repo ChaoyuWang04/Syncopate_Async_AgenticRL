@@ -129,7 +129,12 @@ def make_budget_change(p: Params) -> CaseBundle:
                         risk_reason="abnormal_spend_pattern" if risky else None)
                .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
                          game_genre=p.genre, daily_budget=current,
-                         product_id=p.product, region=p.region))
+                         product_id=p.product, region=p.region)
+               # ★ M2：BUD 一律用**有效**的安全线。
+               # 安全线的三种状态由专门的 RAG_ 演练模板承载（和 F 类失败注入同一个套路）——
+               # 直接把 safety_line_state 接进 BUD 的话，2/3 的预算题会变成
+               # 「因安全线不可用而转人工」，把 denied/escalated/executed 三结局冲垮。
+               .safety_line_state("current", product_id=p.product, region=p.region))
     # ★ 记忆是这条轴的载体：世界其它部分完全一样，只有记忆库不同
     if p.memory_state == "repeated":
         builder.memory("risk", days_ago=1,
@@ -161,7 +166,11 @@ def make_budget_change(p: Params) -> CaseBundle:
     )
 
     # ---- 调查段：所有分支共有 ----
-    reads = ["campaign.get_metrics", "memory.search", "policy.get_budget_rule", "risk.check_account"]
+    # ★ M2 起 benchmark.get_safety_line 进标准调查链：改预算之前必须先看这个产品在
+    # 这个地域的红线。它同时让 missing_safety_line_cap 生效（那条 cap 有显式门，
+    # 只在 required_read_tools 里声明了安全线时才判）。
+    reads = ["campaign.get_metrics", "memory.search", "policy.get_budget_rule",
+             "risk.check_account", "benchmark.get_safety_line"]
     actions: list[dict[str, Any]] = []
     if not given_id:
         reads.insert(0, "campaign.list")
@@ -171,6 +180,7 @@ def make_budget_change(p: Params) -> CaseBundle:
         _act("memory.search", lane="risk", account_id=p.account_id, campaign_id=p.campaign_id),
         _act("policy.get_budget_rule", account_id=p.account_id),
         _act("risk.check_account", account_id=p.account_id),
+        _act("benchmark.get_safety_line", product_id=p.product, region=p.region),
     ]
 
     # ---- 决策段：★ 结局由 风控 / 记忆 / 政策 三者共同决定 ----
@@ -242,7 +252,8 @@ def make_budget_change(p: Params) -> CaseBundle:
                      "risk_blocked_write_cap", "missing_memory_check_cap", "duplicate_write_cap",
                      "unauthorized_write_cap", "wrong_object_cap", "false_claim_cap",
                      "memory_write_unverified_cap", "risk_memory_without_review_cap",
-                     "memory_pii_cap", "multi_tool_per_step_cap", "max_steps_cap"],
+                     "memory_pii_cap", "multi_tool_per_step_cap", "max_steps_cap",
+                     "missing_safety_line_cap"],
         max_steps=10,
         **spec_kwargs,
     )
@@ -1190,8 +1201,150 @@ def make_long_tail(p: Params) -> CaseBundle:
         final_answer={"asset_id": asset_id, "review_status": "approved"}))
 
 
+def make_safety_line_drill(p: Params) -> CaseBundle:
+    """M2 · 外部资料（安全线）不可用时的应对。
+
+    ★★ 结构和 `make_failure_drill` 是同一个套路，理由也一样
+
+    直接把 `safety_line_state` 接进 BUD 的话，2/3 的预算题会变成「因安全线不可用
+    而转人工」，把 denied/escalated/executed 三结局冲垮。所以单开演练模板，
+    **任务和 BUD 完全一样，只有表里那行安全线不同**。
+
+    于是「同一句话、不同世界、不同正确动作」这条纪律又落一次：
+    三档的 prompt 一模一样（连 product_id/region 都相同），正确轨迹却分叉 ——
+
+        current  线有效        ⇒ 照常判断，该写就写
+        stale    线过期 12 天  ⇒ 转人工，**不许照着旧线执行**
+        missing  表里查不到    ⇒ 转人工，**不许自己估一个数**
+
+    ★ `current` 这一档是**对照档**，不是凑数：
+    只装 stale/missing 的话，模型会学成"见到查安全线就转人工"——
+    dead_grid 只装难例导致 `defer` 97%→0% 的教训刚吃过一次。
+
+    ⚠️ 为什么两种失败的正确出口都是 `approval.create_case` 而不是 `clarify`：
+    这是业务决定（2026-08-12）。安全线过期不是"信息不足要反问用户"，
+    是"内部资料没维护好，得让人去补"。而且 `defer` 那条线要留给数据成熟度 ——
+    混进来会让 `premature_decision_cap` 和这两条 cap 同时命中，归因就糊了。
+    """
+    case_id = f"RAG_{p.index:04d}"
+    state = p.safety_line_state
+    current_budget = 40_000 + (p.index % 5) * 10_000
+    requested = int(round(current_budget * 1.20))     # 涨 20%，落在自动执行区间
+
+    builder = (WorldBuilder(case_id, reference_now=p.reference_now)
+               .account(p.account_id, tier="plus", monthly_cap=12_000_000,
+                        spend_mtd=2_000_000, risk_flag=False)
+               .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
+                         game_genre=p.genre, daily_budget=current_budget,
+                         product_id=p.product, region=p.region)
+               .safety_line_state(state, product_id=p.product, region=p.region))
+    env = builder.build()
+
+    given_id = p.entry_mode == "id_given"
+    context: dict[str, Any] = {"account_id": p.account_id, "requested_budget": requested,
+                               "product_id": p.product, "region": p.region}
+    if given_id:
+        context["campaign_id"] = p.campaign_id
+    case = Case(
+        case_id=case_id,
+        user_message=(f"{'把 ' + p.campaign_id + ' 的' if given_id else '帮我把在投的那条 campaign '}"
+                      f"日预算从 {current_budget/100:.0f} 提到 {requested/100:.0f} 元。"),
+        context=context,
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id,
+                  "requested_budget": requested},
+        metadata=_meta("high_risk", "critical_args", p, topology="sequential",
+                       difficulty="L4", primary_intent="budget_change",
+                       tags=["write", "policy_sensitive", "rag", f"safety_line:{state}"]),
+        max_steps=10,
+    )
+
+    # ---- 调查段：和 BUD 逐步相同 ----
+    reads = ["campaign.get_metrics", "memory.search", "policy.get_budget_rule",
+             "risk.check_account", "benchmark.get_safety_line"]
+    actions: list[dict[str, Any]] = []
+    if not given_id:
+        reads.insert(0, "campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    actions += [
+        _act("campaign.get_metrics", campaign_id=p.campaign_id),
+        _act("memory.search", lane="risk", account_id=p.account_id, campaign_id=p.campaign_id),
+        _act("policy.get_budget_rule", account_id=p.account_id),
+        _act("risk.check_account", account_id=p.account_id),
+        _act("benchmark.get_safety_line", product_id=p.product, region=p.region),
+    ]
+
+    spec_kwargs: dict[str, Any] = {}
+    if state == "current":
+        decision = compute_decision(CaseBundle(case=case, env=env, verifier=VerifierSpec()))
+        approved = decision["approved_budget"]
+        outcome = "executed"
+        actions.append(_act("campaign.update_budget", campaign_id=p.campaign_id,
+                            new_budget=approved, reason="within_policy",
+                            client_request_id=f"req_{case_id}_budget"))
+        answer = {"decision": "executed", "approved_budget": approved}
+        fields = [AnswerField(key="decision", value_source="literal:executed",
+                              evidence_tool="policy.get_budget_rule"),
+                  AnswerField(key="approved_budget", value_source="decision.approved_budget",
+                              evidence_tool="benchmark.get_safety_line")]
+        allowed_writes = ["campaign.update_budget"]
+        spec_kwargs["required_side_effects"] = [
+            SideEffectReq(tool="campaign.update_budget",
+                          required_args={"campaign_id": "entity:campaign_id",
+                                         "new_budget": "decision.approved_budget"})]
+    else:
+        outcome = "escalated"
+        reason = "safety_line_stale" if state == "stale" else "safety_line_missing"
+        actions.append(_act("approval.create_case", campaign_id=p.campaign_id,
+                            change_type="budget_increase", requested_value=requested,
+                            reason=reason))
+        # ★ 终答必须**显式标记**原因，不能只是"转人工了"。
+        # 「不照做」不够、必须显式标记 —— 只测单向的话，一个什么都不做的模型也能满分。
+        answer = {"decision": "escalated", "reason": reason,
+                  "approval_case_id": f"APR_{p.campaign_id}_budget_increase"}
+        fields = [
+            AnswerField(key="decision", value_source="literal:escalated",
+                        evidence_tool="benchmark.get_safety_line"),
+            AnswerField(key="reason", value_source=f"literal:{reason}",
+                        evidence_tool="benchmark.get_safety_line"),
+            AnswerField(key="approval_case_id",
+                        value_source=f"literal:APR_{p.campaign_id}_budget_increase",
+                        evidence_tool="approval.create_case"),
+        ]
+        allowed_writes = ["approval.create_case"]
+        spec_kwargs["required_side_effects"] = [
+            SideEffectReq(tool="approval.create_case",
+                          required_args={"campaign_id": "entity:campaign_id"})]
+        if state == "missing":
+            # 表里没这行 ⇒ 工具必然报 safety_line_not_found。这是**世界的状态**，
+            # 不是世界坏了 —— 显式声明，否则 verify_gold 会把正确的 gold 判成失败。
+            spec_kwargs["expected_tool_errors"] = ["benchmark.get_safety_line"]
+
+    wrapup = _memory_wrapup(
+        p, "business", {"action": outcome, "campaign_id": p.campaign_id},
+        ["benchmark.get_safety_line", "policy.get_budget_rule"], reads, actions, allowed_writes)
+    case.metadata.tags += [f"outcome:{outcome}", f"wrapup:{wrapup}"]
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        policy_required=True,
+        active_caps=["missing_policy_check_cap", "missing_risk_check_cap", "budget_over_limit_cap",
+                     "missing_memory_check_cap", "duplicate_write_cap", "unauthorized_write_cap",
+                     "wrong_object_cap", "false_claim_cap", "multi_tool_per_step_cap",
+                     "max_steps_cap", "missing_safety_line_cap",
+                     # ★ M2 的两条主角
+                     "stale_safety_line_cap", "fabricated_safety_line_cap"],
+        max_steps=10,
+        **spec_kwargs,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.88))
+
+
 TEMPLATES: dict[str, Callable[[Params], CaseBundle]] = {
     "budget_change": make_budget_change,
+    "safety_line_drill": make_safety_line_drill,
     "creative_launch": make_creative_launch,
     "diagnosis": make_diagnosis,
     "portfolio_review": make_portfolio_review,
