@@ -27,20 +27,58 @@
 |---|---|
 | M0 地基 | ✅ 三桶切分 / 泄漏修复 / base 基线 |
 | M1 数据成熟度 | ✅ 机制 + I02 + `defer`，验收达标（100% / 0.2%） |
-| **沙盒保真度改造** | ✅ **本轮主体**，见 §3 |
-| **v8 base 基线** | ✅ 已测，见 §4 —— **六条预测错了四条** |
-| SFT（v8 数据上） | ⬜ **下一步**，桶已切好待确认 |
-| RL 正式训练 | ⬜ 管线打通过（50 步跑完），但那一轮**结果作废**（prompt 被截断） |
+| 沙盒保真度改造 | ✅ 十类失败注入，见 §3 |
+| v8 base 基线 | ✅ 0.416 —— **base 是「怂」不是「莽撞」**，见 §4 |
+| **SFT（v8）** | ✅ epoch1，0.824（24 工具 prompt）/ **0.774**（裁剪后，这是 RL 的起点） |
+| **工具菜单裁剪** | ✅ prompt −29%，**这是 RL 能跑通的直接原因**，见 §2.2 |
+| **RL 正式训练** | ✅ **50/50 步跑完，第一次有效**（`v8_sync_e1b`）。但 **没测出能力差异**，见 §4.1 |
+| **M2 · RAG v0** | ✅ **本轮主体**，见 §11 |
+| M3 · L5 归因闭环 | ⬜ **下一步** |
 | `fully_async` | ⬜ **单卡跑不了**，见 §6 |
 
 **数据版本：v8**（`data/batches/v8` 820 条 / `data/splits/v8` / `data/sft/v8` / `data/rl/v8`）
-**188 个测试全过**；`.venv` 独立环境（py3.12 + torch2.9+cu128 + vllm0.12 + verl0.8.0，numpy 必须 2.2.6）
+⚠️ **M2 的代码已就位但批次还没重生成** —— 新轴 `safety_line_state` 和 `RAG_` 模板
+要等下一次生成（v9）才会出现在数据里。**M3 做完一起生成**（2026-08-12 决定：
+不每完成一个里程碑就重测一轮，攒一批更划算）。
+
+**207 个测试全过**；`.venv` 独立环境（py3.12 + torch2.9+cu128 + vllm0.12 + verl0.8.0，numpy 必须 2.2.6）
+
+### 1.1 ★★ 数据再生链（**`data/batches/` 和 `ingested.json` 都在 .gitignore 里**）
+
+进版本管理的只有**生成它们的脚本**和**源数据 xlsx**。所以换一台机器 / 重开一个窗口时，
+数据不是 clone 下来的，是**按顺序跑出来的**：
+
+```bash
+python scripts/make_test_external_data.py     # 两周的安全线 xlsx（带 valid_from/valid_to）
+python scripts/ingest_external.py             # → data/external/ingested.json（多周快照）
+python -m syncopate data generate ...         # → data/batches/vN
+python scripts/set_tool_menus.py              # ★ 按模板裁剪 tool_menu（prompt −29%）
+python -m syncopate data split  --batch ... --dead-from _audit/<base 审计>.json
+python -m syncopate data build  --pool sft --split-dir ...
+python -m syncopate data build  --pool rl  --split-dir ...
+```
+
+⚠️ **`set_tool_menus.py` 依赖 `_audit/v8_sft_epoch1.json`**（要读「SFT 模型实际调用过
+哪些工具」来当干扰项）。那个文件已进版本管理，别删。
+
+⚠️ **顺序不能换**：`set_tool_menus` 必须在 `generate` 之后、`split` 之前 ——
+它改的是 case 的 `tool_menu`，而 split 的内容级去重要按最终 prompt 算。
 
 ---
 
-## 2 · ★ 下一步该做什么（按顺序）
+## 2 · ★ 下一步该做什么
 
-### 2.1 立刻做：确认 SFT 桶 → 训 SFT → 评
+### 2.0 ★★ 现在的下一步是 **M3（L5 归因闭环）**，不是重训
+
+M1 那条线已经收口：SFT ✅ → RL 50 步 ✅ → 评测 ✅（结论见 §4.1）。
+M2 的代码已就位但**批次还没重生成**。
+
+**2026-08-12 定的节奏：M2 + M3 一起施工完，再一次性重生成 + 重训 + 重测。**
+理由是重测的边际信息量在下降，而每轮 SFT+评测要 2 小时。
+
+⇒ 下一步：**做 M3**（见 §12），做完按 §1.1 的再生链跑一遍，再走 §2.1 的训练流程。
+
+### 2.1 训练流程（数据重生成之后用）
 
 ```bash
 # 实际用的是默认配额 {convention 6, shortcut 10, control 4} → SFT 279 / RL 437
@@ -218,11 +256,57 @@ FAIL_0009: 查政策 → 过风控 → 改×3 全失败 → defer「服务端错
   ⇒ 和「F 类必须 SFT 教」的先验相反，**RL 够得着**
 - 最大的块是**卡死 51 条**（49%），分数集中在 0.2–0.35
 
+### 4.1 ★ 第一次有效的 RL（`v8_sync_e1b`，50/50 步）：**没测出差异**
+
+```
+均值      0.774 → 0.774     配对差值 +0.001（标准误 0.012，MDE 0.025）
+逐题      赢 42 / 平 20 / 输 42        ← 不是"提升很小"，是**什么都没改变**
+有梯度    75 → 76    饱和 26 → 23    卡死 3 → 5
+```
+
+**这符合预期，原因是算得出来的**：50 步 × 每步 4 条题 = 200 条样本，而 RL 池有
+437 条 —— **连一遍都没跑完**。`pg_clipfrac` 全程 0.0、`grad_norm` 0.11–0.67，
+策略几乎没动过。⇒ 这轮的价值是「**管线通了、尺子齐了**」，不该期待能力提升。
+
+⚠️ **下一次至少要 110 步**（跑完一遍 437 条池子）。每步约 65 秒 ⇒ 约 2 小时。
+
+**两个值得记的信号**
+- **熵没塌**（0.0279–0.0353，中段还略升），有梯度格子没变少 ⇒ 最怕的"RL 把熵训没了"没发生
+- ⚠️ **cap 的方向不太对**：降的都是"少做了什么"（`false_claim` −5、`max_steps` −6），
+  涨的都是"多做了不该做的"（`unauthorized_write` +3、`excessive_retry` +4、
+  `abandoned` +3）。总分没变但错误构成在往**更莽撞**偏 —— 和 §4 的发现正好相反
+  （base 是"怂"，SFT 教它动手，RL 可能推过头）。50 步样本量下可能只是噪声，但下一轮要盯。
+
+**顺带量到的（异步研究要用）**：`最慢/均` 稳定在 1.37–2.75 ⇒ 同批里最慢的 rollout
+要花平均值的 1.4–2.8 倍时间，**这就是 sync barrier 浪费掉的部分、异步收益的上限**。
+分布漂移 = 0.000 ✅（符合 sync 的 barrier 语义，是异步实验的对照基准）。
+
 ---
 
 ## 5 · RL 的已知配置与坑
 
-**能跑通的配置**（单卡 5090，实测）：
+**★ 2026-08-12 实测跑通 50/50 步的配置**（单卡 5090）：
+
+```bash
+python -m syncopate.train.launch_rl --model models/Qwen3-4B-sft-v8-e1 \
+  --train-file data/rl/v8/train.parquet --val-file data/rl/v8/val.parquet \
+  --save-path checkpoints/grpo/<name> --experiment <name> --lora-rank 32 \
+  --steps 50 --train-batch-size 4 --rollout-n 8 --ppo-mini-batch-size 4 \
+  --micro-batch-size 1 --rollout-gpu-util 0.30 --max-num-seqs 32 \
+  --object-store-gb 2 --max-prompt-length 3584 --max-response-length 1536 \
+  --save-freq 10 --latency-scale 0.01
+```
+
+⚠️ **`--train-file` 的默认值是 `data/rl/v3`** —— 不显式传就会拿上上个版本的数据跑，
+且不报错。**每次都要显式指定。**
+
+⚠️ **`--rollout-gpu-util 0.30` 是算出来的，不是拍的**：actor 显存会随步数爬升
+（碎片，见 `launch_rl.py` 顶部），第 24 步峰值 21.08GB ⇒ vLLM 最多只能要
+31.36−21.08 = 10.28GB ⇒ 上限 0.328。**按第一步的显存配会在 20 多步时挂。**
+
+---
+
+### 5.1 历史配置（`max_model_len` 4608 那版，仅供对照）
 
 ```bash
 python -m syncopate.train.launch_rl --model <合并后的 SFT 模型> --lora-rank 32 \
@@ -311,9 +395,30 @@ logprob 即可，而且 k **精确可控**。工具已写好：`train/staleness.
 8. **`system.wait` 自己扣配额** ⇒ 额度耗尽时连等待都调不动，唯一出路被自己堵死。
 9. **超时不消耗墙钟** ⇒ 超时在吞吐指标上免费，异步收益被系统性低估。
 
+12. **只装死格的第二种形态**：`add_controls` 有两道闸，把四个模板整个挡在 SFT 桶外
+    （见 §2.2）。**"只喂难例"不止是"某个意图内只给一档"，还包括"整个意图没进桶"。**
+13. **★ 判据把标准答案判错**：`stale_safety_line_cap` 第一版写成「看到过期 + 仍以
+    `tool_call` 收尾 = 违规」，而正确的 gold 恰恰是 `tool_call` 收尾（开审批单也是
+    调工具）。⇒ **写「什么算错」之前，先把「什么算对」的轨迹拿来过一遍判据。**
+    `behavior` 只能区分「答/不答」，区分不了「答了什么」。
+14. **顺风局假设**：`verify_gold` 和 `false_claim_cap` 都是在"任何工具报错=世界坏了"
+    的年代写的。F 类开了第一个口子（`env.failures`），M2 撞第二、三次。
+    ⇒ 已改成可声明的 `VerifierSpec.expected_tool_errors`，原则是
+    **"一个错误只有在世界没为它给出理由时才算 bug"**。M3 大概率还会撞第四次。
+15. **跨轴共用同一条时间线**：`season_phase` 决定 `reference_now`（8月/10月），而
+    安全线有效期钉在 Excel 的日期上 ⇒ 10 月那批 case 的"当周"线其实过期两个多月。
+    ⇒ 凡是"相对今天"的语义，都要相对 `reference_now` 算，不能写死。
+
 **方法论**
 10. **用推理代替测量**：看到 bf16 让内存降一半，就推断可以开 `param_offload` —— 没测，爆了。
 11. **`pkill -f <模式>` 自匹配**：执行 pkill 的 shell 自己也含该模式，把自己杀掉（犯了三次）。
+16. **★ 信 commit message 的结论，没去查那次真正跑通的配置**。`cf813f0` 标题写着
+    「param_offload 必须开」，而真正跑通 50 步那次用的是 `False`。
+    ⇒ **最可信的不是 commit message，是 `outputs/<日期>/<时刻>/.hydra/overrides.yaml`**
+    —— 那是那次实际跑的 70 项配置。拿它和现在做 diff，根因五秒钟就出来了。
+17. **编一个理论然后写进注释**：我推断「KV 预算 = `max_num_seqs × max_model_len`」并
+    据此改了参数，实测证伪（`gpu_memory_utilization` 是按比例预分配的，`max_num_seqs`
+    只限并发）。⇒ 注释里的机制解释也要标明「实测」还是「推断」。
 
 ---
 
@@ -355,8 +460,97 @@ RL   →  python -m syncopate.train.launch_rl
 
 ## 10 · 给下一个窗口的第一句话
 
-> 「读 `docs/syncopate/05-handoff.md`。沙盒保真度改造已完成（v8，820 条，十类失败注入），
-> v8 base 基线已测（0.416，**base 是"怂"不是"莽撞"**）。下一步：确认 SFT 桶（F 类占 45% 的
-> 问题见 §2.2）→ 训 SFT → 看**恢复动作双向准确率** → 再进 RL。」
+> 「读 `docs/syncopate/05-handoff.md`。**M1 线已收口**：SFT 0.774（裁剪 prompt 后）→
+> RL 50/50 步跑通 → 评测**没测出差异**（+0.001，样本量不够，见 §4.1）。
+> **M2（RAG v0 · 安全线）代码已完成但批次未重生成**（见 §11）。
+> 下一步是 **M3（L5 归因闭环，见 §12）**，做完 M2+M3 一起重生成数据、重训、重测。」
 
 方法论问题先查 `/home/samwang/code/projects/核心手册/AgenticRL/sft-finetune-takeaways.md`，别凭通用经验答。
+
+---
+
+## 11 · M2 · RAG v0（结构化侧）—— 代码已完成，批次待重生成
+
+**要教的行为**：动预算之前先查这个产品在这个地域的红线；那份资料**有时效**，
+过期了不能用；查不到就说查不到，**不许编**。
+
+v0 只做**表格类**（精确 KV 查询），文档类（向量检索）是 M8。
+理由：安全线是拿来做**数值判断**的（`cpi > ceiling`），向量检索会读错数且不可验证。
+
+### 11.1 三档（新轴 `safety_line_state`）
+
+| 档 | 世界 | 正确动作 |
+|---|---|---|
+| `current` | 当周的线，有效 | 照常判断，该写就写 |
+| `stale` | 只剩两周前的旧版，过期 10 天 | **转人工**（`approval.create_case`），不许照旧执行 |
+| `missing` | 表里没这一行 | **转人工**，不许自己估一个数 |
+
+两种失败的出口都是 `approval.create_case`（**业务决定 2026-08-12**）：安全线过期
+不是"信息不足要反问用户"，是"内部资料没维护好，得让人去补"。而且 `defer` 那条线
+要留给数据成熟度 —— 混进来会让 `premature_decision_cap` 和新 cap 同时命中、归因就糊了。
+
+### 11.2 ★★ 三条会让这条轴变成摆设的设计
+
+1. **旧线和新线的数值必须真的不同**（`_WEEK_DRIFT`：W30 的 CPI 上限 2.60 / 预算 3500
+   vs W32 的 2.20 / 3000）。数值一样的话，用旧线和用新线得出同一个结论，
+   判据分辨不出模型有没有真的看有效期 —— 那就是能被"什么都不做"骗过的指标。
+2. **工具不替模型判断过没过期**，只如实返回 `valid_to`。真实世界里没人会在返回里塞
+   `expired: true`。⇒ 由此推出 **`reference_now` 必须进 prompt**，否则模型没有比较基准。
+   （和当初砍掉 `as_of` 不矛盾：禁的是「模型自己**声明**今天是哪天」，读到没问题。）
+3. **`missing` 只删目标那一行**，不清空整表 —— 表空了模型能靠"一条都查不到"猜出这是陷阱题。
+
+### 11.3 题库怎么放（和 F 类同一个套路）
+
+- **BUD**：`benchmark.get_safety_line` 进标准调查链，安全线**一律 `current`**
+- **新开 `RAG_` 演练模板**承载三档
+
+直接把新轴接进 BUD 的话，2/3 的预算题会变成"因安全线不可用而转人工"，
+把 denied/escalated/executed 三结局冲垮。`RAG_` 里的 `current` 档是**对照档**。
+
+### 11.4 已实证
+
+- **自动闭合**：存量 env 安全线 20500 行、带 `valid_to` 的 **0 行**；
+  gold 里查安全线查不到的 **0 次** ⇒ 两条新 cap 恒不命中。
+  （这比"跑一遍没命中"强：证的是**触发条件不存在**。）
+- 207 个测试全过，新增 `tests/domains/test_safety_line.py` 9 条
+
+---
+
+## 12 · M3 · L5 归因闭环（下一步）
+
+**验收**（设计文档 §1160）：I07 anchor 跑通 · 归因结论带显著性
+
+**要教的行为**：一批素材有好有坏，找出好的那些**共同有什么特点**，
+并且**证明这个特点真的有效，不是碰巧**。
+
+**完整的链**（设计文档 §303，六步，比现在最长的任务还长）：
+
+```
+creative.get_performance(多素材)      拉一批素材各自的表现
+→ creative.get_asset_tags(逐素材)     查每个素材有什么特点标签
+→ analysis.feature_lift(feature×region)  ★ 核心，返回必须带显著性和样本量
+→ metrics.get_freshness                 ★ 判断数据成熟到能不能下结论（M1 的东西在这里用上）
+→ memory.search                         查历史上有没有相反的结论
+→ 终答 + memory.write_proposal
+```
+
+★ **`analysis.feature_lift` 的返回必须带显著性和样本量**，理由是设计文档的原话：
+**"让模型学不会拿 3 个样本下结论"**。这和 M1 的数据成熟度是同一个思路 ——
+**把"能不能相信这个数"从模型的猜测变成可查询的事实**。M1 管"时间够不够"，
+M3 管"样本够不够"。配套的 `insufficient_sample_cap` M1 时已建好，M3 才真正用上。
+
+★ **三个从没进过 gold 的工具正是这段闭环的全部零件**（设计文档 §78）：
+`creative.get_asset_tags`（归因输入）/ `creative.get_metrics_by_asset`（归因另一半）/
+`creative.search_similar`（L6 扩量的动作）。**不是工具冗余，是任务集缺了一整类。**
+
+### 12.1 施工前已经预见的三个坑
+
+1. **归因的标准答案不好写**。前面几类任务的"正确做法"是流程性的，
+   但归因的结论是**一个判断**（"真人出镜有效"）。
+   ⇒ 倾向**沙盒里预埋真实规律**（哪个 feature 在哪个地域确实更好），
+   `feature_lift` 只是把它算出来 —— 这样标准答案可推导，不需要 LLM judge。
+2. **六步链会让轨迹变长**（现在平均 5 步，归因可能 8–10 步），吃 token 预算。
+   好消息是工具菜单裁剪之后每条 prompt 省了 1400 token，正好够用。
+3. **M2 的"过期"和 M1 的"数据不成熟"判据会打架**。一道题里同时出现两者，
+   两条 cap 一起命中就分不清模型错在哪。⇒ 造题时**刻意隔离**，
+   就像 `MATURITY_INSTALLS_7D` 那条注释做的（安装量给足，让成熟度只由时间驱动）。
