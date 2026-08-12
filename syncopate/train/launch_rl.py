@@ -2,10 +2,56 @@
 
 ★ 相对老师那套 64 卡配置，单卡 5090 有三处**必须反着来**的改动：
 
-1. **关掉 offload**。老师开 `param_offload=True` + `optimizer_offload=True`，
-   把负担丢给 CPU 内存——前提是"CPU 内存富余、每卡显存紧张"。本机恰好相反：
-   32GB 显存充裕，**30GB 系统内存才是瓶颈**（Ray + vLLM + trainer 三个进程本身就要 8-10GB）。
-   开着 offload 会被 OOM killer 干掉。
+1. **关掉 offload**（两个都关）。老师那套开 `param_offload` + `optimizer_offload`，
+   前提是"CPU 内存富余、每卡显存紧张"；本机 30GB 内存才是瓶颈，开着会被 OOM killer 干掉。
+   ⚠️ commit cf813f0 的标题写着「param_offload 必须开」，但**真正跑通 50 步的那次用的是
+   False**——让它跑通的是 `max_num_seqs` 1024→32。2026-08-12 实测开 True 反而在
+   vLLM 第一次 `sleep()` 时静默杀掉 VllmWorker。**别照着 commit 标题改默认值。**
+
+★★ 2026-08-12 实测的显存账（wake_up OOM 连挂三次换来的）：
+
+   **`max_num_seqs` 不是显存旋钮。** `gpu_memory_utilization` 是按比例**预分配**的：
+   0.42 × 31.36 = 13.2GB，vLLM 无论并发上限是 32 还是 20 都照拿不误。
+   降 `max_num_seqs` 只限并发、不改分配量 —— 实测 32→20 对 OOM 毫无影响。
+   （cf813f0 里 1024→32 有效，是因为那是调度结构和 block table 的开销，不是 KV 池。）
+
+   本机的真实账本（Qwen3-4B：36 层 / 8 KV 头 / head_dim 128 ⇒ **KV = 144 KB/token**）：
+
+       FSDP 建好后 actor 常驻      10.49 GB   （实测，日志里 "After FSDP"）
+       vLLM 按 0.42 预分配         13.2  GB   （权重 7.6 + KV 池 5.6 = 41k token）
+       update_weights 时推权重     ~7.6  GB   （聚合出的一份全量 bf16）
+       ------------------------------------------------
+       合计                        31.3  GB   ≈ 31.36 的物理上限 ⇒ **贴着墙，必挂**
+
+   ⇒ 真正的旋钮是 **`--rollout-gpu-util`**。给 vLLM 少分一点，就是给 wake_up 那一刻
+   的权重聚合腾地方。0.34 ⇒ vLLM 10.7GB、KV 池 3.1GB（22k token ≈ 3 条满长序列），
+   总占用 28.8GB，留 2.5GB 余量。代价是 rollout 并发下降、变慢，但结果不受影响。
+
+   ⚠️ 别把 `--rollout-gpu-util` 降到 KV 池装不下**一条**满长序列以下
+   （max_model_len 7168 × 144KB = 0.98GB），否则会退化成 §5 表里第一行的
+   「vLLM 分不到 KV cache」。
+
+★★★ 更隐蔽的一条：**actor 的显存会随训练步数单调爬升，是碎片不是泄漏**
+
+   2026-08-12 第五次尝试跑到 **step 24** 才挂（前四次是第一步就挂）。实测：
+
+       step   allocated   reserved   差值(碎片)
+         1      16.35      19.22       2.87
+        10      17.01      20.38       3.36
+        15      18.72      20.58       1.86
+        24      18.72      21.08       2.36   ← 然后 wake_up OOM
+
+   **`allocated` 从 step 15 起就不涨了，`reserved` 还在爬** —— PyTorch 缓存分配器
+   的 reserved 只增不减。到 step 24 剩给 vLLM 的只有 31.36−21.08 = 10.28GB，
+   而 0.42 要 13.2GB。
+
+   ⇒ **配 `--rollout-gpu-util` 不能按第一步的显存算，要按跑几十步之后的峰值算。**
+   按 21.08 反推上限是 0.328；实际取 0.30 留余量。
+   ⇒ 这也解释了前四次：它们不是"某个参数配错"，是这条路本来就贴着墙走 ——
+   prompt 更长的时候第一步就撞，prompt 裁短之后能撑 24 步，但墙还在那儿。
+
+   ⚠️ 碎片的标准解法 `expandable_segments:True` 在这里**用不了**，原因见下面
+   `env.pop("PYTORCH_CUDA_ALLOC_CONF")` 那段：它和 vLLM 的 colocate 内存池冲突。
 
 2. **上 LoRA**。4B 全参 AdamW 要 48GB 优化器状态，装不下。
    r=32 挂全部线性层 = 66M 可训练参数（占 1.64%），优化器状态 0.79GB。
@@ -199,9 +245,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-num-seqs", type=int, default=64,
                         help="vLLM 并发槽位。默认 1024 远超实际需要"
                              "（colocate 单卡上就是 train_batch_size × rollout_n）")
+    # ⚠️ 别被 commit cf813f0 的标题（「param_offload 必须开」）带偏：
+    # 真正跑通 50 步的那一次（2026-08-11 12:46）用的是 **False**。让它跑通的是
+    # `max_num_seqs` 从 1024 降到 32，不是 offload。2026-08-12 实测 True 反而在
+    # vLLM 第一次 `sleep()` 时静默杀掉 VllmWorker。⇒ 保持 False，要开先单独验。
     parser.add_argument("--param-offload", default="False", choices=["True", "False"],
-                        help="rollout 期间把 actor 参数挪到 CPU。bf16 下模型只有 7.75GB，"
-                             "内存有 28GB 可用时是 wake_up OOM 的兜底解法")
+                        help="rollout 期间把 actor 参数挪到 CPU。默认 False（实测跑通的那次就是 False）")
     parser.add_argument("--fsdp-dtype", default="bf16", choices=["bf16", "fp32"],
                         help="FSDP 持有参数的精度。LoRA 下 98.4%% 的参数冻结，"
                              "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")

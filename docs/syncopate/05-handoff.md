@@ -43,7 +43,8 @@
 ### 2.1 立刻做：确认 SFT 桶 → 训 SFT → 评
 
 ```bash
-# 建议配额 {convention 5, shortcut 7, control 3} → SFT 199 / RL 517
+# 实际用的是默认配额 {convention 6, shortcut 10, control 4} → SFT 279 / RL 437
+# （2026-08-12 补齐四个空模板后的数，见 §2.2）
 python -m syncopate data split --batch data/batches/v8 --out data/splits/v8 \
     --dead-from _audit/v8_base.json
 python -m syncopate data build --pool sft --batch data/batches/v8 \
@@ -60,9 +61,29 @@ python -m syncopate.train.compare _audit/v8_base.json _audit/v8_sft_e1.json
 
 ⚠️ **`--batch-size 1`**：batch 2 会 OOM（logits 张量 = batch × 5600 token × 15 万词表）。
 
-### 2.2 ★ 悬而未决的问题：SFT 桶里 F 类占 45%
+### 2.2 ★ SFT 桶的成分：F 类占 35%（原 45%），四个空模板已补齐
 
-**机制**（已查清，不要重新推导）：
+> **2026-08-12 更新**：查这个问题时发现了一个更严重的洞，已修。
+>
+> **DIA / HIGH / LONG / MISS 四个模板在 SFT 桶里各 0 条**，而它们在 EVAL 里有 20 条、
+> RL 池里有 180 条。原因是 `add_controls()` 有两道闸各挡掉两个模板：
+> 闸①「只在有死格的模板下找对照」挡掉 HIGH/LONG（它们没有死格）；
+> 闸②「对照必须是 gradient/saturated」挡掉 DIA/MISS（它们是 `subscore`，
+> 分 0.745–0.900、**一条 cap 都没打中**，只是零梯度被 0.9 的边界划到了另一边）。
+>
+> ⇒ 上一次退化的教训**只修了一半**：修了「同一意图内的其它档」，没修「整个模板没进桶」。
+> 铁证：M1fix 那一轮（**已经带对照档**）里 `MISS 0.745 → 0.649（-0.096）、截断率 0%→28%`，
+> 而 MISS 正是被闸②挡住的模板之一。
+>
+> **修法**：闸① 去掉（每个模板都要有对照）；闸② 放宽成 `control_eligible()`
+> —— 新增 `CONTROL_SUBSCORE_FLOOR = 0.7`，收「零梯度但 ≥0.7 且无 cap」的那批。
+> 判据是「格子里**有**够格的样本」而不是「全部够格」：试过后者，它会连带丢掉
+> `FRESH|defer|immature`（0.598/0.683）——**那正是本机制当初为之而生的那一格**。
+>
+> **结果**：对照格 17 → 25（纯增量，丢 0）；SFT 247 → 279；四个模板各 0 → 8；
+> F 占比 39% → **35%**；RL 池 469 → 437。197 个测试全过。
+
+**F 占比的机制**（已查清，不要重新推导）：
 
 ```
 进桶格子 42 个 → F 类 20 个（48%），非 F 22 个
@@ -85,7 +106,7 @@ F 类每格池子   4–7 条   ← 配额 7 用不满，能拿多少拿多少
   **「学 F 类」不会挤掉「学正常路径」，正常路径嵌在每一条 F 样本里。**
   经典的「只喂难例导致退化」，难例往往是另一类任务；我们不是。
 - 上次真正翻车（`defer` 97%→0%）是**桶里一条 defer 都没有**，不是占比问题。
-  现在 `FRESH` 三档齐、`BUD` 三结局齐、behavior 四种齐、17 个 control 格子。
+  现在 `FRESH` 三档齐、`BUD` 三结局齐、behavior 四种齐、**25 个 control 格子、11 个模板全覆盖**。
 
 **判据已经就位**：`eval_local` 新增了**恢复动作双向准确率**
 
@@ -208,8 +229,12 @@ python -m syncopate.train.launch_rl --model <合并后的 SFT 模型> --lora-ran
   --steps 50 --train-batch-size 4 --rollout-n 8 --ppo-mini-batch-size 4 \
   --micro-batch-size 1 --rollout-gpu-util 0.42 --max-num-seqs 32 \
   --object-store-gb 2 --max-prompt-length 5120 --max-response-length 2048 \
-  --save-freq 10 --latency-scale 0.01 --logger console
+  --save-freq 10 --latency-scale 0.01
 ```
+
+⚠️ 这行以前写的是 `--logger console`，那会把 wandb 关掉 —— 已删，用默认的 `console,wandb`（§9.1）。
+跑完别忘了 `rl_report` 补报：verl 的 `compute_data_metrics` 只认两个字段，
+我们的 cap/耗时/coverage 训练时**一个都不上 wandb**。
 
 **五次启动失败换来的地图**：
 
@@ -302,6 +327,29 @@ logprob 即可，而且 k **精确可控**。工具已写好：`train/staleness.
 | ckpt 怎么选 | **不选 val loss 最低的**，选决策位熵高、有梯度格子多的 | 手册 §20 |
 | 沙盒要不要比真实世界友好 | **不要** | 字段名不带单位、返回不含新值、无幂等保护，都如实建模 |
 | 「不照做」够不够 | **不够，必须显式标记** | 只测单向，消极的模型能骗过指标 |
+| 训练入口 | **只有两个，不许再写第三个** | 见 §9.1 |
+| wandb | **默认开**，要关得显式 `--no-wandb` | 见 §9.1 |
+
+### 9.1 ★ 训练入口只有两个，别再写新脚本
+
+```
+SFT  →  python -m syncopate.train.sft
+RL   →  python -m syncopate.train.launch_rl
+```
+
+**每一轮训练都走这两个入口，参数用命令行传，不要为某一轮单开脚本。**
+
+为什么立这条：临时脚本的问题不是麻烦，是**它会静默地和主路径长出差异**，而差异往往在结果出来很久以后才暴露。这个项目已经栽过两次：
+
+- 临时重放脚本漏传 `behavior=`，用了 `gold_script()` 的默认值 ⇒ 100 条 CLAR/REJ 全体 `behavior_mismatch`（坑 #1 的同一个默认值陷阱，隔天又踩一次）
+- `build_dataset.build()` 没读三桶切分文件 ⇒ 冻结 EVAL 从 M0 起就在训练数据里，而 `split_report.json` 还写着「零重叠 ✅」（坑 #2）
+
+两次都是**旁路绕开了主路径的守卫**。守卫只长在主路径上，绕过去就没人拦。
+
+配套：两个入口的 wandb **默认开**（`sft.py` 的 `--wandb-project` 默认 `syncopate`；
+`launch_rl.py` 的 `--logger` 默认 `console,wandb`）。
+⚠️ v8 那轮 SFT 就是因为默认值是 `None`，整轮没有任何上报，曲线只剩一个人肉 tail 的日志。
+**训练脚本的默认值必须是「跑完就有记录」。**
 
 ---
 

@@ -212,7 +212,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--eval-every", type=int, default=1, help="每 N 个 epoch 评一次")
     parser.add_argument("--balance-by", default=None,
                         help="按该列做 token 加权采样，如 behavior。不给则不均衡")
-    parser.add_argument("--wandb-project", default=None, help="给了就上报 W&B")
+    # ★ 默认开 wandb，和 `launch_rl.py` 对齐（那边 --logger 默认就是 console,wandb）。
+    # 之前默认是 None，结果 v8 那轮 SFT 整轮没有任何上报 —— 曲线只剩一个人肉 tail 的日志文件。
+    # 训练脚本的默认值必须是「跑完就有记录」，要关得显式说。
+    parser.add_argument("--wandb-project", default="syncopate")
+    parser.add_argument("--no-wandb", action="store_true", help="显式关掉上报（调试/跑测试用）")
+    parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
     parser.add_argument("--wandb-run", default=None)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
@@ -271,12 +276,19 @@ def main(argv: list[str] | None = None) -> int:
         optimizer, int(total_steps * args.warmup_ratio), total_steps)
 
     run = None
-    if args.wandb_project:
+    if args.wandb_project and not args.no_wandb:
+        import os
+
         import wandb
 
-        run = wandb.init(project=args.wandb_project, name=args.wandb_run or Path(args.out).name,
+        os.environ.setdefault("WANDB_MODE", args.wandb_mode)
+        # 名字带 sft- 前缀：SFT 和 RL 上报到同一个 project，不加前缀在列表里分不出来。
+        run = wandb.init(project=args.wandb_project,
+                         name=args.wandb_run or f"sft-{Path(args.out).name}",
+                         job_type="sft",
                          config={**vars(args), "trainable": trainable_summary(model),
                                  "balance": balance_report})
+        print(f"[wandb] {args.wandb_mode}  {run.url if args.wandb_mode == 'online' else run.dir}")
 
     def log(payload: dict[str, Any], step: int) -> None:
         if run is not None:
