@@ -25,6 +25,7 @@ import asyncio
 import collections
 import json
 import statistics
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -143,6 +144,73 @@ def _report_defer(rows: list[dict]) -> None:
 RECOVERY_MARKERS = ("system.wait",)
 
 
+def _report_behavior_matrix(rows: list[dict]) -> None:
+    """★ 行为五分类的准确率与混淆矩阵 —— M6 六条毕业条件的第 2 条（门槛 90%）。
+
+    为什么要看**矩阵**而不只是一个准确率：
+    tool_call 占 EVAL 的 79%，一个"永远答 tool_call"的退化模型能拿到 79% 的
+    总准确率 —— 看着不算太差，但它在 clarify/reject/defer/answer 上全错。
+    **总准确率会被多数类稀释**，必须逐类看召回。
+
+    ⚠️ 按**采样次数**算，不按 case 算（用 behaviors 而不是众数 behavior）：
+    只留众数会把「8 次里错 3 次」压成一个看不见的 0 —— 和 defer 双向指标同一条纪律。
+    """
+    if not rows:
+        return
+    pairs = [(r["expected_behavior"], b) for r in rows for b in r.get("behaviors", [])]
+    if not pairs:
+        return
+    labels = sorted({e for e, _ in pairs} | {p for _, p in pairs})
+    matrix: dict[tuple[str, str], int] = collections.Counter(pairs)
+    correct = sum(c for (e, p), c in matrix.items() if e == p)
+    total = len(pairs)
+    flag = "" if correct / total >= 0.90 else "   ← ★ 低于 M6 门槛 90%"
+    print("\n★ 行为分类（五分类，按采样次数算）")
+    print(f"  总准确率  {correct}/{total} ({correct/total:.1%}){flag}")
+    print(f"  {'期望\\实际':<12}" + "".join(f"{l:>11}" for l in labels) + f"{'召回':>9}")
+    for exp in labels:
+        row_total = sum(c for (e, _), c in matrix.items() if e == exp)
+        if not row_total:
+            continue
+        cells = "".join(f"{matrix.get((exp, act), 0):>11}" for act in labels)
+        recall = matrix.get((exp, exp), 0) / row_total
+        warn = "  ⚠" if recall < 0.90 else ""
+        print(f"  {exp:<12}{cells}{recall:>8.0%}{warn}")
+
+
+def _report_diversity(rows: list[dict]) -> None:
+    """★ 采样多样性 —— M6 六条毕业条件里最容易被忽略、也最要命的一条。
+
+    设计文档 §30.2：**每 case 8 次采样出现 ≥2 种工具序列的比例 ≥ 70%**。
+
+    为什么它比 reward 重要：GRPO 的梯度**完全来自组内 reward 的方差**，
+    而方差来自采样的多样性。SFT 训过头 ⇒ 8 次采样吐出 8 条一模一样的轨迹
+    ⇒ 组内 reward 全等 ⇒ advantage 恒为 0 ⇒ **RL 一步都训不动**。
+    现象是"RL 没效果"，病根在 SFT 阶段（手册 §20）。
+
+    ⚠️ 它和「零梯度格子占比」不是同一个数，两个都要看：
+        零梯度   看的是 **reward** 一不一样（可能走了不同的路，分却一样）
+        多样性   看的是 **轨迹** 一不一样（更早期的信号 —— 路都一样了，分必然一样）
+    多样性塌了但零梯度还没涨，就是熵正在塌的**前兆**。
+    """
+    if not rows:
+        return
+    per_case = []
+    for row in rows:
+        seqs = {tuple(s) for s in row.get("tool_seqs", [])}
+        per_case.append(len(seqs))
+    multi = sum(1 for n in per_case if n >= 2)
+    ratio = multi / len(per_case)
+    flag = "" if ratio >= 0.70 else "   ← ★ 低于 M6 门槛 70%，RL 会训不动"
+    print("\n★ 采样多样性 —— GRPO 的梯度来自组内方差，方差来自它")
+    print(f"  8 次采样出现 ≥2 种工具序列   {multi}/{len(per_case)} ({ratio:.0%}){flag}")
+    print(f"  平均不同序列数               {statistics.mean(per_case):.2f}")
+    only_one = [r["case_id"] for r, n in zip(rows, per_case) if n == 1]
+    if only_one:
+        print(f"  只有一种轨迹的 case          {len(only_one)} 条"
+              f"{'，前 8 个: ' + str(only_one[:8]) if only_one else ''}")
+
+
 def _report_recovery(rows: list[dict]) -> None:
     """★ 恢复动作的**双向**准确率 —— 和 defer 双向指标同构。
 
@@ -208,7 +276,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = []
     started = time.time()
-    for bundle in bundles:
+    # ★ 逐条打进度。一个跑一百多分钟的任务没有进度输出是不合理的 ——
+    # 只能靠 nvidia-smi 看它还活着，分不出"正常慢"和"卡在某条 case 上了"。
+    # 打到 stderr：stdout 是那份要被解析的报告，别混进去。
+    for index, bundle in enumerate(bundles, start=1):
         group = []
         for k in range(args.samples_per_case):
             output = asyncio.run(run_rollout(
@@ -256,6 +327,13 @@ def main(argv: list[str] | None = None) -> int:
             # ★ 这条 case 有没有声明失败剧本 —— 恢复动作双向指标的分组依据
             "has_failure": bool(bundle.env.failures),
         })
+        elapsed = time.time() - started
+        eta = elapsed / index * (len(bundles) - index)
+        print(f"  [{index:>3}/{len(bundles)}] {bundle.case_id:<12} "
+              f"r={rows[-1]['reward']:.3f} 步={rows[-1]['num_steps']:.1f}  "
+              f"均分={statistics.mean(r['reward'] for r in rows):.3f}  "
+              f"已用 {elapsed/60:.0f}m 剩约 {eta/60:.0f}m",
+              file=sys.stderr, flush=True)
 
     rewards = [r["reward"] for r in rows]
     print(f"\n{'指标':<26}{'值'}")
@@ -297,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
 
     _report_defer(rows)
     _report_recovery(rows)
+    _report_behavior_matrix(rows)
+    _report_diversity(rows)
 
     caps = collections.Counter(c for r in rows for c in r["caps"])
     print("\ncap 命中:", dict(caps) or "无")
