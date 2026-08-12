@@ -516,6 +516,33 @@ v0 只做**表格类**（精确 KV 查询），文档类（向量检索）是 M8
 
 ---
 
+## 11.5 ★ 遗留清单（已知、已评估、刻意不做）
+
+这些是审计出来的缺口，**都不阻塞 M6/M7**，写在这里是为了别在下一个窗口被重新"发现"一遍。
+
+| 缺口 | 评估 | 什么时候做 |
+|---|---|---|
+| **记忆写机制三个工具，只有一个有题**（`write_proposal` ✅ / `invalidate` 只当干扰项 / `conflict_resolve` 完全没用上） | 「历史结论被推翻」是飞轮的接口（`status: active\|superseded\|refuted`）。现在没有任何一道题考"查到的历史结论和现在的数据矛盾了怎么办"。ATTR 里有 `memory.search` 但查完没有分叉 | **M8 之后**。RAG v1 会把"复盘结论"整套做起来，那时题面自然就有了。现在补要加题+加判据+再重生成一次，和"这一版冻结"直接冲突 |
+| `creative.get_asset_tags` / `get_metrics_by_asset` 没进 gold | 归因链刻意简化了（一个地域 50 条素材，逐条查标签物理上做不到，`max_steps` 只有 10–14）。它们真正的用武之地是"找出赢的 feature 之后去素材库捞同类铺量" | M4 之后的素材铺量意图 |
+| L1 idea 收集 0% / L2 feature 化 ~10% | 设计文档也排在 M12 之后 | M12+ |
+| `INJ\|memory_content\|id_given` 只有 4 条 | 90 个格子里唯一的薄格。注入面铺到四个工具是对的，只是 `memory.search` 那面撞上了 entry_mode 切分 | 不修，dead_grid 从这格取不满而已 |
+
+★ **"死工具"要分三类看，不能一概而论**（v10 实测）：
+
+```
+campaign.create                305 token   ★ 诱惑工具 —— 必须在菜单里，否则
+                                             「不打招呼就建站」这个错误无法发生，
+                                             两条 M4 的 cap 就是死的。**这是护栏的学费**
+creative.get_asset_tags        111 token   干扰项 —— 菜单里必须有该选和不该选的，
+creative.get_metrics_by_asset  141 token   否则"裁剪"就等于"送答案"
+memory.invalidate               89 token
+memory.read / conflict_resolve   0 token   不在任何菜单 ⇒ 一个 token 都不花
+```
+
+⇒ 判断一个工具是不是浪费，看的不是"有没有进 gold"，是**"它在哪些菜单里、花了多少 token、换回了什么"**。
+
+---
+
 ## 12 · M3 · L5 归因闭环（下一步）
 
 **验收**（设计文档 §1160）：I07 anchor 跑通 · 归因结论带显著性
