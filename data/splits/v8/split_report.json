@@ -3,8 +3,8 @@
  "mode": "dead_grid",
  "counts": {
   "eval": 104,
-  "sft": 247,
-  "rl": 469
+  "sft": 279,
+  "rl": 437
  },
  "strata_count": 52,
  "overlaps_by_content_sha256": {
@@ -139,6 +139,18 @@
    "eval_evidence": "2/2",
    "available": 12,
    "taken": 10
+  },
+  "DIA|tool_call|default_plan|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 17,
+   "taken": 4
+  },
+  "DIA|tool_call|default_plan|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 15,
+   "taken": 4
   },
   "FAIL|tool_call|absurd_value|id_given": {
    "kind": "shortcut",
@@ -296,6 +308,30 @@
    "available": 12,
    "taken": 4
   },
+  "HIGH|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "HIGH|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "LONG|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 24,
+   "taken": 4
+  },
+  "LONG|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 22,
+   "taken": 4
+  },
   "LOW|tool_call|-|id_given": {
    "kind": "shortcut",
    "eval_evidence": "1/2",
@@ -307,6 +343,18 @@
    "eval_evidence": "2/2",
    "available": 22,
    "taken": 10
+  },
+  "MISS|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "MISS|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
   },
   "REJ|reject|-|id_given": {
    "kind": "convention",

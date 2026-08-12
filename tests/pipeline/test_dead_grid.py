@@ -85,13 +85,53 @@ def test_controls_pull_in_the_sibling_grids_the_model_already_gets_right():
     strata = {"a": dead, "b": sibling, "c": other_template}
     rows = [row("a", 0.3, caps=["false_claim_cap"]),   # 死格
             row("b", 0.9, std=0.2),                    # 同模板、模型做得对 → 该进对照
-            row("c", 0.9, std=0.2)]                    # 别的模板 → 不该进
+            row("c", 0.9, std=0.2)]                    # 别的模板 → **也该进**，见下一个测试
     grids, _ = dg.analyze(rows, strata)
     out = dg.add_controls(grids, rows, strata)
 
     assert out[dead].kind == dg.SHORTCUT
     assert out[sibling].kind == dg.CONTROL
-    assert other_template not in out
+
+
+def test_controls_cover_templates_that_have_no_dead_grid_at_all():
+    """★ 2026-08-12：第一版只在「有死格的模板」下找对照，DIA/HIGH/LONG/MISS 因此各 0 条。
+
+    而那几个模板**正是上一次退化里掉得最狠的**（HIGH -0.12 / LONG -0.11 / DIA -0.09）——
+    对照防的是全局退化，一个完全没进过训练数据的模板照样会被带跑偏。
+    """
+    dead = ("FRESH", "tool_call", "mature", "must_discover")
+    untouched = ("LONG", "tool_call", "-", "id_given")
+    strata = {"a": dead, "b": untouched}
+    rows = [row("a", 0.3, caps=["false_claim_cap"]), row("b", 0.95)]
+    grids, _ = dg.analyze(rows, strata)
+    out = dg.add_controls(grids, rows, strata)
+
+    assert out[untouched].kind == dg.CONTROL
+
+
+@pytest.mark.parametrize("r, ok", [
+    (row("saturated", 0.95), True),
+    (row("gradient", 0.24, std=0.14, caps=["false_claim_cap"]), True),
+    (row("DIA-ish", 0.90), True),        # 卡在 0.9 边界外的 subscore，一条 cap 都没打中
+    (row("MISS-ish", 0.745), True),
+    (row("FRESH_0014", 0.683), False),   # 无 cap 但分数不够
+    (row("FAIL_0009", 0.15, caps=["abandoned_without_escalation_cap"]), False),
+    (row("clean-but-low", 0.5), False),
+])
+def test_control_eligible_lets_in_high_subscore_but_not_the_broken_ones(r, ok):
+    """subscore 区间 0.15–0.9 两头是完全不同的东西，不能整类放开也不能整类挡死。"""
+    assert dg.control_eligible(r) is ok
+
+
+def test_control_grid_needs_only_one_eligible_row():
+    """判据是「有」不是「全部」——用「全部」会丢掉 FRESH|defer|immature（0.598/0.683），
+    而那正是本机制当初为之而生的那一格。"""
+    key = ("FRESH", "defer", "immature", "must_discover")
+    strata = {"a": key, "b": key}
+    rows = [row("a", 0.598, std=0.226, caps=["behavior_mismatch"]), row("b", 0.683)]
+    out = dg.add_controls({}, rows, strata)
+
+    assert out[key].kind == dg.CONTROL
 
 
 def test_controls_never_override_a_dead_grid():

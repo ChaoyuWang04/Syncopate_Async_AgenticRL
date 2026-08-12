@@ -1,0 +1,9320 @@
+{
+ "label": "models/Qwen3-4B + checkpoints/sft/v8/epoch1",
+ "rows": [
+  {
+   "case_id": "BUD_0012",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.84875,
+   "reward_std": 0.1860905357614943,
+   "reward_max": 1.0,
+   "group": [
+    0.995,
+    0.7,
+    0.95,
+    0.45,
+    1.0,
+    0.995,
+    0.95,
+    0.75
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.875,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0017",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.8049999999999999,
+   "reward_std": 0.25096065428668296,
+   "reward_max": 1.0,
+   "group": [
+    0.75,
+    0.945,
+    0.995,
+    1.0,
+    1.0,
+    0.95,
+    0.5,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.25,
+   "caps": [
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0002",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.626875,
+   "reward_std": 0.3560981035824257,
+   "reward_max": 1.0,
+   "group": [
+    0.71,
+    0.0,
+    0.75,
+    0.96,
+    1.0,
+    0.995,
+    0.3,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 5.375,
+   "caps": [
+    "behavior_mismatch",
+    "false_claim_cap",
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0007",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.81125,
+   "reward_std": 0.32452609679346284,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    0.995,
+    1.0,
+    0.75,
+    0.0,
+    0.745
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "memory.write_proposal"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0001",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.5875,
+   "reward_std": 0.24206145913796356,
+   "reward_max": 0.9,
+   "group": [
+    0.4,
+    0.4,
+    0.9,
+    0.9,
+    0.4,
+    0.4,
+    0.9,
+    0.4
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.5,
+   "caps": [
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0004",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.5625,
+   "reward_std": 0.2642796813983247,
+   "reward_max": 0.9,
+   "group": [
+    0.9,
+    0.9,
+    0.4,
+    0.4,
+    0.3,
+    0.9,
+    0.4,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0006",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.524375,
+   "reward_std": 0.3144979878711468,
+   "reward_max": 0.9,
+   "group": [
+    0.4,
+    0.895,
+    0.0,
+    0.9,
+    0.3,
+    0.4,
+    0.9,
+    0.4
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 6.375,
+   "caps": [
+    "missing_memory_check_cap",
+    "behavior_mismatch",
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "missing_memory_check_cap",
+    "missing_memory_check_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0011",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.4125,
+   "reward_std": 0.29764702249476643,
+   "reward_max": 0.9,
+   "group": [
+    0.3,
+    0.3,
+    0.9,
+    0.3,
+    0.3,
+    0.9,
+    0.0,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.0,
+   "num_steps": 5.875,
+   "caps": [
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "behavior_mismatch",
+    "missing_memory_check_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0000",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.9924999999999999,
+   "reward_std": 0.018027756377319962,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    0.995,
+    1.0,
+    0.945,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0020",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.975,
+   "reward_std": 0.025000000000000022,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.95,
+    0.95,
+    0.95,
+    0.95
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.875,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0003",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.98,
+   "reward_std": 0.020000000000000018,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    0.96,
+    1.0,
+    0.96,
+    1.0,
+    1.0,
+    0.96,
+    0.96
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.625,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "BUD_0010",
+   "signal_class": "high_risk",
+   "template": "BUD",
+   "reward": 0.905625,
+   "reward_std": 0.22924383170545723,
+   "reward_max": 1.0,
+   "group": [
+    0.3,
+    1.0,
+    0.96,
+    1.0,
+    0.995,
+    1.0,
+    0.995,
+    0.995
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.list",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CLAR_0000",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify",
+   "behaviors": [
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify"
+   ],
+   "expected_behavior": "clarify",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CLAR_0001",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify",
+   "behaviors": [
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify"
+   ],
+   "expected_behavior": "clarify",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CLAR_0002",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify",
+   "behaviors": [
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify"
+   ],
+   "expected_behavior": "clarify",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CLAR_0003",
+   "signal_class": "graded",
+   "template": "CLAR",
+   "reward": 0.5,
+   "reward_std": 0.0,
+   "reward_max": 0.5,
+   "group": [
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "clarify",
+   "behaviors": [
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify",
+    "clarify"
+   ],
+   "expected_behavior": "clarify",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0000",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.8008332499999999,
+   "reward_std": 0.31143485340707694,
+   "reward_max": 0.995,
+   "group": [
+    0.793333,
+    0.96,
+    0.793333,
+    0.0,
+    0.945,
+    0.995,
+    0.96,
+    0.96
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 4,
+   "truncated": 0.0,
+   "num_steps": 5.875,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.list",
+     "campaign.list"
+    ],
+    [
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0001",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.632708375,
+   "reward_std": 0.36946370195999545,
+   "reward_max": 0.995,
+   "group": [
+    0.96,
+    0.96,
+    0.0,
+    0.96,
+    0.611667,
+    0.3,
+    0.275,
+    0.995
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 12,
+   "truncated": 0.125,
+   "num_steps": 6.375,
+   "caps": [
+    "behavior_mismatch",
+    "false_claim_cap",
+    "max_steps_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "benchmark.get_safety_line",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar",
+     "creative.get_asset_tags"
+    ],
+    [
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0002",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.693125125,
+   "reward_std": 0.33047372497576777,
+   "reward_max": 0.966667,
+   "group": [
+    0.966667,
+    0.966667,
+    0.35,
+    0.9,
+    0.0,
+    0.966667,
+    0.633333,
+    0.761667
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.125,
+   "num_steps": 6.5,
+   "caps": [
+    "max_steps_cap",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.get_asset_tags",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "creative.search_similar",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "creative.search_similar",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0003",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.69583325,
+   "reward_std": 0.2519023771998539,
+   "reward_max": 0.933333,
+   "group": [
+    0.3,
+    0.766667,
+    0.933333,
+    0.8,
+    0.3,
+    0.6,
+    0.933333,
+    0.933333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 5,
+   "truncated": 0.0,
+   "num_steps": 6.75,
+   "caps": [
+    "false_claim_cap",
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal",
+     "memory.invalidate"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal",
+     "memory.invalidate"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0009",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.747499875,
+   "reward_std": 0.2790198338978062,
+   "reward_max": 0.995,
+   "group": [
+    0.778333,
+    0.99,
+    0.995,
+    0.995,
+    0.823333,
+    0.828333,
+    0.3,
+    0.27
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 10,
+   "truncated": 0.125,
+   "num_steps": 6.75,
+   "caps": [
+    "false_claim_cap",
+    "max_steps_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "benchmark.get_industry_baseline",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "calendar.get_seasonal_context",
+     "benchmark.get_safety_line",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0013",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.723124875,
+   "reward_std": 0.3470434641217284,
+   "reward_max": 1.0,
+   "group": [
+    0.995,
+    0.833333,
+    0.0,
+    0.833333,
+    1.0,
+    0.3,
+    1.0,
+    0.823333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [
+    "behavior_mismatch",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0007",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.75145825,
+   "reward_std": 0.2690059213645445,
+   "reward_max": 0.96,
+   "group": [
+    0.793333,
+    0.3,
+    0.3,
+    0.955,
+    0.793333,
+    0.96,
+    0.955,
+    0.955
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.5,
+   "caps": [
+    "false_claim_cap",
+    "memory_write_unverified_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "memory.write_proposal",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "CRE_0011",
+   "signal_class": "graded",
+   "template": "CRE",
+   "reward": 0.7318748749999999,
+   "reward_std": 0.2550849749144574,
+   "reward_max": 0.96,
+   "group": [
+    0.3,
+    0.793333,
+    0.945,
+    0.788333,
+    0.96,
+    0.96,
+    0.315,
+    0.793333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 11,
+   "truncated": 0.125,
+   "num_steps": 6.875,
+   "caps": [
+    "false_claim_cap",
+    "max_steps_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.get_asset_tags",
+     "creative.search_similar",
+     "creative.search_similar",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "creative.search_similar"
+    ],
+    [
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list",
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "calendar.get_seasonal_context",
+     "memory.write_proposal"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0000",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.968125,
+   "reward_std": 0.023443749166888836,
+   "reward_max": 1.0,
+   "group": [
+    0.95,
+    0.95,
+    0.95,
+    1.0,
+    0.95,
+    1.0,
+    0.995,
+    0.95
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0005",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.96875,
+   "reward_std": 0.024206145913796377,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    0.95,
+    1.0,
+    0.95,
+    0.95,
+    0.95,
+    1.0,
+    0.95
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.375,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0003",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.925,
+   "reward_std": 0.013228756555322928,
+   "reward_max": 0.96,
+   "group": [
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.96,
+    0.92,
+    0.92
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "memory.search",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0010",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.92,
+   "reward_std": 0.0,
+   "reward_max": 0.92,
+   "group": [
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.92,
+    0.92
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0001",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.705625,
+   "reward_std": 0.014882351124738335,
+   "reward_max": 0.745,
+   "group": [
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.745,
+    0.7
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0004",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.6187499999999999,
+   "reward_std": 0.23443749166888814,
+   "reward_max": 0.75,
+   "group": [
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.0,
+    0.7,
+    0.7,
+    0.75
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 2,
+   "truncated": 0.0,
+   "num_steps": 4.25,
+   "caps": [
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "policy.get_budget_rule",
+     "campaign.list"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0002",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.67,
+   "reward_std": 0.0,
+   "reward_max": 0.67,
+   "group": [
+    0.67,
+    0.67,
+    0.67,
+    0.67,
+    0.67,
+    0.67,
+    0.67,
+    0.67
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "DIA_0006",
+   "signal_class": "graded",
+   "template": "DIA",
+   "reward": 0.675,
+   "reward_std": 0.013228756555322928,
+   "reward_max": 0.71,
+   "group": [
+    0.67,
+    0.67,
+    0.67,
+    0.67,
+    0.71,
+    0.67,
+    0.67,
+    0.67
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization",
+     "memory.search",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FAIL_0020",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.693125,
+   "reward_std": 0.34033932975047126,
+   "reward_max": 1.0,
+   "group": [
+    0.75,
+    1.0,
+    0.745,
+    0.75,
+    1.0,
+    0.0,
+    1.0,
+    0.3
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 3.375,
+   "caps": [
+    "behavior_mismatch",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0052",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.411875,
+   "reward_std": 0.350070863361977,
+   "reward_max": 1.0,
+   "group": [
+    0.3,
+    0.0,
+    0.745,
+    1.0,
+    0.3,
+    0.0,
+    0.75,
+    0.2
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 3.5,
+   "caps": [
+    "false_claim_cap",
+    "behavior_mismatch",
+    "false_claim_cap",
+    "behavior_mismatch",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "acted_on_bad_data_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "memory.search",
+     "memory.search"
+    ],
+    [],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0002",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.65625,
+   "reward_std": 0.3197533228912563,
+   "reward_max": 1.0,
+   "group": [
+    0.3,
+    1.0,
+    0.75,
+    0.735,
+    0.0,
+    0.995,
+    0.73,
+    0.74
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 3,
+   "truncated": 0.0,
+   "num_steps": 4.625,
+   "caps": [
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_safety_line",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "benchmark.get_industry_baseline",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "memory.search",
+     "memory.search",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "memory.search"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0011",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.6875,
+   "reward_std": 0.2735758578529911,
+   "reward_max": 1.0,
+   "group": [
+    0.75,
+    1.0,
+    0.3,
+    0.75,
+    0.75,
+    1.0,
+    0.2,
+    0.75
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.125,
+   "caps": [
+    "false_claim_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "acted_on_bad_data_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0029",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.4627085,
+   "reward_std": 0.1729942902077985,
+   "reward_max": 0.718333,
+   "group": [
+    0.3,
+    0.556667,
+    0.556667,
+    0.551667,
+    0.166667,
+    0.3,
+    0.718333,
+    0.551667
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 7,
+   "truncated": 0.0,
+   "num_steps": 6.25,
+   "caps": [
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "false_claim_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0056",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.5941665,
+   "reward_std": 0.17779107667287466,
+   "reward_max": 0.723333,
+   "group": [
+    0.723333,
+    0.718333,
+    0.713333,
+    0.556667,
+    0.718333,
+    0.3,
+    0.3,
+    0.723333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 6.625,
+   "caps": [
+    "false_claim_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "memory.search",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0006",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.500833375,
+   "reward_std": 0.16831263631033286,
+   "reward_max": 0.723333,
+   "group": [
+    0.556667,
+    0.3,
+    0.556667,
+    0.718333,
+    0.3,
+    0.723333,
+    0.3,
+    0.551667
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 6,
+   "caps": [
+    "false_claim_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0015",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.5018748749999999,
+   "reward_std": 0.25435831841982165,
+   "reward_max": 0.723333,
+   "group": [
+    0.713333,
+    0.0,
+    0.3,
+    0.718333,
+    0.723333,
+    0.556667,
+    0.3,
+    0.703333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 9,
+   "truncated": 0.0,
+   "num_steps": 7.125,
+   "caps": [
+    "behavior_mismatch",
+    "unauthorized_write_cap",
+    "false_claim_cap",
+    "unauthorized_write_cap",
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "clarify",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "approval.create_case",
+     "campaign.list",
+     "approval.create_case"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0016",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.971666625,
+   "reward_std": 0.05611259637759044,
+   "reward_max": 0.995,
+   "group": [
+    0.995,
+    0.823333,
+    0.995,
+    0.995,
+    0.99,
+    0.99,
+    0.99,
+    0.995
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0025",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.972291625,
+   "reward_std": 0.05446045185255421,
+   "reward_max": 0.995,
+   "group": [
+    0.995,
+    0.995,
+    0.995,
+    0.99,
+    0.995,
+    0.99,
+    0.99,
+    0.828333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.375,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0007",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.918749875,
+   "reward_std": 0.07846524243803352,
+   "reward_max": 0.995,
+   "group": [
+    0.995,
+    0.99,
+    0.828333,
+    0.995,
+    0.823333,
+    0.9,
+    0.995,
+    0.823333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0039",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.94958325,
+   "reward_std": 0.07152010061295706,
+   "reward_max": 0.995,
+   "group": [
+    0.99,
+    0.995,
+    0.828333,
+    0.99,
+    0.995,
+    0.99,
+    0.823333,
+    0.985
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0009",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.15,
+   "reward_std": 0.0,
+   "reward_max": 0.15,
+   "group": [
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 28,
+   "truncated": 0.375,
+   "num_steps": 10.875,
+   "caps": [
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0036",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.13125,
+   "reward_std": 0.049607837082461075,
+   "reward_max": 0.15,
+   "group": [
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.0,
+    0.15
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 25,
+   "truncated": 0.25,
+   "num_steps": 9.875,
+   "caps": [
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "behavior_mismatch",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "defer",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0018",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.13125,
+   "reward_std": 0.049607837082461075,
+   "reward_max": 0.15,
+   "group": [
+    0.0,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 19,
+   "truncated": 0.0,
+   "num_steps": 8.5,
+   "caps": [
+    "behavior_mismatch",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "defer",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0027",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.15,
+   "reward_std": 0.0,
+   "reward_max": 0.15,
+   "group": [
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15,
+    0.15
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 28,
+   "truncated": 0.375,
+   "num_steps": 10.875,
+   "caps": [
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap",
+    "max_steps_cap",
+    "excessive_retry_cap",
+    "abandoned_without_escalation_cap",
+    "false_claim_cap",
+    "abandoned_without_escalation_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0008",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9462499999999999,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 0.95,
+   "group": [
+    0.945,
+    0.945,
+    0.945,
+    0.945,
+    0.95,
+    0.945,
+    0.945,
+    0.95
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0017",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.944375,
+   "reward_std": 0.0029973947020704526,
+   "reward_max": 0.95,
+   "group": [
+    0.94,
+    0.945,
+    0.95,
+    0.945,
+    0.945,
+    0.94,
+    0.945,
+    0.945
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 6.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0026",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9462499999999999,
+   "reward_std": 0.003307189138830741,
+   "reward_max": 0.95,
+   "group": [
+    0.95,
+    0.945,
+    0.945,
+    0.95,
+    0.94,
+    0.95,
+    0.945,
+    0.945
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.75,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0035",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9456249999999999,
+   "reward_std": 0.005266343608235201,
+   "reward_max": 0.95,
+   "group": [
+    0.945,
+    0.95,
+    0.95,
+    0.945,
+    0.95,
+    0.935,
+    0.95,
+    0.94
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5.875,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0004",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.86124975,
+   "reward_std": 0.07291919186117946,
+   "reward_max": 0.99,
+   "group": [
+    0.985,
+    0.818333,
+    0.818333,
+    0.818333,
+    0.99,
+    0.818333,
+    0.823333,
+    0.818333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.75,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0013",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.778958125,
+   "reward_std": 0.24788818054136702,
+   "reward_max": 0.99,
+   "group": [
+    0.823333,
+    0.818333,
+    0.823333,
+    0.818333,
+    0.823333,
+    0.99,
+    0.15,
+    0.985
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 7,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [
+    "false_claim_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0022",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9010414999999999,
+   "reward_std": 0.07921040633811949,
+   "reward_max": 0.985,
+   "group": [
+    0.965,
+    0.985,
+    0.985,
+    0.823333,
+    0.985,
+    0.823333,
+    0.818333,
+    0.823333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 9,
+   "truncated": 0.0,
+   "num_steps": 8.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "system.wait",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0031",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.881458125,
+   "reward_std": 0.08154529831393945,
+   "reward_max": 0.99,
+   "group": [
+    0.818333,
+    0.823333,
+    0.99,
+    0.818333,
+    0.985,
+    0.985,
+    0.813333,
+    0.818333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.875,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "system.wait",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0001",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.86499975,
+   "reward_std": 0.07216892798627052,
+   "reward_max": 0.99,
+   "group": [
+    0.823333,
+    0.823333,
+    0.99,
+    0.823333,
+    0.823333,
+    0.99,
+    0.823333,
+    0.823333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0024",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9060414999999999,
+   "reward_std": 0.083972456628647,
+   "reward_max": 0.99,
+   "group": [
+    0.818333,
+    0.823333,
+    0.99,
+    0.823333,
+    0.99,
+    0.99,
+    0.99,
+    0.823333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0010",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.86437475,
+   "reward_std": 0.07254772208131349,
+   "reward_max": 0.99,
+   "group": [
+    0.823333,
+    0.823333,
+    0.99,
+    0.823333,
+    0.818333,
+    0.823333,
+    0.823333,
+    0.99
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0042",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.925624875,
+   "reward_std": 0.08056215218456726,
+   "reward_max": 0.99,
+   "group": [
+    0.985,
+    0.818333,
+    0.985,
+    0.99,
+    0.823333,
+    0.99,
+    0.823333,
+    0.99
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.375,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "system.wait",
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0012",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0021",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0003",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0030",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ],
+    [
+     "campaign.get_metrics",
+     "mmp.get_attribution"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0000",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.756041375,
+   "reward_std": 0.15347794081230168,
+   "reward_max": 0.818333,
+   "group": [
+    0.818333,
+    0.813333,
+    0.813333,
+    0.813333,
+    0.813333,
+    0.35,
+    0.813333,
+    0.813333
+   ],
+   "parse_ok": 0.875,
+   "parse_errors": 7,
+   "tool_errors": 8,
+   "truncated": 0.125,
+   "num_steps": 8.375,
+   "caps": [
+    "max_steps_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0032",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.752916375,
+   "reward_std": 0.17121237553031723,
+   "reward_max": 0.823333,
+   "group": [
+    0.818333,
+    0.818333,
+    0.813333,
+    0.818333,
+    0.818333,
+    0.3,
+    0.823333,
+    0.813333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.25,
+   "caps": [
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0014",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.813333,
+   "reward_std": 0.0025000000000000022,
+   "reward_max": 0.818333,
+   "group": [
+    0.813333,
+    0.813333,
+    0.813333,
+    0.813333,
+    0.818333,
+    0.813333,
+    0.813333,
+    0.808333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 8,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0023",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.817708,
+   "reward_std": 0.0029973947020704526,
+   "reward_max": 0.823333,
+   "group": [
+    0.823333,
+    0.818333,
+    0.813333,
+    0.813333,
+    0.818333,
+    0.818333,
+    0.818333,
+    0.818333
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0005",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9193748749999999,
+   "reward_std": 0.08088475630246639,
+   "reward_max": 0.985,
+   "group": [
+    0.98,
+    0.818333,
+    0.98,
+    0.813333,
+    0.98,
+    0.813333,
+    0.985,
+    0.985
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.625,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0028",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.960416625,
+   "reward_std": 0.05563252227550334,
+   "reward_max": 0.985,
+   "group": [
+    0.813333,
+    0.98,
+    0.985,
+    0.98,
+    0.985,
+    0.98,
+    0.98,
+    0.98
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.75,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0019",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.9370832499999999,
+   "reward_std": 0.07152010061295706,
+   "reward_max": 0.98,
+   "group": [
+    0.975,
+    0.808333,
+    0.98,
+    0.818333,
+    0.98,
+    0.975,
+    0.98,
+    0.98
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 8.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FAIL_0046",
+   "signal_class": "high_risk",
+   "template": "FAIL",
+   "reward": 0.918124875,
+   "reward_std": 0.08249779384692281,
+   "reward_max": 0.985,
+   "group": [
+    0.813333,
+    0.98,
+    0.985,
+    0.813333,
+    0.985,
+    0.808333,
+    0.98,
+    0.98
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 8,
+   "truncated": 0.0,
+   "num_steps": 7.875,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "system.wait",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_industry_baseline",
+     "benchmark.get_safety_line",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ],
+    [
+     "campaign.get_metrics",
+     "memory.search",
+     "policy.get_budget_rule",
+     "risk.check_account",
+     "campaign.update_budget",
+     "campaign.get_metrics",
+     "campaign.update_budget"
+    ]
+   ],
+   "has_failure": true
+  },
+  {
+   "case_id": "FRESH_0004",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "defer",
+   "behaviors": [
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer"
+   ],
+   "expected_behavior": "defer",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0008",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 0.9125,
+   "reward_std": 0.23150323971815168,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.3,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2.75,
+   "caps": [
+    "false_claim_cap"
+   ],
+   "behavior": "defer",
+   "behaviors": [
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer"
+   ],
+   "expected_behavior": "defer",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0002",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 0.9125,
+   "reward_std": 0.23150323971815168,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.3,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.625,
+   "caps": [
+    "false_claim_cap"
+   ],
+   "behavior": "defer",
+   "behaviors": [
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer"
+   ],
+   "expected_behavior": "defer",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0014",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "defer",
+   "behaviors": [
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer",
+    "defer"
+   ],
+   "expected_behavior": "defer",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0000",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0012",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0006",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0010",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0001",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0005",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 0.625,
+   "reward_std": 0.4841229182759271,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "defer",
+    "tool_call",
+    "defer",
+    "defer"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0003",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 0.75,
+   "reward_std": 0.4330127018922193,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "defer",
+    "defer",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "FRESH_0007",
+   "signal_class": "graded",
+   "template": "FRESH",
+   "reward": 0.625,
+   "reward_std": 0.4841229182759271,
+   "reward_max": 1.0,
+   "group": [
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 4,
+   "caps": [
+    "behavior_mismatch",
+    "behavior_mismatch",
+    "behavior_mismatch"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "defer",
+    "tool_call",
+    "defer",
+    "tool_call",
+    "tool_call",
+    "defer",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "metrics.get_freshness"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "HIGH_0000",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "HIGH_0001",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "HIGH_0002",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "HIGH_0003",
+   "signal_class": "all_high",
+   "template": "HIGH",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 2,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ],
+    [
+     "campaign.get_metrics"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LONG_0000",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LONG_0001",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LONG_0002",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LONG_0003",
+   "signal_class": "long_tail",
+   "template": "LONG",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 5,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ],
+    [
+     "campaign.get_metrics",
+     "creative.upload",
+     "system.wait",
+     "creative.poll_review"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LOW_0000",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.816875,
+   "reward_std": 0.2984222836434974,
+   "reward_max": 0.99,
+   "group": [
+    0.99,
+    0.99,
+    0.99,
+    0.3,
+    0.985,
+    0.99,
+    0.3,
+    0.99
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7.375,
+   "caps": [
+    "unauthorized_write_cap",
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LOW_0001",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.98875,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 0.99,
+   "group": [
+    0.99,
+    0.99,
+    0.99,
+    0.99,
+    0.985,
+    0.99,
+    0.99,
+    0.985
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LOW_0002",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.8731249999999999,
+   "reward_std": 0.21662088859341336,
+   "reward_max": 0.955,
+   "group": [
+    0.3,
+    0.955,
+    0.955,
+    0.955,
+    0.955,
+    0.955,
+    0.955,
+    0.955
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7.125,
+   "caps": [
+    "unauthorized_write_cap"
+   ],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization",
+     "memory.write_proposal"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "LOW_0003",
+   "signal_class": "all_low",
+   "template": "LOW",
+   "reward": 0.96375,
+   "reward_std": 0.01515544456622769,
+   "reward_max": 0.99,
+   "group": [
+    0.955,
+    0.955,
+    0.955,
+    0.955,
+    0.955,
+    0.99,
+    0.955,
+    0.99
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 7.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ],
+    [
+     "campaign.list",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "campaign.detect_anomalies",
+     "playbook.get_optimization"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "MISS_0000",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.99875,
+   "reward_std": 0.003307189138830741,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    0.99,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 1,
+   "truncated": 0.0,
+   "num_steps": 3.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "creative.get_metrics_by_asset",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "MISS_0001",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.998125,
+   "reward_std": 0.0024206145913796377,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    0.995,
+    0.995,
+    1.0,
+    1.0,
+    1.0,
+    0.995,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.375,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "memory.search"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "MISS_0002",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.99875,
+   "reward_std": 0.0021650635094610984,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    0.995,
+    1.0,
+    1.0,
+    0.995,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.25,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "MISS_0003",
+   "signal_class": "tool_missing",
+   "template": "MISS",
+   "reward": 0.999375,
+   "reward_std": 0.0016535945694153705,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.995,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 3.125,
+   "caps": [],
+   "behavior": "tool_call",
+   "behaviors": [
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call",
+    "tool_call"
+   ],
+   "expected_behavior": "tool_call",
+   "tool_seqs": [
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line",
+     "benchmark.get_industry_baseline"
+    ],
+    [
+     "campaign.get_metrics",
+     "benchmark.get_safety_line"
+    ]
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "REJ_0000",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject",
+   "behaviors": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ],
+   "expected_behavior": "reject",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "REJ_0001",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 0.9375,
+   "reward_std": 0.16535945694153692,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.5,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject",
+   "behaviors": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ],
+   "expected_behavior": "reject",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "REJ_0002",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject",
+   "behaviors": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ],
+   "expected_behavior": "reject",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  },
+  {
+   "case_id": "REJ_0003",
+   "signal_class": "graded",
+   "template": "REJ",
+   "reward": 1.0,
+   "reward_std": 0.0,
+   "reward_max": 1.0,
+   "group": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "parse_ok": 1.0,
+   "parse_errors": 0,
+   "tool_errors": 0,
+   "truncated": 0.0,
+   "num_steps": 1,
+   "caps": [],
+   "behavior": "reject",
+   "behaviors": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ],
+   "expected_behavior": "reject",
+   "tool_seqs": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "has_failure": false
+  }
+ ]
+}

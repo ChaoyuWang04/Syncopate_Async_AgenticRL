@@ -64,6 +64,15 @@ CONTROL = "control"         # ★ 对照档：模型已经做对的兄弟格子�
 
 DEAD_KINDS = (CONVENTION, SHORTCUT)
 
+# ★ subscore 里「其实做得挺好、只是零梯度」那一批也够格当对照，判据见 `control_eligible()`。
+# 0.7 这条线是照 v8 base 的实测分布画的：
+#     FAIL_0009 0.150 / FAIL_0029 0.333  ← 打中 abandoned/excessive_retry/max_steps，真有问题
+#     REJ_0003  0.500 / FRESH_0014 0.683 ← 无 cap，但离及格还远
+#     ------------------------------ 0.7 ------------------------------
+#     MISS 0.745 ×4 / DIA 0.630–0.900 ×8 ← 一条 cap 都没打中，只是每次都一样
+# 切在这里，恰好把前四条挡在外面。改这个值等于改「什么叫做得不错」的口径。
+CONTROL_SUBSCORE_FLOOR = 0.7
+
 # ★ 每个死格从池子里取多少条。
 #
 # 为什么不整格全取：12 个死格对应池子里 288/528 条，SFT 桶会吃掉一多半的 RL 池，
@@ -92,6 +101,30 @@ def classify(row: dict[str, Any]) -> str:
     if row["reward"] < WIPEOUT_CEIL:
         return CONVENTION
     return SHORTCUT if set(row["caps"]) & SHORTCUT_CAPS else SUBSCORE
+
+
+def control_eligible(row: dict[str, Any]) -> bool:
+    """这一条 EVAL 结果能不能拿来当**对照档**（= base 本来就做得不错）。
+
+    `gradient`/`saturated` 显然够格。争议在 `subscore`：按 `classify()` 的定义它是
+    「零梯度、没打中捷径 cap、分在 0.15–0.9 之间」，这个区间两头的东西完全不同 ——
+
+        DIA 0.880–0.900  caps=[]   ← 差 0.001 就够 saturated，纯粹是卡在边界上
+        MISS 0.745       caps=[]   ← 没犯任何错，只是每次答得一模一样
+        FAIL_0009 0.150  caps=[abandoned_without_escalation ×8, excessive_retry ×3, …]
+
+    前两者当对照是对的（它们正是「模型已经做对、别教坏」的典型），
+    后者当对照是错的（它真的不会做）。所以加两道闸：**分数够高** + **一条 cap 都没打中**。
+
+    ⚠️ 不能整类放开 SUBSCORE —— 它在设计上是留给 RL 的（见常量表注释）。
+    这里只是把「其实已经做对了、只是被 0.9 的边界划到了另一边」的那批捞回来。
+    """
+    kind = classify(row)
+    if kind in (GRADIENT, SATURATED):
+        return True
+    return (kind == SUBSCORE
+            and row["reward"] >= CONTROL_SUBSCORE_FLOOR
+            and not row["caps"])
 
 
 @dataclass
@@ -164,21 +197,41 @@ def add_controls(grids: dict[tuple[str, ...], DeadGrid],
     **凡是 SFT 要教某个意图的一档，就必须同时给它这个意图的其它档。**
     否则模型学到的不是「什么时候该 A」，而是「见到这类题就 A」。
 
-    对照格的选取：同模板、不在死格里、且审计显示模型本来就做得不错
-    （gradient / saturated）。取样量比死格小（配额 4 vs 6/10）——
-    对照档的作用是**锚定**，不是重新教一遍。
+    对照格的选取：不在死格里、且审计显示模型本来就做得不错（`control_eligible()`）。
+    取样量比死格小（配额 4 vs 6/10）——对照档的作用是**锚定**，不是重新教一遍。
+
+    ---
+
+    ★ 2026-08-12：上面那次翻车其实只修了一半，四个模板一条都没进桶
+
+    第一版实现里有两道闸，各挡掉两个模板：
+
+        闸① 只在「已经有死格的模板」下找兄弟格   → HIGH / LONG 被挡（它们没有死格）
+        闸② 兄弟格必须是 gradient / saturated    → DIA / MISS 被挡（它们是 subscore）
+
+    结果 SFT 桶里 DIA / HIGH / LONG / MISS **各 0 条**，而这四个模板在 EVAL 里有
+    20 条、在 RL 池里有 180 条 —— **恰恰就是上一次退化里掉得最狠的那几个**
+    （HIGH -0.12 / LONG -0.11 / DIA -0.09，见上文）。
+
+    闸① 的本意是「只给要教的东西配对照」，但对照防的是**全局退化**，不是
+    单个模板内部的混淆 —— 一个完全没进过训练数据的模板照样会被带跑偏，
+    上次的实测数字就是证据。所以闸① 直接去掉：**每个模板都要有对照。**
+    闸② 放宽成 `control_eligible()`，理由见那里。
+
+    ⚠️ 判据是「格子里**有**够格的样本」，不是「格子里**全部**够格」。试过后者，
+    它会连带丢掉 4 个旧对照格，其中包括 `FRESH|defer|immature|must_discover`
+    （两条 EVAL 是 0.598 / 0.683）—— 那正是本机制当初为之而生的那一格。
+    收紧已有对照的取舍口径是另一件事，别和「补齐缺口」捆在一起改。
     """
-    dead_templates = {key[0] for key in grids}
-    kind_of: dict[tuple[str, ...], str] = {}
+    eligible: dict[tuple[str, ...], bool] = {}
     for row in rows:
         key = strata[row["case_id"]]
-        if key in grids or key[0] not in dead_templates:
+        if key in grids:
             continue
-        kind = classify(row)
-        if kind in (GRADIENT, SATURATED):
-            kind_of.setdefault(key, kind)
+        eligible[key] = eligible.get(key, False) or control_eligible(row)
 
     out = dict(grids)
-    for key in sorted(kind_of):
-        out[key] = DeadGrid(stratum=key, kind=CONTROL, eval_seen=0)
+    for key in sorted(eligible):
+        if eligible[key]:
+            out[key] = DeadGrid(stratum=key, kind=CONTROL, eval_seen=0)
     return out
