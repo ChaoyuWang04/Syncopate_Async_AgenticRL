@@ -1,5 +1,20 @@
 """给本项目的 venv 安装一个 `flash_attn.bert_padding` 垫片。
 
+## ⛔ 已退役（2026-08-13 晚）——新机器别再跑这个脚本
+
+已找到并装上完全匹配的**真 flash-attn 预编译轮子**（零编译，sm_120 kernel 经
+cuobjdump 验证）：
+
+    uv pip install /workspace/wheels/flash_attn-2.8.3+cu128torch2.9-cp312-cp312-linux_x86_64.whl
+    # 或重新下载：
+    # https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.0/flash_attn-2.8.3%2Bcu128torch2.9-cp312-cp312-linux_x86_64.whl
+    # （换 torch/python 版本时去该仓库按 cu128torch<X>-cp<Y> 检索，装完 cuobjdump 验 sm_120）
+
+垫片的问题：它满足了 import，没满足契约——verl rmpad 的 attention_mask=None +
+打包 position_ids 约定是为 varlen kernel 设计的，落到 sdpa 上 transformers 会
+恒物化 [1,1,L,L] mask（单序列也物化），dynamic_bsz 打包更是 2.2× 倒退。
+本脚本仅留作历史记录。
+
 ## 为什么需要
 
 verl 0.8.0 的训练主路径已经改成 padding-free：`_compute_old_log_prob` 里

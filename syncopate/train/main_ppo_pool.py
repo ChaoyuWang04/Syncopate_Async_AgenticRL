@@ -23,11 +23,32 @@ shuffle=True 给 RandomSampler，否则 SequentialSampler。两个都是均匀�
 两边通过**文件**通信而不是共享内存：rollout 跑在 Ray 的 worker 进程里，
 和 trainer 不同进程；文件是唯一不需要额外接线的通道，而它本来就存在
 （`record_dispatch` 是为分布漂移诊断写的，这里顺带复用）。
+
+★★ 这层壳同时负责选 verl 的哪个 main（2026-08-13 上 4 卡后新增）
+
+    SYNCOPATE_RL_MODE = colocate | one_step_off | fully_async
+
+三个 main 是**三套不同的 trainer**，不是一个开关：
+
+    colocate      verl.trainer.main_ppo                              rollout 和 train 同卡
+    one_step_off  verl.experimental.one_step_off_policy.main_ppo      分卡，落后一步
+    fully_async   verl.experimental.fully_async_policy.fully_async_main  分卡，两个独立池
+
+⚠️⚠️ **补丁必须打两处，否则在 one_step_off 下静默失效**：
+`one_step_off_policy/main_ppo.py` 用的是
+`from verl.trainer.main_ppo import create_rl_sampler` —— 名字在**导入时**就绑进了
+它自己的模块命名空间，改 `verl.trainer.main_ppo.create_rl_sampler` 对它一点用都没有。
+**这正是本文件原注释里预告过的那种失效**（"如果哪天 verl 改成从别处 import"），
+只不过它不是"哪天"，是换个 trainer 就已经发生。⇒ 照旧看 `[pool] 动态分池启用` 那行日志。
+
+⚠️ **`fully_async` 根本不调 `create_rl_sampler`**（它自己排采样计划）
+⇒ **动态分池在那个模式下不生效**，启动时会打一行警告。别把两件事混在一起做对照。
 """
 
 from __future__ import annotations
 
 import os
+import runpy
 import sys
 from pathlib import Path
 
@@ -35,6 +56,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from syncopate.train import verl_patches  # noqa: E402
 from syncopate.train.pool import Pool  # noqa: E402
 
 # 采样器把池子状态存这里，断点续跑时接着用。由 launch_rl 通过环境变量指定。
@@ -119,7 +141,17 @@ class DynamicPoolSampler:
         self.epoch = int(state.get("epoch", 0))
 
 
-def _install() -> None:
+MODE_ENV = "SYNCOPATE_RL_MODE"
+
+# 模式 → (verl 的 main 模块, 该模块里需要打补丁的命名空间)
+_MAINS = {
+    "colocate": "verl.trainer.main_ppo",
+    "one_step_off": "verl.experimental.one_step_off_policy.main_ppo",
+    "fully_async": "verl.experimental.fully_async_policy.fully_async_main",
+}
+
+
+def _install(mode: str) -> None:
     """把 verl 的 create_rl_sampler 换掉。必须在 TaskRunner 跑起来之前做。"""
     from verl.trainer import main_ppo
 
@@ -135,18 +167,53 @@ def _install() -> None:
         )
 
     main_ppo.create_rl_sampler = patched
-    # ⚠️ TaskRunner 里是 `from ... import create_rl_sampler` 还是 `main_ppo.create_rl_sampler`？
-    # 实测是同模块内直接调用（`train_sampler = create_rl_sampler(...)`），
-    # 所以改模块属性就够了；如果哪天 verl 改成从别处 import，这里会**静默失效** ——
-    # 所以 DynamicPoolSampler 启动时会打一行 `[pool] 动态分池启用`，
-    # 日志里没这行就说明补丁没生效。**别只看代码，看那行日志。**
+    # ⚠️ colocate 下 TaskRunner 是同模块内直接调用（`train_sampler = create_rl_sampler(...)`），
+    # 所以改模块属性就够了。
+    #
+    # one_step_off 用的是 `from verl.trainer.main_ppo import create_rl_sampler`（导入时绑名），
+    # 按说改上面这行对它无效 —— 但我们是用 runpy **重新导入**它的（见 main()），
+    # 那次导入发生在这个补丁**之后**，所以它绑到的就是补丁版。
+    # ⇒ 判据还是那一条：日志里有没有 `[pool] 动态分池启用`。**别只看代码，看那行日志。**
 
 
 def main() -> None:
-    _install()
-    from verl.trainer.main_ppo import main as verl_main
+    mode = os.environ.get(MODE_ENV, "colocate")
+    if mode not in _MAINS:
+        raise SystemExit(f"未知的 {MODE_ENV}={mode}，可选：{'/'.join(_MAINS)}")
 
-    verl_main()
+    _install(mode)
+    # verl 自己的 bug 补在这里（见该模块的 docstring）。必须在 verl 的 main 被 import
+    # 之前调 —— 补丁换的是模块属性，import 之后再换就来不及了。
+    verl_patches.apply(mode)
+    print(f"[rl] 模式={mode}  verl 入口={_MAINS[mode]}", flush=True)
+
+    if mode == "colocate":
+        from verl.trainer.main_ppo import main as verl_main
+
+        verl_main()
+        return
+
+    if mode == "fully_async":
+        # 它自己排采样计划，不走 create_rl_sampler ⇒ 分池在这个模式下**不存在**。
+        # 说出来，别让人以为「代码在仓库里」就等于「这一轮生效了」。
+        print("[pool] ⚠️ fully_async 不调 create_rl_sampler ⇒ 动态分池本轮不生效", flush=True)
+
+    # ⚠️⚠️ 两个实验性入口**必须当 `__main__` 跑，不能 import 了再调**（2026-08-13 实测）
+    #
+    #     Primary config module 'verl.experimental.one_step_off_policy.config' not found.
+    #     Check that it's correct and contains an __init__.py file
+    #
+    # 根因：`@hydra.main(config_path="config")` 解析 config_path 的方式取决于
+    # **task function 的 `__module__`** —— 是 `__main__` 就按**文件路径**找，
+    # 否则按**模块**找（要求那个 config 目录是个包）。而实测：
+    #
+    #     verl/trainer/config/__init__.py                        有   ← 所以 colocate 直接 import 能跑
+    #     verl/experimental/one_step_off_policy/config/__init__.py  没有
+    #     verl/experimental/fully_async_policy/config/__init__.py   没有
+    #
+    # 两个实验性配置目录**不是包**，verl 只考虑了 `python -m` 的用法。
+    # runpy 以 `__main__` 跑等价于 `python -m`，且不用碰 site-packages（那是旁路）。
+    runpy.run_module(_MAINS[mode], run_name="__main__")
 
 
 if __name__ == "__main__":

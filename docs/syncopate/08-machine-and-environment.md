@@ -1,0 +1,278 @@
+# Syncopate · 08 — 机器、环境与运行配置
+
+> 2026-08-13 在 4×RTX 5090（RunPod）上从零搭起来并逐条实跑验证过。
+> **这份是"怎么把它跑起来"，方法论和研究结论在 `05-handoff.md`。**
+
+---
+
+## 1 · 硬件画像（实测）
+
+```
+4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 570.195.03  CUDA 12.8  torch 2.9.0+cu128
+CPU   2× EPYC 7543（120 核 / 2 NUMA）      RAM 944 GB
+拓扑  GPU0–3 两两 PHB、全部 NUMA 0 —— **四卡完全对称**
+盘    /workspace 是网络盘（mfs）733T；/ 只有 30G overlay
+      ⇒ HF_HOME、.venv、models、checkpoints 全部必须放 /workspace
+```
+
+🔴 **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起就被驱动关掉了
+PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了**。
+⇒ 卡间通信一律经主机内存中转。
+
+**实测带宽上限：2 卡 all-reduce bus bandwidth ≈ 6.4 GB/s**（256MB 消息）。
+对照 NVLink 的 300–450 GB/s ⇒ **差约 50 倍**。这个数是所有并行策略选择的定量依据。
+
+⬜ 还没测：NCCL 完整带宽曲线、主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，
+会污染所有对照实验）。⚠️ PCIe 空闲时报 Gen1 x16（max Gen4），需在负载下复测。
+
+---
+
+## 2 · 从零搭环境（新机器按顺序做）
+
+```bash
+uv sync --extra train --extra dev          # ← 见 2.1 的三个坑
+python scripts/install_flash_attn_shim.py  # ← 漏了 RL 一启动就 ImportError
+hf download Qwen/Qwen3-4B   --local-dir models/Qwen3-4B     # 7.6G
+hf download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B   # 1.4G，31 个测试要它
+# reference/ 870M 只能手动 scp —— 版权所有（深圳途明智启科技），永不进 git
+python -m pytest -q                        # 应为 246 passed, 0 skipped
+```
+
+### 2.1 依赖的三个坑（都已修进 pyproject / uv.toml）
+
+| 坑 | 表现 | 修法 |
+|---|---|---|
+| **numpy 冲突** | `uv sync` 直接判 unsatisfiable（verl 钉 `<2.0`，我们要 `>=2.2`） | `[tool.uv] override-dependencies` |
+| **numpy 版本** | 装成 2.5 ⇒ **vLLM 起引擎那一刻**才炸（numba 卡 ≤2.2） | 钉 `numpy>=2.2,<2.3` |
+| **tensordict** | verl 依赖表写 `>=0.8.0`，**代码里 `assert >=0.10`** ⇒ 分卡异步必踩 | 钉 `tensordict==0.10.0` |
+| **openpyxl 不在依赖表** | 数据再生链第一步就断 | 已补进 `[project] dependencies` |
+
+⚠️ **uv 有一条警告是错的，别照着"修"**：它说「同目录有 uv.toml ⇒ 整段 `[tool.uv]`
+被忽略」。实测 override 写 `[tool.uv]` 里**能装出来**，挪到 uv.toml 反而 unsatisfiable。
+
+⚠️ **`uv.lock` 在 .gitignore 里** ⇒ 每台机器解析结果可能不同。想要真正可复现，
+该考虑把它放进版本管理。
+
+### 2.2 flash_attn 垫片
+
+verl 0.8 在 CUDA 路径上**无条件** `from flash_attn.bert_padding import ...`，
+不管 `use_remove_padding` 开不开。垫片是纯 PyTorch 的四个 gather/scatter 函数，秒装；
+在 sm_120 上编译真 flash-attn 要一两小时。
+
+⚠️ **「垫片就够用」要限定范围：对正确性够用，对 `use_dynamic_bsz` 的序列打包不够用**
+（见 §4.2）。**装真 flash-attn 是目前最值得做的一项 infra 投资。**
+
+### 2.3 Claude 的项目记忆已经进仓库了
+
+2026-08-13 起放在 **`.claude/memory/`**（原来在 `~/.claude/projects/<slug>/memory/`，
+不进 git、换机器带不走 —— 那是交接文档记过的一条搬家缺口）。
+原位置留了软链指回仓库，读写照常。
+
+⚠️ **新机器 clone 完要把软链重建一次**，做法见 `.claude/memory/README.md`。
+
+### 2.4 git 推送凭据
+
+旧机器靠 VSCode 的 GitHub 登录，换机器就没了。**新服务器上建议一劳永逸配 SSH key 或
+装 gh CLI。**
+
+---
+
+## 3 · 数据再生链（`data/batches/`、`data/sft/`、`data/rl/` 都在 .gitignore 里）
+
+进版本管理的只有**生成脚本**和**源 xlsx**。数据不是 clone 下来的，是跑出来的：
+
+```bash
+python scripts/make_test_external_data.py
+python scripts/ingest_external.py
+python -m syncopate cases generate --spec configs/buckets/v11.yaml --out data/batches/v11
+python scripts/set_tool_menus.py --batch data/batches/v11 --sft-audit _audit/v8_sft_epoch1.json
+python -m syncopate data split --batch data/batches/v11 --out data/splits/v11 \
+       --dead-from _audit/v11_base.json
+python -m syncopate data build --pool sft --batch data/batches/v11 \
+       --out data/sft/v11 --split-dir data/splits/v11 --val-every 6 --model models/Qwen3-4B
+python -m syncopate data build --pool rl  --batch data/batches/v11 \
+       --out data/rl/v11  --split-dir data/splits/v11 --model models/Qwen3-4B
+```
+
+产出：**1370 条 · 17 模板 · EVAL 198 / SFT 434 / RL 738（train 590 + val 148）**
+
+✅ **2026-08-13 实测逐字节可复现**：重跑出来的三桶切分和 git 里的 SHA-256 完全一致。
+
+⚠️ **两个会静默跑错的默认值**：
+- 子命令是 **`cases generate`**，不是 `data generate`；
+- **`set_tool_menus.py --batch` 默认 `data/batches/v8`**，不显式传就改错批次
+  （和 `launch_rl --train-file` 默认指向 v3 同一个形状）。
+- `set_tool_menus` 必须在 generate 之后、split 之前 —— 它改 `tool_menu`，而 split
+  的内容级去重按最终 prompt 算。
+
+⚠️ `_audit/v8_sft_epoch1.json` 已进版本管理（`set_tool_menus` 要读它当干扰项），别删。
+
+---
+
+## 4 · 训练入口与调好的默认值
+
+**入口只有两个，不许再写第三个**（临时脚本会静默地和主路径长出差异，这个项目栽过两次）：
+
+```
+SFT  →  python -m syncopate.train.sft
+RL   →  python -m syncopate.train.launch_rl
+```
+
+### 4.1 SFT
+
+```bash
+python -m syncopate.train.sft --model models/Qwen3-4B \
+  --train-file data/sft/v11/train.parquet --val-file data/sft/v11/val.parquet \
+  --out checkpoints/sft/v11 --epochs 2 --batch-size 1 --grad-accum 4 \
+  --lr 1e-4 --warmup-ratio 0.1 --lora-rank 32 --max-length 6144
+```
+
+实测：单卡 **412 s/epoch**，显存峰值 12.0 GB（稀疏投影已上线，只对被监督的位置做
+lm_head+CE —— 本项目监督占比只有 3.8–4.9%）。
+
+⚠️ **别改 `--batch-size`**：实测 bs=1 反而最快，而且改了要同步改 `--grad-accum`。
+⚠️ v11 最长序列 5806 token < 6144，不会截断。**换数据版本要重新量。**
+
+### 4.2 RL（★ 2026-08-13 调优后，默认值已是最优的那套）
+
+```bash
+python -m syncopate.train.launch_rl --mode one_step_off \
+  --model <merge 后的 SFT 模型> \
+  --train-file data/rl/v11/train.parquet --val-file data/rl/v11/val.parquet \
+  --save-path checkpoints/grpo/<name> --experiment <name> --lora-rank 32 \
+  --steps 150 --train-batch-size 6 --rollout-n 8 --ppo-mini-batch-size 6 \
+  --micro-batch-size 1 --max-num-seqs 64 --object-store-gb 2 \
+  --max-prompt-length 3584 --max-response-length 1536 --save-freq 25 --latency-scale 0.01
+```
+
+★ **RL 起点必须是 merge 后的模型**（`train/merge_adapter.py`）：`launch_rl` 没有加载
+adapter 的入口，而且 verl 用 LoRA 时 reference = 关掉 adapter = **基座**，
+合并之后 reference 才等于 SFT。
+
+**已调优的默认值（全部有实测支撑）**：
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| `--fsdp-size` | **1**（DDP，不切分） | 3 卡 FULL_SHARD 1182 s/步 vs 1 卡不切分 198 s ⇒ **慢 6 倍**。改 DDP 后 **3.00× 完美扩展** |
+| `--dynamic-bsz` | **False** | 实测慢 **2.2×**（垫片下打包让注意力退化成 O(总长²)）。装真 flash-attn 后要重测 |
+| `--trainer-gpus / --rollout-gpus` | 3 / 1 | gen 只占 12%，rollout 不是瓶颈 |
+| `--rollout-gpu-util` | 0.75 | 0.85 会让第一次权重同步 OOM（bucket 也在 rollout 卡上） |
+| `--attention-backend` | TRITON_ATTN | vLLM 自带 FA2 的 sm_120 PTX 比驱动新，编不了 |
+| `--bypass-mode` | **False**（decoupled） | **只有这个模式产出 ESS 等 `rollout_corr/*` 指标**，停止条件 P6 依赖它 |
+| `NCCL_CUMEM_ENABLE=0` | 多卡时自动设 | 见 §5 |
+
+**调优后实测（one_step_off，3 卡 DDP + 1 卡 rollout，稳态）**：
+
+```
+step 49.5 / 50.7 s   ← 重复性很好
+  update_actor    30.0 s   61%
+  update_weights  13.3 s   27%   ← ★ 下一个目标，见下
+  ref              6.0 s   12%
+  gen              4.1 s    8%   ← 异步把它藏掉了（step1 是 89.6 s）
+```
+
+⚠️ **`update_weights` 13.3 s 是未解之谜**：LoRA 只有 132 MB，按 6.4 GB/s 该是毫秒级。
+时间不在传输上。它占 27% 且随训练卡数上升，是异步方案的上限所在。
+
+⚠️ **rollout 卡的显存是反直觉点**：KV 池 110,496 token 听着大，实测**峰值只用 16.7%、
+零 preemption**，排队是 `max_num_seqs` 卡的不是显存卡的。**给 rollout 卡加显存换不来速度。**
+
+### 4.3 `--mode` 的三个值不是一个开关，是三套 trainer
+
+```
+colocate      verl.trainer.main_ppo                      rollout 和 train 同卡（单卡时代唯一选择）
+one_step_off  experimental/one_step_off_policy           分卡、落后一步   ✅ 验证充分
+fully_async   experimental/fully_async_policy            分卡、两个独立池 ⚠️ 第一次尝试
+```
+
+⚠️ **`fully_async` 的数据流模型不同**：rollouter 按 `gen_batch_size=1` 连续产样本，
+trainer 攒够 `ppo_mini_batch_size × require_batches` 就训一步。
+⇒ `data.train_batch_size` **必须是 0**（有硬断言），`rollout.total_rollout_steps` 才是收工点。
+⇒ **动态分池在 fully_async 下不生效**（它不调 `create_rl_sampler`），启动时会打警告。
+
+#### 🔴 `fully_async` 目前跑不了：我们的 AgentLoop 缺一个字段（2026-08-13 实测到这一步）
+
+启动、建池、rollout 生成全都通过，死在 trainer 组装 batch 的那一刻：
+
+```
+detach_utils.py:153  assemble_batch_from_rollout_samples
+TypeError: unsupported operand type(s) for -: 'NoneType' and 'NoneType'
+  ← param_version_diff = [abs(a-b) for a,b in zip(max_global_steps, min_global_steps)]
+```
+
+**根因**：`fully_async` 要求 AgentLoop 给每条轨迹标注**它是用哪个版本的策略生成的**
+（`min_global_steps` / `max_global_steps`）—— 那是它算 staleness 分布和
+partial-rollout 比例的**唯一依据**。verl 自带的 `tool_agent_loop.py:251` 会从
+`output.extra_fields` 里取并向上传，而**我们自己写的 `syncopate/train/verl_agent_loop.py`
+根本没设这两个字段** ⇒ 恒为 None。
+
+⇒ **这不是配置问题，是我们的 AgentLoop 要补的接线。** 修法方向：在 rollout 每一轮拿到
+生成结果时，把引擎返回的策略版本写进 `extra_fields`，多轮取 min/max。
+
+⚠️ 有意思的是：**这个字段正好就是异步研究要量的东西**（每条轨迹落后了几个版本 = staleness 的
+经验分布）。补上它不只是"让 fully_async 能跑"，而是**把 σ²(k) 的真值测量接上** ——
+对照单卡离线合成的 ESS/N=0.846。**优先级因此比"修个 bug"高。**
+
+⇒ 在此之前，**分卡异步用 `--mode one_step_off`**（已连跑四轮全绿，稳态 49.5 s/步）。
+
+---
+
+## 5 · 多卡的三个环境变量（都已在 `launch_rl` 里自动处理）
+
+```
+NCCL_CUMEM_ENABLE=0        多卡时必须
+VLLM_ATTENTION_BACKEND     默认 TRITON_ATTN
+RAY_object_store_memory    --object-store-gb 控制
+```
+
+**NCCL 那条的完整故事**（值得读，因为推理链错过一次）：
+
+```
+症状   transport/shm.cc:590 NCCL WARN Cuda failure 217 'peer access is not supported'
+       ← FSDP 初始化第一次参数广播
+
+原猜想 P2P 全关 ⇒ 设 NCCL_P2P_DISABLE=1        ❌ **实测完全无效**
+
+实测   ① 裸 torchrun（每进程看得见 4 张卡）：默认就通
+       ② 模拟 Ray（每进程只看得见 1 张卡）：
+            默认 ❌ / P2P_DISABLE=1 ❌ / SHM_DISABLE=1 ✅ / CUMEM_ENABLE=0 ✅
+
+真根因 **P2P 缺失 × Ray 只给每个 worker 开放一张卡** 两个条件叠加 ——
+       进程看不见对端设备，SHM 传输要用的 CUDA IPC 建不起来。
+       `NCCL_P2P_DISABLE` 只关 P2P 传输，管不到 SHM 里的 IPC。
+
+选哪个 按带宽定：SHM_DISABLE 2.09 GB/s  vs  CUMEM_ENABLE=0 **6.44 GB/s** ⇒ 选后者
+```
+
+---
+
+## 6 · 给 verl 打的补丁（`syncopate/train/verl_patches.py`）
+
+不 fork、不改 site-packages。目前一条：
+
+**`OneStepOffRayTrainer` 漏调 `_init_dump_executor()`**（`RayPPOTrainer` 和两个
+`FullyAsync*` 都调了，只有它漏）。触发条件是设了 `trainer.rollout_data_dir` ——
+上游大概没开着 dump 跑过异步。
+
+⚠️ **不能用"关掉 dump"绕过**：那份 dump 是分布漂移的一半（dump = 训练到的，
+`dispatched.jsonl` = 下发过的），关掉等于为了跑通把要测的东西关了。
+
+★ 补丁做成子类 + 幂等，上游哪天修了会自动不生效。
+**判据永远是日志**：`[verl-patch] ...` / `[pool] 动态分池启用` / `[rl] 模式=...`
+**这三行没出现就是没接上。**
+
+---
+
+## 7 · 其它运行期须知
+
+- **评测引擎是 vLLM**：198 条 × 8 采样约 11 分钟（旧 HF 引擎要 84 分钟）。
+  ⚠️ 旧 HF 引擎的审计**不能和新审计逐 case 配对**（引擎决定采样内核），
+  要配对比较必须同引擎重跑。
+- **wandb 默认开**，要关得显式 `--no-wandb`。⚠️ 本机**没有 wandb 登录**，
+  当前用 `--wandb-mode offline`，之后 `wandb sync <dir>` 可补传。
+- **磁盘**：verl 0.8 的 FSDP checkpoint manager 存**全量** state_dict，
+  LoRA 下一个 ckpt 8.5 GB，其中 8.22 GB 和基座逐字节相同。
+  `scripts/prune_rl_ckpts.py` 只留 LoRA 键（默认跳过最后一个，保留断点续跑）。
+- **`pkill -f <模式>` 会自匹配**（执行 pkill 的 shell 自己也含该模式）—— 犯过三次。
+- **最可信的不是 commit message，是 `outputs/<日期>/<时刻>/.hydra/overrides.yaml`**
+  —— 那是那次实际跑的全部配置。查"上次到底怎么跑通的"就看它。

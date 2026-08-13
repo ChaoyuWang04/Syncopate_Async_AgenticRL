@@ -1,5 +1,9 @@
-# 本机 ~/.config/uv/uv.toml 把清华源设为默认，但全局代理下国内镜像不通（实测 0 B/s）。
+# 旧机器的 ~/.config/uv/uv.toml 把清华源设为默认，但全局代理下国内镜像不通（实测 0 B/s）。
 # 这里覆盖回官方源（实测 1.47 MB/s）。
+#
+# ⚠️ numpy 的 override 不在这里，在 pyproject.toml 的 `[tool.uv]` 里 —— 原因见那边的注释。
+# 别信 uv 那条「uv.toml 会覆盖掉 [tool.uv]」的警告：2026-08-13 实测，
+# override 写这里 `uv sync` 直接 unsatisfiable，写 `[tool.uv]` 才真的生效。
 [[index]]
 url = "https://pypi.org/simple"
 default = true

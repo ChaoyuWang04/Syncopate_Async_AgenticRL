@@ -8,6 +8,11 @@ dependencies = [
     "pydantic>=2.0",
     "pyarrow>=15.0",
     "pandas>=2.0",
+    # 数据再生链的硬依赖（交接文档 §1.1）：`make_test_external_data.py` 写安全线 xlsx、
+    # `ingest_external.py` 用 pandas 读它，两边都要 openpyxl。
+    # 2026-08-13 搬家时才发现它一直没进依赖表 —— 旧机器上是手动装的，
+    # 于是「数据 100% 脚本可复现」在一台干净机器上第一步就断了。
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -16,8 +21,28 @@ dependencies = [
 # 但那是条陈旧的钉：装上 numpy 1.26 会连锁打断 scipy 1.18（它自己要求 numpy>=2.0），
 # 进而 transformers 导入失败，最后 verl 自己也 import 不了。
 # torch 2.9 / vLLM 0.12 / scipy 1.18 全是 numpy-2 原生的，实测 numpy 2.2.6 整条栈正常。
-train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<3"]
+# ⚠️ numpy 的上界也是刻意的（2026-08-13 实测钉死）：vLLM 的引擎会 import numba，
+# 而 numba 卡 `NumPy <= 2.2`。装成 2.5 的表现是**训练能起、FSDP 能建、
+# 到 vLLM 起引擎那一刻才炸** —— `ImportError: Numba needs NumPy 2.2 or less`。
+# 交接文档以前只写「numpy 必须 2.2.6」没写为什么，这就是为什么。
+# ⚠️ tensordict 也要自己钉（2026-08-13 实测）：verl 的依赖表写的是
+# `tensordict>=0.8.0,<=0.10.0,!=0.9.0`，解析器于是装 0.8.3 —— 但 verl **自己的代码**
+# 里写着 `assert parse_version(tensordict.__version__) >= parse_version("0.10")`
+# （`protocol.py:1108 to_tensordict`）。**声明的下界比代码实际要的低**，上游不一致。
+# 走分卡异步路径时必踩（colocate 不走 to_tensordict，所以以前从没暴露）。
+train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<2.3", "tensordict==0.10.0"]
 dev = ["pytest>=8.0"]
+
+[tool.uv]
+# ★ 上面那条注释只写了结论（numpy 整条栈正常），没写「怎么装得进去」。
+# 2026-08-13 搬到 4 卡机时暴露：verl 0.8.0 的 `numpy<2.0.0` 和我们的 `numpy>=2.2`
+# 是硬冲突，`uv sync` 直接判定 unsatisfiable —— 旧机器上大概是用 uv pip 逐个装绕开了
+# 解析器（旁路，正是本项目 §9.1 反复栽的那种）。这里写成显式 override，让主路径自己能装。
+#
+# ⚠️ uv 会 warning 说「同目录有 uv.toml ⇒ 整段 [tool.uv] 被忽略」。**那条警告是错的**
+# （或至少对 override-dependencies 不成立）：2026-08-13 实测，写这里能装出来，
+# 挪到 uv.toml 反而 unsatisfiable。⇒ 别照警告去"修"它。
+override-dependencies = ["numpy>=2.2,<2.3"]
 
 [build-system]
 requires = ["hatchling"]

@@ -94,7 +94,11 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         "data.return_raw_chat=True",          # AgentLoop 要拿原始 messages
         "data.filter_overlong_prompts=False",
         "data.truncation=error",
-        f"data.train_batch_size={args.train_batch_size}",
+        # ⚠️ fully_async 里 `train_batch_size` **必须是 0**（`fully_async_rollouter.py:414`
+        # 有硬断言）。它的运转方式根本没有"一步取固定条数"这回事：rollouter 按
+        # gen_batch_size=1 连续产样本，trainer 攒够 `ppo_mini_batch_size × require_batches`
+        # 就训一步。⇒ 这个键在两种模式下语义不同，不能共用一个值。
+        f"data.train_batch_size={0 if args.mode == 'fully_async' else args.train_batch_size}",
         f"data.val_batch_size={args.val_batch_size}",
         f"data.max_prompt_length={args.max_prompt_length}",
         f"data.max_response_length={args.max_response_length}",
@@ -103,10 +107,16 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         # ---- 模型 ----
         f"actor_rollout_ref.model.path={model}",
         # remove_padding 需要 flash-attn（verl 的 unpad_input 直接 import flash_attn.bert_padding）。
-        # sm_120 上 flash-attn 目前得自己编译，冒烟阶段先关掉；
-        # 它是真实的效率优化（见 docs/learning-notes/04），正式跑长序列前应该装上再打开。
         f"actor_rollout_ref.model.use_remove_padding={str(args.remove_padding)}",
-        "+actor_rollout_ref.model.override_config.attn_implementation=sdpa",
+        # ★ 2026-08-13 起默认 flash_attention_2 —— 装上了真轮子
+        # （mjun0812/flash-attention-prebuild-wheels 的 2.8.3+cu128torch2.9-cp312，
+        #   cuobjdump 验过 sm_120 kernel 在内；varlen 与逐序列 SDPA 对拍差 7e-3 bf16 量级，
+        #   跨序列隔离精确为 0）。此前写死 sdpa 是垫片时代的产物。
+        # ⚠️ sdpa 回退仍保留（--attn-implementation sdpa），但要知道它的三笔账：
+        #   rmpad 路径下 transformers 4.57 恒物化 [1,1,L,L] mask（连单序列都物化，
+        #   masking_utils.find_packed_sequence_indices 永不返回 None）+ SDPA 有显式
+        #   mask 时用不了内部 flash 后端 + 打包时跨序列象限白算 ⇒ 见 dynamic_bsz 注释。
+        f"+actor_rollout_ref.model.override_config.attn_implementation={args.attn_implementation}",
 
         # ---- ★★ 融合 logprob/熵 kernel：RL 侧的「稀疏投影」----
         #
@@ -162,7 +172,56 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.actor.use_kl_loss={str(args.use_kl_loss)}",
         "actor_rollout_ref.actor.kl_loss_coef=0.001",
         "actor_rollout_ref.actor.entropy_coeff=0",
-        "actor_rollout_ref.actor.use_dynamic_bsz=False",
+
+        # ---- ★★★ 训练侧的两个大旋钮（2026-08-13 在 4 卡上实测出来的）----
+        #
+        # 背景：分卡异步跑通后的第一份耗时分解（1 训练卡 + 1 rollout 卡，稳态）：
+        #     step 116.0s = update_actor 86.3 (74%) + ref 17.3 (15%)
+        #                 + update_weights 12.3 (11%) + gen 4.4 (4%)
+        # ⇒ **瓶颈已经不是 rollout 了**，是训练侧的前向/反向。
+        #
+        # ① `fsdp_size`：**在这台机器上必须是 1**。
+        #    create_device_mesh(world_size, fsdp_size)（fsdp/utils.py:40）：
+        #        fsdp_size <= 0 或 >= world_size  ⇒ 一维 mesh，全部参数切分（FULL_SHARD）
+        #        否则                             ⇒ (world_size//fsdp_size, fsdp_size)，
+        #                                            维度 ["ddp", "fsdp"]
+        #    取 1 ⇒ fsdp 维长度为 1 = **不切分**，只在 ddp 维 all-reduce 梯度 = **DDP**。
+        #    ⚠️ 实测代价：trainer 3 卡跑 FULL_SHARD 每步 1182s，1 卡不切分 198s ——
+        #    **多两张卡慢 6 倍**。因为 5090 没有 P2P，卡间只有 6.4 GB/s（经主机中转），
+        #    而 FULL_SHARD 每层前向反向都要把 8GB 权重 all-gather 回来。
+        #    LoRA 下 DDP 只同步 66M 梯度（约 260MB ⇒ 40ms），三个数量级的差距。
+        f"actor_rollout_ref.actor.fsdp_config.fsdp_size={args.fsdp_size}",
+        f"actor_rollout_ref.ref.fsdp_config.fsdp_size={args.fsdp_size}",
+
+        # ② `use_dynamic_bsz`：按 **token 预算**打包，而不是按固定条数。
+        #
+        # ⛔⛔ **在本机是倒退，默认关掉了。** 原猜想是「序列才 4.1k token，
+        # 一条一条算喂不饱 5090，打包成 16k 应该更快」。实测（同为 step 1，1 张训练卡）：
+        #        静态 micro_batch=1   update_actor  84.5 s
+        #        dynamic 16384        update_actor 184.9 s   ← **慢 2.19×**
+        #    3 卡上同样的比值（187.8 / 84.5 ≈ 2.2），说明和卡数无关。
+        #
+        # 根因（2026-08-13 读码+CPU 实验证实，比原推断多两层）：垫片时代被迫走 sdpa，而
+        # verl rmpad 传 attention_mask=None + 打包 position_ids —— 这套约定是为 flash-attn
+        # varlen 设计的。落到 sdpa 上，transformers 4.57 的 masking_utils 走「物化 mask」路：
+        #   ① 跨序列象限白算再 mask 掉：(16k)² ≈ 3.2×Σ(5k)²；
+        #   ② mask 本身 16k² bool = 256MB/前向；
+        #   ③ SDPA 拿到显式 mask 后用不了内部 flash 后端（要求 attn_mask=None），落到
+        #      efficient/math。三笔叠加 ⇒ 2.2×。
+        # 两个附带发现：
+        #   🍀 正确性是运气好——4.57 的 find_packed_sequence_indices 把块对角 mask 建对了，
+        #      旧版 transformers 会静默跨序列泄漏；
+        #   🔴 该函数**永不返回 None**（单序列也返回全零张量）⇒ allow_is_causal_skip 恒
+        #      False ⇒ **不打包的 rmpad 基线同样在物化 mask 的慢路径上**。
+        # ⇒ 已装真 flash-attn 2.8.3（attn_implementation 默认已切 flash_attention_2），
+        #    varlen 按 cu_seqlens 分段、不物化 mask ⇒ **这一条要重测，大概率翻过来**。
+        #
+        # ⚠️ 它同时管住 ref（`log_prob_use_dynamic_bsz` 默认跟随这个开关），所以 ref 一起变慢。
+        f"actor_rollout_ref.actor.use_dynamic_bsz={str(args.dynamic_bsz)}",
+        f"actor_rollout_ref.actor.ppo_max_token_len_per_gpu={args.max_token_len_per_gpu}",
+        f"actor_rollout_ref.ref.log_prob_max_token_len_per_gpu={args.max_token_len_per_gpu}",
+        f"actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu={args.max_token_len_per_gpu}",
+
         f"actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu={args.micro_batch_size}",
         f"actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu={args.micro_batch_size}",
 
@@ -241,7 +300,7 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"trainer.project_name={args.project}",
         f"trainer.experiment_name={args.experiment}",
         f"trainer.logger=[{args.logger}]",
-        "trainer.n_gpus_per_node=1",
+        f"trainer.n_gpus_per_node={args.trainer_gpus}",
         "trainer.nnodes=1",
         "trainer.total_epochs=1",
         f"trainer.total_training_steps={args.steps}",
@@ -254,6 +313,93 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"trainer.test_freq={args.test_freq}",
         "trainer.resume_mode=disable",
     ]
+
+    # ---- ★★★ 分卡异步：rollout 和 training 各占各的卡（2026-08-13 上 4 卡后新增）----
+    #
+    # verl 的两条异步路径**都要求 rollout 和 training 不同卡**，这是第二研究目标
+    # （异步 agentic RL）在单卡上一直卡着的原因：
+    #     one_step_off_policy/ray_trainer.py:89   assert not self.hybrid_engine
+    #     fully_async_policy                      trainer_pool 和 rollout 是两个独立资源池
+    #
+    # ⚠️ 这**不是一个开关**，是换了一整套 trainer：不同的 hydra 根配置
+    # （`one_step_off_ppo_trainer` / `fully_async_ppo_trainer`）、不同的 worker 栈
+    # （`separation.engine_workers.DetachActorWorker`，不是 colocate 那套 FSDP worker）、
+    # 不同的入口 main。⇒ 由 `main_ppo_pool` 按 SYNCOPATE_RL_MODE 分发。
+    if args.mode != "colocate":
+        overrides += [
+            # ⚠️ 上游 bug：`one_step_off_ppo_trainer.yaml` 的 searchpath 写的是
+            #     hydra.searchpath: [file://verl/trainer/config]
+            # 这是**相对 CWD** 的路径 —— 只有在 verl 源码仓库根目录下跑才找得到。
+            # 我们从自己的仓库根跑，于是 `Could not load 'ppo_trainer'`。
+            # （同目录的 `fully_async_ppo_trainer.yaml` 写的是正确的 `pkg://verl.trainer.config`，
+            #   所以这是 one_step_off 独有的疏漏，不是我们配错了。）
+            # ⇒ 命令行覆盖成 pkg://，对两个模式都正确。
+            "hydra.searchpath=[pkg://verl.trainer.config]",
+            # colocate 的反面。ray_trainer.py:89 那条 assert 就是查它。
+            "actor_rollout_ref.hybrid_engine=False",
+            # 顶层 `rollout` 节是异步配置独有的（不是 actor_rollout_ref.rollout）
+            f"rollout.n_gpus_per_node={args.rollout_gpus}",
+            "rollout.nnodes=1",
+            # ---- ★★ 权重同步的缓冲区（分卡模式独有的一笔显存开销）----
+            #
+            # 分卡之后 trainer 每隔几步要把权重推给 rollout 卡，走 NCCL checkpoint engine。
+            # 它会在 **rollout 那张卡上**分配一个 bucket 大小的暂存区
+            # （`nccl_checkpoint_engine.py:142 prepare`）。
+            #
+            # ⚠️ 2026-08-13 实测：这笔钱**必须提前从 vLLM 的份额里扣掉**，否则第一次
+            # 权重同步就 OOM —— 而它发生在第一步训练之后，前面所有东西都建好了才炸，
+            # 是最贵的一种失败。0.85 那次的账：
+            #     vLLM 0.85 × 31.37 = 26.66 GB 常驻
+            #     CheckpointEngineWorker 自己 2.58 GB + bucket 2.00 GB = 4.58 GB
+            #     31.37 − 26.66 = 4.71 GB 可用 ⇒ 差 0.13 GB，贴着墙 ⇒ 挂
+            # ⇒ 默认降到 0.75（vLLM 23.5 GB，留 7.8 GB），并把 bucket 做成显式参数。
+            f"actor_rollout_ref.rollout.checkpoint_engine.update_weights_bucket_megabytes"
+            f"={args.weight_sync_bucket_mb}",
+
+            # ---- ★★★ staleness 修正：**必须显式设成 decoupled** ----
+            #
+            # ⚠️ verl 的两个异步配置都把 `bypass_mode` 设成了 True（全局默认是 False）。
+            # 它不是"跳过修正"，是两种修正模式之一：
+            #     True  bypass    两个 policy：old_log_prob := rollout_log_prob，
+            #                     修正靠 PPO ratio r = π_θ/π_rollout 本身 + clip
+            #     False decoupled 三个 policy：额外重算 old_log_prob，**显式 IS 权重**
+            #
+            # 🔴 **选 decoupled 的真正理由不是修正强弱，是「有没有刹车」**：
+            # verl 自己的注释（`separation/ray_trainer.py:590`）写着
+            #     "Compute rollout correction: IS weights, rejection sampling, and metrics
+            #      Only runs in decoupled mode ... In bypass mode, this is skipped"
+            # ⇒ **bypass 模式下 `rollout_corr/*` 一整套指标（ESS / IS ratio 分布 /
+            #    超界比例）根本不产出**。2026-08-13 实测：one_step_off 跑完三步，
+            #    把整个 step 的指标键全列出来核对，一个 rollout_corr 都没有。
+            #
+            # 而 `06-rl-run-protocol.md` 的停止条件 P6 是「**ESS/N 跌破 0.3 立即停**」。
+            # 没有这个数 = 没有刹车，而 fully_async 的 staleness 比 one_step_off 大得多，
+            # 正是最需要刹车的场景。
+            # ⇒ 代价：每步多一次 actor 前向算 old_log_prob（约 +6–10 s）。**值得。**
+            f"algorithm.rollout_correction.bypass_mode={args.bypass_mode}",
+        ]
+        if args.mode == "fully_async":
+            # ⚠️ fully_async 的 rollout 计划是**另一套键**，和 actor_rollout_ref.rollout.* 平行。
+            # 它按「攒够 ppo_mini_batch_size × require_batches 条样本就训一步」运转，
+            # 而 rollouter 自己按 total_rollout_steps 收工。
+            # ⇒ 要跑满 N 个训练步，rollout 侧至少要产出 N × mini_batch × require_batches 条。
+            rollout_steps = args.steps * args.ppo_mini_batch_size * args.require_batches
+            overrides += [
+                f"rollout.n={args.rollout_n}",
+                # `fully_async_rollouter.py:415` 有硬断言 assert gen_batch_size == 1
+                "data.gen_batch_size=1",
+                f"rollout.total_rollout_steps={rollout_steps}",
+                f"async_training.require_batches={args.require_batches}",
+                f"async_training.staleness_threshold={args.staleness_threshold}",
+                f"async_training.trigger_parameter_sync_step={args.sync_every}",
+                # ⚠️ partial_rollout=True 会把被打断的长轨迹续跑。它直接关系到
+                # 「异步会不会系统性丢掉长任务」这个问题（分布漂移那条线），
+                # 所以做成显式参数，别让它藏在 verl 的默认值里。
+                f"async_training.partial_rollout={args.partial_rollout}",
+                # rollouter 的收工点是 min(total_rollout_steps, len(dataloader)×total_epochs)
+                # ⇒ epoch 数必须够，否则 rollout 提前停、训练步数达不到。
+                f"trainer.total_epochs={max(1, -(-rollout_steps // 590) + 1)}",
+            ]
 
     # ---- ★ 改动 2：LoRA ----
     if args.lora_rank > 0:
@@ -284,6 +430,59 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
     return overrides + list(args.extra)
 
 
+def _visible_gpu_count() -> int:
+    """当前进程能看到几张卡。优先信 CUDA_VISIBLE_DEVICES —— 这条线上最容易搞错的
+    就是「机器上有 4 张」和「这次跑能用几张」不是一回事。"""
+    vis = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if vis is not None:
+        return len([x for x in vis.split(",") if x.strip() != ""])
+    try:
+        out = subprocess.run(["nvidia-smi", "--list-gpus"], capture_output=True, text=True, check=True)
+        return len([ln for ln in out.stdout.splitlines() if ln.strip()])
+    except Exception:
+        return 0
+
+
+def _resolve_topology(args: argparse.Namespace) -> None:
+    """把「模式」翻译成卡怎么分、vLLM 拿多少显存，并且**当场校验**。
+
+    ⚠️ 这里刻意做成硬失败而不是自动降级：分卡模式静默退回单卡，
+    表现是「跑起来了、但测的根本不是异步」——本项目最怕的那种失效
+    （交接文档 §15：机制在，但没接上）。
+    """
+    total = _visible_gpu_count()
+
+    if args.mode == "colocate":
+        if args.trainer_gpus is None:
+            args.trainer_gpus = 1
+        if args.rollout_gpu_util is None:
+            args.rollout_gpu_util = 0.40
+        args.rollout_gpus = 0          # colocate 没有独立的 rollout 池
+        return
+
+    # ---- 分卡模式 ----
+    if total and total < 2:
+        raise SystemExit(
+            f"--mode {args.mode} 要求 rollout 和 training 在不同 GPU 上，当前只看到 {total} 张卡。\n"
+            "  （verl 的两条异步路径都有这个硬前提：one_step_off 有 `assert not hybrid_engine`，\n"
+            "    fully_async 的 trainer_pool 和 rollout 是两个独立资源池。）")
+    if args.trainer_gpus is None:
+        args.trainer_gpus = max(1, total - args.rollout_gpus) if total else 1
+    if args.rollout_gpu_util is None:
+        # rollout 独占整张卡，没有 actor 和它抢 —— colocate 那套 0.40 的账在这里不成立。
+        # 但**也不是想给多少给多少**：权重同步的 bucket 也在这张卡上（见 build_overrides
+        # 里的账本）。0.85 实测第一次同步就 OOM ⇒ 0.75，留 7.8 GB 给同步和碎片。
+        args.rollout_gpu_util = 0.75
+
+    used = args.trainer_gpus + args.rollout_gpus
+    if total and used > total:
+        raise SystemExit(
+            f"卡不够：trainer {args.trainer_gpus} + rollout {args.rollout_gpus} = {used}，"
+            f"但只有 {total} 张。")
+    if total and used < total:
+        print(f"[拓扑] ⚠️ 只用了 {used}/{total} 张卡，剩下 {total - used} 张闲着", flush=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
@@ -306,11 +505,43 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-response-length", type=int, default=2048)
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--agent-workers", type=int, default=1)
-    parser.add_argument("--rollout-gpu-util", type=float, default=0.40,
+    parser.add_argument("--rollout-gpu-util", type=float, default=None,
                         help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
                              "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache。"
-                             "0.40 是 2026-08-13 实测值：KV 池 4.19GB/30528 token，"
-                             "actor 峰值 13.9GB / 上限 18.8GB")
+                             "不传则按模式取：colocate 0.40（2026-08-13 实测：KV 池 4.19GB/"
+                             "30528 token，actor 峰值 13.9GB / 上限 18.8GB）；"
+                             "分卡模式 0.85（rollout 独占整张卡，没人和它抢）")
+
+    # ---- ★★★ 分卡异步（4 卡才有的东西）----
+    parser.add_argument("--mode", default="colocate",
+                        choices=["colocate", "one_step_off", "fully_async"],
+                        help="colocate=rollout 和 train 同卡（单卡时代唯一能跑的）；"
+                             "one_step_off=分卡、落后一步；fully_async=分卡、两个独立池。"
+                             "★ 后两个**要求至少 2 张卡**，是第二研究目标的入口。")
+    parser.add_argument("--trainer-gpus", type=int, default=None,
+                        help="训练池的卡数。不传：colocate 用 1，分卡模式用「总卡数 − rollout 卡数」")
+    parser.add_argument("--rollout-gpus", type=int, default=1,
+                        help="rollout 池的卡数（只在分卡模式下有意义）。"
+                             "⚠️ agentic 负载的 rollout 很重，最优配比大概率不是 2+2，本身就是个实验")
+    parser.add_argument("--weight-sync-bucket-mb", type=int, default=2048,
+                        help="分卡模式：权重从 trainer 推给 rollout 时的暂存区大小（MB）。"
+                             "★ 它占的是 **rollout 卡**的显存，必须和 --rollout-gpu-util "
+                             "一起算账，否则第一次权重同步才 OOM（见代码里的账本）")
+    parser.add_argument("--bypass-mode", default="False", choices=["True", "False"],
+                        help="staleness 修正的模式。★ **默认 False（decoupled）**：三个 policy、"
+                             "显式 IS 权重，**而且只有这个模式产出 ESS 等 rollout_corr/* 指标** "
+                             "—— 停止条件 P6「ESS/N<0.3 立即停」依赖它。"
+                             "verl 的异步配置默认 True（bypass），那样跑等于没有刹车")
+    parser.add_argument("--require-batches", type=int, default=1,
+                        help="fully_async：攒够几个 mini-batch 才训一步")
+    parser.add_argument("--staleness-threshold", type=float, default=0.1,
+                        help="fully_async：允许的样本陈旧度上限")
+    parser.add_argument("--sync-every", type=int, default=4,
+                        help="fully_async：每几步把权重推给 rollout 池")
+    parser.add_argument("--partial-rollout", default="True", choices=["True", "False"],
+                        help="fully_async：权重同步时被打断的轨迹要不要续跑。"
+                             "★ 关掉它，长轨迹会被系统性丢掉 —— 而长链正是 agentic 的核心能力，"
+                             "这条直接关系到分布漂移那条研究线")
     parser.add_argument("--object-store-gb", type=int, default=2,
                         help="Ray 对象存储上限(GB)。默认按 RAM 的 30%% 预留，在 30GB 机器上会把 vLLM 和 trainer 挤死")
     parser.add_argument("--max-num-seqs", type=int, default=64,
@@ -322,20 +553,39 @@ def main(argv: list[str] | None = None) -> int:
     # vLLM 第一次 `sleep()` 时静默杀掉 VllmWorker。⇒ 保持 False，要开先单独验。
     parser.add_argument("--param-offload", default="False", choices=["True", "False"],
                         help="rollout 期间把 actor 参数挪到 CPU。默认 False（实测跑通的那次就是 False）")
+    parser.add_argument("--fsdp-size", type=int, default=1,
+                        help="FSDP 的切分组大小。★ **本机默认 1 = 不切分 = DDP**。"
+                             "-1 是 verl 的默认（全部切分 / FULL_SHARD），"
+                             "在这台没有 P2P 的机器上实测慢 6 倍，别用")
+    parser.add_argument("--dynamic-bsz", default="False", choices=["True", "False"],
+                        help="按 token 预算打包 micro-batch。⛔ **本机实测是倒退（慢 2.2×）**，"
+                             "默认关。原因见 build_overrides 里的注释：我们的 flash-attn 是垫片，"
+                             "打包后注意力退化成 O(总长²)。装了真 flash-attn 之后再来重测")
+    parser.add_argument("--max-token-len-per-gpu", type=int, default=16384,
+                        help="--dynamic-bsz 的预算：每个 micro-batch 最多多少 token。"
+                             "★ 这是**显存旋钮**，调大 = 激活值更大 = 更快但更吃显存")
     parser.add_argument("--fsdp-dtype", default="bf16", choices=["bf16", "fp32"],
                         help="FSDP 持有参数的精度。LoRA 下 98.4%% 的参数冻结，"
                              "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")
     parser.add_argument("--lora-rank", type=int, default=0, help="0 = 全参；4B 必须给 32")
     parser.add_argument("--lr", default="1e-6")
     parser.add_argument("--remove-padding", default="True", choices=["True", "False"],
-                        help="抠掉 pad token 再算（5120→~4200）。★ 2026-08-13 实测：本仓库的"
-                             "`scripts/install_flash_attn_shim.py` 垫片就够，**不需要编译 flash-attn**"
-                             "（verl 导入的只是四个纯 PyTorch 的 gather/scatter 函数）")
+                        help="抠掉 pad token 再算（5120→~4200）。2026-08-13 晚起本机已装真"
+                             "flash-attn 2.8.3（预编译轮子，sm_120 kernel 验证过），垫片已退役")
+    parser.add_argument("--attn-implementation", default="flash_attention_2",
+                        choices=["flash_attention_2", "sdpa"],
+                        help="训练侧 attention 实现。默认 flash_attention_2（真轮子已装）。"
+                             "sdpa 是垫片时代的回退项——注意 rmpad 路径下它恒物化 [1,1,L,L] "
+                             "mask 且丢失 fused 后端（见 build_overrides 里的注释），只用于对照/排障")
     parser.add_argument("--no-pool", action="store_true",
                         help="退回 verl 原生的均匀采样（对照组）。默认启用动态分池："
                              "按组内 reward 方差加权，饱和的题降采样但不剔除")
     parser.add_argument("--pool-state", default=None,
                         help="池子状态的落盘路径；不给则放在 save-path 下")
+    parser.add_argument("--attention-backend", default="TRITON_ATTN",
+                        help="vLLM 的注意力后端。★ 本机默认的 FA2 起不来（PTX 工具链比驱动新），"
+                             "TRITON_ATTN 是实测能用且最快的那个。驱动够新的机器上可以换回 "
+                             "FLASH_ATTN")
     parser.add_argument("--vllm-log-level", default="INFO", choices=["INFO", "WARN", "ERROR"],
                         help="vLLM 日志级别。★ 默认 INFO：KV 池大小 / prefix cache 命中率 / "
                              "preemption 全是 INFO 级，verl 默认的 WARN 会把它们全吞掉")
@@ -381,6 +631,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
+    _resolve_topology(args)
 
     # ★ 走我们的薄壳而不是 verl 的入口：它只把训练集采样器换成动态分池，
     # 其余原样交给 verl（见 main_ppo_pool 的模块 docstring）。
@@ -402,9 +653,17 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_POOL_STATE"] = str(
         Path(args.pool_state) if args.pool_state else ROOT / args.save_path / "pool_state.json")
     env["SYNCOPATE_POOL"] = "0" if args.no_pool else "1"
+    # 薄壳按它选 verl 的哪个 main（三套不同的 trainer，不是一个开关）
+    env["SYNCOPATE_RL_MODE"] = args.mode
     # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
     print(f"[实验设定] latency_scale={args.latency_scale}  async_verifier={args.async_verifier}"
           f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})")
+    if args.mode == "colocate":
+        print(f"[拓扑] colocate：rollout 和 train 共用 {args.trainer_gpus} 张卡"
+              f"  vLLM 份额 {args.rollout_gpu_util}")
+    else:
+        print(f"[拓扑] {args.mode}：trainer {args.trainer_gpus} 卡 / rollout {args.rollout_gpus} 卡"
+              f"  vLLM 份额 {args.rollout_gpu_util}")
     env["WANDB_MODE"] = args.wandb_mode
     env.setdefault("WANDB_PROJECT", args.project)
     # ⚠️ 不要设 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True。
@@ -414,6 +673,15 @@ def main(argv: list[str] | None = None) -> int:
     # 参见 pytorch/pytorch#147851。抄配置时最容易连这种坑一起抄过来。
     env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
     env.setdefault("VLLM_USE_V1", "1")
+    # ★★★ vLLM 的注意力后端（2026-08-13 在 4×5090 / 驱动 570.195.03 上实测）
+    #
+    # 默认的 FlashAttention-2 在 sm_120 上走 PTX JIT，而那份 PTX 是用比本机驱动更新的
+    # 工具链编的 ⇒ `CUDA error: the provided PTX was compiled with an unsupported toolchain`。
+    # **模型能加载、引擎能起、第一次生成才炸** —— 前面所有东西都建好了才暴露。
+    #     默认(FA2) ❌   FLASHINFER ❌   TRITON_ATTN ✅   FLEX_ATTENTION ✅
+    # Triton 是本地 JIT，用的就是本机 CUDA 12.8，不存在错配。
+    # ⚠️ setdefault：驱动够新的机器上导出这个变量就能换回 FA2（更快）。
+    env.setdefault("VLLM_ATTENTION_BACKEND", args.attention_backend)
     # ★ Ray 的对象存储默认占 RAM 的 30%（本机 /dev/shm 有 16GB 可用，它就敢要 9GB）。
     #
     # 实测：本机 30.9GB 内存，Ray 报 29.78GB 用满后直接杀 worker，**param_offload
@@ -423,6 +691,33 @@ def main(argv: list[str] | None = None) -> int:
     # 内存吃紧时 Ray 会提前杀 worker。放宽一点，让真正的分配失败自己暴露出来，
     # 而不是被 Ray 的保护机制提前打断（真 OOM 有堆栈，被 Ray 杀掉只有一句话）
     env.setdefault("RAY_memory_usage_threshold", "0.97")
+    # ★★★ 多卡必须设 NCCL_CUMEM_ENABLE=0（2026-08-13 在 4×5090 + Ray 上实测出来的）
+    #
+    # 症状：FSDP 初始化的第一次参数广播直接炸
+    #     transport/shm.cc:590 NCCL WARN Cuda failure 217
+    #     'peer access is not supported between these two devices'
+    #
+    # ⚠️ **根因不是"P2P 关了"那么简单，一开始我就是这么以为的，被自己的测量推翻**：
+    # 裸 torchrun 跑 NCCL all_reduce **默认配置就能通**（每个进程看得见全部 4 张卡）。
+    # 真正的触发条件是 **Ray 给每个 worker 只设一张卡的 CUDA_VISIBLE_DEVICES** ——
+    # 进程根本看不见对端设备，NCCL 的 SHM 传输要用的 CUDA IPC 就开不了。
+    #
+    # 四种配置在「每进程只看得到自己那张卡」下的实测：
+    #     默认                     ❌ 217
+    #     NCCL_P2P_DISABLE=1       ❌ 217   ← 光关 P2P 没用，别照抄网上的偏方
+    #     NCCL_SHM_DISABLE=1       ✅       退回 socket 传输
+    #     NCCL_CUMEM_ENABLE=0      ✅       保留 SHM 传输，走老式 cudaMalloc 的 IPC
+    #
+    # 选后者的依据是带宽（2 卡 all-reduce bus bandwidth，实测）：
+    #     SHM_DISABLE=1     1MB 1.11 GB/s   256MB 2.09 GB/s
+    #     CUMEM_ENABLE=0    1MB 5.20 GB/s   256MB 6.44 GB/s   ← 快 3 倍
+    #
+    # ⚠️ 6.4 GB/s 是这台机器**卡间通信的天花板**（没有 NVLink、没有 P2P、经主机中转），
+    #    记在账上：TP 每层两次 all-reduce 在这个带宽下大概率是负收益，而 LoRA 的
+    #    DDP 只同步 132 MB ≈ 20 ms。这是通信画像的第一个实测点
+    #    （`docs/distributed-training-design-v0.1.md` §2 / D7）。
+    if args.trainer_gpus + args.rollout_gpus > 1:
+        env.setdefault("NCCL_CUMEM_ENABLE", "0")
     return subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode
 
 

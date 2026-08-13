@@ -97,6 +97,24 @@ class VLLMEngine:
                  max_new_tokens: int, temperature: float, gpu_util: float) -> None:
         import itertools
         import logging
+        import os
+
+        # ★★★ 必须在 import vllm 之前设（2026-08-13 在 4×5090 / 驱动 570.195.03 上实测）
+        #
+        # vLLM 自带的 FlashAttention-2（`_vllm_fa2_C.varlen_fwd`）在 sm_120 上走 PTX JIT，
+        # 而那份 PTX 是用比本机驱动更新的工具链编译的：
+        #     CUDA error: the provided PTX was compiled with an unsupported toolchain
+        # ⇒ **模型能加载、引擎能起、一开始生成就炸**（最难查的那种时序）。
+        #
+        # 四个后端的实测：
+        #     默认(FA2)      ❌ unsupported toolchain
+        #     FLASHINFER     ❌
+        #     TRITON_ATTN    ✅   ← 本地 JIT 编译，用的就是本机 CUDA 12.8，不存在错配
+        #     FLEX_ATTENTION ✅
+        #
+        # ⚠️ 用 setdefault：换一台驱动够新的机器时，`export VLLM_ATTENTION_BACKEND=` 之外
+        # 什么都不用改；而且**别把它写死** —— FA2 在能用的机器上更快。
+        os.environ.setdefault("VLLM_ATTENTION_BACKEND", "TRITON_ATTN")
 
         from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
