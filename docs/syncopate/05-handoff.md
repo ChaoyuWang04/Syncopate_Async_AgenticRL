@@ -732,3 +732,147 @@ verl 0.8.0 的 FSDP checkpoint manager 存**全量** state_dict。LoRA 训练下
 ⚠️ **旧的 HF 引擎审计不能和新审计逐 case 配对**（引擎决定采样内核）。
 新审计的 label 带 `[vllm]` 后缀就是为了防混比。要配对比较，**对照组必须同引擎重跑** ——
 好在现在重跑 base 只要十分钟。
+
+---
+
+# ⚙️ Infra 线（Ostinato）· 增量交接
+
+> **2026-08-13 新增。这一节是「另一条线」——推理/训练基础设施的优化，
+> 和上面的数据/训练主线并行推进，共用同一台机器和同一套评测尺子。**
+>
+> 分工：
+> - **`docs/ostinato-project-design-v0.2.md`** —— infra 线的权威设计文档
+>   （负载画像 / 开源格局调查 / 手写算子菜单 K1–K4 / 里程碑 H0–H5 /
+>   §23–28 训练侧显存工程）。**机制和设计不在这里重复，去那份看。**
+> - **`docs/distributed-training-design-v0.1.md`** —— 🆕 4×5090 分布式实验设计
+>   （搬机器之后的施工蓝图，见 §17.6）
+> - **本节** —— 只放「改了训练脚本什么 / 现在该怎么跑 / 哪些结论会影响主线」。
+
+## 17 · Infra 线交接
+
+### 17.1 ★★★ 先看这个：RL 的四个默认值已经改了（不用手动加参数）
+
+**2026-08-13 之前的配置（交接文档 §5 那套）在 v11 上已经跑不起来了**，
+6 次冒烟 3 次 `wake_up` OOM。
+
+⇒ **已把四个默认值改成实测跑通的那套**（理由：这个项目栽过「默认值是个坑」的跟头
+——`--train-file` 默认指向上上版数据那次。**默认值必须是能跑通的那套**）：
+
+```
+--free-cache-engine   True  → False     不加就 wake_up OOM
+--remove-padding      False → True      垫片就够，不用编译 flash-attn
+--fused-kernels       False → True      actor 峰值 −5.0 GB
+--rollout-gpu-util    0.55  → 0.40      实测值
+--vllm-log-level                INFO    新增，否则统计全被 verl 的 WARN 吞掉
+```
+
+所以现在的命令**和以前一样**，不需要额外参数：
+
+```bash
+python -m syncopate.train.launch_rl --model <合并后的 SFT 模型> \
+  --train-file data/rl/v11/train.parquet --val-file data/rl/v11/val.parquet \
+  --save-path checkpoints/grpo/<name> --experiment <name> --lora-rank 32 \
+  --steps 150 --train-batch-size 4 --rollout-n 8 --ppo-mini-batch-size 4 \
+  --micro-batch-size 1 --max-num-seqs 32 --object-store-gb 2 \
+  --max-prompt-length 3584 --max-response-length 1536 --save-freq 25 \
+  --latency-scale 0.01
+```
+
+**实测效果**（2 步冒烟，Qwen3-4B + LoRA r32，单卡 5090）：
+
+| | 旧配置 | 新配置 |
+|---|---|---|
+| 能不能启动 | ❌ wake_up OOM | ✅ |
+| actor 峰值 reserved | 18.76 GB（余量 3.1 GB） | **13.92 GB**（余量 4.9 GB） |
+| KV 池 | 1.06 GB / 7.4k token / 1.5 条序列 | **4.19 GB / 30,528 token / 6 条** |
+| 每步耗时 | — | **91–99 秒** |
+
+三个参数各治什么（**机制详见 ostinato 文档 §26，这里只记结论**）：
+
+- `--free-cache-engine False`：不再每步把 vLLM 的 7.6 GB 权重搬去 CPU 又搬回来。
+  **wake_up OOM 的直接触发点消失。** 代价：vLLM 显存变常驻，actor 上限被压到
+  31.36 − vLLM 份额。
+- `--remove-padding True` + `--fused-kernels True`：logprob 不再物化
+  `[seq_len × 151936]` 的 logits（fp32 3.1 GB×2）。**actor 峰值 −5.0 GB。**
+  ⚠️ 代价：早期实测每步 +21%（0.30 时 121s），但把 gpu_util 提到 0.40 之后
+  反而回落到 91–99s —— 说明那 21% 里有一部分是小 KV 池导致的调度压力。
+- `--rollout-gpu-util 0.40`：actor 省出来的显存还给 KV 池。
+
+★ **`--remove-padding True` 能开，靠的是本仓库自己的垫片**
+（`scripts/install_flash_attn_shim.py`，已装）。**不需要编译真的 flash-attn。**
+2026-08-13 一度以为要编译（sm_120 上一两小时），实测证伪：verl 从 flash_attn 导入的
+只是四个纯 PyTorch 的 gather/scatter 函数。
+
+### 17.2 ★★ 修掉了一个会杀死整个 RL 任务的 bug（rollout_loop）
+
+`rollout_loop` 每轮无条件发生成请求，不检查剩余预算。response 吃满
+`max_response_length` 时，送进引擎的上下文正好 = `max_model_len`，vLLM 抛
+`Prompt length (5120) leaves no room to generate` ⇒ **Ray 把整个训练任务杀掉**。
+
+v8 从没炸是因为轨迹短；**v11 的 GEO(14 步)/ATTR(8–10 步) 第一次把预算真正吃满。**
+已修（剩余 < `MIN_GENERATION_HEADROOM`=64 就标 truncated 收工）+ 守卫测试。
+
+⇒ **长任务会把所有「刚好够用」的边界一次性引爆。M8 之后还会有。**
+
+### 17.3 SFT 的稀疏投影（已上线，命令零改动）
+
+`sft.py::token_losses` 只对**被监督的位置**做 lm_head + CE。
+实测本项目 SFT 数据的**监督占比只有 3.8–4.9%**（平均 5402 token 只有 204 个进 loss）
+⇒ 朴素路径 96% 的 logits 算完就被 `ignore_index` 扔掉。
+
+- 数学等价（loss 与 HF 路径逐位相同），4 条测试守着
+- bs=1 峰值 **16.94 → 10.40 GB**；**T=12288 从 OOM 变成能跑**（16k+ 也行）
+- ⚠️ **别改 `--batch-size`**：实测 bs=1 反而最快（4400 token 的序列在 bs=1
+  就已经喂饱 GPU），而且改了要同步改 `--grad-accum` 保持有效 batch=4 才可比
+- ⇒ **省出的显存应该换「更长的序列」（M8+ 的长轨迹），不是「更大的 batch」**
+
+### 17.4 ★★★ 一个被自己的测量推翻的假设（最值得记的一条）
+
+infra 线原本的核心论点是：
+> 「KV 池太小（1.5 条序列 vs 32 条并发）⇒ 前缀缓存被 LRU 反复踢掉 ⇒
+> 每步重算 prefill ⇒ 量化 KV 扩容能把它救回来」
+
+**实测（gpu_util 0.40，2 步）：**
+
+```
+Prefix cache hit rate:  96.7 – 97.5%     ← 命中率已经接近满分
+GPU KV cache usage:     23.9% / 28.9% / 43.8%   ← 池子只用了不到一半
+Running: 26 reqs, Waiting: 0 reqs        ← 零排队
+Preemption:             一次都没有
+```
+
+**为什么原来的推算错了**（按最坏情况 32 条 × 5120 token 算的）：
+1. 组内 8 路共享的 prompt **只存一份**（radix cache 的本职）⇒ prompt 侧实际只占 4 份；
+2. 多轮 agent 的上下文是**逐步长出来的**，大部分时间在 3.5k 而不是 5120；
+3. agent 的瓶颈是**工具调用的往返**，不是并发 —— 26 条在跑也没排队。
+
+⇒ **「量化 KV 换容量、容量换命中率」这条线在当前负载上没有兑现空间**，
+连带 **QLoRA 的优先级也降到很低**（它的价值本来就是省显存换 KV 池）。
+
+⇒ **这不是失败，是 H0 存在的全部意义**：先测再动手，省掉了 1–2 周去写一个
+解决不存在的问题的 kernel。**下一个该拿 nsys 拆的是「每步 91–99 秒花在哪」——
+KV 池空着、GPU 不排队，时间显然在别处。**
+
+### 17.5 踩到的两个「机制在但没接上」（§15 那个形状的第 6、7 次）
+
+1. **`disable_log_stats=False` 传对了，却一行统计都看不到** ——
+   **verl 把 `VLLM_LOGGING_LEVEL` 硬编码成 `WARN`**（`constants_ppo.py:34`），
+   而 KV 池大小 / 命中率 / preemption **全是 INFO 级**。
+   ⇒ 已加 `--vllm-log-level`（默认 INFO），走 `ray_kwargs.ray_init.runtime_env` 覆盖。
+   **两个开关必须同时开，只开一个等于没开。**
+2. **verl 的融合 kernel 和 `use_remove_padding=False` 不兼容**（实测 AssertionError
+   @ `padding.py:131`）：融合路径返回 padded `[B,T]`，而 `_compute_old_log_prob`
+   无条件按 unpadded 扁平还原。⇒ 两个开关**必须一起开**。
+
+### 17.6 🆕 搬到 4×5090 之后：看 `docs/distributed-training-design-v0.1.md`
+
+那份文档规划了**只有多卡才能做的实验**：异步 RL（rollout/trainer 分卡，
+第二研究目标终于能跑）、并行策略对比（FSDP/TP/PP/SP）、
+**无 NVLink 消费卡的通信画像**（这是和数据中心卡最不一样的地方，也是最有意思的角度）。
+
+⚠️ **本节 §17.1 的三个新参数全是「单卡 colocate」的产物**：
+- `--free-cache-engine False` 治的是 colocate 的 sleep/wake ⇒ **rollout 和 trainer
+  分卡之后这个问题根本不存在**，该改回 True（或者说它不再重要）；
+- `--rollout-gpu-util 0.40` 是和 actor 抢同一张卡算出来的 ⇒ 分卡后可以给到 0.8+；
+- **`--remove-padding` / `--fused-kernels` 是跨机器都成立的**（省的是训练侧显存），
+  4 卡上继续开。
