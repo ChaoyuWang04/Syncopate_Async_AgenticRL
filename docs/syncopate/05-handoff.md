@@ -699,11 +699,40 @@ verl 的 `create_rl_sampler` 写死（`main_ppo.py:348`，无配置挂点），�
 | 目标 | 大小 | 怎么来 |
 |---|---|---|
 | `models/` | 16G | HF 重新下载 Qwen3-4B（合并模型本地重 merge） |
-| `.venv/` | 9.7G | `uv sync`（⚠️ numpy 必须 2.2.6） |
+| `.venv/` | 9.7G | `uv sync`（⚠️ numpy 必须 2.2.6）**＋ 见下面 16.2.1，还差一步** |
 | **`reference/`** | **870M** | ⚠️ **只能手动 scp** —— 版权所有（深圳途明智启科技），永不进 git |
 
 ⚠️ **Claude 的记忆也不在 git 里**（在 `~/.claude/projects/-home-samwang-.../memory/`）。
-换机器要手动拷，或者它的关键内容已经合并进本文档（§13–§16 就是）。
+换机器要手动拷，或者它的关键内容已经合并进本文档（§13–§17 就是）。
+
+#### 16.2.1 🔴 `uv sync` 之后必须补跑一步，否则 RL 直接 import 失败
+
+```bash
+python scripts/install_flash_attn_shim.py     # ← 新机器上别忘了
+```
+
+**垫片装在 `.venv/lib/python3.12/site-packages/flash_attn`，而 `.venv/` 不进 git，
+`uv sync` 也不会装它**（它不是 pip 包，是本仓库的脚本手动铺进去的）。
+
+为什么少了它会直接挂：verl 0.8 的 `attention_utils.py:30` 在 **CUDA 路径上无条件**
+`from flash_attn.bert_padding import ...`（只给 NPU 留了 fallback）
+⇒ **不管 `use_remove_padding` 开不开，没有这个模块 RL 一启动就 ImportError。**
+而 sm_120 上编译真 flash-attn 要一两个小时且可能失败 —— 垫片是纯 PyTorch 实现，
+秒装（详见 §17.1 和脚本自己的文档字符串）。
+
+⚠️ **4 卡新机器上如果换了 Python 版本，路径里的 `python3.12` 也会变**——
+脚本用 `site.getsitepackages()` 自己找，不用手改。
+
+#### 16.2.2 ⚠️ git 推送的凭据也不在 git 里
+
+本机的 push 凭据来自 **VSCode 的 GitHub 登录**（没有 gh CLI / SSH key /
+credential helper）。表现是：`GIT_ASKPASS` 等四个环境变量指向 vscode-server 的
+现存构建和活的 socket，一旦构建被清理就 `鉴权失败`
+（修法：用 `~/.vscode-server/cli/servers/lru.json` 第一位的构建 + 
+`ls -lt /run/user/1000/vscode-git-*.sock` 最新的那个覆盖四个变量）。
+
+⇒ **新服务器上如果不用 VSCode Remote 连，就完全没法 push。**
+建议搬家时**一劳永逸配一个 SSH key 或装 gh CLI**。
 
 ### 16.3 4 卡上要重算的东西
 
