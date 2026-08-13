@@ -83,6 +83,58 @@ def collate(batch: list[dict[str, Any]], pad_token_id: int) -> dict[str, torch.T
     }
 
 
+def _unwrap(model) -> tuple[Any, Any]:
+    """拿到 (transformer 主干, lm_head)。
+
+    PEFT 在外面包了一层，但 LoRA 是**就地替换模块**（nn.Linear → lora.Linear），
+    所以直接调主干仍然走 LoRA 的前向、梯度照样回传到 adapter。
+    """
+    base = model.get_base_model() if hasattr(model, "get_base_model") else model
+    return base.model, base.lm_head
+
+
+def token_losses(model, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+    """★★ 稀疏投影：只对**被监督的位置**做 lm_head + CE。
+
+    返回 (每个被监督 token 的 loss [N], 它属于 batch 里第几条 [N])。
+
+    ★ 为什么不能直接用 `model(**batch).loss`
+    HF 的实现是「先对**所有**位置做 lm_head，再让 CE 用 ignore_index=-100 把不要的扔掉」。
+    在我们的负载上这是巨大的浪费——实测 SFT 数据**监督占比只有 3.8%**
+    （平均每条 5402 token，只有 204 个 token 参与 loss）：
+
+        朴素   logits [5402 × 151936] fp32 = 3.4 GB，其中 96.2% 算完就扔
+        稀疏   logits [ 204 × 151936] fp32 = 0.12 GB
+
+    ⇒ 那张表是全模型最大的瞬态张量，也是 `--batch-size 2` 直接 OOM 的元凶
+    （峰值窗口里同时挂着 logits + fp32 副本 + dlogits ≈ 3 份）。
+
+    为什么占比这么低是**我们这个负载特有**的：prompt 3.2k + 每轮工具返回一大堆，
+    而模型自己说的话很少。通用 SFT 的监督占比通常有 30–50%，所以上游框架
+    默认不做这件事——这是「负载画像决定该优化什么」的又一个例子。
+
+    ⚠️ 数学上和朴素路径**完全等价**（不是近似）：被丢弃位置的 CE 本来就不进 loss，
+    它们的 dlogits 恒为 0。有测试逐位对拍 `model(**batch).loss`。
+    """
+    trunk, lm_head = _unwrap(model)
+    hidden = trunk(input_ids=batch["input_ids"],
+                   attention_mask=batch["attention_mask"]).last_hidden_state
+    # 位置 i 的输出预测位置 i+1 的词 —— 所以要错开一位
+    shift_hidden = hidden[:, :-1, :]
+    shift_labels = batch["labels"][:, 1:]
+    rows, cols = (shift_labels != -100).nonzero(as_tuple=True)
+    if rows.numel() == 0:
+        # 整个 batch 一个监督 token 都没有：返回空张量，调用方跳过
+        return hidden.new_zeros(0), rows
+    # ★ 一次 gather 同时跨 batch 展平 —— batch>1 时每条的监督位置各不相同，
+    # 用 [N, H] 的扁平表示天然处理这种不齐
+    sel_hidden = shift_hidden[rows, cols]                       # [N, 2560]
+    sel_labels = shift_labels[rows, cols]                       # [N]
+    logits = lm_head(sel_hidden).float()                        # [N, 151936]
+    losses = torch.nn.functional.cross_entropy(logits, sel_labels, reduction="none")
+    return losses, rows
+
+
 def token_balanced_weights(rows: list[dict[str, Any]]) -> tuple[list[float], dict[str, Any]]:
     """★ 按 **token 数** 而不是样本数做类别均衡。
 
@@ -165,19 +217,15 @@ def evaluate(model, dataset, device, pad_id: int, batch_size: int) -> dict[str, 
                         collate_fn=lambda b: (collate(b, pad_id), [r["group"] for r in b]))
     for batch, groups in loader:
         batch = {k: v.to(device) for k, v in batch.items()}
-        logits = model(**batch).logits
-        # 逐样本算 loss，才能按组聚合
-        shift_logits = logits[:, :-1].float()
-        shift_labels = batch["labels"][:, 1:]
-        losses = torch.nn.functional.cross_entropy(
-            shift_logits.reshape(-1, shift_logits.size(-1)), shift_labels.reshape(-1),
-            ignore_index=-100, reduction="none").view(shift_labels.shape)
-        valid = (shift_labels != -100)
+        # 走和训练同一条稀疏投影路径（rows 记着每个 loss 属于 batch 里第几条，
+        # 按组聚合要用）—— 评测和训练用同一个函数，不留第二条路径
+        losses, rows = token_losses(model, batch)
         for i, group in enumerate(groups):
-            n = int(valid[i].sum())
+            mine = rows == i
+            n = int(mine.sum())
             if n == 0:
                 continue
-            loss_i = float(losses[i][valid[i]].sum())
+            loss_i = float(losses[mine].sum())
             by_group.setdefault(group, []).append((loss_i, n))
             totals[0] += loss_i
             totals[1] += n
@@ -337,7 +385,11 @@ def main(argv: list[str] | None = None) -> int:
         optimizer.zero_grad(set_to_none=True)
         for micro_step, batch in enumerate(train_loader, start=1):
             batch = {k: v.to(device) for k, v in batch.items()}
-            loss = model(**batch).loss / args.grad_accum
+            token_loss, _ = token_losses(model, batch)
+            if token_loss.numel() == 0:
+                continue                       # 这一条没有监督 token，跳过
+            # mean over 被监督 token —— 和 HF 的 `model(**batch).loss` 同口径
+            loss = token_loss.mean() / args.grad_accum
             loss.backward()
             running += float(loss) * args.grad_accum
             seen += 1
