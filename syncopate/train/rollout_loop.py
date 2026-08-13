@@ -81,6 +81,12 @@ class GenerateFn(Protocol):
                  sampling_params: dict[str, Any]) -> Awaitable[Any]: ...
 
 
+# 再发一次生成请求所需的最小剩余预算。低于它就收工：
+# ①<1 时引擎直接报错并杀死整个任务（实测，见循环里的注释）；
+# ②只剩几十个 token 也吐不出完整的 tool_call/终答，白烧一次往返。
+MIN_GENERATION_HEADROOM = 64
+
+
 @dataclass
 class RolloutConfig:
     max_assistant_turns: int = 8
@@ -205,6 +211,23 @@ async def run_rollout(
     tool_seconds = 0.0
 
     while step < config.max_assistant_turns:
+        # ★★ 预算耗尽就收工 —— 不能再发一次生成请求。
+        #
+        # 2026-08-13 实测炸过：response 预算用满（1536）时，送进引擎的上下文
+        # 正好等于 max_model_len（3584+1536=5120），vLLM 直接抛
+        # `Prompt length (5120) leaves no room to generate` 并**杀掉整个训练任务**。
+        #
+        # 为什么以前没炸而现在炸：v11 的 GEO(14 步)/ATTR(8-10 步) 轨迹变长了，
+        # 才第一次把 1536 的 response 预算真正吃满。**这是长任务暴露的边界 bug，
+        # 不是新引入的**——同一条循环在 eval 里不炸，只因为那边 max_model_len
+        # 留了 4096 的多轮累积余量。
+        #
+        # 阈值不取 1 而取 64：只剩几个 token 时就算能发出去，也吐不出一个完整的
+        # tool_call 或终答，白烧一次往返。截断由 trajectory.truncated 记账，
+        # 和下面 `added == 0` 那条出口是同一套语义。
+        if config.max_response_length - len(response_ids) < MIN_GENERATION_HEADROOM:
+            trajectory.truncated = True
+            break
         step += 1
 
         # ---- 1. 生成 ----

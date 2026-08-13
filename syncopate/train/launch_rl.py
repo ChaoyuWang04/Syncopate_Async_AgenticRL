@@ -108,6 +108,35 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.model.use_remove_padding={str(args.remove_padding)}",
         "+actor_rollout_ref.model.override_config.attn_implementation=sdpa",
 
+        # ---- ★★ 融合 logprob/熵 kernel：RL 侧的「稀疏投影」----
+        #
+        # 同一个病：算 log_prob 要先物化 logits [micro_bs × seq_len × 151936]，
+        # 5120 token 的序列 fp32 就是 3.1 GB，前向反向各一份。verl 的融合实现
+        # 边算边归约，logits 从不落地（dense_common 分支覆盖 Qwen3）。
+        #
+        # 省下来的显存不是白省的 —— 它直接变成 `--rollout-gpu-util` 的额度，
+        # 也就是 vLLM 的 KV 池（现在只有 ~1.8 GB / 12.5k token，是 preemption 的根源）。
+        # **这是 Ostinato 的因果链在训练侧的第一个可执行落点。**
+        #
+        # ⚠️⚠️ **2026-08-13 实测：本机现在开不了，不是没试过。**
+        #
+        #     AssertionError @ verl/workers/utils/padding.py:131
+        #     no_padding_2_padding: sequence_offsets[-1] != values.shape[0]
+        #
+        # 根因：`dense_common.forward_with_torch_backend` 返回的 log_probs/entropy
+        # 形状跟着 hidden_states 走 —— `use_remove_padding=False` 时是 **padded [B, T]**，
+        # 而 `_compute_old_log_prob` 无条件按 **unpadded 扁平 [总token数]** 去还原。
+        # ⇒ **verl 0.8 的融合 kernel 路径假定了 `use_remove_padding=True`。**
+        #
+        # 而 remove_padding 需要 flash-attn，sm_120 上要自己编译（已知缺口 🟡）。
+        # ⇒ 解锁顺序是「先装 flash-attn 打开 remove_padding，再开这个」，
+        #   或者自己写一版不依赖 unpad 契约的融合 kernel（Ostinato K1 的 RL 变体）。
+        #
+        # ⚠️ 即使解锁了也不设默认开：数学等价但浮点路径不同，logprob 有 1e-6 级差异
+        # ⇒ TIS 的 importance ratio 跟着动，要配 EVAL 配对回归才能上。
+        f"actor_rollout_ref.model.use_fused_kernels={str(args.fused_kernels)}",
+        f"actor_rollout_ref.model.fused_kernel_options.impl_backend={args.fused_kernels_backend}",
+
         # ---- ★ 改动 1：关掉 offload（本机瓶颈是内存不是显存）----
         f"actor_rollout_ref.actor.fsdp_config.param_offload={args.param_offload}",
         "actor_rollout_ref.actor.fsdp_config.optimizer_offload=False",
@@ -150,7 +179,36 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         # 而这块显存在 sleep/wake 循环里每轮都要重新申请 —— 实测 wake_up 就死在这。
         f"actor_rollout_ref.rollout.max_num_seqs={args.max_num_seqs}",
         "actor_rollout_ref.rollout.enforce_eager=True",
-        "actor_rollout_ref.rollout.free_cache_engine=True",
+        # ---- ★★★ H1a：要不要每步把 vLLM 的权重搬去 CPU 再搬回来 ----
+        #
+        # `free_cache_engine=True`（verl 默认）= 每步 sleep/wake：
+        #   sleep    vLLM 的 7.6 GB 权重 → CPU，KV 池丢弃
+        #   wake_up  7.6 GB CPU → GPU，KV 池重建   ← **实测就死在这一步**
+        #
+        # 2026-08-13 实测：这条路在 v11 上**起不来**（6 次冒烟 3 次 wake_up OOM，
+        # `CUDA Error: out of memory at cumem_allocator.cpp:112`）。根因不是显存总量不够
+        # （10.49 + 9.41 = 19.9 GB，离 31.36 还远），而是 wake_up 要**一次性映射
+        # 7.6 GB 连续物理页**，而 PyTorch 缓存分配器占着的 reserved 不还给驱动。
+        #
+        # ⚠️ 注意别和「权重同步」搞混（源码查证过，我自己先搞混过一次）：
+        # verl 的同步**本来就是 adapter-only**（首次推基座，之后 TensorLoRARequest
+        # 只推 132 MB，见 vllm_rollout/utils.py:262）。**搬 7.6 GB 的是 sleep/wake 本身。**
+        #
+        # `False` ⇒ `sleep()` 开头直接 return（vllm_async_server.py:626），
+        # 权重常驻 GPU、永不搬运，OOM 的触发点整个消失。
+        # 代价：vLLM 的 gpu_util 份额变成**常驻**，actor 的可用空间被压到
+        # 31.36 − 9.41 ≈ 21.9 GB —— 而 v8 实测 actor 峰值 21.08 GB，**贴边**。
+        # ⇒ 所以这个开关必须和「融合 logprob kernel」（去掉 3.1 GB 的 logits 物化）
+        #   配套，否则只是把 OOM 从 wake_up 挪到训练侧。
+        f"actor_rollout_ref.rollout.free_cache_engine={str(args.free_cache_engine)}",
+        # ---- ★ 让 vLLM 的引擎统计真的打出来（H0 的核心观测）----
+        #
+        # 坑：`disable_log_stats=False` 传对了也看不到任何统计行 ——
+        # **verl 把 `VLLM_LOGGING_LEVEL` 硬编码成 `WARN`**（constants_ppo.py:34），
+        # 而吞吐 / prefix cache 命中率 / preemption / KV 池大小全是 **INFO 级**。
+        # ⇒ 两个开关必须同时开，只开一个等于没开。
+        # `main_ppo.py:77` 用 OmegaConf.merge 合并，我们的值覆盖它的默认值。
+        f"+ray_kwargs.ray_init.runtime_env.env_vars.VLLM_LOGGING_LEVEL={args.vllm_log_level}",
         # ---- H0 观测仪：vLLM 周期性统计（吞吐 / prefix cache 命中率 / preemption 次数）----
         # 纯打日志不改行为。「训练脚本的默认值必须是跑完就有记录」的推理侧版本：
         # KV 池会不会踢人、踢多凶，这三个数字以前从来没人看过。
@@ -248,9 +306,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-response-length", type=int, default=2048)
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--agent-workers", type=int, default=1)
-    parser.add_argument("--rollout-gpu-util", type=float, default=0.55,
+    parser.add_argument("--rollout-gpu-util", type=float, default=0.40,
                         help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
-                             "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache")
+                             "自己的模型权重(4B bf16≈8GB)也装进这个预算里，剩下的才是 KV cache。"
+                             "0.40 是 2026-08-13 实测值：KV 池 4.19GB/30528 token，"
+                             "actor 峰值 13.9GB / 上限 18.8GB")
     parser.add_argument("--object-store-gb", type=int, default=2,
                         help="Ray 对象存储上限(GB)。默认按 RAM 的 30%% 预留，在 30GB 机器上会把 vLLM 和 trainer 挤死")
     parser.add_argument("--max-num-seqs", type=int, default=64,
@@ -267,8 +327,30 @@ def main(argv: list[str] | None = None) -> int:
                              "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")
     parser.add_argument("--lora-rank", type=int, default=0, help="0 = 全参；4B 必须给 32")
     parser.add_argument("--lr", default="1e-6")
-    parser.add_argument("--remove-padding", default="False", choices=["True", "False"],
-                        help="需要 flash-attn；sm_120 上要自己编译")
+    parser.add_argument("--remove-padding", default="True", choices=["True", "False"],
+                        help="抠掉 pad token 再算（5120→~4200）。★ 2026-08-13 实测：本仓库的"
+                             "`scripts/install_flash_attn_shim.py` 垫片就够，**不需要编译 flash-attn**"
+                             "（verl 导入的只是四个纯 PyTorch 的 gather/scatter 函数）")
+    parser.add_argument("--no-pool", action="store_true",
+                        help="退回 verl 原生的均匀采样（对照组）。默认启用动态分池："
+                             "按组内 reward 方差加权，饱和的题降采样但不剔除")
+    parser.add_argument("--pool-state", default=None,
+                        help="池子状态的落盘路径；不给则放在 save-path 下")
+    parser.add_argument("--vllm-log-level", default="INFO", choices=["INFO", "WARN", "ERROR"],
+                        help="vLLM 日志级别。★ 默认 INFO：KV 池大小 / prefix cache 命中率 / "
+                             "preemption 全是 INFO 级，verl 默认的 WARN 会把它们全吞掉")
+    parser.add_argument("--free-cache-engine", default="False", choices=["True", "False"],
+                        help="每步是否 sleep/wake vLLM（搬 7.6 GB 权重）。★ 默认 False —— "
+                             "True 在 v11 上 wake_up OOM **起不来**（2026-08-13 实测 6 次冒烟 3 次挂）。"
+                             "⚠️ 这是**单卡 colocate** 的产物：4 卡上 rollout 和 trainer 分卡后"
+                             "这个问题不存在，届时可改回 True（详见 build_overrides 注释）")
+    parser.add_argument("--fused-kernels", default="True", choices=["True", "False"],
+                        help="融合 logprob/熵 kernel（不物化 [seq×151936] 的 logits）。"
+                             "★ actor 峰值 −5.0 GB（2026-08-13 实测）。"
+                             "⚠️ **必须和 --remove-padding True 一起开**：verl 的融合路径"
+                             "假定 unpadded 扁平契约，单独开会 AssertionError@padding.py:131")
+    parser.add_argument("--fused-kernels-backend", default="torch", choices=["torch", "triton"],
+                        help="融合 kernel 的实现后端")
     parser.add_argument("--no-engine-stats", action="store_true",
                         help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")
     parser.add_argument("--kv-cache-dtype", default=None,
@@ -277,9 +359,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--use-kl-loss", default="True")
     parser.add_argument("--val-before-train", default="False")
     parser.add_argument("--test-freq", type=int, default=-1)
-    parser.add_argument("--save-freq", type=int, default=10,
+    parser.add_argument("--save-freq", type=int, default=25,
                         help="每 N 步存一次 ckpt。★ 正式跑不能是 -1：跑完没 ckpt 就没法重评，"
-                             "而且 staleness 研究要的就是同一次训练里相隔 k 步的两个 policy")
+                             "而且 staleness 研究要的就是同一次训练里相隔 k 步的两个 policy。\n"
+                             "⚠️ 默认从 10 调到 25（2026-08-13）：verl 0.8.0 的 FSDP "
+                             "checkpoint manager 存的是**全量** state_dict，LoRA 训练下 "
+                             "97.1%% 是和基座逐字节相同的冻结权重 —— 一个 ckpt 8.5GB，"
+                             "其中只有 252MB 是训练产物。12 个 ckpt 吃掉 98GB 才发现。\n"
+                             "跑完用 scripts/prune_rl_ckpts.py 瘦身（只留 LoRA 权重）。")
 
     parser.add_argument("--rollout-correction", action="store_true", default=True)
     parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"])
@@ -295,7 +382,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
 
-    cmd = [sys.executable, "-m", "verl.trainer.main_ppo", *build_overrides(args)]
+    # ★ 走我们的薄壳而不是 verl 的入口：它只把训练集采样器换成动态分池，
+    # 其余原样交给 verl（见 main_ppo_pool 的模块 docstring）。
+    # --no-pool 退回 verl 原生的均匀采样，用于对照实验。
+    entry = "verl.trainer.main_ppo" if args.no_pool else "syncopate.train.main_ppo_pool"
+    cmd = [sys.executable, "-m", entry, *build_overrides(args)]
     if args.dry_run:
         print(" \\\n  ".join(cmd))
         return 0
@@ -307,6 +398,10 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_LATENCY_SCALE"] = str(args.latency_scale)
     # 下发侧记账，和 trainer.rollout_data_dir 的训练侧 dump 配对算分布漂移
     env["SYNCOPATE_DISPATCH_LOG"] = str(ROOT / args.save_path / "dispatched.jsonl")
+    # 动态分池的状态（per-case 的 ema_std / seen / last_seen_step），断点续跑要用
+    env["SYNCOPATE_POOL_STATE"] = str(
+        Path(args.pool_state) if args.pool_state else ROOT / args.save_path / "pool_state.json")
+    env["SYNCOPATE_POOL"] = "0" if args.no_pool else "1"
     # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
     print(f"[实验设定] latency_scale={args.latency_scale}  async_verifier={args.async_verifier}"
           f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})")

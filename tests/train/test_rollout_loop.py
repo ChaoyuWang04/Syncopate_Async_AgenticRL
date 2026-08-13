@@ -375,3 +375,30 @@ def test_sft_target_behavior_matches_the_spec(tokenizer):
         block = text[text.rindex("```json") + 7: text.rindex("```")]
         assert _json.loads(block)["behavior"] == bundle.verifier.expected_behavior, (
             f"{name} 的监督目标 behavior 和 spec 不一致：{block}")
+
+
+def test_stops_before_exhausting_response_budget(tokenizer):
+    """★ response 预算耗尽必须**主动收工**，不能再发一次生成请求。
+
+    2026-08-13 实测：预算用满时送进 vLLM 的上下文正好等于 max_model_len，
+    引擎抛 `leaves no room to generate` 并**杀掉整个训练任务**。
+    v11 的长轨迹（GEO 14 步）第一次把预算真吃满，才暴露出来。
+    """
+    from syncopate.train.rollout_loop import MIN_GENERATION_HEADROOM
+
+    bundle = SEED_BUILDERS["SIG_HIGH_001"]()
+    # 每步都吐一个不给终答的工具调用，快速烧干预算
+    script = [render_tool_call("campaign.get_metrics", {"campaign_id": "CMP_1024"})] * 30
+    budget = 512
+    output, engine = asyncio.run(_run(
+        bundle, tokenizer, script,
+        RolloutConfig(max_assistant_turns=30, max_prompt_length=4096,
+                      max_response_length=budget),
+    ))
+
+    assert len(output.response_ids) <= budget
+    assert output.trajectory.truncated is True
+    # 关键断言：每次发出的请求，剩余预算都够真的生成点东西
+    prompt_len = len(output.prompt_ids)
+    for context_len in engine.prompt_lengths:
+        assert context_len - prompt_len <= budget - MIN_GENERATION_HEADROOM
