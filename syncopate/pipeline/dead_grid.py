@@ -88,6 +88,20 @@ CONTROL_SUBSCORE_FLOOR = 0.7
 # CONTROL 是实测打脸后加的，理由见 `add_controls()`。
 DEFAULT_QUOTA: dict[str, int] = {CONVENTION: 6, SHORTCUT: 10, CONTROL: 4}
 
+# ★★ 稀有**行为**的保底配额（2026-08-13 实测打脸后加）
+#
+# dead_grid 按「base 在哪些格子上死了」选桶。base 的 defer 双向已有 77%，
+# 于是这条轴一个格子都没进 SFT 桶 —— 逻辑上没错（做得好的交给 RL），
+# 但结果是 **SFT 训练集里 defer 只有 4 条**，epoch1 之后 defer 从 77% 崩到 **36%**。
+#
+# 这是 v3 那次「defer 97%→0%」的**同一个坑，更轻的版本**：
+#   那次的修法是 add_controls（保证同意图的其它**档**进桶）
+#   这次暴露的是另一个维度 —— 某个**行为**在训练集里太稀薄，照样会被挤掉
+#
+# ⇒ 凡是 EVAL 里要单独考的行为，SFT 桶里就必须有保底的量。
+# 数值取 12：M1 那轮 defer 从 0 学到 97% 用了 9 条，给点余量。
+RARE_BEHAVIOR_SFT_FLOOR = {"defer": 12, "clarify": 12, "reject": 12, "answer": 12}
+
 
 def classify(row: dict[str, Any]) -> str:
     """把一条 base 评测结果归到五种格子之一。

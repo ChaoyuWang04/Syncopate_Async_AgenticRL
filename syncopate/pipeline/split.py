@@ -172,7 +172,30 @@ def split(
                 "available": len(available),
                 "taken": len(taken),
             }
-        buckets.sft = sorted(chosen)
+        # ★★ 稀有行为的保底：dead_grid 只按「哪些格子死了」选，
+        # 做得好的行为一个格子都不会进桶 —— 而"训练集里太稀薄"照样会被挤掉。
+        # 2026-08-13 实测：defer 只有 4 条 ⇒ SFT 后从 77% 崩到 36%。
+        from syncopate.pipeline.dead_grid import RARE_BEHAVIOR_SFT_FLOOR
+        chosen_set = set(chosen)
+        floor_added: dict[str, int] = {}
+        for behavior, floor in sorted(RARE_BEHAVIOR_SFT_FLOOR.items()):
+            have = [c for c in chosen_set if bundles[c].verifier.expected_behavior == behavior]
+            if len(have) >= floor:
+                continue
+            spare = [c for c in pool
+                     if c not in chosen_set
+                     and bundles[c].verifier.expected_behavior == behavior]
+            take = spare[:floor - len(have)]
+            chosen.extend(take)
+            chosen_set.update(take)
+            if take:
+                floor_added[behavior] = len(take)
+        if floor_added:
+            selection["__rare_behavior_floor__"] = {
+                "kind": "floor", "eval_evidence": "-", "available": 0,
+                "taken": sum(floor_added.values()), "detail": floor_added,
+            }
+        buckets.sft = sorted(set(chosen))
         sft_set = set(buckets.sft)
         buckets.rl = [c for c in pool if c not in sft_set]
         mode = "dead_grid"

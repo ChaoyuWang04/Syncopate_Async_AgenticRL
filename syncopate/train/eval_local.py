@@ -10,8 +10,13 @@ SFT 的 loss 是 **teacher forcing** 下算的——每一步都喂正确的前�
 0.6B 在冒烟测试里出过 42 次格式错误，而它的 teacher-forced loss 很低。
 **唯一有意义的 SFT 效果度量，是真的让它自己走一遍。**
 
-不走 verl / Ray，直接 transformers generate —— 几十条 case 足够看趋势，
-而且能在几分钟内给出 SFT 前后的对照。
+引擎是 vLLM（AsyncLLMEngine：prefix caching + CUDA graph + 组内并发）。
+2026-08-13 之前走 transformers 逐条 generate —— 每一轮都把整条历史重新
+prefill，104×8 的全量评测要一百多分钟；换引擎后进入分钟量级。
+
+⚠️ 引擎决定采样内核：**配对比较必须同引擎**。HF 时代的审计（v8 及更早的
+_audit/*.json）不能和新引擎的审计逐 case 配对；新对照组（base/SFT/RL）
+全部用新引擎重跑。审计 label 带 [vllm] 后缀就是为了防这种混比。
 
     python -m syncopate.train.eval_local --model models/Qwen3-0.6B --limit 20
     python -m syncopate.train.eval_local --model models/Qwen3-0.6B \
@@ -37,11 +42,18 @@ from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
 from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
 
+# 多轮累积的预算：最长的模板（GEO）max_steps=14，实测每步约 140 token
+#（模型输出 + 工具返回），留一倍余量。
+MAX_TURN_ACCUMULATION = 4096
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class HFEngine:
-    """把 transformers 的 generate 包成核心循环要的接口。"""
+    """把 transformers 的 generate 包成核心循环要的接口。
+
+    ⚠️ 已不再是评测入口（评测走 VLLMEngine）。保留是因为 staleness.py
+    要用它拿**旧 ckpt** 生成再用新权重重算 logprob —— 那条路需要 HF 前向。"""
 
     def __init__(self, model, tokenizer, max_new_tokens: int, temperature: float) -> None:
         self.model = model
@@ -63,6 +75,94 @@ class HFEngine:
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
         return out[0][len(prompt_ids):].tolist()
+
+
+class VLLMEngine:
+    """评测的唯一引擎（vLLM AsyncLLMEngine）。接口与 HFEngine 相同。
+
+    为什么值得有第二个后端：HF 路径每一轮都把整条历史重新 prefill——
+    多轮之间、同 case 8 次采样之间、同模板 case 之间的公共前缀全部重复计算。
+    vLLM 的 prefix caching 让这三层重复都变成缓存命中，只算增量；decode 走
+    CUDA graph 而不是 eager。评测独占整卡（没有 actor 抢显存），KV 池给足，
+    命中率接近理想值——这本身就是 Ostinato H0 要的对照数据点。
+
+    ⚠️ 换后端 = 换采样内核。**配对比较必须两边同后端**（和「改 system.txt
+    基线作废」同一条纪律）；跨后端只能看聚合趋势，不能逐 case 配对。
+    采样参数逐项对齐 HF 路径：temperature/top_p 显式，top_k=20 ——
+    HF 是从 generation_config.json **隐式**继承的，这里必须显式写出来，
+    否则两个后端跑的根本不是同一个采样分布。
+    """
+
+    def __init__(self, model_path: str, adapter: str | None,
+                 max_new_tokens: int, temperature: float, gpu_util: float) -> None:
+        import itertools
+        import logging
+
+        from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
+
+        # vLLM 的日志默认打 stdout，而我们的 stdout 是要被解析的报告 —— 挪去 stderr
+        for handler in logging.getLogger("vllm").handlers:
+            if hasattr(handler, "stream"):
+                handler.stream = sys.stderr
+
+        # eos 按 generation_config 的完整清单（Qwen3 是 [im_end, endoftext]），
+        # 与 HF generate 的停机条件一致
+        try:
+            from transformers import GenerationConfig
+            eos = GenerationConfig.from_pretrained(model_path).eos_token_id
+            eos_ids = list(eos) if isinstance(eos, (list, tuple)) else [eos]
+        except Exception:
+            eos_ids = []
+
+        # ★ async 引擎而不是同步 LLM：同步版每次 generate 都独占引擎，
+        # 组内 k 份采样只能排队——continuous batching 整个空转。
+        # async 版多条 rollout 同时在引擎里飞，decode 自动拼 batch。
+        # ⚠️ 引擎把后台任务绑在第一个事件循环上，所以整个评测必须跑在
+        # **同一个 asyncio.run** 里（main 里已按此重构）。
+        self.engine = AsyncLLMEngine.from_engine_args(AsyncEngineArgs(
+            model=model_path,
+            dtype="bfloat16",
+            gpu_memory_utilization=gpu_util,
+            # ★ 这里要的是**多轮累积后的总长**，不是首轮 prompt 的上限。
+            #
+            # 踩过（2026-08-13）：写成 MAX_PROMPT_LENGTH + 512 = 5632，
+            # 结果 GEO 走到第 9 步时对话累积到 5711 token，引擎直接抛
+            # `decoder prompt longer than max_model_len` 并杀掉 EngineCore。
+            # MAX_PROMPT_LENGTH 管的是"首轮 prompt 太长就左截断"，
+            # 和"这一轮对话最终会有多长"是两件事 —— 每步的工具返回都会往上加。
+            #
+            # 按最坏情况配：首轮 prompt 上限 + 每步约 140 token × 最多 14 步 + 余量。
+            max_model_len=MAX_PROMPT_LENGTH + MAX_TURN_ACCUMULATION,
+            enable_prefix_caching=True,
+            # 周期性打印吞吐 / prefix cache 命中率 / preemption —— H0 的仪表
+            disable_log_stats=False,
+            enable_lora=bool(adapter),
+            max_lora_rank=64,
+        ))
+        self._request_counter = itertools.count()
+        self.lora = None
+        if adapter:
+            from vllm.lora.request import LoRARequest
+
+            # 不合并权重，运行时应用 LoRA（W + BA·scale，数学上等价于 merge_and_unload）
+            self.lora = LoRARequest("eval_adapter", 1, adapter)
+        self.params = SamplingParams(
+            temperature=temperature,
+            top_p=0.95 if temperature > 0 else 1.0,
+            top_k=20 if temperature > 0 else -1,
+            max_tokens=max_new_tokens,
+            stop_token_ids=eos_ids,
+            detokenize=False,       # 核心循环自己管 token，不需要引擎反解文本
+        )
+
+    async def __call__(self, prompt_ids: list[int], sampling_params: dict[str, Any]) -> list[int]:
+        request_id = f"eval-{next(self._request_counter)}"
+        final = None
+        async for out in self.engine.generate(
+                {"prompt_token_ids": prompt_ids}, self.params, request_id,
+                lora_request=self.lora):
+            final = out
+        return list(final.outputs[0].token_ids)
 
 
 def load_model(model_path: str, adapter: str | None):
@@ -259,50 +359,74 @@ def main(argv: list[str] | None = None) -> int:
                         help="★ 模拟 GRPO 的组大小。组内 reward 方差=0 就没有梯度")
     parser.add_argument("--latency-scale", type=float, default=0.0,
                         help="评测时把 480 秒审核压掉；测异步时才设 1.0")
+    parser.add_argument("--gpu-util", type=float, default=0.85,
+                        help="vLLM 的显存份额。评测独占整卡，可以给大 —— KV 池越大命中率越高")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
 
     domain = build_domain()
     domain.registry.latency_scale = args.latency_scale
-    model, tokenizer = load_model(str((ROOT / args.model).resolve()), args.adapter)
-    engine = HFEngine(model, tokenizer, args.max_new_tokens, args.temperature)
+    model_path = str((ROOT / args.model).resolve())
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    adapter = str((ROOT / args.adapter).resolve()) if args.adapter else None
+    engine = VLLMEngine(model_path, adapter, args.max_new_tokens, args.temperature, args.gpu_util)
     if args.split_dir:
         bundles = load_frozen_eval(ROOT / args.batch, ROOT / args.split_dir, args.limit)
     else:
         bundles = load_cases(ROOT / args.batch, args.per_class, args.split_every)
 
-    label = f"{args.model}" + (f" + {args.adapter}" if args.adapter else " (基座)")
+    label = (f"{args.model}" + (f" + {args.adapter}" if args.adapter else " (基座)")
+             + " [vllm]")
     print(f"[评测] {label}   {len(bundles)} 条 case，temperature={args.temperature}")
 
     rows = []
     started = time.time()
-    # ★ 逐条打进度。一个跑一百多分钟的任务没有进度输出是不合理的 ——
-    # 只能靠 nvidia-smi 看它还活着，分不出"正常慢"和"卡在某条 case 上了"。
-    # 打到 stderr：stdout 是那份要被解析的报告，别混进去。
-    for index, bundle in enumerate(bundles, start=1):
-        group = []
-        for k in range(args.samples_per_case):
-            output = asyncio.run(run_rollout(
-                bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
-                config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                     max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
-                rollout_id=f"eval{k}",
-            ))
-            result = score_trajectory(
-                bundle, output.trajectory, output.sandbox,
-                policy_scorer=domain.policy_scorer, decision_fn=domain.decision_fn, caps=domain.caps)
-            group.append({
-                "reward": result.reward,
-                "parse_ok": output.trajectory.parse_ok,
-                "parse_errors": output.metrics["parse_errors"],
-                "tool_errors": output.metrics["tool_errors"],
-                "truncated": output.metrics["truncated"],
-                "num_steps": output.metrics["num_steps"],
-                "caps": [h.name for h in result.cap_hits],
-                "behavior": output.trajectory.behavior,
-                # 恢复动作的双向指标要用：这一次采样调了哪些工具
-                "tools": [a.name for a in output.trajectory.actions],
-            })
+
+    async def _one_sample(bundle: CaseBundle, k: int) -> dict[str, Any]:
+        """一份采样：rollout + 打分。并发安全的依据是 per-rollout 隔离 ——
+        Sandbox 按 namespace 每次新建（账本/失败计数器/BUC 积分全在它身上），
+        共享的 bundle.env 只读、registry 只持只读工具规格。这是当年修
+        「rollout_id 固定导致 artifact 互相覆盖」时立下的设计，现在成了并发的通行证。"""
+        output = await run_rollout(
+            bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
+            config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
+                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
+            rollout_id=f"eval{k}",
+        )
+        result = score_trajectory(
+            bundle, output.trajectory, output.sandbox,
+            policy_scorer=domain.policy_scorer, decision_fn=domain.decision_fn, caps=domain.caps)
+        return {
+            "reward": result.reward,
+            "parse_ok": output.trajectory.parse_ok,
+            "parse_errors": output.metrics["parse_errors"],
+            "tool_errors": output.metrics["tool_errors"],
+            "truncated": output.metrics["truncated"],
+            "num_steps": output.metrics["num_steps"],
+            "caps": [h.name for h in result.cap_hits],
+            "behavior": output.trajectory.behavior,
+            # 恢复动作的双向指标要用：这一次采样调了哪些工具
+            "tools": [a.name for a in output.trajectory.actions],
+        }
+
+    async def _eval_case(bundle: CaseBundle) -> list[dict[str, Any]]:
+        # ★ 组内 k 份采样并发进引擎，continuous batching 拼 decode
+        return list(await asyncio.gather(
+            *[_one_sample(bundle, k) for k in range(args.samples_per_case)]))
+
+    async def _eval_all() -> None:
+        # ★ 整个评测跑在同一个事件循环里：async 引擎的后台任务绑定首个 loop，
+        # 每个 case 一次 asyncio.run 会在第二个 case 上炸。
+        # ★ 逐条打进度。一个跑一百多分钟的任务没有进度输出是不合理的 ——
+        # 只能靠 nvidia-smi 看它还活着，分不出"正常慢"和"卡在某条 case 上了"。
+        # 打到 stderr：stdout 是那份要被解析的报告，别混进去。
+        for index, bundle in enumerate(bundles, start=1):
+            group = await _eval_case(bundle)
+            _append_row(index, bundle, group)
+
+    def _append_row(index: int, bundle: CaseBundle, group: list[dict[str, Any]]) -> None:
         group_rewards = [g["reward"] for g in group]
         rows.append({
             "case_id": bundle.case_id,
@@ -334,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
               f"均分={statistics.mean(r['reward'] for r in rows):.3f}  "
               f"已用 {elapsed/60:.0f}m 剩约 {eta/60:.0f}m",
               file=sys.stderr, flush=True)
+
+    asyncio.run(_eval_all())
 
     rewards = [r["reward"] for r in rows]
     print(f"\n{'指标':<26}{'值'}")

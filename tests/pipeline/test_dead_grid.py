@@ -198,7 +198,11 @@ def test_dead_grid_applies_quota_and_keeps_buckets_disjoint(tmp_path):
     buckets, report = split(batch, dead_grids=grids, quota_by_kind=dg.DEFAULT_QUOTA)
 
     assert report["mode"] == "dead_grid"
-    assert report["counts"]["sft"] == dg.DEFAULT_QUOTA[dg.SHORTCUT] + dg.DEFAULT_QUOTA[dg.CONVENTION]
+    # 配额取到的 = shortcut 10 + convention 6；再加上 clarify 的保底补足到 12
+    # （CLAR 那格是 convention，只取了 6 条，稀有行为保底会把它补到 RARE_BEHAVIOR_SFT_FLOOR）
+    quota_take = dg.DEFAULT_QUOTA[dg.SHORTCUT] + dg.DEFAULT_QUOTA[dg.CONVENTION]
+    floor_top_up = dg.RARE_BEHAVIOR_SFT_FLOOR["clarify"] - dg.DEFAULT_QUOTA[dg.CONVENTION]
+    assert report["counts"]["sft"] == quota_take + floor_top_up
     assert not any(c.startswith("LOW") for c in buckets.sft)   # 活格没被卷进来
     assert set(buckets.eval) & set(buckets.sft) == set()
     assert set(buckets.sft) & set(buckets.rl) == set()
@@ -234,3 +238,27 @@ def test_stratum_reads_outcome_from_tags(tmp_path):
         verifier=VerifierSpec(expected_behavior="tool_call"),
     )
     assert stratum("BUD_0001", bundle) == ("BUD", "tool_call", "escalated", "must_discover")
+
+
+def test_rare_behavior_floor_tops_up_a_starved_behavior(tmp_path):
+    """★ 2026-08-13：dead_grid 只按「哪些格子死了」选桶，做得好的行为一个都不进 —— 
+    而"训练集里太稀薄"照样会被挤掉。
+
+    实测：base 的 defer 双向已有 77%，于是 defer 一个格子都没进 SFT 桶，
+    训练集里只剩 4 条，**epoch1 之后 defer 从 77% 崩到 36%**。
+    这是 v3 那次「defer 97%→0%」的同一个坑，另一个维度：
+        add_controls 保证的是「同意图的其它**档**」进桶
+        这条保证的是「某个**行为**」有最低量
+    """
+    batch = make_batch(tmp_path, {
+        "BUD|tool_call|denied|id_given": 20,      # 死格
+        "FRESH|defer|immature|id_given": 20,      # 活格 —— dead_grid 一条都不会选
+    })
+    grids = {("BUD", "tool_call", "denied", "id_given"): dg.DeadGrid(
+        ("BUD", "tool_call", "denied", "id_given"), dg.SHORTCUT, ["BUD_0000"], 2)}
+    buckets, report = split(batch, dead_grids=grids, quota_by_kind=dg.DEFAULT_QUOTA)
+
+    defer_in_sft = [c for c in buckets.sft if c.startswith("FRESH")]
+    assert len(defer_in_sft) >= dg.RARE_BEHAVIOR_SFT_FLOOR["defer"], \
+        "defer 没被保底补上 —— 它会在 SFT 后崩掉"
+    assert "__rare_behavior_floor__" in report["dead_grid_selection"]

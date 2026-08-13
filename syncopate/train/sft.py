@@ -217,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     # 训练脚本的默认值必须是「跑完就有记录」，要关得显式说。
     parser.add_argument("--wandb-project", default="syncopate")
     parser.add_argument("--no-wandb", action="store_true", help="显式关掉上报（调试/跑测试用）")
+    parser.add_argument("--profile-steps", type=int, default=0,
+                        help="H0 观测仪：抓 N 个 micro-step 的 torch.profiler 时间线后自动收工"
+                             "（0=关）。纯观测不改训练语义，trace 拖进 ui.perfetto.dev 看")
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
     parser.add_argument("--wandb-run", default=None)
     parser.add_argument("--seed", type=int, default=0)
@@ -305,6 +308,28 @@ def main(argv: list[str] | None = None) -> int:
 
     history = [{"epoch": 0, **{k: v for k, v in base.items() if k != "by_group"},
                 "by_group": base["by_group"]}]
+    # ---- H0 观测仪（--profile-steps N 才启用，纯观测不改语义）----
+    # 要回答的问题：一个 micro-step 的时间花在 数据加载/前向/反向/优化器 各多少，
+    # 以及显存尖峰是不是 logits 物化（K1 fused-CE 的"术前照"）。
+    # 前 2 步丢弃 + 2 步预热，然后抓 N 步，trace 落到 out 目录后自动收工。
+    prof = None
+    prof_left = 0
+    if args.profile_steps and device.type == "cuda":
+        from torch.profiler import ProfilerActivity, profile, schedule
+
+        def _dump_trace(p) -> None:
+            trace_path = ROOT / args.out / "profile_trace.json"
+            trace_path.parent.mkdir(parents=True, exist_ok=True)
+            p.export_chrome_trace(str(trace_path))
+            print(p.key_averages().table(sort_by="cuda_time_total", row_limit=15))
+            print(f"[profile] chrome trace -> {trace_path}")
+
+        prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                       schedule=schedule(wait=2, warmup=2, active=args.profile_steps),
+                       profile_memory=True, on_trace_ready=_dump_trace)
+        prof.start()
+        prof_left = 4 + args.profile_steps
+
     global_step = 0
     started = time.time()
     for epoch in range(1, args.epochs + 1):
@@ -328,6 +353,12 @@ def main(argv: list[str] | None = None) -> int:
                      "train/grad_norm": float(grad_norm),
                      "train/lr": scheduler.get_last_lr()[0],
                      "train/epoch": epoch}, step=global_step)
+            if prof is not None:
+                prof.step()
+                prof_left -= 1
+                if prof_left <= 0:     # 抓够就收工，不给后面的步数留开销
+                    prof.stop()
+                    prof = None
         train_loss = running / max(1, seen)
         line = (f"[epoch {epoch}] train_loss={train_loss:.4f}  lr={scheduler.get_last_lr()[0]:.2e}  "
                 f"step={global_step}/{total_steps}  用时={time.time()-started:.0f}s")

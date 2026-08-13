@@ -1679,8 +1679,12 @@ def make_geo_expansion(p: Params) -> CaseBundle:
     approved = sorted(r for r in GEO_CANDIDATES if r not in drop)
     case = Case(
         case_id=case_id,
-        user_message=(f"{_FEATURE_CN['real_person']}这个方向在我们主投的地区跑得不错，"
-                      f"想铺到 {'、'.join(GEO_CANDIDATES)} 去。看看哪些能上，各给个预算建议。"),
+        # ★ 题面刻意不用祈使句。原文是「想铺到 X 去。看看哪些能上」——
+        # 前半句像下指令，模型抓住的是前半句，直接就去建站了（实测 12/12 全崩）。
+        # 现在整句都是「评估」，没有任何"去做"的暗示。
+        user_message=(f"帮我评估一下：{_FEATURE_CN['real_person']}这个方向，"
+                      f"能不能铺到 {'、'.join(GEO_CANDIDATES)} 这几个地区？"
+                      f"哪些达标、哪些不达标，各给个预算建议，最后走审批。"),
         context={"account_id": p.account_id, "product_id": p.product,
                  "candidate_regions": ",".join(GEO_CANDIDATES)},
         entities={"account_id": p.account_id, "product_id": p.product},

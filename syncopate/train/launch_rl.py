@@ -151,6 +151,10 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.rollout.max_num_seqs={args.max_num_seqs}",
         "actor_rollout_ref.rollout.enforce_eager=True",
         "actor_rollout_ref.rollout.free_cache_engine=True",
+        # ---- H0 观测仪：vLLM 周期性统计（吞吐 / prefix cache 命中率 / preemption 次数）----
+        # 纯打日志不改行为。「训练脚本的默认值必须是跑完就有记录」的推理侧版本：
+        # KV 池会不会踢人、踢多凶，这三个数字以前从来没人看过。
+        f"actor_rollout_ref.rollout.disable_log_stats={str(args.no_engine_stats)}",
         f"actor_rollout_ref.rollout.n={args.rollout_n}",
         # calculate_log_probs=True 才有 rollout_is_* 那套 TIS 诊断指标
         "actor_rollout_ref.rollout.calculate_log_probs=True",
@@ -203,6 +207,13 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             "actor_rollout_ref.rollout.load_format=safetensors",
             "actor_rollout_ref.rollout.layered_summon=True",
         ]
+
+    # ---- Ostinato A1 实验入口：KV cache 量化（fp8_e4m3 / fp8_e5m2）----
+    # 经 engine_kwargs.vllm 透传。容量红利：同一块 KV 池装 2× token ⇒ 驱逐/preemption
+    # 减半。不设默认值 —— 开不开必须是显式决定，且开了要跑 EVAL 128 配对回归验精度。
+    if args.kv_cache_dtype:
+        overrides.append(
+            f"actor_rollout_ref.rollout.engine_kwargs.vllm.kv_cache_dtype={args.kv_cache_dtype}")
 
     # ---- TIS / rollout correction：主线研究要用的诊断指标 ----
     if args.rollout_correction:
@@ -258,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lr", default="1e-6")
     parser.add_argument("--remove-padding", default="False", choices=["True", "False"],
                         help="需要 flash-attn；sm_120 上要自己编译")
+    parser.add_argument("--no-engine-stats", action="store_true",
+                        help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")
+    parser.add_argument("--kv-cache-dtype", default=None,
+                        help="vLLM KV cache 精度（fp8_e4m3/fp8_e5m2）。KV 池容量 ×2 的免费杠杆；"
+                             "默认不动。开了必须配 EVAL 128 配对回归验精度（Ostinato A1）")
     parser.add_argument("--use-kl-loss", default="True")
     parser.add_argument("--val-before-train", default="False")
     parser.add_argument("--test-freq", type=int, default=-1)

@@ -1,0 +1,92 @@
+{
+ "label": "models/Qwen3-4B + checkpoints/sft/v10/epoch1",
+ "positions": 4116,
+ "mean_entropy": 0.0374,
+ "median_entropy": 0.0,
+ "decision_positions": 93,
+ "decision_mean_entropy": 0.1351,
+ "near_deterministic_ratio": 0.9162,
+ "mean_top1_prob": 0.9894,
+ "per_case": [
+  {
+   "case_id": "ATTR_0000",
+   "tokens": 403,
+   "mean_entropy": 0.0414
+  },
+  {
+   "case_id": "ATTR_0001",
+   "tokens": 257,
+   "mean_entropy": 0.0169
+  },
+  {
+   "case_id": "ATTR_0006",
+   "tokens": 257,
+   "mean_entropy": 0.0172
+  },
+  {
+   "case_id": "ATTR_0007",
+   "tokens": 250,
+   "mean_entropy": 0.0207
+  },
+  {
+   "case_id": "ATTR_0004",
+   "tokens": 255,
+   "mean_entropy": 0.035
+  },
+  {
+   "case_id": "ATTR_0009",
+   "tokens": 184,
+   "mean_entropy": 0.071
+  },
+  {
+   "case_id": "ATTR_0018",
+   "tokens": 244,
+   "mean_entropy": 0.0407
+  },
+  {
+   "case_id": "ATTR_0023",
+   "tokens": 264,
+   "mean_entropy": 0.0419
+  },
+  {
+   "case_id": "ATTR_0016",
+   "tokens": 298,
+   "mean_entropy": 0.0385
+  },
+  {
+   "case_id": "ATTR_0017",
+   "tokens": 242,
+   "mean_entropy": 0.0285
+  },
+  {
+   "case_id": "ATTR_0002",
+   "tokens": 162,
+   "mean_entropy": 0.0376
+  },
+  {
+   "case_id": "ATTR_0003",
+   "tokens": 172,
+   "mean_entropy": 0.0698
+  },
+  {
+   "case_id": "BUD_0012",
+   "tokens": 252,
+   "mean_entropy": 0.0664
+  },
+  {
+   "case_id": "BUD_0017",
+   "tokens": 272,
+   "mean_entropy": 0.0524
+  },
+  {
+   "case_id": "BUD_0002",
+   "tokens": 302,
+   "mean_entropy": 0.0194
+  },
+  {
+   "case_id": "BUD_0007",
+   "tokens": 302,
+   "mean_entropy": 0.0232
+  }
+ ]
+}

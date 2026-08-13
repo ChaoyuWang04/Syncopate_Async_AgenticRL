@@ -1,0 +1,640 @@
+{
+ "batch_dir": "data/batches/v11",
+ "mode": "dead_grid",
+ "counts": {
+  "eval": 198,
+  "sft": 434,
+  "rl": 738
+ },
+ "strata_count": 90,
+ "overlaps_by_content_sha256": {
+  "eval∩sft": 0,
+  "eval∩rl": 0,
+  "sft∩rl": 0
+ },
+ "duplicate_content_pairs": 0,
+ "eval_strata_coverage": {
+  "ATTR|tool_call|conclusive|id_given": 33,
+  "ATTR|tool_call|conclusive|must_discover": 32,
+  "ATTR|tool_call|flat|id_given": 8,
+  "ATTR|tool_call|flat|must_discover": 6,
+  "ATTR|tool_call|insufficient|id_given": 9,
+  "ATTR|tool_call|insufficient|must_discover": 12,
+  "BUD|tool_call|denied|id_given": 14,
+  "BUD|tool_call|denied|must_discover": 14,
+  "BUD|tool_call|escalated|id_given": 40,
+  "BUD|tool_call|escalated|must_discover": 41,
+  "BUD|tool_call|executed|id_given": 16,
+  "BUD|tool_call|executed|must_discover": 15,
+  "CHAT|answer|capability|id_given": 12,
+  "CHAT|answer|capability|must_discover": 8,
+  "CHAT|answer|chitchat|id_given": 10,
+  "CHAT|answer|chitchat|must_discover": 10,
+  "CHAT|answer|inertia|id_given": 8,
+  "CHAT|answer|inertia|must_discover": 12,
+  "CLAR|clarify|-|id_given": 26,
+  "CLAR|clarify|-|must_discover": 24,
+  "CRE|tool_call|block|id_given": 32,
+  "CRE|tool_call|block|must_discover": 30,
+  "CRE|tool_call|launch|id_given": 14,
+  "CRE|tool_call|launch|must_discover": 14,
+  "DIA|tool_call|default_plan|id_given": 19,
+  "DIA|tool_call|default_plan|must_discover": 17,
+  "DIA|tool_call|switch_plan|id_given": 27,
+  "DIA|tool_call|switch_plan|must_discover": 27,
+  "FAIL|tool_call|absurd_value|id_given": 6,
+  "FAIL|tool_call|absurd_value|must_discover": 9,
+  "FAIL|tool_call|forbidden|id_given": 6,
+  "FAIL|tool_call|forbidden|must_discover": 9,
+  "FAIL|tool_call|injection|id_given": 8,
+  "FAIL|tool_call|injection|must_discover": 7,
+  "FAIL|tool_call|outage|id_given": 8,
+  "FAIL|tool_call|outage|must_discover": 7,
+  "FAIL|tool_call|pagination|id_given": 7,
+  "FAIL|tool_call|pagination|must_discover": 7,
+  "FAIL|tool_call|quota_exhausted|id_given": 8,
+  "FAIL|tool_call|quota_exhausted|must_discover": 7,
+  "FAIL|tool_call|rate_limited|id_given": 8,
+  "FAIL|tool_call|rate_limited|must_discover": 7,
+  "FAIL|tool_call|source_conflict|id_given": 8,
+  "FAIL|tool_call|source_conflict|must_discover": 7,
+  "FAIL|tool_call|timeout_applied|id_given": 8,
+  "FAIL|tool_call|timeout_applied|must_discover": 8,
+  "FAIL|tool_call|timeout_lost|id_given": 8,
+  "FAIL|tool_call|timeout_lost|must_discover": 7,
+  "FRESH|defer|immature|id_given": 25,
+  "FRESH|defer|immature|must_discover": 24,
+  "FRESH|tool_call|mature|id_given": 25,
+  "FRESH|tool_call|mature|must_discover": 24,
+  "FRESH|tool_call|partial|id_given": 26,
+  "FRESH|tool_call|partial|must_discover": 26,
+  "GEO|tool_call|all_pass|id_given": 18,
+  "GEO|tool_call|all_pass|must_discover": 12,
+  "GEO|tool_call|none_pass|id_given": 14,
+  "GEO|tool_call|none_pass|must_discover": 16,
+  "GEO|tool_call|partial|id_given": 14,
+  "GEO|tool_call|partial|must_discover": 16,
+  "HIGH|tool_call|-|id_given": 16,
+  "HIGH|tool_call|-|must_discover": 14,
+  "INJ|tool_call|campaign_name|id_given": 10,
+  "INJ|tool_call|campaign_name|must_discover": 7,
+  "INJ|tool_call|memory_content|id_given": 4,
+  "INJ|tool_call|memory_content|must_discover": 9,
+  "INJ|tool_call|policy_text|id_given": 7,
+  "INJ|tool_call|policy_text|must_discover": 10,
+  "INJ|tool_call|safety_line_note|id_given": 7,
+  "INJ|tool_call|safety_line_note|must_discover": 6,
+  "LONG|tool_call|-|id_given": 26,
+  "LONG|tool_call|-|must_discover": 24,
+  "LOW|tool_call|-|id_given": 26,
+  "LOW|tool_call|-|must_discover": 24,
+  "MISS|tool_call|-|id_given": 16,
+  "MISS|tool_call|-|must_discover": 14,
+  "RAG|tool_call|escalated_missing|id_given": 16,
+  "RAG|tool_call|escalated_missing|must_discover": 16,
+  "RAG|tool_call|escalated_stale|id_given": 18,
+  "RAG|tool_call|escalated_stale|must_discover": 14,
+  "RAG|tool_call|executed|id_given": 12,
+  "RAG|tool_call|executed|must_discover": 14,
+  "REJ|reject|-|id_given": 26,
+  "REJ|reject|-|must_discover": 24,
+  "SCALE|tool_call|headroom|id_given": 12,
+  "SCALE|tool_call|headroom|must_discover": 18,
+  "SCALE|tool_call|over|id_given": 17,
+  "SCALE|tool_call|over|must_discover": 13,
+  "SCALE|tool_call|tight|id_given": 17,
+  "SCALE|tool_call|tight|must_discover": 13
+ },
+ "dead_grid_selection": {
+  "ATTR|tool_call|conclusive|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 31,
+   "taken": 4
+  },
+  "ATTR|tool_call|conclusive|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 30,
+   "taken": 4
+  },
+  "ATTR|tool_call|flat|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "ATTR|tool_call|insufficient|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 7,
+   "taken": 4
+  },
+  "ATTR|tool_call|insufficient|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 10,
+   "taken": 4
+  },
+  "BUD|tool_call|denied|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "BUD|tool_call|denied|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "BUD|tool_call|escalated|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 38,
+   "taken": 10
+  },
+  "BUD|tool_call|escalated|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 39,
+   "taken": 4
+  },
+  "BUD|tool_call|executed|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "BUD|tool_call|executed|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 13,
+   "taken": 4
+  },
+  "CHAT|answer|capability|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 9,
+   "taken": 4
+  },
+  "CHAT|answer|capability|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "2/3",
+   "available": 5,
+   "taken": 5
+  },
+  "CHAT|answer|chitchat|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 7,
+   "taken": 4
+  },
+  "CHAT|answer|chitchat|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 7,
+   "taken": 4
+  },
+  "CHAT|answer|inertia|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "CHAT|answer|inertia|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 9,
+   "taken": 4
+  },
+  "CLAR|clarify|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "4/4",
+   "available": 22,
+   "taken": 6
+  },
+  "CLAR|clarify|-|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "4/4",
+   "available": 20,
+   "taken": 6
+  },
+  "CRE|tool_call|block|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 30,
+   "taken": 4
+  },
+  "CRE|tool_call|block|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 28,
+   "taken": 10
+  },
+  "CRE|tool_call|launch|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "CRE|tool_call|launch|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 12,
+   "taken": 10
+  },
+  "DIA|tool_call|default_plan|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 17,
+   "taken": 4
+  },
+  "DIA|tool_call|default_plan|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 15,
+   "taken": 4
+  },
+  "FAIL|tool_call|absurd_value|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 4,
+   "taken": 4
+  },
+  "FAIL|tool_call|absurd_value|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 7,
+   "taken": 7
+  },
+  "FAIL|tool_call|forbidden|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 4,
+   "taken": 4
+  },
+  "FAIL|tool_call|forbidden|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 7,
+   "taken": 4
+  },
+  "FAIL|tool_call|injection|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|injection|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|outage|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|outage|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FAIL|tool_call|pagination|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FAIL|tool_call|quota_exhausted|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|quota_exhausted|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FAIL|tool_call|rate_limited|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|rate_limited|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|source_conflict|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 6,
+   "taken": 6
+  },
+  "FAIL|tool_call|source_conflict|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "FAIL|tool_call|timeout_applied|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_applied|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_lost|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 6,
+   "taken": 4
+  },
+  "FAIL|tool_call|timeout_lost|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "FRESH|defer|immature|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 21,
+   "taken": 4
+  },
+  "FRESH|defer|immature|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 20,
+   "taken": 4
+  },
+  "FRESH|tool_call|mature|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 23,
+   "taken": 4
+  },
+  "FRESH|tool_call|mature|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 22,
+   "taken": 4
+  },
+  "FRESH|tool_call|partial|id_given": {
+   "kind": "convention",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 6
+  },
+  "FRESH|tool_call|partial|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "2/2",
+   "available": 24,
+   "taken": 6
+  },
+  "GEO|tool_call|all_pass|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 16,
+   "taken": 4
+  },
+  "GEO|tool_call|all_pass|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 10,
+   "taken": 4
+  },
+  "GEO|tool_call|none_pass|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "GEO|tool_call|none_pass|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "GEO|tool_call|partial|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "GEO|tool_call|partial|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "HIGH|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "HIGH|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "INJ|tool_call|campaign_name|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 8,
+   "taken": 4
+  },
+  "INJ|tool_call|campaign_name|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "INJ|tool_call|memory_content|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 2,
+   "taken": 2
+  },
+  "INJ|tool_call|memory_content|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 7,
+   "taken": 7
+  },
+  "INJ|tool_call|policy_text|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 5,
+   "taken": 4
+  },
+  "INJ|tool_call|policy_text|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 8,
+   "taken": 4
+  },
+  "INJ|tool_call|safety_line_note|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 5,
+   "taken": 5
+  },
+  "INJ|tool_call|safety_line_note|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 4,
+   "taken": 4
+  },
+  "LONG|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 24,
+   "taken": 4
+  },
+  "LONG|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 22,
+   "taken": 4
+  },
+  "LOW|tool_call|-|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 24,
+   "taken": 10
+  },
+  "LOW|tool_call|-|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 22,
+   "taken": 10
+  },
+  "MISS|tool_call|-|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 14,
+   "taken": 4
+  },
+  "MISS|tool_call|-|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "RAG|tool_call|escalated_missing|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 14,
+   "taken": 10
+  },
+  "RAG|tool_call|escalated_missing|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 14,
+   "taken": 10
+  },
+  "RAG|tool_call|escalated_stale|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "2/2",
+   "available": 16,
+   "taken": 10
+  },
+  "RAG|tool_call|escalated_stale|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 12,
+   "taken": 4
+  },
+  "RAG|tool_call|executed|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 10,
+   "taken": 4
+  },
+  "RAG|tool_call|executed|must_discover": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 12,
+   "taken": 10
+  },
+  "REJ|reject|-|id_given": {
+   "kind": "convention",
+   "eval_evidence": "3/4",
+   "available": 22,
+   "taken": 6
+  },
+  "REJ|reject|-|must_discover": {
+   "kind": "convention",
+   "eval_evidence": "2/4",
+   "available": 20,
+   "taken": 6
+  },
+  "SCALE|tool_call|headroom|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 10,
+   "taken": 4
+  },
+  "SCALE|tool_call|headroom|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 16,
+   "taken": 4
+  },
+  "SCALE|tool_call|over|id_given": {
+   "kind": "shortcut",
+   "eval_evidence": "1/2",
+   "available": 15,
+   "taken": 10
+  },
+  "SCALE|tool_call|over|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 11,
+   "taken": 4
+  },
+  "SCALE|tool_call|tight|id_given": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 15,
+   "taken": 4
+  },
+  "SCALE|tool_call|tight|must_discover": {
+   "kind": "control",
+   "eval_evidence": "0/0",
+   "available": 11,
+   "taken": 4
+  },
+  "__rare_behavior_floor__": {
+   "kind": "floor",
+   "eval_evidence": "-",
+   "available": 0,
+   "taken": 4,
+   "detail": {
+    "defer": 4
+   }
+  }
+ },
+ "quota_by_kind": {
+  "convention": 6,
+  "shortcut": 10,
+  "control": 4
+ }
+}
