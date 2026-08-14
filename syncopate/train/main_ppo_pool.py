@@ -41,8 +41,28 @@ shuffle=True 给 RandomSampler，否则 SequentialSampler。两个都是均匀�
 **这正是本文件原注释里预告过的那种失效**（"如果哪天 verl 改成从别处 import"），
 只不过它不是"哪天"，是换个 trainer 就已经发生。⇒ 照旧看 `[pool] 动态分池启用` 那行日志。
 
-⚠️ **`fully_async` 根本不调 `create_rl_sampler`**（它自己排采样计划）
-⇒ **动态分池在那个模式下不生效**，启动时会打一行警告。别把两件事混在一起做对照。
+⛔ **一条已被推翻的结论（2026-08-14 更正，原文保留见下）**
+
+原注释写着：「`fully_async` 根本不调 `create_rl_sampler`（它自己排采样计划）
+⇒ 动态分池在那个模式下不生效」。**读码核实：它调了。**
+
+    verl/experimental/fully_async_policy/fully_async_rollouter.py
+      392  @ray.remote(num_cpus=10, max_concurrency=100)      ← 它是个 Ray actor
+      400  class FullyAsyncRollouter(SeparateRayPPOTrainer): def __init__
+      447      from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
+      464      train_sampler = create_rl_sampler(config.data, train_dataset)   ★
+
+而且那个 `import` 写在**函数体内** ⇒ 调用时才解析
+`verl.trainer.main_ppo.create_rl_sampler` ⇒ **对 monkeypatch 最友好的写法**。
+
+真正的原因不是「没有挂点」，是**作用域**：`FullyAsyncRollouter` 跑在**另一个 Ray
+worker 进程**里，而 `_install()` 只打在 driver。`worker_process_setup_hook`
+（`verl_patches.setup_worker`）**已经在用了**，但当前只装 `_patch_fsdp_cpu_copy_for_ddp`。
+⇒ **修法：把 sampler patch 也装进 `setup_worker()`。**（M7 跑完再改，见交接文档。）
+
+★ 教训：这是「机制建好了但没接上」的**新变种**——**不是忘了接，是断定接不上、而断定错了。**
+同一天 `verl_patches.py` 里刚写下同一条：「判据行打出来了 ≠ 补丁在需要它的那个进程里生效」。
+⇒ **凡是说「verl 不支持 X」，先查三层：① 配置项在不在 ② 代码路径调不调 ③ 它在哪个进程里跑。**
 """
 
 from __future__ import annotations
@@ -194,9 +214,14 @@ def main() -> None:
         return
 
     if mode == "fully_async":
-        # 它自己排采样计划，不走 create_rl_sampler ⇒ 分池在这个模式下**不存在**。
-        # 说出来，别让人以为「代码在仓库里」就等于「这一轮生效了」。
-        print("[pool] ⚠️ fully_async 不调 create_rl_sampler ⇒ 动态分池本轮不生效", flush=True)
+        # ⛔ 原因已更正（2026-08-14，见模块 docstring）：
+        # 不是「fully_async 不调 create_rl_sampler」——它调（rollouter.py:464），
+        # 而是它跑在**另一个 Ray worker 进程**里，driver 侧的 patch 够不着。
+        # 修法是把 sampler patch 装进 verl_patches.setup_worker()（M7 跑完再动）。
+        # 在那之前照实说不生效——别让人以为「代码在仓库里」就等于「这一轮生效了」。
+        print("[pool] ⚠️ fully_async 的 sampler 在 Ray worker 进程里，"
+              "driver 侧 patch 够不着 ⇒ 动态分池本轮不生效（可修，见 main_ppo_pool docstring）",
+              flush=True)
 
     # ⚠️⚠️ 两个实验性入口**必须当 `__main__` 跑，不能 import 了再调**（2026-08-13 实测）
     #

@@ -68,6 +68,28 @@ DISPATCH_LOG = os.environ.get("SYNCOPATE_DISPATCH_LOG")
 _dispatch_lock = asyncio.Lock()
 
 
+# ★ 判据行。策略版本字段是「靠上游往 extra_fields 里塞、我们再转手」生效的机制 ——
+# 正是本项目反复栽的那种「机制在但没接上」。所以每个 worker 进程打**一次**，
+# 说清楚到底收没收到：
+#     [agent-loop] 策略版本字段 ✓ min=3 max=5     ← fully_async 下应该看到这行
+#     [agent-loop] 策略版本字段 ✗ 未上报（keys=[]）← 看到这行就是又断了，别跑长任务
+# 只打第一条 rollout 的第一轮，不刷屏。
+_version_logged = False
+
+
+def _log_version_fields_once(fields: dict[str, Any]) -> None:
+    global _version_logged
+    if _version_logged:
+        return
+    _version_logged = True
+    lo, hi = fields.get("min_global_steps"), fields.get("max_global_steps")
+    if lo is None and hi is None:
+        print(f"[agent-loop] 策略版本字段 ✗ 未上报（keys={sorted(fields)}）"
+              f" —— fully_async 会崩在 detach_utils.py:153", flush=True)
+    else:
+        print(f"[agent-loop] 策略版本字段 ✓ min={lo} max={hi}", flush=True)
+
+
 async def record_dispatch(bundle: CaseBundle, output: RolloutOutput, reward: float) -> None:
     if not DISPATCH_LOG:
         return
@@ -202,6 +224,24 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
         domain.registry.latency_scale = LATENCY_SCALE
         bundle = load_bundle(extra_info)
 
+        # ★★★ 策略版本字段：rollout 侧每次生成都在 `TokenOutput.extra_fields` 里带回
+        # `min/max_global_steps` —— 这条轨迹的 token 分别是第几个策略版本生成的。
+        #
+        # **不带上去 fully_async 直接起不来**：`fully_async_policy/detach_utils.py:153`
+        # 对它做 `abs(max - min)` 且**不做 None 保护**，漏报就是
+        # `TypeError: unsupported operand type(s) for -: 'NoneType' and 'NoneType'`。
+        # 2026-08-13 的 M7 就崩在这里，而根因不在 verl 上游 —— 是这一层把
+        # `extra_fields` 整个丢掉了（只取了 token_ids 和 log_probs）。
+        #
+        # ★ 但它的价值不止是"让它别崩"：`max - min` 就是**这条轨迹横跨了几个策略版本**，
+        # 也就是 staleness 的经验分布。补上它等于把 σ²(k) 的真值测量接上，
+        # 可以和单卡离线合成的 ESS/N=0.846 对照（设计文档 D-A6 的核心问题）。
+        #
+        # 聚合规则照抄 verl 自带的 `agent_loop/tool_agent_loop.py:248-254`：
+        # 首轮把整个 extra_fields 收下（拿到 min），后续轮次只抬 max。
+        # 其它模式下 rollout 侧不写这两个键，version_fields 保持空 —— 无害。
+        version_fields: dict[str, Any] = {}
+
         # 把 verl 的 server_manager 包装成核心循环要的接口。
         # request_id 由这里生成（verl 自带的 agent loop 也是 uuid4().hex），
         # 不是从 extra_info 传进来的——它是每次生成请求的标识，不是样本标识。
@@ -209,6 +249,12 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             token_output = await self.server_manager.generate(
                 request_id=uuid4().hex, prompt_ids=prompt_ids, sampling_params=params
             )
+            extra = getattr(token_output, "extra_fields", None) or {}
+            if not version_fields:
+                version_fields.update(extra)
+                _log_version_fields_once(version_fields)
+            elif extra.get("max_global_steps") is not None:
+                version_fields["max_global_steps"] = extra["max_global_steps"]
             # ★ log_probs 必须带出来，否则 rollout_corr/* 那套 TIS 诊断全是空的
             #   —— 而它正是 docs/syncopate/00-research-question 的观测基础。
             #   需要 actor_rollout_ref.rollout.calculate_log_probs=True 才有值。
@@ -257,11 +303,12 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             prompt_ids=output.prompt_ids,
             response_ids=output.response_ids,
             response_mask=output.response_mask,
+            # ★ 策略版本随轨迹一起交回去（见上面 version_fields 的说明）。
             # 有 logprob 才传；全是占位值时传 None，免得给 TIS 喂假数据
             response_logprobs=(output.response_logprobs
                                if output.metrics["logprob_coverage"] > 0.5 else None),
             reward_score=result.reward,
             num_turns=output.num_turns,
             metrics=AgentLoopMetrics(),
-            extra_fields={"reward_extra_info": reward_extra_info(result, output)},
+            extra_fields={"reward_extra_info": reward_extra_info(result, output), **version_fields},
         )

@@ -337,6 +337,15 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             "hydra.searchpath=[pkg://verl.trainer.config]",
             # colocate 的反面。ray_trainer.py:89 那条 assert 就是查它。
             "actor_rollout_ref.hybrid_engine=False",
+            # ★★ 让 verl_patches 在 **Ray worker 进程**里也生效。
+            #
+            # `main_ppo_pool` 里的 `verl_patches.apply()` 只覆盖 driver（TaskRunner）进程。
+            # 而 P2 要补的 `save_model_to_cpu` 活在 `WorkerDict` 这个 Ray actor 里，
+            # 那个进程从不 import 我们的包 ⇒ 2026-08-14 实测：driver 侧判据行照常打印，
+            # 断言照常在 worker 里触发。**判据行打出来了不等于补丁在需要它的进程里生效。**
+            # ⇒ 用 Ray 的 worker 启动钩子（字符串形式，模块路径；PYTHONPATH 已由本脚本注入）。
+            "+ray_kwargs.ray_init.runtime_env.worker_process_setup_hook="
+            "syncopate.train.verl_patches.setup_worker",
             # 顶层 `rollout` 节是异步配置独有的（不是 actor_rollout_ref.rollout）
             f"rollout.n_gpus_per_node={args.rollout_gpus}",
             "rollout.nnodes=1",
@@ -375,7 +384,20 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             # 而 `06-rl-run-protocol.md` 的停止条件 P6 是「**ESS/N 跌破 0.3 立即停**」。
             # 没有这个数 = 没有刹车，而 fully_async 的 staleness 比 one_step_off 大得多，
             # 正是最需要刹车的场景。
-            # ⇒ 代价：每步多一次 actor 前向算 old_log_prob（约 +6–10 s）。**值得。**
+            # ⇒ 代价：每步多一次 actor 前向算 old_log_prob。
+            #
+            # ⛔ **这里原来写「约 +6–10 s。值得。」——那是估算，2026-08-14 实测推翻了它**：
+            #    M7 fully_async 全程 37 步均值 **old_log_prob = 76.3 s，占 step 的 25.7%**
+            #    （update_actor 98.1 / old_log_prob 76.3 / param_sync 55.8 / ref 39.2 / gen 18.6）
+            #    ⇒ **低估了 8–13 倍。** 详见 docs/infra_exp/E12-weight-sync.md §4.4 与 §6-②。
+            #
+            # 「值得」这个判断是基于 6–10 s 做出的，**现在要重新算这笔账**：
+            # 76.3 s 换来的是 rollout_corr/* 那套 ESS 刹车。刹车仍然要（P6 停止条件靠它），
+            # 但代价要如实标价。可考虑的折中：ESS **降频采样**（每 N 步算一次 old_log_prob）
+            # 而不是每步都算 —— ⚠️ 做之前先设计对照，别直接改。
+            #
+            # ★ 教训：**注释里的估算数字会被后人当实测引用。** 估算就标「估算」，
+            #   拿到实测后回填。（同一天在 E11 已经犯过一次：拿配置上限当实际值。）
             f"algorithm.rollout_correction.bypass_mode={args.bypass_mode}",
         ]
         if args.mode == "fully_async":
