@@ -5,4 +5,5 @@
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 这个项目最反复出现的失效形状
 - [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
+- [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
