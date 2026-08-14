@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: d8054c42-ce87-481d-a266-b7806a058358
-  modified: 2026-08-14T06:04:18.794Z
+  modified: 2026-08-14T13:43:39.113Z
 ---
 
 infra 线与主线训练**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
@@ -34,6 +34,24 @@ infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-13 关机前写�
    修法＝把 sampler patch 装进已在用的 `verl_patches.setup_worker()`。
    ★ 新变种：**不是忘了接，是断定接不上而断定错了。**
    ⇒ 说「verl 不支持 X」前查三层：①配置项在不在 ②代码路径调不调 ③**它在哪个进程里跑**。
+
+**2026-08-14 GPU 时段的主要结果**（详见 `docs/infra_exp/` 的 E11/E12/E13/E08/E02）：
+1. ★ **整机占空比只有 31%**：trainer 三卡空闲 54–57%，**rollout 卡空闲 82.5%、平均 47.7 W**。
+   ⇒ 比任何算子优化大一个量级（对照：全套自写 kernel 端到端 4.3%）。**Track B 的头号发现。**
+2. ★ **权重同步 60 s 的根因不是传输**：编排 8 步合计 0.038 s（0.06%），
+   99.94% 在第 5 步；而 8 GB 与 132 MB **同耗时** ⇒ 与数据量无关。
+   已排除：建 NCCL 组（一次性 46 s）、buffer 分配（2.6 ms）、`empty_cache`（12.2 ms）、
+   **`layered_summon`（A/B 60.13 vs 60.16，无差异）**、「取参数」整环节（两条不同路径同耗时）。
+   **只剩 `send_weights`**，探针已加。猜想：`collective.broadcast` 广播的是**整个 2048 MB 定长 buffer**。
+3. ✅ **E13 已落地**：`ddp_save_to_cpu` 加一行 `if param.requires_grad`
+   （8.309 GB 里只有 3.18% 可训练，冻结基座跨版本逐字节相同）。
+   `old_log_prob/ref` 比值 **1.941 → 1.069**（M7 37 样本 vs 3 样本），省 ~8.5 s/步。
+   端到端保守报 −5%（样本不足）。3 条测试守着。
+4. 🔻 **E11 降级不写 kernel**：密度 4.17% 但 lm_head 只占前向 **4.28%** ⇒ 端到端仅 4.3%，
+   而最笨的切片就有 4.0%。★ **「浪费的比例」和「能拿回的收益」隔着一个分母。**
+5. ⛔ **`gpu_util 0.75` 不是安全值**：实测第 4 次同步 OOM（vLLM 24.65 + CE 4.71，
+   剩 1.99 要 2.00，**差 0.01 GB**）。**解法不是压 gpu_util，是调小
+   `--weight-sync-bucket-mb`**（send+recv 各 2048 MB，实际只推 132 MB）。
 
 **监督密度（agent 负载的结构性特征）**：SFT 3.8–4.9% / **RL 4.17%**（E11，1755 条轨迹）。
 prompt 占 88.3%、工具返回 7.6%、助手仅 4.2% ⇒ 切 prompt 省 8.5×、完整按 mask 筛省 24×。

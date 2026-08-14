@@ -46,6 +46,37 @@ PY
 其中 97% 是和基座逐字节相同的冻结权重）。200 G 也只放得下 7 个。
 跑完用 `scripts/prune_rl_ckpts.py` 瘦身（只留 LoRA，约 250 MB）。
 
+🔴🔴 **`/workspace` 不支持权限位 —— M9 的 PostgreSQL 因此放不进去**
+
+```
+chmod 700 /workspace/xxx   →  仍是 777    （mfs 是 FUSE，不认权限位，实测）
+capsh --print              →  !cap_sys_admin   ⇒ 不能 mount
+                              ⇒ 「在 /workspace 上放个 ext4 镜像再 loop 挂载」这条路也堵死
+PostgreSQL                 →  PGDATA 必须 0700 或 0750，否则**拒绝启动**（硬编码检查）
+```
+
+⇒ **PGDATA 在物理上放不进 `/workspace`。** 处理办法是把数据库降级成**派生产物**：
+
+| 东西 | 放哪 | 重启后 |
+|---|---|---|
+| PG 二进制/库 | `/workspace/tools/postgres/root` | ✅ 在 |
+| deb 离线包（5 个，19 M） | `/workspace/tools/postgres/debs` | ✅ 在，断网也能重装 |
+| **schema / 迁移** | **仓库** `syncopate/runtime/schema.sql` | ✅ 在（真相来源） |
+| PGDATA | 本地盘 `/var/lib/postgresql/16/syncopate` | ❌ 丢（可重建） |
+
+```bash
+bash scripts/pg_bootstrap.sh          # 幂等：initdb → 起服务 → 建库 → 应用 schema
+bash scripts/pg_bootstrap.sh --reset  # 推倒重来
+```
+
+⚠️ 真要长期保存业务数据，得换**支持权限位的卷**或托管 PG —— 那是部署问题，不是开发期问题。
+
+⚠️ 二进制丢了（容器换了镜像）时的重装，不需要联网：
+```bash
+mkdir -p /workspace/tools/postgres/root
+for d in /workspace/tools/postgres/debs/*.deb; do dpkg -x "$d" /workspace/tools/postgres/root/; done
+```
+
 🔴 **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起就被驱动关掉了
 PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了**。
 ⇒ 卡间通信一律经主机内存中转。

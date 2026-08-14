@@ -12,7 +12,8 @@ metadata:
 docs/syncopate/05-handoff.md              ★ 先读：现在在哪 / 下一步 / 已定的决策 / 反复栽的坑
 docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令、参数为什么是那个值
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
-docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计
+docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 = M8 的 RAG 语料层）
+docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
 docs/syncopate-project-design-v0.1.md     权威设计（里程碑 M0–M12）
 docs/ostinato-project-design-v0.2.md      单卡 infra 优化
 docs/distributed-training-design-v0.1.md  多卡实验设计（异步 / 并行策略 / 通信画像）
