@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-13T17:23:29.602Z
+  modified: 2026-08-14T10:08:44.523Z
 ---
 
 2026-08-13 搬到 4×RTX 5090（RunPod）后实测：
@@ -15,6 +15,11 @@ metadata:
 - **卡间带宽上限 6.4 GB/s**（2 卡 all-reduce bus bandwidth，经主机内存中转）。
   对照 NVLink 的 300–450 GB/s，差约 50 倍。
 - 四卡完全对称（PHB / 单 NUMA），RAM 944 GB，`/workspace` 是网络盘。
+- ⚠️ **`/workspace` 有卷配额，而 `df` 看不到它**（`df` 报 732 T 可用，实际 100 G 就写不动了；
+  2026-08-14 已扩到 200 G）。超限是**静默**的：`cp` 产出 0 字节文件不报错，
+  M7 收尾的 27 GB ckpt 被写到一半掐断且训练日志无任何提示。
+  ⇒ **判断空间要用写入探针（真写几百 MB 再删），不能信 `df`。**
+  ⇒ fully_async 一个 ckpt 27 GB（3 个 rank 全量 state_dict），200 G 也只放得下 7 个。
 
 **因此**：训练侧 `--fsdp-size 1`（DDP）是**必选项**，不是优化。
 实测 3 卡 FULL_SHARD 每步 1182 s，1 卡不切分 198 s —— **多给卡慢 6 倍**；

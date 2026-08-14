@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-13T17:23:44.178Z
+  modified: 2026-08-14T10:08:35.160Z
 ---
 
 2026-08-13 一天里犯了两次同一个错，**都是从一个正确的观察推出一个错误的修法，而且代码改完了才去测**：
@@ -27,4 +27,15 @@ metadata:
    差点把倒退当收益收下。
 3. **结论要带成立范围。**「flash_attn 垫片就够了」对正确性够用，对序列打包不够用。
 
-相关：[[machine-4x5090-constraints]] [[project-mechanism-not-wired]]
+**2026-08-14 又加一条：查得到的指标不等于量对了东西。**
+
+`df -h /workspace` 报 **732 T 可用**，我据此在状态报告里写了"磁盘不是问题"。
+真正管事的是**卷配额**（当时 100 G），`df` 和 `shutil.disk_usage` 都看不到它 ——
+而且它是**静默**的：`cp` 产出 0 字节文件不报错，M7 收尾那个 27 GB 的 ckpt
+被写到一半掐断（三个 rank 分片大小各不相同、zip 中央目录缺失、`torch.load` 直接失败），
+**训练日志里一个字都没有**。150 步跑完了，最终模型丢了，只剩第 100 步那个。
+
+⇒ **量之前先问：这个数字量的是不是掐死我的那个东西？** 判断磁盘要用**写入探针**
+（真写几百 MB 再删），不能信 `df`。同理：判断补丁生效要看**哪个 pid** 打的日志。
+
+相关：[[machine-4x5090-constraints]] [[project-mechanism-not-wired]] [[rl-step-size-is-lr-times-steps]]

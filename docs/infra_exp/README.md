@@ -44,24 +44,61 @@
 
 ---
 
+## 1.5 · ★ 两条 track：编号是身份，track 是视图（2026-08-14 新增）
+
+目标从「把 4×5090 压榨到极限」收窄成**两个有真实需求支撑的项目**，
+于是需要一层「这个实验服务哪条线」的索引。**但 E 编号不重排**——
+§1 的规矩仍然有效（别的文档引用「E02 的结论」，编号一动引用就烂）。
+
+```
+docs/infra_exp/TRACK-A-hardware-kernel.md   负载形状 × 硬件拓扑 决定该写什么算子
+docs/infra_exp/TRACK-B-framework-async.md   agentic RL 训练系统的框架级改造
+```
+
+⇒ **track 文档回答「这条线要兑现什么、现在在哪」，E 报告回答「我们量到了什么」，
+本文件是索引。三者不重复内容。**
+
+★ **判据（这次改组的核心纪律）**：每个实验都要能回答
+**「它服务哪条 track 的哪条兑现物」**。答不上来的**不是先做后想，是先停放**——
+见下表 ⚪ 无主 的三个。理由本身是资产（§1「作废不删」的同一条精神）。
+
+---
+
 ## 2 · 实验索引
 
-> 状态：⬜ 未开始 · 🟡 进行中 · ✅ 完成 · 🔻 降级 · ⛔ 作废
+> 状态：⬜ 未开始 · 🟡 进行中 · ✅ 完成 · 🔻 降级 · ⚪ 无主（停放）· ⛔ 作废
 > 优先级：🔴 现在做 · 🟠 下一批 · ⚪ 排队中
+> GPU：🟢 不用 GPU · 🟡 可与训练共存（只出是/否）· 🔴 必须独占 · 🐟 挂主线训练一鱼两吃
+>
+> ⚠️ **一切性能数字必须独占**：除了竞争，满载 2.3 kW 的降频曲线还没测（E00），
+> 它会污染所有对照。训练期间只能做 🟢 和 🟡。
 
-| # | 实验组 | 一句话 | 状态 | 优先级 | 依赖 |
-|---|---|---|---|---|---|
-| **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | 🟡 | 🔴 | 无 |
-| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + **建纯训练 microbench**（后面所有实验的跑台） | ⬜ | 🔴 | 无 |
-| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档，扫模型大小找翻转点 | 🟡 首个数据点已有：4B LoRA 下 FULL_SHARD×3=1182s vs DDP 3.00× 线性（rl_ddp.log，待写成报告） | 🟠 | E01 |
-| **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮、计算通信重叠率、bucket 大小 | 🟡 首个数据点已有：CUMEM=0 6.4GB/s vs SHM_DISABLE 2.1GB/s | 🟠 | E00 |
-| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | **先做后端可行性探针**，再扫曲线、量 PP 气泡 | ⬜ | ⚪ | 后端探针 |
-| **E05** | [序列并行](E05-sequence-parallel.md) | Ulysses / Ring，多长的序列之后才划算 | ⬜ | ⚪ | E01 |
-| **E06** | [装更大的模型](E06-bigger-models.md) | 全参 vs LoRA 的可行域地图（显存×通信×速度） | ⬜ | ⚪ | E02 |
-| **E07** | [MoE 与专家并行](E07-moe-ep.md) | **GLM-4.7-Flash + verl + GSPO**（决策见 E07 §1）；分片 vs 复制 vs EP 三摆法对照 | 🟡 决策完成 | 🔴 | 探针 P1–P6 |
-| **E08** | [异步 RL 三模式](E08-async-rl.md) | colocate / one_step_off / fully_async | 🟡 one_step_off ✅ 跑通+调优；fully_async ❌ 上游 bug（detach_utils.py:153，见 handoff §3-⑤）；colocate 同机基线欠着 | 🟠 | 冒烟跑通 |
-| **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | ⬜ | ⚪ | E08 |
-| **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | ⬜ | ⚪ | E08 |
+| # | 实验组 | 一句话 | Track | 状态 | 优先 | GPU |
+|---|---|---|---|---|---|---|
+| **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | A+B | 🟡 | 🔴 | 🔴 |
+| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台） | A+B | ⬜ | 🔴 | 🐟 |
+| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 数据已有待成文：FULL_SHARD×3=1182s vs DDP 3.00× 线性 | 🟠 | 🟢 成文 |
+| **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮、重叠率、bucket 大小 | **A** | 🟡 数据已有待成文：CUMEM=0 6.4GB/s vs SHM_DISABLE 2.1 | 🟠 | 🟢 成文 |
+| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 后端可行性探针 → 扫曲线、量 PP 气泡 | ⚪ **无主** | ⬜ | ⚪ | — |
+| **E05** | [序列并行](E05-sequence-parallel.md) | Ulysses / Ring，多长的序列之后才划算 | ⚪ **无主** | ⬜ | ⚪ | — |
+| **E06** | [装更大的模型](E06-bigger-models.md) | 全参 vs LoRA 的可行域地图 | 🔻 并入 E07 | ⬜ | ⚪ | — |
+| **E07** | [MoE 与专家并行](E07-moe-ep.md) | GLM-4.7-Flash + verl + GSPO；分片/复制/EP 三摆法 | **A**(通信动机) + B(路由) | 🟡 决策完成 | 🟠 | 🟡 探针 |
+| **E08** | [异步 RL 三模式与分布漂移](E08-async-rl.md) | colocate / one_step_off / fully_async + **分布漂移** | **B** | 🟡 one_step_off ✅；fully_async ✅ 跑完 147 步；**漂移实测「完成→训练」段零差（7200=7200 逐桶相同）——但★发现仪器装在下游，「发出→完成」段无仪器**；colocate 同机基线欠着 | 🔴 | 🟢 已完成部分 / 🔴 基线 |
+| **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | **B** | ⬜ | 🟠 | 🔴 |
+| **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | **B** | ⬜ | 🟠 | 🟢 画像 |
+| **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **A** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
+| **E12** 🆕 | [权重同步的代价与根因](E12-weight-sync.md) | **fully_async 稳态 55.8 s；反解出固定开销 55.0 s、传输 0.8 s ⇒ 98.6% 不是传输**。根因是每次同步走完 8 步，只有第 5 步在传数据 | **B** | 🟡 读码+日志已完成，分步计时待做 | 🔴 | 🟢 已完成部分 / 🔴 分步计时 |
+| **E13** 🆕 | [sm_120 能力探底](E13-sm120-capability.md) | Triton fp8/fp4 静默退化复现 / FP8 GEMM roofline / FP4 inline PTX | **A** | ⬜ | ⚪ | 🔴 |
+| **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
+| **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
+
+### 2.1 三个「无主」实验的停放理由（不删，理由是资产）
+
+| # | 为什么停 | 什么条件下复活 |
+|---|---|---|
+| **E04** TP/PP | ① 训练侧 TP/PP **缺一整个后端**（megatron/torchtitan 均未装，sm_120 风险未验）；② 更要紧的是**没有真需求指向它**——4B+LoRA 单卡放得下，6.4 GB/s 上 TP 大概率净负 | E07 的真 EP 需要 Megatron 时，与 P4 探针一起复活 |
+| **E05** SP | 同上：减的是单卡序列长度，而稀疏投影已经把 T=16384 变成可训 ⇒ **问题被别的手段解决了** | M8 长轨迹把序列推到稀疏投影也扛不住时 |
+| **E06** 装更大的模型 | 它问的「全参 vs LoRA 可行域」已被 E07 的三摆法覆盖，独立存在会重复记账 | 并入 E07，不单独复活 |
 
 ---
 
@@ -76,6 +113,8 @@
 
 | | |
 |---|---|
+| **Track / 兑现物** | ★ A 或 B + **它服务哪条兑现物**。答不上来就别开这个实验（见 §1.5） |
+| **需求从哪来** | ★ **哪个测量指出了这个需求**（带数字/日志路径）。「我觉得应该优化」不算 |
 | **问题** | 一句话 |
 | **答案** | 一句话，**带数字** |
 | **信心** | 高/中/低 + 为什么（样本量、是否配对、有没有对照） |
@@ -159,6 +198,7 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 
 全部满足才把状态改 ✅：
 
+- [ ] **Track / 兑现物 / 需求从哪来** 三行填满（§1.5 的判据）
 - [ ] 结论卡片填满，**答案里有数字**
 - [ ] 有对照组，且对照组和实验组**只差一个变量**
 - [ ] 环境指纹完整（换框架之后还能重现）
@@ -183,9 +223,38 @@ rollout 长尾（同批最慢/平均）                          1.37–2.75×
 actor 峰值 reserved（remove_padding+fused_kernels 后）  13.92 GB / 上限 ~18.8 GB
 prefix cache 命中率（单副本, gpu_util 0.40）            96.7–97.5%
 DDP vs FSDP（4B LoRA）: FULL_SHARD×3 = 1182 s/步, 单卡 198 s, DDP 3.00× 线性
-dynamic_bsz（sdpa 时代）: update_actor 84.5 → 184.9 s（2.19× 倒退; FA2 装上待重测）
-权重同步: one_step_off update_weights 13.3 s（27%/步）/ fully_async param_sync 24.0 s ← 未查因
 flash-attn: 真轮子 2.8.3 已装（2026-08-13 晚), sm_120 verified, /workspace/wheels/
+★ 监督密度（agent 负载的结构性特征，两个阶段同量级）
+    SFT  3.8–4.9%（5402 token 中仅 204 进 loss）
+    RL   **4.17%**（E11，1755 条真实轨迹：prompt 88.3% / 工具返回 7.6% / 助手 4.2%）
+         逐条中位 3.94% · p90 5.56% · 最大 15.21%；按轮数 1 轮 0.88% → 8 轮 8.41%
+         response 中位仅 422 token（配置上限 1536 的 27%）；prompt 中位 3584 = 打满
+    ⇒ lm_head 计算量：切 prompt 省 8.5×，完整按 mask 筛省 24×
 4 卡 all-reduce 曲线                                    ⬜ 还没测（E00）
 满载功耗与降频（2.3 kW）                                ⬜ 还没测（E00，会污染所有对照）
+
+★ FA2 × dynamic_bsz 2×2（2026-08-14 主线实测，one_step_off / Qwen3-4B base / bypass_mode）
+    update_actor 按 token 归一（ms/token）
+        单卡  sdpa+static 0.439 → FA2+static 0.342 → FA2+dynamic 0.244   （1.82×）
+        3 卡  sdpa+static 0.151 →                    FA2+dynamic 0.083   （1.78×）
+    端到端 3 卡 49.5 → 32.6 s/步；ref 17.3 → 12.4
+    ⇒ ★ dynamic_bsz 的**符号由 attention 决定**：sdpa 下 ×2.18 倒退，FA2 下 ÷1.37 提升。
+      原结论「dynamic_bsz 慢 2.2×」没错，**缺的是成立范围**。默认建议翻回 True。
+    ⇒ FA2 在 static 那档也快 25% ⇒ 证实「不打包的单序列基线本来也在 sdpa 慢路径上」
+    原始日志 logs/probe_fa2_static.log / probe_fa2_dyn.log / probe_fa2_dyn_3c.log
+
+★ 权重同步 —— ⚠️ **按模式分别记，不能跨模式引用**（E12 §6-①）
+    one_step_off  update_weights  11.1–13.6 s（与 attention/打包/卡数全无关）
+    fully_async   param_sync      首次 103.3 s（推基座+LoRA）/ **稳态 55.8 s**（只推 LoRA 132 MB）
+                                  中位 56.0 · 标准差 1.79（3.2%）· 37 次
+    ★ 两点反解（数据量差 60×、时间只差 1.85×）：
+        有效带宽 ≈ 168 MB/s · 传输分量 ≈ 0.8 s · **固定开销 ≈ 55.0 s = 98.6%**
+    ⇒ 根因不是传输，是同步前后的 8 个步骤（KV cache 拆建 / buffer alloc-free +
+      empty_cache / partial rollout 中断恢复）。分步计时待做 → E12-b
+
+★ fully_async 一个 step 的完整分解（37 步均值，`--sync-every 4`；分项合计 297.7 vs step 296.4，账对得上）
+    update_actor 98.1 (33.1%) · old_log_prob 76.3 (25.7%) · param_sync 55.8 (18.8%)
+    ref 39.2 (13.2%) · gen 18.6 (6.3%) · adv 9.6 (3.2%)
+    ⇒ **训练侧三次前向占 72%，rollout 生成只占 6.3%**（异步把生成藏起来了）
+    ⚠️ old_log_prob 实测 76.3 s，而 launch_rl 注释估的是「+6–10 s」——**低估 8–13 倍**（E12 §6-②）
 ```

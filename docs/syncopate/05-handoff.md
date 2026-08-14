@@ -1,6 +1,6 @@
 # Syncopate 交接文档
 
-> 更新于 **2026-08-13**（搬到 4×5090 · 环境重建完成 · 异步 RL 跑通并调优 · M7 已启动）
+> 更新于 **2026-08-14**（M7 跑完并验收 · fully_async 打通 · 结论：位移太小，下一跑改 lr）
 >
 > **这份只放：现在在哪 / 下一步做什么 / 已定的决策 / 反复栽的坑。**
 > 怎么搭环境、怎么跑命令、参数为什么是那个值 → **`08-machine-and-environment.md`**
@@ -31,19 +31,24 @@
 |---|---|
 | M0–M5（地基 / 数据成熟度 / 沙盒 / RAG v0 / L5 归因 / L6 扩量 / 负面数据） | ✅ 全部完成，**prompt / 工具 / 环境已冻结** |
 | **M6 · SFT 冷启动** | ⚠️ **条件毕业**（§3：两条判据实测互斥）。**选 v11-e1** |
-| **M7 · RL 正式训练** | ⬜ **下一步**。管线全通、配置已调优，但**还没正式起跑**（见 §2.1） |
+| **M7 · RL 正式训练** | ✅ **跑完并验收**（150 步 / 3h09m / 零错误）。⚠️ **结论是「没测出差异」**，见 §2.1 |
 | 搬到 4×5090 | ✅ 环境、数据、SFT、评测全部在新机器上重建并验证 |
-| 异步 RL · `one_step_off` | ✅ **跑通并调优**（分卡异步，连跑四轮全绿，稳态 49.5 s/步） |
-| 异步 RL · `fully_async` | 🔴 **卡住**：我们的 AgentLoop 缺策略版本字段（§2.1） |
-| 动态分池 | ✅ `one_step_off` 下生效；⚠️ **`fully_async` 下不生效** |
+| 异步 RL · `one_step_off` | ✅ 跑通并调优（稳态 49.5 s/步；FA2+打包后 **32.6 s/步**） |
+| 异步 RL · `fully_async` | ✅ **2026-08-14 打通**（翻了四堵墙，见 §2.2），稳态 ~76 s/步 |
+| 动态分池 | ✅ `one_step_off` 下生效；⚠️ `fully_async` 下**没接上**（可修，见 §2.3） |
 
 ```
 数据 v11   1370 条 · 17 模板 · 90 格子 · 28 工具 · 32 cap · 5 种行为
 三桶       EVAL 198 / SFT 434 / RL 738（train 590 + val 148），内容级零重叠实测
-测试       246 全过（0 skipped）
+测试       250 全过（0 skipped）
 SFT        v11 e1/e2 已在新机器重训 + 重评，**结论与旧机器一致 ⇒ 选 e1**
-RL 稳态    one_step_off 3 卡 DDP：49.5 s/步
+M7 产物    checkpoints/grpo/m7_v11e1/global_step_25  ← param_version 命名 = **global step 100**
+           models/Qwen3-4B-rl-m7-s100/（已合并）  wandb run `m7_v11e1` / u6205j1n
 ```
+
+⚠️ **最终 ckpt（step 150）丢了**：收尾 27 GB 写盘撞上卷配额被静默截断（`df` 看不到配额）。
+可用的是第 100 步那个 —— 好在 **100 步正好训完整整一遍**（590/590 条 RL prompt 全覆盖，
+平均每题 1.02 组；150 步是 1.53 遍），当结论点反而更干净。配额已扩到 200 G。
 
 ★ **M6、M7 是考试不是施工**，跑在冻结的东西上。下一次会动 prompt/工具/环境的是 **M8（RAG v1 · 非结构化侧）**。
 
@@ -51,33 +56,73 @@ RL 稳态    one_step_off 3 卡 DDP：49.5 s/步
 
 ## 2 · ★ 下一步该做什么
 
-### 2.1 起跑 M7 —— 用 `one_step_off`，别用 `fully_async`
+### 2.1 ★★★ M7 的结论：模型只动了 **0.0093%**，所以什么都没测出
 
-**一切就绪**：起点模型已 merge 好（`models/Qwen3-4B-sft-v11-e1`）、数据在
-`data/rl/v11`、配置已调优（见环境文档 §4.2）。命令：
-
-```bash
-python -m syncopate.train.launch_rl --mode one_step_off \
-  --model models/Qwen3-4B-sft-v11-e1 \
-  --train-file data/rl/v11/train.parquet --val-file data/rl/v11/val.parquet \
-  --save-path checkpoints/grpo/m7_v11e1 --experiment m7_v11e1 --lora-rank 32 \
-  --steps 150 --train-batch-size 6 --rollout-n 8 --ppo-mini-batch-size 6 \
-  --micro-batch-size 1 --max-num-seqs 64 --object-store-gb 2 \
-  --max-prompt-length 3584 --max-response-length 1536 --save-freq 25 \
-  --latency-scale 0.01 --wandb-mode offline
+```
+配对比较（冻结 EVAL 198 条，对照 _audit/v11_sft_e1_m2.json）
+  均值           0.803 → 0.814
+  配对差值        +0.011      最小可检出差异 0.013   ⇒ 「没测出差异」
+  逐题            赢 73 / 平 69 / 输 56
+  决策位熵        0.0270 → 0.0724（P5 通过，探索没死）
+  有梯度格子      120 → 116（略退）
 ```
 
-约 **49.5 s/步 × 150 ≈ 2.1 小时**（+ 8 分钟启动）。
+⚠️ **配对 MDE 是 0.013**；0.048 是**不配对**的。别引用错，差近四倍。
 
-🔴 **`fully_async` 先别用**：2026-08-13 试到最后一步失败，根因是
-**我们自己的 `verl_agent_loop.py` 没给轨迹标注策略版本**（`min/max_global_steps`），
-而 `fully_async` 拿它算 staleness ⇒ `None - None` TypeError。详见环境文档 §4.3。
+**根因不是"RL 推不动"，是位移被 lr 锁死**（直接量的）：
 
-★ **补这个字段的优先级很高，但不是因为"修 bug"**：那个字段**正好就是异步研究要量的东西**
-（每条轨迹落后了几个版本 = staleness 的经验分布），补上它等于**把 σ²(k) 的真值测量接上**，
-可以和单卡离线合成的 ESS/N=0.846 对照 —— 那是设计文档 D-A6 的核心问题。
+```
+||ΔW|| / ||W|| = 0.0093%     ← 正常 LoRA 微调是 0.5%–5%，小了两三个数量级
+100 次更新 × lr 1e-6 = 1e-4，实测 9.3e-5 —— 几乎正好贴着这个上界
+```
 
-### 2.1.1 跑完怎么查（`06-rl-run-protocol.md`）
+★ **GRPO + AdamW 下 reward 只决定方向，不决定距离**：advantage 组内归一化 ⇒
+"好很多"和"好一点"梯度幅度一样；AdamW 每步位移 ≈ lr，与梯度大小无关。
+⇒ **位移 ≈ lr × 步数 × 方向一致性，reward 完全不参与。**
+
+★ **但方向对、而且模型极敏感**：0.0093% 的位移下 `false_claim_cap` 就掉了 19%
+（130→105）、`missing_safety_line_cap` −11；代价是 `unauthorized_write` +3、
+`unconfirmed_irreversible` +2，以及 `cross_region_generalization` / `duplicate_write`
+两类**基线上为 0、RL 后新长出来的违规**。⇒ 杠杆在，**放大 lr 会同时放大好坏两个方向。**
+
+**⇒ 下一跑只改一个变量：`--lr 1e-6 → 1e-5`。** 理由：步数是钱（150 步 = 3.2 h）、
+lr 免费；`grad_norm` 整跑 0.011–0.06 稳得发闷，稳定性有余量。不稳就退 5e-6。
+停止条件今天已全部实跑验证（见 §2.4）。
+
+### 2.2 fully_async 翻过的四堵墙（都已修，有测试）
+
+| 墙 | 性质 | 修法 |
+|---|---|---|
+| `min/max_global_steps` 缺失 ⇒ `None-None` TypeError | **我们的** AgentLoop 丢了 `extra_fields` | `verl_agent_loop.py` 照 `tool_agent_loop.py:248-254` 聚合；判据 `[agent-loop] 策略版本字段 ✓` |
+| `save_model_to_cpu` 断言要 DTensor | 上游假定分片 × 本机必须 DDP | `verl_patches` P2，只在**无 DTensor** 时接管；4 条数值往返测试 |
+| 补丁打在 driver、断言在 worker | **作用域** | `runtime_env.worker_process_setup_hook` |
+| 第 8 步权重同步 OOM（差 0.09 GB） | bucket 住 rollout 卡 | `--weight-sync-bucket-mb 1024 --rollout-gpu-util 0.70` |
+
+**跑通后的第一批真机异步数据**（这才是这一跑真正的收获）：
+
+```
+ESS/N            0.74–0.88，整跑稳定     ← 单卡离线合成预测 0.846，落在区间内 ✅
+陈旧轨迹          576 / 7200 = 8.0%
+partial_ratio    0.0                    ← 没有任何轨迹跨越版本边界
+rollouter 空闲率  81.0%                  ← ★ 1 rollout : 3 trainer 严重过配
+param_sync       58–103 s（占步长 ~19%） ← 与 one_step_off 的 update_weights 11–13 s 不是一回事
+```
+
+⇒ **`partial_ratio=0` 解释了漂移为什么是 0**：轨迹太短（4.5 工具步、~700 token）
+相对同步周期（4 步 ≈ 300 s），根本碰不到边界。想让这条研究线有内容，
+要么调大 `--latency-scale`，要么缩短同步周期。
+⚠️ 另注：`record_dispatch` 记在轨迹**末尾** ⇒ "下发"实为"跑完"，
+"尝试过但从未跑完"的轨迹这把尺子看不见。
+
+### 2.3 已知欠着的三件
+
+| 事 | 为什么 | 成本 |
+|---|---|---|
+| **动态分池接进 fully_async** | `fully_async_rollouter.py:464` **确实调** `create_rl_sampler`（import 在函数体内，最好 patch）。没生效是**作用域**：rollouter 在另一个 worker 进程。⇒ 把 sampler patch 也装进 `verl_patches.setup_worker()` | 几行 |
+| **colocate 同机基线** | 所有加速比仍无同机分母 | 约 30 分钟 |
+| **卡配比实验** | 空闲率 81% ⇒ 2+2 / 1+3 都该试 | 一次冒烟 |
+
+### 2.4 跑完怎么查（`06-rl-run-protocol.md`）
 
 ```bash
 python -m syncopate.train.rl_report  checkpoints/grpo/m7_v11e1      # cap/耗时/漂移，补报 wandb
@@ -89,19 +134,22 @@ python -m syncopate.train.entropy    --adapter <ckpt> --limit 24
 ⚠️ **对照基线是 `_audit/v11_sft_e1_m2.json`**（新机器、vLLM 引擎跑的 e1）。
 别拿旧机器的审计配对 —— 引擎决定采样内核。
 
-⚠️ **`compare` 会自己打印最小可检出差异，不要绕过它读均值。** 配对 MDE ≈ 0.05。
+⚠️ **`compare` 会自己打印最小可检出差异，不要绕过它读均值。配对 MDE = 0.013**
+（不配对是 0.048 —— **别引用错，差近四倍**）。
 
-**停止条件（优先级高于分数曲线）**：ESS/N < 0.3 / 决策位熵 < 0.05 / reward 涨但 cap 不降（连续 3 步）/ grad_norm 跳两个数量级。
+**停止条件（优先级高于分数曲线）**：ESS/N < 0.3 / 决策位熵 < 0.05 /
+reward 涨但 cap 不降（连续 3 步）/ grad_norm 跳两个数量级。
 
-### 2.2 三件已知欠着的事
+★ **2026-08-14 实跑验证过四条判据都拿得到**：ESS 看
+`rollout_corr/rollout_is_eff_sample_size`（键名不叫 ess）、grad_norm 和长度在日志、
+**cap-vs-reward 控制台看不到**（verl 的 `compute_data_metrics` 只认两个字段），
+要按步段聚合 `rollout_dumps/*.jsonl` 里的 32 个 `cap/*` 字段 —— 不必等跑完的 `rl_report`。
 
-| 事 | 为什么 | 成本 |
-|---|---|---|
-| **colocate 同机基线** | 现在所有加速比**没有同机分母**；且老路子在这台机器上一次都没验证过 | 约 30 分钟 |
-| **`update_weights` 13.3 s 查因** | 占每步 27%，且随训练卡数上升 —— **异步方案的上限所在**。LoRA 只有 132 MB，时间显然不在传输上 | 未知 |
-| ~~**装真 flash-attn**~~ | ✅ **已装（2026-08-13 晚，零编译）**：找到完全匹配的预编译轮子（mjun0812/flash-attention-prebuild-wheels，`2.8.3+cu128torch2.9-cp312`，cuobjdump 验过 sm_120 kernel 在内，已存 `/workspace/wheels/`）。varlen 对拍 ✓ 跨序列隔离=0 ✓。`launch_rl` 默认已切 `flash_attention_2`。**换机器直接装这个轮子，垫片脚本退役。剩下的活：重测 dynamic_bsz** | ~~编译 1–2 小时~~ → 已完成 |
+★ **ckpt 合并要先补 `actor/huggingface/`**（fully_async 不写它，merger 又要它）：
+从起点模型拷 config/tokenizer 九件套，**逐字节校验大小**，然后
+`python -m verl.model_merger merge --backend fsdp --local_dir <ckpt>/actor --target_dir <out>`。
 
-### 2.3 之后
+### 2.5 之后
 
 M7 通过 → M8（RAG v1，会解冻 prompt/工具/环境）。
 多卡实验线（异步三模式对照 / 并行策略 / 前缀缓存分片）见 `../distributed-training-design-v0.1.md`。
@@ -219,6 +267,28 @@ megatron/torchtitan 后端一个都没装，目前用不了。
 - **判据永远是日志**：`[pool] 动态分池启用` / `[rl] 模式=...` / `[verl-patch] ...` —— **没有这行就是没生效**。
 - **硬失败，不自动降级**：`--mode` 在卡数不够时直接报错。静默退回单卡的表现是「跑起来了、但测的根本不是异步」。
 - **需要精确控制的量，别靠取模碰运气。**
+
+### ★★ 2026-08-14：三个比"忘了接"更隐蔽的变种
+
+**① 判据行打出来了 ≠ 补丁在需要它的进程里生效 —— 作用域。**
+P2 补丁打在 driver，`[verl-patch]` 照常打印，断言却在 `WorkerDict` 这个 Ray actor
+进程里触发。⇒ 判据要连**哪个 pid 打的**一起看。修法：`worker_process_setup_hook`。
+
+**② 判据行不能写断言，只能写观测。**
+`main_ppo_pool` 打的是「`fully_async` 不调 `create_rl_sampler` ⇒ 本轮不生效」。
+**这句话本身是错的** —— 它调了（`fully_async_rollouter.py:464`，import 还在函数体内）。
+真因仍是作用域。⇒ 一行陈述"为什么不行"的日志，**把"其实能行、只是没接上"整个盖住**，
+而且它长得像个合格判据。⇒ 说「上游不支持 X」之前查三层：
+**配置项在不在 / 代码路径调不调 / 它在哪个进程里跑。**
+
+**③ 短冒烟证明不了长跑的稳定性 —— 时间维度。**
+`--sync-every 4` ⇒ 首次同步在第 4 步、冒烟只跑 3 步；而真正炸的是**第二次**同步
+（第 8 步，差 0.09 GB）—— rollout 卡可用显存随生成推进变紧。
+⇒ **冒烟至少覆盖两个同步周期。**
+
+**④ 查得到的指标 ≠ 量对了东西。** `df` 报 732 T 可用，掐死我们的是**卷配额**
+（`df` 看不到，超限还是静默的）⇒ 最终 ckpt 被写一半掐断，训练日志毫无提示。
+⇒ **判断空间要用写入探针，不能信 `df`。**
 
 ---
 
@@ -357,8 +427,11 @@ megatron/torchtitan 后端一个都没装，目前用不了。
 
 > 「读 `docs/syncopate/05-handoff.md`，环境和命令看 `08-machine-and-environment.md`。
 > **M0–M5 完成、prompt/工具/环境冻结、M6 条件毕业（选 v11-e1）。**
-> 已经搬到 **4×5090**，环境/数据/SFT/评测全部重建并验证过，**异步 RL 跑通并调优到 49.5 s/步**。
-> **M7 正在跑**（fully_async，150 步）—— 先看它的结果（§2.1），再补 §2.2 那三件欠着的事。
-> ⚠️ 这台机器上**只能用 DDP**，FSDP/TP 是净亏损（§5）。」
+> **M7 已跑完并验收**：fully_async 150 步全绿，但**结论是「没测出差异」**——
+> 直接量出来模型只动了 **0.0093%**，因为 GRPO+AdamW 下**位移 ≈ lr × 步数，reward 不参与**（§2.1）。
+> **下一跑只改一个变量：`--lr 1e-6 → 1e-5`。** 别加步数（步数是钱，lr 免费）。
+> 真正的收获在 §2.2：fully_async 打通 + 第一批真机异步数据（ESS 0.74–0.88 对上离线预测的
+> 0.846、rollout 空闲率 81% ⇒ 卡配比严重过配）。
+> ⚠️ 这台机器上**只能用 DDP**（§5）；`/workspace` **有 `df` 看不到的卷配额**（§6-④）。」
 
 方法论问题先查 `核心手册/AgenticRL/sft-finetune-takeaways.md`，别凭通用经验答。

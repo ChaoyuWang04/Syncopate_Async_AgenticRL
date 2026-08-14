@@ -5,11 +5,11 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-13T17:23:59.437Z
+  modified: 2026-08-14T10:08:14.453Z
 ---
 
 **「我建了一个机制，然后假设它会自动生效。」** 这是 Syncopate 反复栽的同一个形状，
-到 2026-08-13 已经累计十次以上（cap 监视的工具不在菜单里、稀疏格子被取模削成 0 条、
+到 2026-08-14 已经累计十五次以上（cap 监视的工具不在菜单里、稀疏格子被取模削成 0 条、
 verl 把日志级别硬编码成 WARN 导致统计看不到、动态分池的 monkeypatch 对另一个 trainer
 无效、staleness 修正在 bypass 模式下不产出 ESS 指标……）。
 
@@ -26,4 +26,25 @@ verl 把日志级别硬编码成 WARN 导致统计看不到、动态分池的 mo
 4. 上游也会犯：verl 的 `train_batch_size` 在 fully_async 里强制为 0（而不是忽略），
    就是**逼你发现"你以为在控制的东西其实没接上"** —— 这是好设计，值得抄。
 
-相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]]
+---
+
+## ★ 2026-08-14 一天里撞到的三个新变种（都比"忘了接"更隐蔽）
+
+**① 判据行打出来了 ≠ 补丁在需要它的进程里生效 —— 作用域。**
+`verl_patches` 的 P2 打在 driver，`[verl-patch]` 那行照常打印，而断言在
+`WorkerDict` 这个 **Ray actor 进程**里触发。修法是 `runtime_env.worker_process_setup_hook`。
+⇒ **判据要连作用域一起看：是哪个 pid 打的这行？**
+
+**② 判据行不能写断言，只能写观测。**
+`main_ppo_pool` 打的是 `[pool] ⚠️ fully_async 不调 create_rl_sampler ⇒ 本轮不生效`。
+**这句话本身是错的**：`fully_async_rollouter.py:464` 调了，import 还写在函数体内
+（最适合 monkeypatch）。真因仍是作用域——rollouter 在另一个 worker 进程里。
+⇒ 一行陈述"为什么不行"的日志，**把"其实能行、只是没接上"整个盖住了**，而且它长得像个合格判据。
+⇒ 凡是说「上游不支持 X」，先查三层：**① 配置项在不在 ② 代码路径调不调 ③ 它在哪个进程里跑。**
+
+**③ 短冒烟证明不了长跑的稳定性 —— 时间维度。**
+`--sync-every 4` ⇒ 第一次 bucketed 权重同步在第 4 步，而冒烟只跑 3 步；
+真正炸的是**第二次**同步（第 8 步）：rollout 卡可用显存随生成推进变紧，
+第一次够用、第二次差 0.09 GB。⇒ 冒烟至少覆盖**两个**同步周期。
+
+相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]

@@ -11,9 +11,40 @@
 4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 570.195.03  CUDA 12.8  torch 2.9.0+cu128
 CPU   2× EPYC 7543（120 核 / 2 NUMA）      RAM 944 GB
 拓扑  GPU0–3 两两 PHB、全部 NUMA 0 —— **四卡完全对称**
-盘    /workspace 是网络盘（mfs）733T；/ 只有 30G overlay
+盘    /workspace 是网络盘（mfs）；/ 只有 30G overlay
       ⇒ HF_HOME、.venv、models、checkpoints 全部必须放 /workspace
 ```
+
+🔴🔴 **`/workspace` 有卷配额，而 `df` 看不到它 —— 2026-08-14 因此丢了一个 ckpt。**
+
+```
+df -h /workspace     →  733 T 可用     ← 这是底层网络文件系统，不是给你的额度
+真实额度              →  当时 100 G（已扩到 200 G）
+```
+
+**超限是静默的**：`cp` 产出 0 字节文件不报错（`cat` 才会喊 `Disk quota exceeded`）；
+M7 收尾那个 27 GB 的 ckpt 被写到一半掐断 —— 三个 rank 分片大小各不相同、
+zip 中央目录缺失、`torch.load` 报 `failed finding central directory`，
+**而训练日志里一个字都没有**，进程还是 exit 0。
+
+⇒ **判断空间只能用写入探针**（真写几百 MB 再删），别信 `df`：
+
+```bash
+python - <<'PY'
+import os; p="/workspace/.quota_probe"; CH=os.urandom(1<<20); n=0
+try:
+    with open(p,"wb") as f:
+        for _ in range(5000): f.write(CH); n+=1
+    print(f"写入 {n} MiB 未触上限")
+except OSError as e: print(f"写到 {n} MiB 失败 → {e}")
+finally:
+    os.path.exists(p) and os.remove(p)
+PY
+```
+
+⇒ **容量账**：fully_async 一个 ckpt **27 GB**（3 个 rank 的全量 state_dict，
+其中 97% 是和基座逐字节相同的冻结权重）。200 G 也只放得下 7 个。
+跑完用 `scripts/prune_rl_ckpts.py` 瘦身（只留 LoRA，约 250 MB）。
 
 🔴 **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起就被驱动关掉了
 PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了**。
@@ -182,38 +213,48 @@ step 49.5 / 50.7 s   ← 重复性很好
 ```
 colocate      verl.trainer.main_ppo                      rollout 和 train 同卡（单卡时代唯一选择）
 one_step_off  experimental/one_step_off_policy           分卡、落后一步   ✅ 验证充分
-fully_async   experimental/fully_async_policy            分卡、两个独立池 ⚠️ 第一次尝试
+fully_async   experimental/fully_async_policy            分卡、两个独立池 ✅ 2026-08-14 打通
 ```
 
 ⚠️ **`fully_async` 的数据流模型不同**：rollouter 按 `gen_batch_size=1` 连续产样本，
 trainer 攒够 `ppo_mini_batch_size × require_batches` 就训一步。
 ⇒ `data.train_batch_size` **必须是 0**（有硬断言），`rollout.total_rollout_steps` 才是收工点。
-⇒ **动态分池在 fully_async 下不生效**（它不调 `create_rl_sampler`），启动时会打警告。
 
-#### 🔴 `fully_async` 目前跑不了：我们的 AgentLoop 缺一个字段（2026-08-13 实测到这一步）
+⚠️⚠️ **两个键在两种模式下语义不同，别照搬**：
 
-启动、建池、rollout 生成全都通过，死在 trainer 组装 batch 的那一刻：
+| 键 | one_step_off | fully_async |
+|---|---|---|
+| `train_batch_size` | 一步取几条 | **强制 0**（硬断言） |
+| `--save-freq` | 每 N 个 **global step** | 每 N 个 **param_version**（= N×`sync-every` 个 step） |
 
-```
-detach_utils.py:153  assemble_batch_from_rollout_samples
-TypeError: unsupported operand type(s) for -: 'NoneType' and 'NoneType'
-  ← param_version_diff = [abs(a-b) for a,b in zip(max_global_steps, min_global_steps)]
-```
+⇒ `--save-freq 25` + `--sync-every 4` ⇒ **每 100 步才存一次**，150 步只出 2 个 ckpt
+（中途 1 + 收尾强制 1，`fully_async_trainer.py:410`）。
+⇒ ckpt 目录按 **param_version** 命名：跑 150 步看到的是 `global_step_37`，不是 `global_step_150`。
 
-**根因**：`fully_async` 要求 AgentLoop 给每条轨迹标注**它是用哪个版本的策略生成的**
-（`min_global_steps` / `max_global_steps`）—— 那是它算 staleness 分布和
-partial-rollout 比例的**唯一依据**。verl 自带的 `tool_agent_loop.py:251` 会从
-`output.extra_fields` 里取并向上传，而**我们自己写的 `syncopate/train/verl_agent_loop.py`
-根本没设这两个字段** ⇒ 恒为 None。
+#### ✅ `fully_async` 打通（2026-08-14）—— 翻过的四堵墙
 
-⇒ **这不是配置问题，是我们的 AgentLoop 要补的接线。** 修法方向：在 rollout 每一轮拿到
-生成结果时，把引擎返回的策略版本写进 `extra_fields`，多轮取 min/max。
+| 墙 | 性质 | 修法 / 判据 |
+|---|---|---|
+| `detach_utils.py:153` `None - None` | **我们的** AgentLoop 把 `TokenOutput.extra_fields` 整个丢了 | `verl_agent_loop.py` 照 `tool_agent_loop.py:248-254` 聚合（首轮收 min、后续抬 max）；判据 `[agent-loop] 策略版本字段 ✓` |
+| `save_model_to_cpu` 断言要 DTensor | 上游假定 trainer 侧在分片，而本机**必须** DDP | `verl_patches` P2，**只在无 DTensor 时接管**；4 条数值往返测试 |
+| 补丁打在 driver、断言在 worker | 作用域 | `ray_kwargs.ray_init.runtime_env.worker_process_setup_hook=syncopate.train.verl_patches.setup_worker` |
+| 第 8 步权重同步 OOM（差 0.09 GB） | bucket 住在 rollout 卡上 | `--weight-sync-bucket-mb 1024 --rollout-gpu-util 0.70` |
 
-⚠️ 有意思的是：**这个字段正好就是异步研究要量的东西**（每条轨迹落后了几个版本 = staleness 的
-经验分布）。补上它不只是"让 fully_async 能跑"，而是**把 σ²(k) 的真值测量接上** ——
-对照单卡离线合成的 ESS/N=0.846。**优先级因此比"修个 bug"高。**
+★ 那个策略版本字段**正好就是异步研究要量的东西**：`max-min` = 轨迹横跨几个版本。
+实测 `stale_trajectory_processed 576/7200 = 8.0%`、`partial_ratio 0.0`。
 
-⇒ 在此之前，**分卡异步用 `--mode one_step_off`**（已连跑四轮全绿，稳态 49.5 s/步）。
+⚠️ **动态分池在 fully_async 下没接上，但不是模式限制**：
+`fully_async_rollouter.py:464` **确实调**了 `create_rl_sampler`（import 还写在函数体内，
+最适合 monkeypatch）；没生效是因为 rollouter 跑在**另一个 worker 进程**里，
+而 `setup_worker()` 目前只装 fsdp 那个补丁。⇒ 把 sampler patch 也装进去即可。
+（旧注释「它不调 create_rl_sampler」**是错的**，2026-08-14 读码更正。）
+
+#### 合并 fully_async 的 ckpt 要先补 `huggingface/`
+
+`fully_async` 存盘不写 `actor/huggingface/`，而 `verl.model_merger` 要它。
+从起点模型拷 config/tokenizer 九件套（**逐字节校验大小**，配额超限时 `cp` 会静默产出 0 字节），
+再 `python -m verl.model_merger merge --backend fsdp --local_dir <ckpt>/actor --target_dir <out>`。
+产出里同时有完整模型和 `lora_adapter/`。
 
 ---
 

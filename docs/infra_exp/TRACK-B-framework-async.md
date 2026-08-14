@@ -1,0 +1,313 @@
+# Track B · agentic RL 训练系统的框架级改造
+
+> 建于 2026-08-14。**这是一条 track 的进度文档，不是实验报告**——
+> 数据在 E 报告里，这里只管「这条线要兑现什么 / 现在在哪 / 下一步做什么」。
+> 平行的另一条线：[`TRACK-A-hardware-kernel.md`](TRACK-A-hardware-kernel.md)
+
+---
+
+## 0 · 论点（这条线存在的理由）
+
+> **通用 RL 框架的默认假设，在 agentic 负载上逐条失效。我们逐条量、逐条改。**
+
+失效点不是猜的，每条都有实测或源码支撑：
+
+| 通用框架的假设 | 在 agentic 负载上的实际情况 |
+|---|---|
+| 「rollout 时长大致齐整，barrier 的代价可接受」 | 同批最慢/平均 **1.37–2.75×**（多轮 + 工具往返）⇒ barrier 浪费的就是这块 |
+| 「权重同步 = 传输，量小就便宜」 | LoRA 仅 132 MB（6.4 GB/s 上约 0.02 s），实测 **11.1–13.6 s 恒定**，占步 **36%**。差 600 倍，**时间不在传输上** |
+| 「训练到的样本 = 下发的样本」 | sync 下恒真（barrier 保证），**异步下短任务先回、长任务被切断** ⇒ 分布漂移。而长链正是 agentic 的核心能力 |
+| 「rollout 与训练的分布差是数值偏差」 | MoE 上两侧 router 可能选**不同专家** = 走了不同计算路径（Miles R3），verl 无路由重放 |
+| 「staleness 有人在记」 | verl 的 fully_async 要 `min/max_global_steps`，**我们的 agent loop 没透传** ⇒ 曾崩在 step 0（2026-08-14 已解，M7 正在跑 fully_async） |
+
+### ⚠️ 2026-08-14 状态变更：异步与 staleness 修正**已经上线了**
+
+M7 现在跑的就是 `fully_async`（3 trainer + 1 rollout），而且两层修正都开着：
+
+```
+[rl] 模式=fully_async  verl 入口=verl.experimental.fully_async_policy.fully_async_main
+algorithm.rollout_correction.bypass_mode=False   ⇒ decoupled：三个 policy、显式 IS 权重
+async_training.staleness_threshold=0.1           ⇒ 陈旧度上限
+async_training.partial_rollout=True              ⇒ 被打断的轨迹续跑
+--dynamic-bsz True --max-token-len-per-gpu 16384
+```
+
+⇒ **这条 track 的重心必须移动**：「把异步跑起来」「加 staleness 修正」**已经不是待办**。
+见 §0.6 的重新定位。
+
+---
+
+## 0.6 · ★★ 重新定位：AReaL 已经做完的，和它留下的洞（2026-08-14）
+
+读了 AReaL 论文（arXiv 2505.24298，清华 IIIS + 蚂蚁 + HKUST）后必须承认：
+
+| AReaL 的做法 | 我们的现状 | 判断 |
+|---|---|---|
+| **Decoupled PPO**：三个 policy（behavior / proximal / target），IS 比率对 **π_prox** 算而非 π_behav，防止当前策略被陈旧低质策略拽偏 | ✅ `bypass_mode=False` 就是它 | **不是新东西** |
+| **最大陈旧度 η**：rollout 控制器优先发老轨迹、拒绝会越界的请求 | ✅ `staleness_threshold=0.1` 同思路 | **不是新东西** |
+| **可打断 rollout**：权重更新时打断生成、丢弃旧 KV、用新权重重算后续写 | ✅ `partial_rollout=True` | **不是新东西** |
+| **Proposition 1**：跨多版本生成的轨迹等价于从某个单一 behavior policy 采样（不同版本走过的状态互不相交） | 我们没有对应论证 | 理论依据，可引用 |
+| 消融：decoupled 下 η≤4 与同步版差 ±1 分内；朴素 PPO 超 η=1 就崩 | 我们的 η 换算是多少，没算过 | **可补的小实验** |
+
+### ★ 但论文自己留了一个洞
+
+> 原文：**没有**定量测过短序列是否被优先生成/训练，**也没有**实现按长度分层的采样，
+> 并把它列为 future work。他们只承认「上下文短时收益变小，因为很多序列生成了却没被有效消费」。
+
+### 🆕 AReaL **2.0**（arXiv 2607.01120，cs.DC，2026-07）——读完的结论：**我们的缝隙更安全了**
+
+同一批作者（Wei Fu / Zhiyu Mei / Jiaxuan Gao 等 24 人）的新作，但**方向完全变了**：
+
+| | AReaL 1.0（2505.24298） | AReaL 2.0（2607.01120） |
+|---|---|---|
+| 分类 | cs.LG，算法+系统 | **cs.DC，纯系统/架构** |
+| 主张 | 异步 RL 加 decoupled PPO 能吃掉 staleness | **瓶颈不在算法，在 agentic RL 的系统层** |
+| 算法层 | 提出 decoupled PPO / η / 可打断 rollout | **明确原样继承，一处未改** |
+| 新东西 | — | ① **ATDP**（Agent Trajectory Data Protocol，轨迹事件 schema）② data proxy 与治理（跨框架拦截、回放分级、reward harvesting、租户隔离）③ **Evolution Control Plane**（决定改哪一面：权重 / 记忆 / harness / 工具 schema / 回滚，带 replay-first + shadow + canary 门禁）④ 四层栈 gateway / router / data proxy / agent-compute worker |
+| 定位 | 有完整消融与基准 | **"deliberately scoped proof of feasibility"——全文没有任何评测数字** |
+
+**⇒ 对 Track B 的三条重心，逐条核对结果：**
+
+| 我们的缝隙 | AReaL 2.0 碰了吗 |
+|---|---|
+| ① 长度/分布漂移的定量测量 | ❌ **全文未提**（1.0 列为 future work，2.0 也没做） |
+| ② 分池 × 异步的补偿组合 | ❌ 未提 |
+| ③ 权重同步的代价与根因 | ❌ **明确未讨论**（1.0 只把 "delayed parameter synchronization" 当手段提，从没量过它的代价） |
+
+⇒ **最有资格填这三个洞的团队，两篇论文连着跳过了它们。** 缝隙不但没被填，还被再次确认。
+
+### ⚠️ 但有一条要警惕：他们的框架性主张和 Syncopate 的三条前提高度重合
+
+| Syncopate 钉死的前提（设计文档 §0） | AReaL 2.0 的对应物 |
+|---|---|
+| 会变的进 RAG，不变的进权重，绝不能错的进代码 | **multi-surface adaptation**：记忆 / 权重 / harness / 工具 schema 分面更新 |
+| 沙盒里只有过程奖励 ⇒ **灰度上线不是验收，是训练的第二阶段** | **online RL loop from deployed workloads** |
+| **归因延迟是第一性约束**（D7 才知对错） | ATDP 的 **late-bound learning signals**：reward 字段允许事后追加/更新 |
+
+⇒ **「这个框架判断很对」已经不再是我们的差异化**——它被发表了。
+**但他们一个数字都没有**，而我们有真实业务负载、真实 D7 归因延迟、真实测量。
+⇒ 我们能做的是**他们论文的经验对照物**：他们给了词汇表和架构，我们给数。
+（顺带：我们的 `token_trace` / `dispatched.jsonl` / artifact schema 其实是一个自发长出来的
+简化版 ATDP，做一次「我们记了什么 vs ATDP 说该记什么」的对照很便宜——但这属于主线 M8+，
+不是 infra track 的关键路径，**先记下，别插队**。）
+
+### 🔍 读源码后的补充（`reference/AReaL`，2026-08-14 clone，commit d67fee0）
+
+在线闭环的机制（`areal/experimental/openai/proxy/`）**不是自调用，是控制反转**：
+训练循环不再自己造 rollout，而是**阻塞等一个真实用户走完会话**
+（`start_session → /v1/chat/completions → set_reward → end_session`，见 `online_agent.py`）。
+staleness 用**「进店限流」**控制——训练侧控制网关放不放新会话名额（`grant_capacity`），
+源码注释自称 "a hacky way"，但很实用。
+
+⚠️ **但在线模式下的筛查只有三条，全是结构性的**（`workflow.py` arun_episode）：
+空会话 / agent 抛异常 / retry orphans。**没有任何内容级筛查、质量分或分布检查。**
+
+⛔ **而且有一个静默降级，正好是我们的反面教材**：
+```python
+# areal/experimental/openai/types.py:41,195
+reward: float | None = None
+reward = self.reward if self.reward is not None else 0.0
+```
+**没人调 `/rl/set_reward`，reward 就静默变成 0.0，轨迹照样进训练。** 不报错、不拒绝。
+
+★★ **由此得到一条可直接抄进我们设计的硬约束**：
+> **在归因延迟（D7）的前提下，「reward 还不知道」和「reward 确实是 0」是两种完全不同的状态。**
+> 把前者当后者，等于在教模型「这次做得不好」，而实际上你只是还没拿到结果。
+> ⇒ **若将来做在线闭环，「reward 未回填」必须是硬失败，不能默认成 0。**
+
+对照我们自己的纪律：verl 把 `train_batch_size` 在 fully_async 里**强制为 0 而不是忽略**，
+是「逼你发现你以为在控制的东西其实没接上」——那是好设计。这里正好是反例。
+
+★ **借鉴方向要反过来**：不是「学他们怎么做在线」，而是
+**「学他们的管道设计，把我们已有的闸门装上去」**——
+我们已经有闸门（26 个 cap 构成 / 冻结 EVAL 配对 + MDE / 决策位熵 / ESS 停止条件 / 动态分池），
+而且是**实测跑过的，不是提案**；我们缺的是那根**从线上回流的管子**和 **reward 事后回填的字段**。
+
+⇒ **这就是 Track B 的新重心**，而且我们的条件比他们好：
+1. 他们跑数学/代码推理，长尾没我们狠；**我们是多轮工具调用 agent**——实测轮数 1–8、截断率 22.3%；
+2. 我们有 `record_dispatch`（发出去的）和 rollout dump（训练到的），**可以直接做长度分布的差**，工具现成；
+3. 我们还有 `pool.py` 这个**补偿杠杆**（见 §0.7）——
+   **「量出漂移 + 用采样权重补偿」这个组合，AReaL 没做，verl 也没有。**
+
+## 0.7 · ⛔ 一条要更正的结论：动态分池在 fully_async 下**能**接上
+
+> **原结论**（`main_ppo_pool.py:196-199` 的注释与启动日志）：
+> 「`fully_async` 根本不调 `create_rl_sampler`（它自己排采样计划）⇒ 分池在这个模式下**不存在**」。
+> 启动时照此打印：`[pool] ⚠️ fully_async 不调 create_rl_sampler ⇒ 动态分池本轮不生效`。
+>
+> **实测（2026-08-14 读码核实）：它调了。**
+> ```
+> verl/experimental/fully_async_policy/fully_async_rollouter.py
+>   392  @ray.remote(num_cpus=10, max_concurrency=100)     ← 它是个 Ray actor
+>   400  class FullyAsyncRollouter(SeparateRayPPOTrainer): def __init__
+>   447      from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
+>   464      train_sampler = create_rl_sampler(config.data, train_dataset)   ★
+> ```
+> 而且那个 `import` 写在**函数体内** ⇒ 在**调用时**才解析
+> `verl.trainer.main_ppo.create_rl_sampler` ⇒ **对 monkeypatch 最友好的写法**。
+>
+> **推翻后**：真正的原因不是「没有挂点」，而是**作用域**——
+> `FullyAsyncRollouter` 跑在**另一个 Ray worker 进程**里，而我们的 patch 只打在 driver。
+> `worker_process_setup_hook`（`verl_patches.setup_worker`）**已经在用了**，
+> 但它当前只装 `_patch_fsdp_cpu_copy_for_ddp`，没装 sampler patch。
+> ⇒ **修法大概是往 `setup_worker()` 里加一行。**
+>
+> **教训**：这是「机制建好了但没接上」的**新变种**——
+> **不是忘了接，是断定接不上，而断定错了。**
+> 而 `verl_patches.py` 的注释里今天早上刚写下同一条教训：
+> 「**判据行打出来了 ≠ 补丁在需要它的那个进程里生效。判据要和作用域一起看。**」
+> 那次是 P2 的 `save_model_to_cpu`，这次是 sampler，**同一个坑，隔了几个小时**。
+> ⇒ **凡是说「verl 不支持 X」，先查三层**：① 配置项在不在 ② 代码路径调不调
+> ③ **它在哪个进程里跑**。以前只查到 ①②。
+
+⚠️ **修改要等 M7 跑完**（改的是正在运行的采样路径）。当前只更正文档与注释，不动行为。
+
+## 0.8 · 分池 ≠ 治漂移：两件事要分清
+
+| | 管什么 | 在哪一端 |
+|---|---|---|
+| **动态分池**（`pool.py`，按 reward 方差 `ema_std` 给 case 加权） | 哪些 case 值得多发 rollout | **发出去**那一端 |
+| **异步分布漂移** | 发出去的 ≠ 最后训练到的（短的先回、长的被切） | **收回来**那一端 |
+
+⇒ 分池接上**不会自动治好漂移**，但它是治漂移**最自然的杠杆**：
+一旦量出「哪类 case 系统性没被训到」，就能用采样权重去补偿。
+**顺序钉死：先量出漂移，再用分池补。别反过来。**
+
+★ 另外 verl 已有一个专门治漂移的机制在跑：**`partial_rollout=True`**
+（被权重更新打断的轨迹接着跑完，而不是丢掉，= AReaL 的 interruptible rollout）。
+⇒ **长轨迹理论上不会被丢，只是跨了多个权重版本。它有没有真的管用，得测——这就是 E08 的核心。**
+
+---
+
+## 0.5 · 要解决的实际问题（业务 → 技术）
+
+**业务侧**：agent 的价值在于**自己走完长链路**（多轮工具调用、自己纠错、该问就问该拒就拒）。
+这带来两个通用 RL 框架没面对过的现实：
+
+| 业务事实 | 技术后果 | 实测证据 |
+|---|---|---|
+| 每条轨迹的工具往返次数**天然不齐**（有的两轮结束，有的走满 8 轮） | sync 的 barrier 要等最慢的那条，**快的卡在干等** | 同批最慢/平均 **1.37–2.75×** |
+| 长链任务**又慢又重要**（它正是 agent 的核心能力） | 异步下短任务先回、长任务被切断 ⇒ **可能系统性地丢掉长任务**。这是**正确性问题不是吞吐问题** | sync 下差恒为 0；异步下未测 |
+| 训练一步要把新权重推给推理侧 | 大家默认「LoRA 小所以便宜」 | 实测 **11.1–13.6 s 恒定、占步 36%**，而 LoRA 只有 132 MB ⇒ **差约 600 倍** |
+
+### 为什么是这些解法，不是别的
+
+| 问题 | 我们的解法 | 为什么不是别的 |
+|---|---|---|
+| barrier 空等 | **异步**（one_step_off / fully_async），让训练和采样重叠 | 「加大 batch 摊薄」治不了长尾（尾巴是**比例**不是绝对值）；「砍掉慢任务」直接砍掉业务能力 |
+| 权重同步 36% | **先查因再优化**（E12） | 直接调 bucket 大小 / 换传输方式都是**在没查因的情况下猜**——本项目为「推断代替测量」已经付过两次钱 |
+| staleness 不可见 | **在 agent loop 里透传 param_version**，量真值分布 | monkeypatch 跳过该 metric 能让程序不崩，但**跳掉的正是要量的东西** |
+| 分布漂移 | `record_dispatch`（下发的）vs 实际训练到的，**直接做差** | 只看 reward 曲线看不见它——漂移会伪装成「训练很稳」 |
+| 量化/路由/陈旧三种失配 | **统一用 ESS / TIS / 逐 token logprob 差**（E15） | 生态的验证止步 PPL，而 PPL 量不出「采样分布偏了多少」 |
+
+### 怎么衡量
+
+| 层 | 指标 | 判据 |
+|---|---|---|
+| **吞吐** | 每步墙钟、样本/秒、GPU 空闲占比 | 分母是 **colocate 同机基线**（欠着 → E08 第一件事） |
+| **分布** | staleness 的 **k 分布**、**ESS/N**、下发 vs 训练到的**长度分布差** | ESS/N < 0.3 是停止条件 |
+| **正确性** | 冻结 EVAL 128×8 配对（MDE 0.05）+ cap 构成 + 决策位熵 | 只报吞吐不报任务精度**不算完成** |
+
+### 预期提升（★ 跑之前写死）
+
+| # | 预测 | 如果错了说明什么 |
+|---|---|---|
+| **P-B1** | 异步相对 sync 的吞吐收益**上限就是长尾比 1.37–2.75×**，实际吃到 **1.3–1.8×** | 若超过上限，说明测量口径错了（多半是分母不同机） |
+| **P-B2** 🟡 **半对** | ~~大头在分配/同步/串行握手~~ → **方向对**（2026-08-14 实测：固定开销 55.0 s / 传输 0.8 s，**98.6% 不是传输**），**但机制猜错一半**：不是 NCCL 建组（`rebuild_group` 默认 **False**）、不是遍历全参（`base_sync_done` 确认只收 LoRA），而是 **KV cache 拆建 + buffer alloc/free + `empty_cache()` + partial rollout 中断恢复**。见 [E12](E12-weight-sync.md) | 已验。★ 教训：**「猜对方向」≠「猜对机制」——机制不查实就动手，改的是错的地方** |
+| **P-B3** | 查因后 update_weights 可降到 **< 3 s**（占比 36% → <10%） | ⚠️ 条件预测，**待 E12-b 分步计时**。8 步里哪几步能省还不知道 |
+| **P-B6** 🆕 | fully_async 的瓶颈在**训练侧三次前向**（update_actor + old_log_prob + ref = 72%），rollout 生成只占 6.3% | 已实测。⇒ **E11 稀疏 logprob 一次命中三项**，但端到端收益约 7% 不是 24×（省的只是 lm_head 那层） |
+| **P-B4** | 真异步的 σ²(k) 曲线与离线合成值（ESS/N=0.846）**同量级但偏高** | 对不上则说明离线合成的构造方式有系统性偏差——**这个负结果同样有价值** |
+| **P-B5** ⛔ **未发生** | ~~异步下训练到的轨迹短于下发的~~ → 实测**逐桶零差**（7200=7200，14 个轮数桶全相同，长尾 9–14 轮一条没少）。`dropped_stale_samples`=0、`partial/*`=0 全程。**但这是「什么都没发生」的零差，不是「发生了被修好」的零差** | ★★ 真正的产出是**发现仪器装错了位置**：`record_dispatch` 记的是「跑完了」不是「发出去了」⇒ 我们量的是「完成→训练」，而漂移在「**发出→完成**」那一段，**被中途杀掉的长轨迹一条都看不见**。见 [E08](E08-async-rl.md) §6 |
+| **P-B7** 🆕 | `partial_rollout=True` 设了但**全程一次没触发**（`partial/total_partial_num` 37 步全 0） | 假设：rollouter 同步前会排空在飞请求 ⇒「abort→续写」路径从未走过 ⇒ **又一个没生效的开关**。待 E08 §8-② 验证 |
+
+---
+
+## 1 · 兑现物（简历那一段的骨架，〔 〕待实测填入）
+
+> ⚠️ **措辞纪律（2026-08-14）**：decoupled PPO / η / 可打断 rollout **都是 AReaL 已发表的做法**，
+> 我们是**在 agentic 负载上复现并验证**它们，不能写成自己的创新。
+> **真正属于我们的是**：① 长度漂移的定量测量（论文明说没做）② 分池 × 异步的补偿组合
+> ③ 权重同步的根因 ④ 消费级无 P2P 拓扑下的这条曲线。
+
+- **异步 agentic RL 的三模式对照**：sync colocate / one_step_off / fully_async 同尺子比较，
+  吞吐〔实测〕、staleness 的**真值分布**〔实测〕。
+  ★ 与离线合成曲线（ESS/N=0.846、σ²(0)≈2.0e-4/token）并排验证——
+  **真异步跑出来的曲线和合成值对不对得上，本身就是一个可验证的结论**。
+- **权重同步的根因与优化**：把一笔全行业当成「传输」的开销拆开
+  ——实测 11.1–13.6 s 与 attention / 打包 / 卡数**全部无关**，
+  根因〔E12 实测〕，优化后〔实测〕。这是异步方案吞吐上限的所在。
+- **agentic 特有的正确性问题**：异步会不会**系统性地丢掉长任务**
+  （`record_dispatch` 下发的 vs 实际训练到的，sync 下差恒为 0）〔E08 实测〕；
+  超发早停的 advantage 长度偏差风险与对照设计。
+- **训推一致性尺子**：ESS / TIS / 逐 token logprob 差，用于量化、路由抖动、陈旧度
+  三种失配的**统一度量**〔E15〕——生态的量化验证止步 PPL，这格是空白。
+- **前缀缓存分片**：单副本命中率 96.7–97.5%，多副本分片后〔E09 实测〕；
+  掉得明显则「同组 rollout 路由到同一副本」是可提上游的改进。
+
+---
+
+## 2 · 归本 track 的实验
+
+| # | 实验 | 状态 | 这条线为什么要它 |
+|---|---|---|---|
+| **E12** | 权重同步的代价与根因 | 🔴 **下一个** | 占步 36% 且不是传输。**这条线最有分量的单点发现** |
+| **E08** | 异步三模式 + 分布漂移 | 🟡 | 主线实验。one_step_off ✅；fully_async 待解封；colocate 同机基线欠着 |
+| **E15** | 训推一致性尺子 | ⬜ | 横跨量化 / 路由 / 陈旧度，是 A、B 两条线共用的验收尺 |
+| **E09** | 前缀缓存分片 | ⬜ | agentic 特有，最可能提上游 PR |
+| **E10** | rollout 长尾与调度 | ⬜ | 异步收益的天花板（1.37–2.75×）从哪来 |
+| E07 | MoE 路由不一致 / GSPO | 🟡 | 与 Track A 共享；B 关心的是**路由抖动的可训性** |
+| E00 / E01 | 机器体质 / 一步的时间去哪了 | 🟡 / ⬜ | 两条 track 共用的分母与裁判 |
+
+---
+
+## 3 · 下一步（按序）
+
+> ✅ **已完成，不再是待办**：`param_version` 透传（fully_async 已解封并在跑）、
+> decoupled staleness 修正、partial_rollout。**重心已按 §0.6 移动到「漂移」与「权重同步」。**
+
+1. **E08-a · 分布漂移分析**（🟢 无需 GPU，**当前最高价值**）——
+   M7 跑完就有产物：`checkpoints/grpo/m7_v11e1_fullyasync/dispatched.jsonl`（发出去的）
+   vs `rollout_dumps/*.jsonl`（训练到的）。**比长度分布、轮数分布、截断率，不是比均值。**
+   ★ 这是 **AReaL 论文明确留下的 future work**，我们工具现成。
+2. **E12-a · update_weights 查因读码**（🟢）。
+   主线已把「计算侧」整片嫌疑砍掉（与 attention/打包/卡数全无关）。嫌疑集中在 checkpoint engine：
+   bucket 默认 2048 MB × **双缓冲**是否每次同步 alloc/free 4 GB？
+   是否遍历了全部 4B 参数而不是 132 MB 的 LoRA？握手/序列化是否串行？
+   🆕 **新数据点：M7 首次 `param_sync = 104.24 s`**（param_version 0）——
+   比此前记录的 13.3 / 24.0 s 高一个量级。首次要推整个基座，之后才是 LoRA-only，
+   ⇒ **必须等第 2、3 次同步的数**，才能把「首次推基座」和「稳态推 LoRA」分开。
+3. **E12-b · py-spy attach 采栈**（🟡 可打在正在跑的训练上，几乎零成本）。
+4. **接上动态分池**（🟢 写码 / 🔴 验）——见 §0.7，往 `setup_worker()` 加 sampler patch。
+   ⚠️ **等 M7 跑完再改**。改完必须有启动日志证明它在 **worker 进程**里生效，
+   而不是只在 driver 打了一行字（§4 坑 2 的教训）。
+5. **E08-b · colocate 同机基线**（🔴，30 分钟）——所有加速比至今没有同机分母。
+6. **E15 · η 换算**（🟢 分析）——我们的 `staleness_threshold=0.1` 折算成 AReaL 的 η 是多少？
+   他们的消融说 decoupled 下 η≤4 安全、朴素 PPO 超 η=1 就崩。**我们在曲线的哪个位置？**
+
+---
+
+## 4 · 这条 track 特有的坑
+
+1. **⛔ 别 monkeypatch 跳过 staleness metric。** 那个 metric 正是这条线要量的东西，
+   跳过它等于把研究目标删了。（infra handoff 曾把它误记为「verl 上游 bug」并建议跳过。）
+2. **「机制建好了但没接上」是本项目累计十次以上的失效形状。**
+   ⇒ 每个靠 monkeypatch / 环境变量 / 配置生效的机制，**启动时必须打一行日志**；
+   没有那行就是没生效。判据永远是日志，不是代码。
+   （已知实例：动态分池在 one_step_off ✅ / fully_async ❌ 不生效。）
+3. **硬失败，不静默降级。** 静默降级的表现是「跑起来了，但测的根本不是你以为的东西」。
+4. **「分卡之后没人和它抢」是想当然。** rollout 卡上不只有 vLLM——
+   checkpoint engine 的 2×bucket 也住在那，`gpu_util 0.85` 在**第一次权重同步**时 OOM。
+   ⇒ 凡是说「某资源现在独占」，先列一遍还有谁会在这张卡上分配内存。
+   ⚠️ 而且它炸在最贵的时刻：模型加载、建池、rollout 全跑完之后。
+5. **超发早停有统计风险**：先完成的偏短 ⇒ advantage 长度偏差。
+   **动它等于动实验有效性**，做之前必须先设计对照。
+
+## 5 · 已经兑现的
+
+- **分卡异步接线**：one_step_off 跑通并调优，3 卡 DDP 稳态 49.5 → **32.6 s/步**（FA2+dynamic 后）。
+  过程中撞到四堵墙（三套 trainer / 动态分池只在一档生效 / rollout 卡不只有 vLLM / NCCL 以为 P2P 可用），
+  全部记在 `../distributed-training-design-v0.1.md` §7。
+- **DDP 必选**的定论：3 卡 FULL_SHARD 1182 s/步 vs 单卡 198 s（**多给卡慢 6 倍**），DDP 3.00× 线性。
+- **fully_async 解封并上线**（2026-08-14）：`param_version` 透传补上，M7 正在用
+  fully_async + decoupled + partial_rollout + dynamic_bsz 跑 150 步。
+  ★ 修 bug 和拿数据是同一个动作——那个字段正是 staleness 经验分布的来源。

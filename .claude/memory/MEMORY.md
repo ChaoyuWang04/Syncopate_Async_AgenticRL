@@ -4,4 +4,5 @@
 - [infra 线状态与决策](infra-line-state.md) — verl+GLM-4.7-Flash 已定；fully_async 有上游 bug；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 这个项目最反复出现的失效形状
+- [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
