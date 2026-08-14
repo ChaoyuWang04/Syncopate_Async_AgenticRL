@@ -68,6 +68,35 @@ DATA_MATURITIES = ["mature", "partial", "immature"]
 #    所以 `reference_now` 必须进 prompt，否则这道题没有比较基准、不公平。
 SAFETY_LINE_STATES = ["current", "stale", "missing"]
 
+# M8 · RAG v1：政策条款库的三种状态。
+#
+#   present     只有现行版本            ⇒ 照常引用它作答       ← ★ 对照档
+#   superseded  旧版(已过期)+新版同在    ⇒ **必须引用新版**     ← 过期检出率
+#   empty       库里根本没这个主题       ⇒ 转人工/反问，不许编   ← 无检索幻觉率
+#
+# ★ `present` 不是凑数：只装 superseded/empty 的话，模型会学成"见到检索就别信"。
+# `defer` 97%→0% 和 dead_grid 只装难例，这个教训已经吃过两次。
+#
+# ⚠️ 和 safety_line_state 的区别（两者都关于"资料不可用"，但正确出口不同）：
+#   安全线过期  世界**没有**可用数据 ⇒ 转人工补录
+#   政策过期    现行版本**就在同一次检索结果里** ⇒ 改引用新版继续办事，转人工反而过度保守
+RAG_STATES = ["present", "superseded", "empty"]
+
+# M8 · RAG v1：复盘结论（非结构化侧）与**当前数据**的关系。
+#
+#   aligned      历史结论和现在的数据一致   ⇒ 照常引用作答          ← ★ 对照档
+#   conflicting  历史结论被现在的数据推翻   ⇒ **显式做冲突消解**    ← 本轴的主角
+#   absent       根本没有相关历史结论       ⇒ 只按数据判断，不许编经验
+#
+# ★★ `conflicting` 这一档补的是遗留清单里挂了很久的那个缺口：
+# 「记忆写机制三个工具只有一个有题（`invalidate` 只当干扰项、`conflict_resolve`
+# 完全没用上）。现在没有任何一道题考『查到的历史结论和现在的数据矛盾了怎么办』」。
+#
+# ⚠️ 正确动作**不是二选一硬答**，是 `memory.conflict_resolve` 显式记录冲突
+# 并在终答里说明"历史经验是 X、本次数据是 Y、建议以数据为准并复核该结论"。
+# 只答一边（哪怕答对了那边）都算没做这道题 —— 因为**冲突本身就是要报告的信息**。
+INSIGHT_STATES = ["aligned", "conflicting", "absent"]
+
 # 各成熟度对应的开投天数（ROAS 7 天收敛）。
 # 安装量统一给足，是为了让这条轴**只由时间驱动**——
 # 样本量不足是另一种不可信（insufficient_sample），混进来会让两条 cap 同时命中，归因就糊了。
@@ -110,6 +139,8 @@ class Params:
     memory_action: str
     data_maturity: str
     safety_line_state: str
+    rag_state: str
+    insight_state: str
 
     @property
     def campaign_id(self) -> str:
@@ -159,6 +190,15 @@ def params_for(index: int) -> Params:
         data_maturity=DATA_MATURITIES[(index // 3 + index % 5) % 3],
         # 用 //13 和 %7 这对互不整除的因子，避免和 data_maturity(//3,%5) 同步变化
         safety_line_state=SAFETY_LINE_STATES[(index // 13 + index % 7) % 3],
+        # //17 和 %11 又是一对互不整除的因子：和 safety_line_state(//13,%7)、
+        # data_maturity(//3,%5) 都不同步 —— 否则两条轴会被绑成一条，
+        # 90 个格子里就会有一半永远填不满（稀疏格子被取模削成 0 条的同源坑）。
+        rag_state=RAG_STATES[(index // 17 + index % 11) % 3],
+        # ★ 因子是**扫出来的**，不是拍的：第一版用 (//19 + %13)，和 rag_state 的
+        # 9 格联合分布出现对角线富集（50 vs 22–29，均匀期望 33）——两条轴被部分绑住。
+        # 这里乘 2 打破同余结构，实测 9 格 32–35、卡方 0.3。
+        # 「乘个质数就去相关」只在模数互质时成立，这条坑 `_mix` 的注释里记着。
+        insight_state=INSIGHT_STATES[(index // 11 + index % 7 * 2) % 3],
     )
 
 
@@ -167,7 +207,7 @@ def axis_summary(params: list[Params]) -> dict[str, dict[str, int]]:
     out: dict[str, dict[str, int]] = {}
     for axis in ("platform", "genre", "region", "entry_mode", "memory_state",
                  "season_phase", "amount_band", "tier", "memory_action", "data_maturity",
-                 "safety_line_state"):
+                 "safety_line_state", "rag_state", "insight_state"):
         counts: dict[str, int] = {}
         for p in params:
             key = str(getattr(p, axis))

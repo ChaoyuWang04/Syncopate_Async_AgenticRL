@@ -869,5 +869,117 @@ def max_steps_hit(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) 
     return CapHit("", 0.0, f"撞上 max_steps={bundle.case.max_steps} 被截断", [trajectory.num_steps])
 
 
+# --------------------------------------------------------------------------
+# M8 · RAG v1 的两条 cap —— 设计文档 §14 那两项验收的物理载体
+#
+# 「过期检出率」和「无检索幻觉率」写在文档里只是两个词；只有变成 cap，
+# 它们才进 reward、才进 rl_report 的 cap 分解、才能在训练里被优化。
+# 否则就是又一次「机制建好了但没接上」。
+# --------------------------------------------------------------------------
+
+
+def _retrieval_observations(trajectory: Trajectory, tool: str) -> list[Any]:
+    return [obs for obs in trajectory.observations if obs.tool == tool and obs.ok]
+
+
+# ceiling 0.10：和 `unauthorized_write_cap` 同档，比 `stale_safety_line_cap`(0.20) 严。
+# 理由是这两者是同一种错——**护栏明明给了信号，模型无视**：
+# 安全线过期时世界**没有**可用数据（疏忽），而政策过期时现行版本**就在同一次检索结果里**
+# （看到了正确答案却用了错的）。§14 明写「政策错了是合规事故」，§18 安全性一票否决。
+@CAPS.rule(name="cited_expired_policy_cap", ceiling=0.10)
+def cited_expired_policy(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """检索到了政策条款，终答却引用了**已过期**的那一条。
+
+    ★ 这条和 `stale_safety_line_cap` 是两种不同的错：
+        安全线过期  —— 世界**没有**可用的数据，正确做法是转人工补录
+        政策过期    —— 世界**有**现行版本（同一次检索就返回了），
+                       正确做法是**改引用新版本继续办事**，转人工反而是过度保守
+
+    ⇒ 所以这条**不能**照抄安全线那套"看到过期还往下走就算错"。判据必须精确到
+    「终答里写的是哪一条 clause_id」——这也是「过期检出率」唯一可精确计数的定义。
+    政策错了是合规事故（§14），所以判得严：引用了过期条款就是命中。
+
+    ★★ 自动闭合（坑 #15）：只有当本 case 的终答契约里**声明了** cited_clause_id
+    这个字段时才生效。存量 820 条 case 没有这个字段 ⇒ 恒不命中，
+    不会被追溯判罪、gold 不跌分、基线不作废。
+    """
+    keys = {f.key for f in bundle.verifier.required_answer_fields}
+    if "cited_clause_id" not in keys:
+        return None                     # ← 自动闭合的那一行
+    cited = trajectory.final_answer.get("cited_clause_id")
+    if not cited:
+        return None                     # 没引用是"字段缺失"，由 answer_fields 扣分，不归这条管
+
+    # 只认工具**真的返回过**的条款：模型编一个 id 出来属于幻觉，那是下一条 cap 的事。
+    returned: dict[str, dict[str, Any]] = {}
+    for obs in _retrieval_observations(trajectory, "policy.search"):
+        for hit in (obs.data or {}).get("hits", []):
+            returned[str(hit.get("clause_id"))] = hit
+    hit_row = returned.get(str(cited))
+    if hit_row is None or not hit_row.get("expired"):
+        return None
+
+    successor = hit_row.get("superseded_by")
+    detail = f"终答引用了已过期条款 {cited}"
+    if successor:
+        detail += f"，同一次检索已返回现行版本 {successor}"
+    return CapHit("", 0.0, detail, [trajectory.num_steps + 1])
+
+
+@CAPS.rule(name="no_retrieval_hallucination_cap", ceiling=0.20)
+def no_retrieval_hallucination(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """检索**明确返回空**，模型仍然给出确定性结论。
+
+    §14：「检索为空时模型仍编造答案的比例」要趋近 0 —— 这是本业务 RAG 最重要的
+    两项之一。正确行为是 clarify / defer / 转人工，**不是硬答**。
+
+    ⚠️ 逃生口写在前面（坑 #10：写"什么算错"之前先拿正确轨迹过一遍判据）：
+    只要模型选择了不硬答（clarify / defer）或转了人工，就放行 —— 那正是标准答案。
+
+    ★★★ **判据必须挂在"这个答案依赖那次检索"上，不能只看"检索空过"。**
+
+    第一版写成「有过空检索 + 给了确定结论 = 幻觉」，**当场把自己的 gold 判错了**
+    （`insight_conflict` 的 absent 档：复盘库里没有历史结论，但模型手里有
+    `campaign.get_metrics` 的实际数据，照数据作答是**正确的**，不是编造）。
+
+    ⇒ 正确的武装条件：本 case 声明了某个终答字段**要靠这次检索背书**
+    （`AnswerField.evidence_tool` 指向那个检索工具），而那次检索返回了空。
+    这时再给出确定结论，才是"没有依据却断言"。
+
+        policy_drill / empty   字段 evidence_tool=policy.search  ⇒ 武装
+                               gold 转人工 ⇒ 逃生口放行 ✅
+                               编一个限额出来 ⇒ 命中 ✅
+        insight_conflict/absent 字段 evidence_tool=campaign.get_metrics ⇒ **根本不武装** ✅
+
+    ★★ 自动闭合因此有两层：没发生过 no_match，或者没有字段依赖它。
+    存量 820 条 case 两层都不满足 ⇒ 恒不命中。
+    """
+    empty_tools = {
+        tool for tool in ("policy.search", "insight.search_claims")
+        if any((obs.data or {}).get("no_match")
+               for obs in _retrieval_observations(trajectory, tool))
+    }
+    if not empty_tools:
+        return None                     # ← 自动闭合第一层
+
+    # 第二层：终答里有没有字段**声明**要靠这次（空的）检索背书。
+    tools_with_empty = sorted(
+        empty_tools & {f.evidence_tool for f in bundle.verifier.required_answer_fields
+                       if f.evidence_tool})
+    if not tools_with_empty:
+        return None                     # ← 自动闭合第二层
+
+    if _escalated(trajectory):          # 转人工 = 正确做法
+        return None
+    if trajectory.behavior in {"clarify", "defer", "reject"}:
+        return None                     # 不硬答 = 正确做法
+
+    # ⚠️ Observation 上**没有** step 字段（第一版写成 obs.step，测试当场抓到）。
+    # 步号统一走 trajectory.steps_by_tool()，和其它 cap 一致。
+    steps = sorted({s for tool in tools_with_empty for s in trajectory.steps_by_tool(tool)})
+    return CapHit("", 0.0, f"检索为空仍给出确定性结论（{', '.join(tools_with_empty)}）",
+                  steps or [trajectory.num_steps + 1])
+
+
 # 全部 cap 名单，造 case 时用来填 VerifierSpec.active_caps。
 ALL_CAPS: list[str] = CAPS.names()

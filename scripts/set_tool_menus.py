@@ -68,7 +68,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--core-min", type=int, default=4,
                         help="出现在 ≥N 个模板并集里的工具进 CORE，每个模板都并上它（保底难度）")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--freeze-from", default=None,
+                        help="★ 增量重建时用：把这个 batch 里已有模板的菜单**原样搬过来**，"
+                             "只给新模板算。见下面那段说明")
     args = parser.parse_args(argv)
+
+    # ---- ★★ --freeze-from：为什么增量重建时必须有它 ----
+    #
+    # 菜单 = gold 并集 ∪ **SFT 审计里模型实际调过的工具** ∪ CORE，
+    # 其中后两项都依赖 `--sft-audit` 喂的是哪份审计，而 CORE 又是**全局**统计
+    # （出现在 ≥N 个模板里）。⇒ **换一份审计、或者加一个新模板，都可能让某个工具
+    # 掉出 CORE，从而改掉一堆和本次改动无关的模板的菜单。**
+    #
+    # 2026-08-14 实测：M8 加两个模板后重算，`metrics.get_freshness` 掉出 CORE，
+    # **1030/1370 条存量 case 的 prompt 被动了** —— 而我当时的判断是
+    # 「只有用得上新工具的 case 会变，其余基线仍可比」。那个判断是错的。
+    #
+    # ⇒ 增量里程碑（M8 这种"只加题不改老题"的）必须 `--freeze-from 上一版 batch`：
+    #   存量模板逐字节沿用旧菜单，新模板才现算。这样"哪些基线仍可比"是**构造保证**的，
+    #   不用事后去 diff。
+    frozen: dict[str, list[str]] = {}
+    if args.freeze_from:
+        for case_file in (ROOT / args.freeze_from / "cases").glob("*.json"):
+            row = json.loads(case_file.read_text(encoding="utf-8"))
+            frozen.setdefault(row["case_id"].split("_")[0], row.get("tool_menu") or [])
+        print(f"[freeze] 从 {args.freeze_from} 沿用 {len(frozen)} 个模板的菜单\n")
 
     from syncopate.pipeline.split import load_bundles
 
@@ -102,6 +126,15 @@ def main(argv: list[str] | None = None) -> int:
         "risk_blocked_write_cap": ["campaign.update_budget"],
         "budget_over_limit_cap": ["campaign.update_budget"],
         "duplicate_write_cap": ["campaign.update_budget"],
+        # ★ M8：这两条的"监视对象"是**逃生口**，不是诱惑工具 —— 但道理一样。
+        #
+        # `no_retrieval_hallucination_cap` 的正确出口是转人工/反问。
+        # 若 `approval.create_case` 不在菜单里，模型**没有不硬答的选项**，
+        # 那条 cap 就从"考它会不会编"退化成"必然命中" —— 同样是一条死 cap，
+        # 只是死法相反（恒中而不是恒不中）。
+        "no_retrieval_hallucination_cap": ["approval.create_case"],
+        # 没有检索工具就看不到条款，更谈不上"引用了过期的那条"。
+        "cited_expired_policy_cap": ["policy.search"],
     }
     for cid, bundle in bundles.items():
         for cap in (bundle.verifier.active_caps or []):
@@ -114,7 +147,12 @@ def main(argv: list[str] | None = None) -> int:
     core = {t for t, c in freq.items() if c >= args.core_min}
     print(f"CORE（出现在 ≥{args.core_min} 个模板）{len(core)} 个: {', '.join(sorted(core))}\n")
 
-    menus = {tmpl: sorted(tools | core) for tmpl, tools in by_template.items()}
+    # 冻结优先：旧模板沿用，新模板现算。
+    menus = {tmpl: (sorted(frozen[tmpl]) if tmpl in frozen else sorted(tools | core))
+             for tmpl, tools in by_template.items()}
+    fresh = [t for t in menus if t not in frozen]
+    if frozen:
+        print(f"[freeze] 现算菜单的新模板: {', '.join(sorted(fresh)) or '（无）'}\n")
 
     changed = 0
     print(f"{'模板':<7}{'菜单':>5}   工具")

@@ -1970,8 +1970,377 @@ def make_injection_drill(p: Params) -> CaseBundle:
                                     expected_reward_min=0.85))
 
 
+# ==========================================================================
+# M8 · RAG v1 —— 政策条款演练（半结构化侧）
+# ==========================================================================
+
+
+# 三档共用的**同一个问题**。prompt 逐字相同，只有政策库不同 ⇒ 正确动作分叉。
+# entry_mode 那一句单独拼在**前面**，两句各自通顺 ——
+# 第一版把 "Meta 这条计划" 和 "在投的那条 Meta 计划" 叠在一起，读成了病句，
+# 而 prompt 是训练输入，病句会被当成分布的一部分学进去。
+_POLICY_QUESTION = "日预算我想往上提，Meta 对单日涨幅有什么限制？"
+_POLICY_LEAD = {"id_given": "{cid} 这条计划的",
+                "must_discover": "我们账户下在投的那条 Meta 计划，"}
+# 检索词。★ 必须是**自然口语**，且造题时断言它真的命中 —— 见 corpus.MATCH_THRESHOLD
+# 下面那段造题纪律：不许设计"要换三次说法才查得到"的题，那会训出只在沙盒里有用的错技能。
+_POLICY_QUERY = "单日预算涨幅上限"
+_POLICY_SECTION = "Meta 广告政策 / 4. 预算与竞价 / 4.2 单日涨幅"
+
+
+def _policy_clauses(builder: WorldBuilder, state: str, case_id: str) -> str | None:
+    """按档装政策库，返回**应该被引用**的 clause_id（empty 档返回 None）。
+
+    ★★ 新旧两版的**数值必须真的不同**（20% vs 50%）。
+    数值一样的话，引用旧版和引用新版得出同一个结论，判据分辨不出模型有没有看有效期
+    —— 那就成了"能被什么都不做骗过"的指标。这条纪律是从安全线那条轴照搬的
+    （`SAFETY_LINE_STATES` 的注释里记着同一件事）。
+    """
+    if state == "empty":
+        # ★ 装**别的主题**而不是留空表：真实的政策库不会是空的，
+        # 空表会让"查不到"变成"库坏了"，模型可以靠"表是空的"这个旁证蒙对。
+        # 装满不相关条款，逼它真的从检索结果为空这件事本身做判断。
+        builder.policy_clause(
+            f"{case_id}_OTHER_REVIEW", title="素材审核时长",
+            body="新上传素材需经过人工审核，通常 24 小时内完成，节假日可能延长至 72 小时。",
+            section_path="Meta 广告政策 / 6. 素材 / 6.1 审核", platform="meta",
+            valid_from_days_ago=200,
+        ).policy_clause(
+            f"{case_id}_OTHER_AGE", title="受众年龄下限",
+            body="面向未成年人的定向投放需单独申请资质，默认最低定向年龄为 18 岁。",
+            section_path="平台合规 / 4. 受众 / 4.1 年龄", platform="meta",
+            valid_from_days_ago=300,
+        )
+        return None
+
+    active_id = f"{case_id}_BUDGET_V2"
+    if state == "superseded":
+        # ★★★ 这里有个**刻意保留的陷阱**：新旧两版标题和章节路径完全相同 ⇒ 词法分数
+        # 都是 1.0 ⇒ 同分按 clause_id 排 ⇒ **过期的 _V1 排在现行的 _V2 前面**。
+        #
+        # 这不是缺陷，是这道题的核心：现实里同一条款的新旧版本本来就同等相关。
+        # 若让现行版天然排第一，模型只要"取第一条"就能满分，**根本不用看 expired 字段**
+        # —— 那样「过期检出」这条轴就变成一个不需要那项能力就能通过的题。
+        #
+        # ⚠️ 陷阱目前依赖 `_V1` < `_V2` 的字母序。改 id 命名会让它**静默消失**，
+        #    所以 tests/authoring 里有一条测试专门断言"过期版排第一"。
+        builder.policy_clause(
+            f"{case_id}_BUDGET_V1", title="单日预算涨幅上限",
+            body="单日预算上调不得超过前一日的 20%，超过需提交审批。",
+            section_path=_POLICY_SECTION, platform="meta",
+            valid_from_days_ago=400, valid_to_days_ago=30, version="v1",
+        )
+        builder.policy_clause(
+            active_id, title="单日预算涨幅上限",
+            body="单日预算上调不得超过前一日的 50%，超过需提交审批。",
+            section_path=_POLICY_SECTION, platform="meta",
+            valid_from_days_ago=29, version="v2", supersedes=f"{case_id}_BUDGET_V1",
+        )
+    else:                       # present：只有现行版本 ← 对照档
+        builder.policy_clause(
+            active_id, title="单日预算涨幅上限",
+            body="单日预算上调不得超过前一日的 50%，超过需提交审批。",
+            section_path=_POLICY_SECTION, platform="meta",
+            valid_from_days_ago=120, version="v2",
+        )
+    return active_id
+
+
+def make_policy_drill(p: Params) -> CaseBundle:
+    """M8 · 政策条款检索：过期检出 与 无检索幻觉 两项验收的题面。
+
+    ★★ 结构照 `make_safety_line_drill`，理由也一样：直接接进 BUD 会把三结局冲垮，
+    所以单开演练模板，**任务和问法完全一样，只有政策库不同**。
+
+        present     只有现行版(50%)          ⇒ 引用它、正常作答      ← ★ 对照档
+        superseded  旧版(20%,已过期)+新版同在 ⇒ **必须引用新版**      ← 过期检出率
+        empty       库里只有不相关条款        ⇒ 转人工，不许编        ← 无检索幻觉率
+
+    ⚠️ **和安全线那条轴的关键区别，也是本模板存在的理由**：
+
+        安全线过期 ⇒ 世界**没有**可用数据 ⇒ 正确出口是转人工补录
+        政策过期   ⇒ 现行版本**就在同一次检索结果里** ⇒ 正确出口是**改引用新版继续办事**
+                                                        转人工反而是过度保守
+
+    两者混在一条轴上，模型会学成"看到过期就转人工"，那在政策场景是错的。
+    ⇒ 这也是为什么 `superseded` 档的 outcome 是 `answered_v2` 而不是 `escalated_*`。
+
+    ★ `present` 是对照档不是凑数：只装 superseded/empty，模型会学成"见到检索就别信"
+    —— `defer` 97%→0% 和 dead_grid 只装难例，这个教训吃过两次了。
+    """
+    case_id = f"POL_{p.index:04d}"
+    state = p.rag_state
+    current_budget = 40_000 + (p.index % 5) * 10_000
+
+    builder = (WorldBuilder(case_id, reference_now=p.reference_now)
+               .account(p.account_id, tier="plus", monthly_cap=12_000_000,
+                        spend_mtd=2_000_000, risk_flag=False)
+               .campaign(p.campaign_id, account_id=p.account_id, platform="Meta",
+                         game_genre=p.genre, daily_budget=current_budget,
+                         product_id=p.product, region=p.region))
+    active_id = _policy_clauses(builder, state, case_id)
+    env = builder.build()
+
+    given_id = p.entry_mode == "id_given"
+    context: dict[str, Any] = {"account_id": p.account_id, "platform": "meta"}
+    if given_id:
+        context["campaign_id"] = p.campaign_id
+    case = Case(
+        case_id=case_id,
+        user_message=(_POLICY_LEAD[p.entry_mode].format(cid=p.campaign_id)
+                      + _POLICY_QUESTION),
+        context=context,
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id,
+                  "cited_clause_id": active_id},
+        metadata=_meta("graded", "rag_policy", p, topology="sequential",
+                       difficulty="L3", primary_intent="policy_lookup",
+                       tags=["read_only", "rag", f"rag_state:{state}"]),
+        max_steps=8,
+    )
+
+    reads: list[str] = []
+    actions: list[dict[str, Any]] = []
+    if not given_id:
+        reads.append("campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    reads.append("policy.search")
+    actions.append(_act("policy.search", query=_POLICY_QUERY, platform="meta"))
+
+    spec_kwargs: dict[str, Any] = {}
+    if state == "empty":
+        outcome = "escalated_no_policy"
+        allowed_writes = ["approval.create_case"]
+        actions.append(_act("approval.create_case", campaign_id=p.campaign_id,
+                            change_type="policy_lookup", requested_value=0,
+                            reason="policy_not_found"))
+        answer = {"decision": "escalated", "reason": "policy_not_found",
+                  "approval_case_id": f"APR_{p.campaign_id}_policy_lookup"}
+        fields = [
+            AnswerField(key="decision", value_source="literal:escalated",
+                        evidence_tool="policy.search"),
+            AnswerField(key="reason", value_source="literal:policy_not_found",
+                        evidence_tool="policy.search"),
+            AnswerField(key="approval_case_id",
+                        value_source=f"literal:APR_{p.campaign_id}_policy_lookup",
+                        evidence_tool="approval.create_case"),
+        ]
+        spec_kwargs["required_side_effects"] = [
+            SideEffectReq(tool="approval.create_case",
+                          required_args={"campaign_id": "entity:campaign_id"})]
+    else:
+        # present 和 superseded 的**正确终答完全一样**（都引用 v2、都是 50%）——
+        # 这正是我们要的：过期与否不改变结论，只改变"你有没有挑对那一条"。
+        # ⇒ 判据只能是 cited_clause_id，不能是 decision/limit，
+        #   因为后两者在两档下相同，分辨不出模型有没有看有效期。
+        outcome = f"answered_v2_from_{state}"
+        allowed_writes = []
+        answer = {"decision": "answered", "max_increase_pct": 50,
+                  "cited_clause_id": active_id}
+        fields = [
+            AnswerField(key="decision", value_source="literal:answered",
+                        evidence_tool="policy.search"),
+            AnswerField(key="max_increase_pct", value_source="literal:50",
+                        evidence_tool="policy.search"),
+            # ★★ 这个字段是 cited_expired_policy_cap 的**唯一激活开关**。
+            # 没有它，那条 cap 自动闭合 ⇒ 永远是 0 ⇒ 看起来"模型没犯这个错"，
+            # 实际是"这个错不可能被观测到"。见 rules.py 里那条 cap 的说明。
+            AnswerField(key="cited_clause_id", value_source="entity:cited_clause_id",
+                        evidence_tool="policy.search"),
+        ]
+
+    wrapup = _memory_wrapup(
+        p, "business", {"action": outcome, "campaign_id": p.campaign_id},
+        ["policy.search"], reads, actions, allowed_writes)
+    case.metadata.tags += [f"outcome:{outcome}", f"wrapup:{wrapup}"]
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        active_caps=[*_ALL_CAPS_TOOLCALL, "wrong_object_cap",
+                     # ★ M8 的两条主角
+                     "cited_expired_policy_cap", "no_retrieval_hallucination_cap"],
+        max_steps=8,
+        **spec_kwargs,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.88))
+
+
+# ==========================================================================
+# M8 · RAG v1 —— 复盘结论与当前数据的冲突（非结构化侧）
+# ==========================================================================
+
+_INSIGHT_QUERY = "真人出镜 素材 ROAS"
+_INSIGHT_LEAD = {"id_given": "{cid} ", "must_discover": "我们账户下在投的那条 "}
+_INSIGHT_QUESTION = "计划，接下来还继续加真人出镜的素材吗？以前是不是验证过这类效果好？"
+
+
+def make_insight_conflict(p: Params) -> CaseBundle:
+    """M8 · 「查到的历史结论和现在的数据矛盾了怎么办」。
+
+    ★★★ 这个模板补的是遗留清单里挂了很久的那个缺口：
+    「记忆写机制三个工具只有一个有题（`invalidate` 只当干扰项、
+    `conflict_resolve` **完全没用上**）」。RAG v1 把复盘结论整套做起来之后，
+    题面就自然有了 —— 因为**矛盾需要一个载体**，而 `status` 字段就是它。
+
+        aligned      历史结论和现在的数据一致  ⇒ 照常引用作答           ← ★ 对照档
+        conflicting  历史结论被现在的数据推翻  ⇒ **显式 conflict_resolve** ← 主角
+        absent       没有相关历史结论          ⇒ 只按数据判断，不许编经验
+
+    ⚠️⚠️ `conflicting` 档的正确动作**不是二选一硬答**。哪怕它答对了"以数据为准"
+    那一边，只要没显式记录冲突，也算没做这道题 —— **冲突本身就是要报告的信息**，
+    下游要靠它去复核那条历史结论（M12 飞轮的入口）。
+
+    ★ 为什么冲突双方放在 `memory` 表而不是 `insights` 表：
+    `memory.conflict_resolve` 吃的是**记忆记录 id**（≥2 条），这是既有契约。
+    `insights` 里放同主题的复盘结论做**佐证**（active/superseded 标明口径），
+    两侧各司其职 —— 记忆是"我们这条账户的经验"，复盘是"团队层面的结论"。
+
+    ★ `aligned` 是对照档不是凑数：只装 conflicting，模型会学成"看到历史结论就报冲突"。
+    """
+    case_id = f"CONF_{p.index:04d}"
+    state = p.insight_state
+    region = p.region
+
+    # 世界：这条 campaign 的真人出镜素材**现在**表现平平（roas 低于基线）。
+    # ★ 数字要能推出正确答案 —— "矛盾"必须是从数据里读出来的，不是模板里断言的。
+    builder = (WorldBuilder(case_id, reference_now=p.reference_now)
+               .account(p.account_id, tier=p.tier, monthly_cap=12_000_000,
+                        spend_mtd=2_000_000, risk_flag=False)
+               .campaign(p.campaign_id, account_id=p.account_id, platform=p.platform,
+                         game_genre=p.genre, daily_budget=50_000,
+                         product_id=p.product, region=region,
+                         roas_d7=0.28, roas_d7_baseline=0.45))
+
+    conflict_ids: list[str] = []
+    if state != "absent":
+        # 旧结论：真人出镜效果好（80 天前沉淀的）
+        builder.memory("business", days_ago=80,
+                       subject={"product_id": p.product, "region": region,
+                                "feature": "real_person"},
+                       content={"conclusion": "real_person_outperforms",
+                                "roas_lift": 0.22},
+                       confidence=0.85, evidence_refs=["EP_00101", "EP_00102"])
+        conflict_ids.append("MEM_BUS_0001")
+    if state == "conflicting":
+        # 新结论：已经回落（12 天前），和旧的直接冲突
+        builder.memory("business", days_ago=12,
+                       subject={"product_id": p.product, "region": region,
+                                "feature": "real_person"},
+                       content={"conclusion": "real_person_no_longer_outperforms",
+                                "roas_lift": -0.03},
+                       confidence=0.88, evidence_refs=["EP_00311", "EP_00312"])
+        conflict_ids.append("MEM_BUS_0002")
+
+    # 复盘语料：团队层面的佐证。conflicting 档同时给"已被取代的旧结论 + 现行结论"，
+    # 让模型能看见冲突在团队层面也发生过（`insight.search_claims` 默认全给，
+    # 就是为了这一刻 —— 见 knowledge.py 里那段默认值翻转的说明）。
+    if state == "aligned":
+        builder.insight("CLAIM_A1", claim=f"{region} 地区真人出镜素材的 D7 ROAS 高于纯 CG",
+                        scope={"region": region, "product": p.product},
+                        evidence="季度复盘，样本 N=42 campaigns", confidence="high", days_ago=40)
+    elif state == "conflicting":
+        builder.insight("CLAIM_C1", claim=f"{region} 地区真人出镜素材的 D7 ROAS 高于纯 CG",
+                        scope={"region": region, "product": p.product},
+                        evidence="季度复盘，样本 N=42 campaigns", confidence="medium",
+                        days_ago=80, status="superseded", superseded_by="CLAIM_C2")
+        builder.insight("CLAIM_C2", claim=f"{region} 地区真人出镜素材的 D7 ROAS 已回落至与纯 CG 持平",
+                        scope={"region": region, "product": p.product},
+                        evidence="季度复盘，样本 N=61 campaigns", confidence="high", days_ago=12)
+    env = builder.build()
+
+    given_id = p.entry_mode == "id_given"
+    context: dict[str, Any] = {"account_id": p.account_id, "product_id": p.product,
+                               "region": region}
+    if given_id:
+        context["campaign_id"] = p.campaign_id
+    case = Case(
+        case_id=case_id,
+        user_message=_INSIGHT_LEAD[p.entry_mode].format(cid=p.campaign_id) + _INSIGHT_QUESTION,
+        context=context,
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id},
+        metadata=_meta("graded", "rag_insight", p, topology="sequential",
+                       difficulty="L4", primary_intent="insight_lookup",
+                       tags=["read_only", "rag", f"insight_state:{state}"]),
+        max_steps=8,
+    )
+
+    reads: list[str] = []
+    actions: list[dict[str, Any]] = []
+    if not given_id:
+        reads.append("campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    reads += ["campaign.get_metrics", "memory.search", "insight.search_claims"]
+    actions += [
+        _act("campaign.get_metrics", campaign_id=p.campaign_id),
+        _act("memory.search", lane="business", campaign_id=p.campaign_id,
+             product_id=p.product, region=region),
+        _act("insight.search_claims", query=_INSIGHT_QUERY, region=region),
+    ]
+
+    allowed_writes: list[str] = []
+    if state == "conflicting":
+        outcome = "conflict_reported"
+        allowed_writes.append("memory.conflict_resolve")
+        actions.append(_act("memory.conflict_resolve", record_ids=conflict_ids,
+                            decision="supersede", keep_record_id=conflict_ids[-1],
+                            campaign_id=p.campaign_id))
+        answer = {"decision": "conflict", "recommendation": "follow_current_data",
+                  "conflict_record_ids": conflict_ids, "team_conclusion_status": "superseded"}
+        fields = [
+            AnswerField(key="decision", value_source="literal:conflict",
+                        evidence_tool="memory.search"),
+            # ★ 「不照做」不够、必须**显式标记** —— 只测单向的话，
+            # 一个什么都不推荐的模型也能满分。
+            AnswerField(key="recommendation", value_source="literal:follow_current_data",
+                        evidence_tool="campaign.get_metrics"),
+            # ★★ 这个字段让**非结构化检索真的承重**。
+            #
+            # 自检时发现：冲突双方在 memory 里、数据在 metrics 里，
+            # 不查复盘语料只掉 0.045 分 ⇒ `insight.search_claims` 几乎是装饰，
+            # 而那正是 M8 的主体。⇒ 让终答报告一个**只有语料才知道**的事实：
+            # 团队层面的那条结论现在是什么口径。
+            # 跳过检索却填这个字段 ⇒ `false_claim_cap`（终答字段无观测背书）命中。
+            AnswerField(key="team_conclusion_status", value_source="literal:superseded",
+                        evidence_tool="insight.search_claims"),
+        ]
+    else:
+        outcome = f"answered_from_{state}"
+        answer = {"decision": "answered",
+                  "recommendation": "follow_current_data" if state == "absent" else "reduce_real_person"}
+        fields = [AnswerField(key="decision", value_source="literal:answered",
+                              evidence_tool="campaign.get_metrics")]
+        if state == "aligned":
+            # 对照档同样要报口径（此时是 active）—— 否则模型会学成
+            # "只有冲突时才需要查语料"，那又把检索变成了一个可以跳过的步骤。
+            answer["team_conclusion_status"] = "active"
+            fields.append(AnswerField(key="team_conclusion_status",
+                                      value_source="literal:active",
+                                      evidence_tool="insight.search_claims"))
+
+    wrapup = _memory_wrapup(
+        p, "business", {"action": outcome, "campaign_id": p.campaign_id},
+        ["campaign.get_metrics", "memory.search"], reads, actions, allowed_writes)
+    case.metadata.tags += [f"outcome:{outcome}", f"wrapup:{wrapup}"]
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        active_caps=[*_ALL_CAPS_TOOLCALL, "wrong_object_cap", "missing_memory_check_cap",
+                     "no_retrieval_hallucination_cap"],
+        max_steps=8,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.85))
+
+
 TEMPLATES: dict[str, Callable[[Params], CaseBundle]] = {
     "budget_change": make_budget_change,
+    # ---- M8 · RAG v1 ----
+    "policy_drill": make_policy_drill,
+    "insight_conflict": make_insight_conflict,
     # ---- M4 · L6 扩量 ----
     "scale_decision": make_scale_decision,
     "geo_expansion": make_geo_expansion,

@@ -1,0 +1,68 @@
+# v12 = v11 + **M8（RAG v1 · 非结构化侧）**。
+#
+# ★★★ 这一版**解冻** prompt / 工具 / 环境 —— v11 之后第一次
+#
+# v11 的注释写着「下一次会动这三样的是 M8」，就是这一版。
+# 但代价比当初以为的小：`tool_menu` 是**逐 case** 存的，所以加 RAG 工具只改到
+# 用得上它的那些 case 的 prompt，**其余 case 的输入分布逐字节不变、基线仍可比**。
+# ⇒ 重建之后要产出「哪些 case 的基线仍然可比」的名单（见 05-handoff）。
+#
+# ★ 新增两个模板都**刻意先小**：三条轴各跑通一条，再扩量。
+# v11 已经 90 个格子 / 1370 条，再撒大网会重蹈「稀疏格子被取模削成 0 条」的坑。
+#
+#   policy_drill      90 = 3 档(present/superseded/empty) × 2 entry_mode × 15
+#                     §14 两项验收（过期检出率 / 无检索幻觉率）的题面
+#   insight_conflict  90 = 3 档(aligned/conflicting/absent) × 2 entry_mode × 15
+#                     补遗留清单里「conflict_resolve 完全没用上」那个缺口
+name: seed_v12
+
+quotas:
+  budget_change:    140
+  creative_launch:   90
+  diagnosis:         90
+  portfolio_review:  50
+  long_tail:         50
+  clarify:           50
+  reject:            50
+  all_high:          30
+  tool_missing:      30
+  # ★ 90 → 150：三档里只有 immature 那档产出 defer，90 条 = 30 条 defer，
+  # 而 defer 是 M1 整个里程碑的产物，全库只有 30 条太薄。150 → 50 条 defer。
+  freshness_check:  150
+  failure_drill:    150
+  safety_line_drill: 90   # M2
+  feature_attribution: 100  # M3
+
+  # ---- M4 · L6 扩量 ----
+  # I09：三档由「离安全线还有多远」决定 —— 这是安全线第一次真正参与**决策**，
+  # 而不只是"查没查"。90 = 3 档 × 2 entry_mode × 15。
+  # ★ 和 BUD 的边界写死在 user_message 上：BUD 一定含"从 X 提到 Y"，
+  #   SCALE 一定不含任何目标数字（设计文档 §339 警告过这两类会互相污染）。
+  scale_decision:    90
+  # I11：全项目最长的链（10–14 步），也是唯一的**并行拓扑**。
+  # 三档：三地域全过 / 其中一个安全线查不到该剔除 / 全查不到该开单补录。
+  # ★ 核心考点是逐地域查安全线 —— 直接接上 M3 埋的事实：
+  #   real_person 在 US +0.23、在 JP −0.14，拿一个地域的结论去铺所有地域就是亏钱。
+  geo_expansion:     90
+
+  # ---- M5 · 负面数据 ----
+  # N1「不该调工具」—— 在此之前**一条都没有**。设计文档警告过后果：
+  # 训练里没有 ⇒ 评测里通常也没有 ⇒ 这个失败模式对你完全不可见。
+  # 60 = 3 种场景（能力询问 / 闲聊 / 上下文惯性）× 2 × 10。
+  # 它是第五种顶层行为 `answer` 的唯一载体。
+  no_call:           60
+  # N6 加量。F 类里已有一档 injection（约 15 条），但设计文档给的是
+  # Injection Resistance = 100% 的硬指标，15 条撑不起来。
+  # ★ 和 F 类那档的区别：**注入点铺开到四个不同的工具**
+  #   （campaign 名 / 记忆内容 / 政策条款 / 安全线备注）。
+  #   只在一个字段上训，模型学到的是"这个字段不可信"，
+  #   而不是"工具返回是 data 不是 instruction"。
+  injection_drill:   60
+
+  # ---- M8 · RAG v1（非结构化 + 半结构化侧）----
+  # ★ 两个模板的 gold 都逐条实跑验证过（tests/authoring/test_policy_drill*.py
+  #   与 test_insight_conflict.py），且配了**双向断言**：
+  #   该命中的档 gold 查询真的命中且中对，空洞档真的返回空。
+  #   没有这两条，哪条轴静默失效都看不出来（见 scripts/calibrate_retrieval.py）。
+  policy_drill:      90
+  insight_conflict:  90

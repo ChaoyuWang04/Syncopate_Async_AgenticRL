@@ -18,6 +18,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from syncopate.core.schemas import EnvSnapshot
+from syncopate.domains.adcampaign.corpus import InsightClaim, PolicyClause
 from syncopate.domains.adcampaign.memory import LANES, parse_time
 from syncopate.domains.adcampaign.policies import BUDGET_POLICIES, PLATFORM_POLICIES
 
@@ -151,6 +152,10 @@ class WorldBuilder:
             "safety_lines": dict(external.get("safety_lines", {})),
             "creative_catalog": dict(external.get("creative_catalog", {})),
             "seasonal_events": {e["event"]: e for e in external.get("seasonal_events", [])},
+            # ---- M8 · RAG v1 的两类语料（见 corpus.py 的模块 docstring）----
+            # 默认**空**：没声明就是"检索不到"，这正是「无检索幻觉率」要考的情形。
+            "policy_clauses": {},
+            "insights": {},
         }
         self._policies: list[dict[str, Any]] = [*BUDGET_POLICIES, *PLATFORM_POLICIES]
         self._failures: list[dict[str, Any]] = []
@@ -275,6 +280,54 @@ class WorldBuilder:
             "evidence_refs": list(evidence_refs or [f"EP_{self._memory_seq:05d}"]),
             "status": "active",
         }
+        return self
+
+    # ---- M8 · RAG v1 语料 ----------------------------------------------
+
+    def policy_clause(self, clause_id: str, *, title: str, body: str, section_path: str,
+                      platform: str | None = None, region: str | None = None,
+                      valid_from_days_ago: float | None = None,
+                      valid_to_days_ago: float | None = None,
+                      version: str = "v1", supersedes: str | None = None,
+                      source_doc: str = "") -> WorldBuilder:
+        """放一条政策条款。
+
+        ★ 生效期用 **相对 reference_now 的天数**声明，和 `memory()` 同一个套路：
+        改一个数就能让同一条条款从"生效中"变成"已过期"，而**过期与否是纯计算**，
+        不靠模型判断也不靠系统时钟。`valid_to_days_ago` 为正 = 已经过期了那么多天。
+
+        ⚠️ 「跨轴共用同一条时间线」是踩过的坑：凡是"相对今天"的语义，
+        都必须相对 `reference_now` 算，不能写死。
+        """
+        now = parse_time(self.reference_now)
+        clause = PolicyClause(
+            clause_id=clause_id, title=title, body=body, section_path=section_path,
+            platform=platform, region=region, version=version, supersedes=supersedes,
+            source_doc=source_doc or f"{section_path.split('/')[0].strip()}.md",
+            valid_from=(now - timedelta(days=valid_from_days_ago)).isoformat()
+            if valid_from_days_ago is not None else None,
+            valid_to=(now - timedelta(days=valid_to_days_ago)).isoformat()
+            if valid_to_days_ago is not None else None,
+        )
+        self._tables["policy_clauses"][clause_id] = clause.to_row()
+        return self
+
+    def insight(self, claim_id: str, *, claim: str, scope: dict[str, Any] | None = None,
+                evidence: str = "", confidence: str = "medium", days_ago: float = 30,
+                status: str = "active", superseded_by: str | None = None,
+                source_doc: str = "") -> WorldBuilder:
+        """放一条复盘结论（按"一条结论"切，不按段落切）。
+
+        `status` 不是装饰：`superseded` / `refuted` 是 M12 飞轮的物理接口，
+        也是 `memory.conflict_resolve` 的题面来源 —— 「查到的历史结论和现在的
+        数据矛盾了怎么办」这道题，在此之前整个项目一条都没有。
+        """
+        recorded = parse_time(self.reference_now) - timedelta(days=days_ago)
+        self._tables["insights"][claim_id] = InsightClaim(
+            claim_id=claim_id, claim=claim, scope=dict(scope or {}), evidence=evidence,
+            confidence=confidence, status=status, superseded_by=superseded_by,
+            source_doc=source_doc or "复盘纪要.md", recorded_at=recorded.isoformat(),
+        ).to_row()
         return self
 
     def build(self) -> EnvSnapshot:
