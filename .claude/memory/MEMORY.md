@@ -1,9 +1,10 @@
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么，别在错的文档里找答案
 - [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、6.4 GB/s、只能 DDP
-- [infra 线状态与决策](infra-line-state.md) — verl+GLM-4.7-Flash 已定；fully_async 有上游 bug；入口 docs/infra_exp/00-INFRA-HANDOFF.md
+- [infra 线状态与决策](infra-line-state.md) — verl+GLM-4.7-Flash 已定；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 这个项目最反复出现的失效形状
 - [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
+- [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义，否则训出来的策略上线不成立
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证

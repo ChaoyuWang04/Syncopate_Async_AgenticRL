@@ -20,6 +20,11 @@ metadata:
   M7 收尾的 27 GB ckpt 被写到一半掐断且训练日志无任何提示。
   ⇒ **判断空间要用写入探针（真写几百 MB 再删），不能信 `df`。**
   ⇒ fully_async 一个 ckpt 27 GB（3 个 rank 全量 state_dict），200 G 也只放得下 7 个。
+- 🔴 **`/workspace` 还不支持权限位**（`chmod 700` → 仍是 777，FUSE），
+  且容器 **`!cap_sys_admin`** ⇒ 不能 mount，"放个 ext4 镜像再 loop 挂"这条路也堵死。
+  ⇒ **PostgreSQL 的 PGDATA 物理上放不进 `/workspace`**（PG 硬性要求 0700）。
+  M9 的处理：二进制和 deb 离线包放 `/workspace/tools/postgres`、schema 在仓库，
+  **数据库降级成派生产物**，`bash scripts/pg_bootstrap.sh` 一条命令重建。
   ⚠️⚠️ **陷阱：`--save-freq 999` 挡不住收尾时那一次保存。** 每个短实验跑（哪怕只有 12 步、
   纯为计时）结束时照样落一个 **27 GB** 的 ckpt。2026-08-14 跑了三四个计时实验，
   差点把 61 GB 的 MoE 下载挤爆（当时已用 145 G / 配额 200 G）。

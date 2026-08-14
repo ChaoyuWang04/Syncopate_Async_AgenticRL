@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-14T05:08:54.367Z
+  modified: 2026-08-14T17:11:57.866Z
 ---
 
 ```
@@ -20,8 +20,13 @@ docs/distributed-training-design-v0.1.md  多卡实验设计（异步 / 并行�
 docs/infra_exp/00-INFRA-HANDOFF.md        ★ infra 线交接（与主线 05-handoff 平行的另一条线）
 docs/infra_exp/TRACK-A-hardware-kernel.md ★ 软硬结合线：负载稀疏结构 × 6.4GB/s 拓扑 决定写什么算子
 docs/infra_exp/TRACK-B-framework-async.md ★ 框架线：通用 RL 框架的假设在 agentic 负载上逐条失效
-docs/infra_exp/README.md                  实验索引 E00–E15 / 报告模板 / 编号规则 / 无主实验的停放理由
-docs/infra_exp/E07-moe-ep.md              MoE 决策全文（GLM-4.7-Flash + verl + GSPO + 探针 P1–P6）
+docs/infra_exp/README.md                  实验索引 E00–E16 / 报告模板 / 编号规则 / 无主实验的停放理由
+docs/infra_exp/E07-moe-ep.md              MoE 决策（★ 2026-08-14 改用 Qwen3-30B-A3B；GLM-4.7-Flash 当前栈不支持）
+docs/infra_exp/E08-async-rl.md            异步三模式 + 分布漂移 + ★ 占空比 31% + 同机分母 1.59×
+docs/infra_exp/E12-weight-sync.md         ★ 权重同步查因（方法论样板：两点反解→微基准→分步计时→A/B 排除）
+docs/infra_exp/E13-proximal-anchor-snapshot.md  一行 `if requires_grad` 的全过程（含三次自我更正）
+docs/infra_exp/E11-sparse-logprob.md      稀疏 logprob：做了调研后主动降级不写 kernel
+docs/infra_exp/E02-data-parallel.md       DDP vs FSDP（"慢 6 倍"的口径边界）
 docs/llm-rl-framework.md                  RL 框架全景调查（Chaoyu 写的，选型背景）
 ```
 
