@@ -4,6 +4,7 @@
 - [infra 线状态与决策](infra-line-state.md) — verl+GLM-4.7-Flash 已定；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 这个项目最反复出现的失效形状
+- [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
 - [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义，否则训出来的策略上线不成立
