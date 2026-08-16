@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-16T14:01:45.960Z
+  modified: 2026-08-16T17:09:54.660Z
 ---
 
 infra 线与主线**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
@@ -77,11 +77,27 @@ Track A  ~30%   论证 80% / 兑现 25% / 硬手艺 0%    ← 三条腿断了两
   **刻意不维护「现在能写的」那一版**——进度归 track 文档，两份并存最后两份都不准。
   欠的实验清单在 `TRACK-B §3.5`（B1–B9）和 `TRACK-A §7.5`（A1–A6）。
 
-## 队列
+## 队列（全表见 `00-INFRA-HANDOFF.md` §5）
 
-见 `00-INFRA-HANDOFF.md` §5（2026-08-16 按「能不能把 before 变成 after」重排）。
-**不吃 GPU 可并行推进的三件**：B4 仪器移位（写码）、B7 η 换算、B6 分池 patch。
-⚠️ `bitsandbytes` 未装。
+**排序原则，按顺序应用**：① **短探测优先，尤其是能防止长实验白做的**
+（30 分钟的 go/no-go 挡住 2–3 天的工作量，期望收益比任何优化都高）；
+② 然后看**对核心数字的贡献力度**（能把某个 before 变成 after 的排前面）。
+
+```
+第0轨 不吃GPU  B4写码(仪器移位) · B6写码(分池patch) · E03成文
+第1批 gate     B2 缓冲区A/B(25m,挡着B3) → A1 E07探针(30m,gate住A2的2-3天)
+               → A7 E00降频+4卡曲线(1h,分母的分母) → B3 one_step_off(30m)
+第2批 核心     B1 权重同步优化(1-2d) → B10 陈旧度曲线(顺带B7 η) → B11 配比
+               ⚠️ B11 必须在 B1 之后：B1 改完时间构成变了，先测配比会白测
+               → B5 任务级尺子(一次性验收 E13+B1+B10/B11)
+第3批 A 兑现   A5 E01(🐟挂跑,零成本,是B12门槛) → A4 切片落地 → A6 E02补稳态
+               → B12 三次前向(=E17) → A2 三摆法
+第4批 长投入   A3 E16(~1周,唯一硬手艺,不gate也不被gate) → B6验证/B8/B9
+```
+
+★ **队列编号 B*/A* 是执行顺序，E 编号是报告身份**，映射写在 handoff §5 第三列；
+新报告按 E 编号建文件（🆕 **E17 = 训练侧三次前向**）。
+⚠️ `bitsandbytes` 未装（A2 要）。
 
 相关：[[machine-4x5090-constraints]] [[syncopate-docs-map]] [[feedback-measure-dont-infer]]
 [[project-mechanism-not-wired]] [[user-chaoyu-working-style]]

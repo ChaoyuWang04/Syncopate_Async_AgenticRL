@@ -101,6 +101,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | Triton fp8/fp4 静默退化复现 / FP8 GEMM roofline / FP4 inline PTX（**原规划占 E13，因 E13 已被实验占用而顺延**） | **A** | ⬜ | ⚪ | 🔴 |
 | **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
 | **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
+| **E17** 🆕 | [训练侧三次前向的必要性](E17-triple-forward.md) | `update_actor`+`old_log_prob`+`ref` 是同一批数据的三次前向，**合计占步 72%**——占空比最大的一块，至今没有实验正面打过。⚠️ `old_log_prob` 不能降频（decoupled 下它是损失函数的一部分），只能从 `ref` 与「共享前向」两个方向进 | **B** | ⬜ | 🟠 | 🔴（门槛 E01） |
 
 ### 2.1 三个「无主」实验的停放理由（不删，理由是资产）
 
