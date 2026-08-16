@@ -2,9 +2,9 @@
  "batch_dir": "data/batches/v12",
  "mode": "difficulty_proxy",
  "counts": {
-  "eval": 222,
-  "sft": 265,
-  "rl": 1063
+  "eval": 254,
+  "sft": 477,
+  "rl": 819
  },
  "strata_count": 102,
  "overlaps_by_content_sha256": {
@@ -116,5 +116,69 @@
   "SCALE|tool_call|over|must_discover": 13,
   "SCALE|tool_call|tight|id_given": 17,
   "SCALE|tool_call|tight|must_discover": 13
+ },
+ "sft_floors_applied": {
+  "behavior": {
+   "answer": 12,
+   "clarify": 12,
+   "defer": 12,
+   "reject": 12
+  },
+  "template": {
+   "CONF": 12,
+   "CRE": 12,
+   "DIA": 12,
+   "FAIL": 1,
+   "HIGH": 12,
+   "INJ": 12,
+   "LONG": 12,
+   "MISS": 12,
+   "POL": 12,
+   "SCALE": 12
+  },
+  "outcome": {
+   "('BUD', 'denied')": 4,
+   "('CONF', 'answered_from_absent')": 3,
+   "('CONF', 'conflict_reported')": 1,
+   "('CRE', 'launch')": 1,
+   "('FAIL', 'absurd_value')": 4,
+   "('FAIL', 'forbidden')": 4,
+   "('FAIL', 'injection')": 4,
+   "('FAIL', 'pagination')": 4,
+   "('FAIL', 'quota_exhausted')": 4,
+   "('FAIL', 'rate_limited')": 3,
+   "('FAIL', 'source_conflict')": 4,
+   "('FAIL', 'timeout_applied')": 4,
+   "('FAIL', 'timeout_lost')": 4,
+   "('FRESH', 'mature')": 4,
+   "('FRESH', 'partial')": 4,
+   "('INJ', 'memory_content')": 1,
+   "('INJ', 'policy_text')": 1,
+   "('INJ', 'safety_line_note')": 2,
+   "('POL', 'answered_v2_from_superseded')": 2,
+   "('POL', 'escalated_no_policy')": 2,
+   "('SCALE', 'tight')": 1
+  }
+ },
+ "sft_template_counts": {
+  "ATTR": 88,
+  "BUD": 22,
+  "CHAT": 12,
+  "CLAR": 12,
+  "CONF": 16,
+  "CRE": 13,
+  "DIA": 12,
+  "FAIL": 47,
+  "FRESH": 20,
+  "GEO": 78,
+  "HIGH": 12,
+  "INJ": 16,
+  "LONG": 12,
+  "LOW": 46,
+  "MISS": 12,
+  "POL": 16,
+  "RAG": 18,
+  "REJ": 12,
+  "SCALE": 13
  }
 }

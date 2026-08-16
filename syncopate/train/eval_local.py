@@ -329,6 +329,96 @@ def _report_diversity(rows: list[dict]) -> None:
               f"{'，前 8 个: ' + str(only_one[:8]) if only_one else ''}")
 
 
+def is_write_case(bundle: CaseBundle) -> bool:
+    """这条 case 的 gold 里有没有**写动作**。
+
+    判据取自工具注册表的 `kind`，不另立一套分类 —— 一份工具在两个地方
+    有两种"是不是写"的说法，迟早会分叉（本项目栽过：沙盒和 runtime 的契约必须同源）。
+    """
+    from syncopate.core.tool_registry import REGISTRY
+
+    if bundle.gold is None:
+        return False
+    # GoldPath.actions 是 [{tool, arguments}] 的纯 dict（见 core/schemas.py）
+    return any((spec := REGISTRY.get(a.get("tool", ""))) is not None and spec.kind == "write"
+               for a in bundle.gold.actions)
+
+
+def _report_read_write(rows: list[dict]) -> None:
+    """★★ 读操作 ⊥ 写操作 —— 设计文档 §21 三条"绝对不能合并"之一。
+
+    原话：**「混在一起，大量读操作会稀释掉写操作的风险」**。
+    这条尺子在 M7 验收时是缺的 —— §31.2 的毕业条件里写着
+    「E2E 任务成功率按读/写分桶均达标」，而全项目没有任何代码按读/写分过桶，
+    于是那一条从头到尾**无法判定**（2026-08-16 审计）。
+
+    为什么这个分桶特别要紧：本项目的 EVAL 里读多写少，
+    把两者平均起来，**写动作上的错误会被读操作的高分直接盖掉** ——
+    而两者的代价差几个数量级（答得啰嗦 vs 乱花钱）。
+
+    分组依据是 **gold 里有没有写工具**（`ToolSpec.kind == "write"`），
+    由数据声明、不是事后按 reward 推断 —— 同 `has_failure` 那条。
+    """
+    write = [r for r in rows if r.get("is_write")]
+    read = [r for r in rows if not r.get("is_write")]
+    if not write:
+        return
+
+    def line(name: str, group: list[dict]) -> str:
+        n = len(group)
+        mean = statistics.mean(g["reward"] for g in group)
+        # "成功"= 该 case 的 8 次采样里 reward 达到满分档的比例。
+        # 用采样次数而不是 case 数：8 次里成功 3 次和成功 8 次不是一回事。
+        ok = sum(1 for g in group for v in g["group"] if v >= 0.999)
+        tot = sum(len(g["group"]) for g in group)
+        caps = sum(len(g["caps"]) for g in group)
+        return (f"  {name:<12}{n:>4}{mean:>9.3f}{ok}/{tot:>9}"
+                f"{ok/tot:>9.0%}{caps/max(tot,1):>10.2f}")
+
+    print("\n★ 读 / 写分桶 —— §21：混在一起，大量读操作会稀释掉写操作的风险")
+    print(f"  {'桶':<12}{'n':>4}{'reward':>9}{'满分次数':>12}{'成功率':>9}{'cap/次':>10}")
+    print(line("只读", read))
+    print(line("含写动作", write))
+    delta = (statistics.mean(g["reward"] for g in read)
+             - statistics.mean(g["reward"] for g in write))
+    print(f"  读−写 差值 {delta:+.3f}"
+          "   ← 正得越多，说明总分越是被读操作撑起来的")
+
+
+def _rereport(audit_path: Path, batch_dir: Path) -> int:
+    """对一份已有的审计 JSON 重出报告（不跑模型）。
+
+    ★ 为什么要有这条路：补一把新尺子之后，历史基线上那个指标是**缺失**的，
+    而重跑一遍 EVAL 要几小时 GPU。审计文件里逐 case 的采样结果都在，
+    缺的只是分组依据（比如 `is_write` 要从 gold 里读）—— 那从 batch 补上就行。
+
+    ⚠️ 补分组依据时必须用**这份审计当初跑的那个 batch**。
+    拿另一个版本的 gold 去给旧审计分组，得到的数看起来正常，但它谁也不是。
+    """
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    rows = audit["rows"]
+    missing = 0
+    for row in rows:
+        try:
+            bundle = CaseBundle.read(batch_dir, row["case_id"])
+        except (FileNotFoundError, OSError):
+            missing += 1
+            continue
+        row["is_write"] = is_write_case(bundle)
+        row.setdefault("has_failure", bool(bundle.env.failures))
+    print(f"[重出报告] {audit.get('label', audit_path.name)}   {len(rows)} 条 case"
+          f"   语料 {batch_dir}")
+    if missing:
+        print(f"⚠️ 有 {missing} 条 case 在 {batch_dir} 里找不到 —— "
+              f"审计和 batch 多半不是同一个版本，下面的分桶数不可信")
+    _report_read_write(rows)
+    _report_defer(rows)
+    _report_recovery(rows)
+    _report_behavior_matrix(rows)
+    _report_diversity(rows)
+    return 0
+
+
 def _report_recovery(rows: list[dict]) -> None:
     """★ 恢复动作的**双向**准确率 —— 和 defer 双向指标同构。
 
@@ -380,7 +470,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gpu-util", type=float, default=0.85,
                         help="vLLM 的显存份额。评测独占整卡，可以给大 —— KV 池越大命中率越高")
     parser.add_argument("--out", default=None)
+    parser.add_argument("--from-audit", default=None,
+                        help="★ 不跑模型，直接对一份已有的审计 JSON 重出报告。"
+                             "补了新尺子之后，用它把历史基线的值反算出来 —— "
+                             "不必为了一个新指标重跑几小时 GPU")
     args = parser.parse_args(argv)
+
+    if args.from_audit:
+        return _rereport(ROOT / args.from_audit, ROOT / args.batch)
 
     domain = build_domain()
     domain.registry.latency_scale = args.latency_scale
@@ -468,6 +565,8 @@ def main(argv: list[str] | None = None) -> int:
             "tool_seqs": [g["tools"] for g in group],
             # ★ 这条 case 有没有声明失败剧本 —— 恢复动作双向指标的分组依据
             "has_failure": bool(bundle.env.failures),
+            # ★ gold 里有没有写动作 —— 读/写分桶的分组依据（§21，见 _report_read_write）
+            "is_write": is_write_case(bundle),
         })
         elapsed = time.time() - started
         eta = elapsed / index * (len(bundles) - index)
@@ -519,6 +618,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _report_defer(rows)
     _report_recovery(rows)
+    _report_read_write(rows)
     _report_behavior_matrix(rows)
     _report_diversity(rows)
 

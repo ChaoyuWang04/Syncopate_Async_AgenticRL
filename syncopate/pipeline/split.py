@@ -114,11 +114,14 @@ def _tags(b: CaseBundle) -> dict[str, str]:
 # 冻结 EVAL 上量出来的一定是"没学会"，**而这个结果和 RAG 实现好坏无关** ——
 # 会把一个分桶 bug 误判成 RAG 设计问题，然后去改根本没错的地方。
 #
-# ⇒ 所以保底从 dead_grid 分支里提出来，**两个分支共用**（见 _apply_sft_floors）。
+# ⇒ 所以保底从 dead_grid 分支里提出来，**两个分支走同一个函数** `_apply_sft_floors`。
 #   「换一条代码分支，保底就悄悄没了」这个形状，正是本项目反复栽的那个
 #   （05-handoff §6「机制在，但没接上」）。
+#   ⚠️ 共用的是**函数**，不是**策略**：在场保底只对 difficulty_proxy 开，
+#      理由写在 `_apply_sft_floors` 的 docstring 里（一句话：dead_grid 说得出
+#      「这个模板是活的」这个理由，difficulty_proxy 说不出任何理由）。
 #
-# 为什么三个轴都要，少一个都不行：
+# 三个轴各挡一种形态，少一个都不行：
 #   behavior  某个**行为**太稀薄 —— 实测 defer 只有 4 条 ⇒ SFT 后从 77% 崩到 36%
 #   template  某个**模板整个没进桶** —— 就是这次 POL/CONF 撞的
 #   outcome   进了桶但**只进了一档** —— 坑 #6 的第一种形态（只装死格 ⇒ defer 97%→0%）
@@ -128,8 +131,24 @@ OUTCOME_SFT_FLOOR = 4        # 且每个 (模板, 结局) 档至少这么多 —
 
 def _apply_sft_floors(
     pool: list[str], chosen: list[str], bundles: dict[str, CaseBundle],
+    *, presence_floors: bool,
 ) -> tuple[list[str], dict[str, dict[str, int]]]:
-    """把"某一类在 SFT 桶里太稀薄"补上来。**dead_grid 和 difficulty_proxy 共用。**
+    """把"某一类在 SFT 桶里太稀薄"补上来。**两个分支共用这一个函数。**
+
+    ★★ `presence_floors` 为什么按分支给，而不是一律开：
+
+        dead_grid 模式      有 base 实测数据。某个模板没进桶，是因为**它在 EVAL 上是活的**
+                           —— 这是一个正当理由，而且 SFT 的职责本来就是
+                           「把 p 从 0 抬到 5–10%，不是抬到 90%」。
+                           新模板若真的不会做，它的格子必然是死格 ⇒ 自然会被选中。
+                           ⇒ 这条分支**不需要**在场保底，硬加反而把活格卷进来。
+
+        difficulty_proxy   **没有任何 base 数据**，纯按 (难度标签, gold 链长) 排序。
+                           某个模板没进桶，说不出任何理由 —— v12 就是这么把
+                           POL/CONF 整个丢掉的。⇒ 这条分支必须有在场保底。
+
+    ⇒ 判据是「说不说得出为什么这个模板不需要 SFT」：说得出就跳过，说不出就保底。
+      （同 infra 线那条纪律：答不上「服务哪条兑现物」的实验一律显式停放。）
 
     ★ 补进去的明细一并返回并写进 `split_report.json` —— 保底如果是静默发生的，
     下次它没生效同样是静默的，而这正是本项目最贵的那类 bug。
@@ -146,7 +165,7 @@ def _apply_sft_floors(
     # 每组在池子里总共有多少条 —— 保底的上限要按它算，见下面 allowance。
     supply: dict[Any, int] = {}
 
-    def top_up(axis: str, group_of, floors: dict[Any, int]) -> None:
+    def top_up(axis: str, group_of, floors: dict[Any, int], *, share: float | None) -> None:
         # 每个轴开始前重算一次 have：前一个轴补进来的 case 在这个轴上同样算数。
         have: dict[Any, int] = {}
         for cid in chosen_set:
@@ -158,12 +177,21 @@ def _apply_sft_floors(
             supply[key] = supply.get(key, 0) + 1
         detail: dict[str, int] = {}
         for group, floor in sorted(floors.items(), key=lambda kv: str(kv[0])):
-            # ★ 保底**不能把一个组吃光**：RL 那边也要有这个模板/行为的题，
-            #   否则该模板在 RL 阶段一条梯度来源都没有 —— 那是把这次修的坑
-            #   原样搬到了下一个阶段。⇒ 每组最多让一半进 SFT 桶。
-            #   （真实规模上这条不会绑定：v12 的 POL 池子有 78 条，一半 39 ≫ 保底 12；
-            #    只有小批量/冒烟用例才会撞到它。）
-            allowance = max(1, supply.get(group, 0) // 2)
+            # ★★ 两类保底的**上限策略刻意不同** —— 因为它们要的东西不是一回事：
+            #
+            #   behavior（share=None，不设上限）
+            #       要的是**饱和**：某个行为得有足够的量才学得会。
+            #       实测依据 —— defer 只有 4 条 ⇒ SFT 后从 77% 崩到 36%；
+            #       M1 那轮从 0 学到 97% 用了 9 条。这是绝对量要求，不能按比例打折。
+            #
+            #   template / outcome（share=0.5，最多吃一半）
+            #       要的是**在场**：这个模板/这一档不能一条都没有。
+            #       在场不需要饱和，所以要给 RL 留口粮 —— 否则该模板在 RL 阶段
+            #       一条梯度来源都没有，等于把这次修的坑原样搬到下一个阶段。
+            #
+            # ⚠️ 真实规模上 share 这条根本不绑定（v12 的 POL 池子 78 条，
+            #    一半 39 ≫ 保底 12），只有小批量/冒烟批次才会撞到。
+            allowance = floor if share is None else max(1, int(supply.get(group, 0) * share))
             missing = min(floor, allowance) - have.get(group, 0)
             if missing <= 0:
                 continue
@@ -178,13 +206,16 @@ def _apply_sft_floors(
         if detail:
             added[axis] = detail
 
+    # ① 饱和保底：两个分支都要。行为学不会就是学不会，和有没有 base 数据无关。
     top_up("behavior", lambda c: bundles[c].verifier.expected_behavior,
-           RARE_BEHAVIOR_SFT_FLOOR)
-    top_up("template", lambda c: c.split("_")[0],
-           {c.split("_")[0]: TEMPLATE_SFT_FLOOR for c in pool})
-    top_up("outcome", lambda c: (c.split("_")[0], _tags(bundles[c]).get("outcome", "-")),
-           {(c.split("_")[0], _tags(bundles[c]).get("outcome", "-")): OUTCOME_SFT_FLOOR
-            for c in pool})
+           RARE_BEHAVIOR_SFT_FLOOR, share=None)
+    # ②③ 在场保底：只有 difficulty_proxy 需要，理由见 docstring。
+    if presence_floors:
+        top_up("template", lambda c: c.split("_")[0],
+               {c.split("_")[0]: TEMPLATE_SFT_FLOOR for c in pool}, share=0.5)
+        top_up("outcome", lambda c: (c.split("_")[0], _tags(bundles[c]).get("outcome", "-")),
+               {(c.split("_")[0], _tags(bundles[c]).get("outcome", "-")): OUTCOME_SFT_FLOOR
+                for c in pool}, share=0.5)
 
     return sorted(set(chosen)), added
 
@@ -297,7 +328,7 @@ def split(
             }
         # ★★ 保底：dead_grid 只按「哪些格子死了」选，做得好的行为一个格子都不会进桶。
         # 三个轴见 _apply_sft_floors 的说明。
-        buckets.sft, sft_floors = _apply_sft_floors(pool, chosen, bundles)
+        buckets.sft, sft_floors = _apply_sft_floors(pool, chosen, bundles, presence_floors=False)
         sft_set = set(buckets.sft)
         buckets.rl = [c for c in pool if c not in sft_set]
         mode = "dead_grid"
@@ -306,7 +337,7 @@ def split(
         cut = max(1, int(len(pool) * sft_ratio))
         # ★ 保底和 dead_grid 分支**共用同一个函数**。
         # 这条分支以前一条保底都没有，v12 因此把 POL / CONF 整个挤出了 SFT 桶。
-        buckets.sft, sft_floors = _apply_sft_floors(pool, ranked[:cut], bundles)
+        buckets.sft, sft_floors = _apply_sft_floors(pool, ranked[:cut], bundles, presence_floors=True)
         sft_set = set(buckets.sft)
         buckets.rl = sorted(c for c in ranked[cut:] if c not in sft_set)
         mode = "difficulty_proxy"

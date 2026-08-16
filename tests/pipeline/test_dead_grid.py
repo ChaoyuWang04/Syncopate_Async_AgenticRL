@@ -261,4 +261,82 @@ def test_rare_behavior_floor_tops_up_a_starved_behavior(tmp_path):
     defer_in_sft = [c for c in buckets.sft if c.startswith("FRESH")]
     assert len(defer_in_sft) >= dg.RARE_BEHAVIOR_SFT_FLOOR["defer"], \
         "defer 没被保底补上 —— 它会在 SFT 后崩掉"
-    assert "__rare_behavior_floor__" in report["dead_grid_selection"]
+    # 2026-08-16：保底提成三个轴、两个分支共用后，明细挪到了 report["sft_floors_applied"]。
+    # ★ behavior 轴**不设比例上限**：它要的是饱和（学得会），不是在场。
+    assert report["sft_floors_applied"]["behavior"]["defer"] > 0
+
+
+# --------------------------------------------------------------------------
+# ★ difficulty_proxy 的在场保底（2026-08-16 验收审计推出）
+# --------------------------------------------------------------------------
+
+
+def test_difficulty_proxy_never_leaves_a_template_out_of_sft(tmp_path):
+    """★★ v12 实际发生过：M8 新增的 POL / CONF 两个模板，SFT 桶里**各 0 条**。
+
+    机制不是"选得不好"，是 `difficulty_proxy` 分支**一条保底都没有**
+    （保底当时只写在 dead_grid 分支里，而 v11 走的正好是那条，所以没暴露）。
+    `_difficulty_rank` 按 (难度, gold 链长) 降序取前 20%，POL 的 gold 只有
+    「一次检索 + 终答」，链最短 ⇒ 整个模板被挤出桶外。
+
+    后果不是"少学一点"，是 **M8 的验收路径整个断掉**：
+    「p=0 的格子 RL 永远够不着」⇒ 没进 SFT ⇒ 冻结 EVAL 上必然量出"没学会"，
+    **而这个结论和 RAG 实现好坏无关** —— 会把分桶 bug 误判成 RAG 设计问题。
+
+    这里用「长链模板 × 大量」+「短链模板 × 少量」复现那个形状：
+    没有保底时，短链的那个模板会被完全挤掉。
+    """
+    batch = make_batch(tmp_path, {
+        "ATTR|tool_call|conclusive|id_given": 60,   # 链长，排前面，会吃满配额
+        "POL|tool_call|answered|id_given": 40,      # 链短，正是被挤掉的那种
+    })
+    # gold 链长决定排序：给 ATTR 造长链，POL 保持最短
+    for i in range(60):
+        p = tmp_path / "gold_paths" / f"ATTR_{i:04d}.gold.json"
+        g = json.loads(p.read_text(encoding="utf-8"))
+        g["actions"] = [{"tool": "campaign.get_metrics", "arguments": {}} for _ in range(6)]
+        p.write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")
+
+    buckets, report = split(batch)
+
+    assert report["mode"] == "difficulty_proxy"
+    pol_in_sft = [c for c in buckets.sft if c.startswith("POL")]
+    assert pol_in_sft, "POL 整个模板没进 SFT 桶 —— 这正是 v12 那个 bug"
+    # 每个模板在报告里都要有数，0 就是 bug 回来了
+    assert all(n > 0 for n in report["sft_template_counts"].values())
+    # ★ 在场保底不能把 RL 吃光：那等于把坑搬到下一个阶段
+    assert [c for c in buckets.rl if c.startswith("POL")], "POL 在 RL 桶里一条不剩"
+
+
+def test_eval_thickening_is_strictly_additive(tmp_path):
+    """★★ 冻结 EVAL 的加厚必须是**严格增量**的 —— 这是构造保证，不是事后 diff。
+
+    取样写法是 `sorted(strata[key])[:take]`，调大 take 只会在尾部追加。
+    只要这一点成立，历史基线（如 `_audit/v11_sft_e1_m2.json`）对老 case_id
+    就仍然逐条配对可比 —— 而"哪些基线仍可比"必须由构造保证，
+    否则每次改数据都要重新跑一遍全量 diff 才敢说话。
+    """
+    # ⚠️ 用一个**不在 OUTCOME_EVAL_QUOTA 里**的档，否则两边都被 clamp 到同一个数，
+    #    测试会因为"两边相等"而失败 —— 那不是冻结被破坏，是这个用例没测到东西。
+    batch = make_batch(tmp_path, {"BUD|tool_call|executed|id_given": 30})
+    thin, _ = split(batch, eval_per_stratum=2)
+    thick, _ = split(batch, eval_per_stratum=6)
+    assert set(thin.eval) < set(thick.eval), "加厚把老成员挤掉了 —— 冻结被破坏"
+
+
+def test_outcome_quota_thickens_the_m8_acceptance_tiers(tmp_path):
+    """M8 两项验收（过期检出率 / 无检索幻觉率）的分母就是这几个档。
+
+    实测 v12：每档只有 4 条 ⇒ 错一题 25%，判不了一个"趋近 0"的指标。
+    根因是 `RARE_BEHAVIOR_EVAL_QUOTA` 只按 behavior 加厚，
+    而这些档的 behavior 恰好是最常见的 `tool_call`。
+    """
+    batch = make_batch(tmp_path, {
+        "POL|tool_call|answered_v2_from_superseded|id_given": 30,
+        "BUD|tool_call|executed|id_given": 30,
+    })
+    buckets, _ = split(batch, eval_per_stratum=2)
+    pol = [c for c in buckets.eval if c.startswith("POL")]
+    bud = [c for c in buckets.eval if c.startswith("BUD")]
+    assert len(pol) == 6, f"过期检出率的分母没被加厚：{len(pol)}"
+    assert len(bud) == 2, "不该动的档位被顺手改了"
