@@ -53,7 +53,14 @@
 ```
 docs/infra_exp/TRACK-A-hardware-kernel.md   负载形状 × 硬件拓扑 决定该写什么算子
 docs/infra_exp/TRACK-B-framework-async.md   agentic RL 训练系统的框架级改造
+docs/infra_exp/NARRATIVE-AND-RESUME.md   🆕 「怎么讲」：面试官视角的审视 / 故事线 / 简历两版本
 ```
+
+★ **第四份是 2026-08-16 新增的，它和前三份的分工是**：
+E 报告答「量到了什么」、track 答「这条线要兑现什么、现在在哪」、README 是索引，
+而 **NARRATIVE 答「对外怎么表达，以及现在的材料够不够」**。
+它写下的头号结论是：**手上的数几乎全是 before，没有 after**
+⇒ 这条判据现在决定实验的优先级（见 `00-INFRA-HANDOFF.md` §5.1）。
 
 ⇒ **track 文档回答「这条线要兑现什么、现在在哪」，E 报告回答「我们量到了什么」，
 本文件是索引。三者不重复内容。**

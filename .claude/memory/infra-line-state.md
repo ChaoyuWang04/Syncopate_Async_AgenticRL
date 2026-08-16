@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-14T17:11:43.898Z
+  modified: 2026-08-16T13:37:07.347Z
 ---
 
 infra 线与主线**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
@@ -55,11 +55,28 @@ infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，�
    **解法是调小 bucket**（实际只推 132 MB）。one_step_off 也中招 ⇒ 不是 fully_async 特有。
 2. `--save-freq 999` 挡不住收尾保存（见 [[machine-4x5090-constraints]]）。
 
-## 明天的队列（已排）
+## ★★ 2026-08-16 的两条重估（用面试官视角审了一遍）
 
-① bucket A/B（收尾 E12 + 解 OOM + 补 one_step_off）→ ② **E07 P2 探针**（Track A 的 go/no-go）
-→ ③ 长跑复核（让 31% 和 E13 端到端有足够样本）→ ④ E16 sm_120 探底。
-⚠️ `bitsandbytes` 未装，P6 要先装且 sm_120 上有风险。
+**头号结论：两条 track 手上的数几乎全是 before，没有 after。**
+「占空比 31%」「只快 1.59×」是**现状陈述不是成果陈述**，孤立放进简历反而像自曝短板。
+⇒ **从此实验优先级只看一件事：它能不能把某个 before 变成 after。**
+
+```
+Track B  ~50%   诊断 85% / 优化 15% / 验收 0%      ← 「够撑一个项目」那句话要加限定词：够撑的是诊断
+Track A  ~30%   论证 80% / 兑现 25% / 硬手艺 0%    ← 三条腿断了两条半
+```
+- **A 的病比 B 重**：②「拓扑驱动的量化」动机是**省通信**，单卡上不成立；
+  ③ E16 的前提（sm_120）随机器消失。**唯一站得住的是①稀疏计算**——
+  它的依据是「监督密度 ~4%」这个**与硬件无关的结构性特征**，换机器也不倒。
+- **E02 抢素材已裁**：归 **A**，B 里降级成背景句，别一份素材写两个项目。
+- 新文档 **`docs/infra_exp/NARRATIVE-AND-RESUME.md`**：面试官审视 / 故事线 / 简历两版本。
+  欠的实验清单在 `TRACK-B §3.5` 和 `TRACK-A §7.5`（A 分「卡回来」「长期单卡」两套）。
+
+## 队列（⛔ 旧版已被机器变更作废，见 [[machine-4x5090-constraints]] 顶部）
+
+新队列见 `00-INFRA-HANDOFF.md` §5.1。**要多卡的（B1/B2/B3/B5、A1/A2/A3）现在一项都跑不了**；
+不吃 GPU 的三件：**B4 仪器移位（写码）、B7 η 换算、B6 分池 patch**。
+⚠️ `bitsandbytes` 未装。
 
 相关：[[machine-4x5090-constraints]] [[syncopate-docs-map]] [[feedback-measure-dont-infer]]
 [[project-mechanism-not-wired]] [[user-chaoyu-working-style]]
