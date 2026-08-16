@@ -5,15 +5,19 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-14T17:11:57.866Z
+  modified: 2026-08-16T17:19:33.538Z
 ---
 
 ```
 docs/syncopate/05-handoff.md              ★ 先读：现在在哪 / 下一步 / 已定的决策 / 反复栽的坑
 docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令、参数为什么是那个值
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
-docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 = M8 的 RAG 语料层）
+docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/10-rag-retrieval.md        ★ RAG/检索权威文档（2026-08-16 新建）：
+                                            **我们没做向量化** —— BM25「是排序器不是判定器」、
+                                            Qwen3-0.6B 向量「没有分离带」，两条都是实测淘汰；
+                                            阈值 0.35 标定 / 两项验收怎么落成 cap / 那次审查
 docs/syncopate-project-design-v0.1.md     权威设计（里程碑 M0–M12）
 docs/ostinato-project-design-v0.2.md      单卡 infra 优化
 docs/distributed-training-design-v0.1.md  多卡实验设计（异步 / 并行策略 / 通信画像）
