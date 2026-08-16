@@ -77,18 +77,19 @@ docs/infra_exp/TRACK-B-framework-async.md   agentic RL 训练系统的框架级�
 |---|---|---|---|---|---|---|
 | **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | A+B | 🟡 | 🔴 | 🔴 |
 | **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台） | A+B | ⬜ | 🔴 | 🐟 |
-| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 数据已有待成文：FULL_SHARD×3=1182s vs DDP 3.00× 线性 | 🟠 | 🟢 成文 |
+| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 **已成文**：首步 FULL_SHARD×3 1182.1s vs 单卡 198.0s = **5.97×**（两边都是首步，口径一致）；⚠️ **FULL_SHARD 稳态数据不存在**（那次跑一步就崩）；ZeRO-2 档未测 | 🟠 | 🔴 补稳态 |
 | **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮、重叠率、bucket 大小 | **A** | 🟡 数据已有待成文：CUMEM=0 6.4GB/s vs SHM_DISABLE 2.1 | 🟠 | 🟢 成文 |
 | **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 后端可行性探针 → 扫曲线、量 PP 气泡 | ⚪ **无主** | ⬜ | ⚪ | — |
 | **E05** | [序列并行](E05-sequence-parallel.md) | Ulysses / Ring，多长的序列之后才划算 | ⚪ **无主** | ⬜ | ⚪ | — |
 | **E06** | [装更大的模型](E06-bigger-models.md) | 全参 vs LoRA 的可行域地图 | 🔻 并入 E07 | ⬜ | ⚪ | — |
-| **E07** | [MoE 与专家并行](E07-moe-ep.md) | GLM-4.7-Flash + verl + GSPO；分片/复制/EP 三摆法 | **A**(通信动机) + B(路由) | 🟡 决策完成 | 🟠 | 🟡 探针 |
-| **E08** | [异步 RL 三模式与分布漂移](E08-async-rl.md) | colocate / one_step_off / fully_async + **分布漂移** | **B** | 🟡 one_step_off ✅；fully_async ✅ 跑完 147 步；**漂移实测「完成→训练」段零差（7200=7200 逐桶相同）——但★发现仪器装在下游，「发出→完成」段无仪器**；colocate 同机基线欠着 | 🔴 | 🟢 已完成部分 / 🔴 基线 |
+| **E07** | [MoE 与专家并行](E07-moe-ep.md) | 分片/复制/EP 三摆法 | **A**(通信动机) + B(路由) | 🟡 **模型改用 Qwen3-30B-A3B**（GLM-4.7-Flash 当前栈不支持，已下载 57 GB）；**账已用真 config 校准**（bf16 61.1 / 4bit 16.8 GB；分片每 micro-batch gather 61.1 GB 而只用 10%）；**★ MoE 上 `all-linear` 会挂 18,432 个专家 Linear ⇒ 必须改 target_modules** | 🔴 | 🟡 P2 探针 |
+| **E08** | [异步 RL 三模式与分布漂移](E08-async-rl.md) | colocate / one_step_off / fully_async + 分布漂移 + **占空比** | **B** | 🟡 **★ 同机分母：colocate 1卡 117.8 s vs fully_async 3+1 74.1 s ⇒ 4 张卡只换 1.59×**；**★ 整机占空比 31%**（rollout 空闲 82.5% @47.7W）；漂移「完成→训练」段零差但仪器在下游；one_step_off 因 bucket OOM 待补 | 🔴 | 🟢 已完成部分 |
 | **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | **B** | ⬜ | 🟠 | 🔴 |
 | **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | **B** | ⬜ | 🟠 | 🟢 画像 |
 | **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **A** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
 | **E12** 🆕 | [权重同步的代价与根因](E12-weight-sync.md) | **fully_async 稳态 55.8 s；反解出固定开销 55.0 s、传输 0.8 s ⇒ 98.6% 不是传输**。根因是每次同步走完 8 步，只有第 5 步在传数据 | **B** | 🟡 读码+日志已完成，分步计时待做 | 🔴 | 🟢 已完成部分 / 🔴 分步计时 |
-| **E13** 🆕 | [sm_120 能力探底](E13-sm120-capability.md) | Triton fp8/fp4 静默退化复现 / FP8 GEMM roofline / FP4 inline PTX | **A** | ⬜ | ⚪ | 🔴 |
+| **E13** 🆕 | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | decoupled 每步把整模型在 GPU↔CPU 搬 3 趟；**902 张量/8.309 GB 里只有 3.18% 是可训练的 LoRA**，基座冻结根本不用存 ⇒ **4.34 → 0.083 s/步，省 5.7%** | **B** | 🟡 根因+收益已实测，改动未做 | 🔴 | 🟢 已完成部分 |
+| **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | Triton fp8/fp4 静默退化复现 / FP8 GEMM roofline / FP4 inline PTX（**原规划占 E13，因 E13 已被实验占用而顺延**） | **A** | ⬜ | ⚪ | 🔴 |
 | **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
 | **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
 
@@ -252,9 +253,18 @@ flash-attn: 真轮子 2.8.3 已装（2026-08-13 晚), sm_120 verified, /workspac
     ⇒ 根因不是传输，是同步前后的 8 个步骤（KV cache 拆建 / buffer alloc-free +
       empty_cache / partial rollout 中断恢复）。分步计时待做 → E12-b
 
-★ fully_async 一个 step 的完整分解（37 步均值，`--sync-every 4`；分项合计 297.7 vs step 296.4，账对得上）
-    update_actor 98.1 (33.1%) · old_log_prob 76.3 (25.7%) · param_sync 55.8 (18.8%)
-    ref 39.2 (13.2%) · gen 18.6 (6.3%) · adv 9.6 (3.2%)
+★ fully_async 的完整步骤分解（37 条 timing 行，`--sync-every 4`；分项合计 297.7 vs step 296.4，账对得上）
+    ⚠️ **口径：每条 timing 行覆盖恰好 4 个 global step**（global_step 序列 3,7,…,147，差分全为 4）。
+       百分比不受影响；绝对秒数要 ÷4 才是每步。param_sync 例外（每 4 步只发生一次）。
+                        每 4 步(日志原值)   每 global step
+    update_actor            98.1 (33.1%)      24.5 s
+    old_log_prob            76.3 (25.7%)      19.1 s
+    param_sync              55.8 (18.8%)      13.9 s（摊薄；单次同步真实时长 = 55.8 s）
+    ref                     39.2 (13.2%)       9.8 s
+    gen                     18.6 ( 6.3%)       4.7 s
+    adv                      9.6 ( 3.2%)       2.4 s
+    step                   296.4              74.1 s
     ⇒ **训练侧三次前向占 72%，rollout 生成只占 6.3%**（异步把生成藏起来了）
-    ⚠️ old_log_prob 实测 76.3 s，而 launch_rl 注释估的是「+6–10 s」——**低估 8–13 倍**（E12 §6-②）
+    ⚠️ old_log_prob 占 25.7%，而 launch_rl 注释估的是「+6–10 s」——**低估 8–13 倍**（E12 §6-②）
+    ⇒ old_log_prob(19.1) 与 ref(9.8) 的 9.3 s/步缺口：**47% 是 proximal anchor 的 CPU 快照**（E13）
 ```

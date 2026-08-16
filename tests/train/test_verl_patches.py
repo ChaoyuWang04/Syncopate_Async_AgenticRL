@@ -83,3 +83,52 @@ def test_patch_delegates_to_upstream_when_dtensor_present(monkeypatch) -> None:
     fsdp_utils.fsdp2_sharded_load_from_cpu(_model(), {}, "spec")
 
     assert calls == ["upstream", "upstream_load"], "有 DTensor 时补丁不该接管"
+
+
+# ---- E13：只存可训练参数（proximal anchor 快照）----------------------------
+#
+# 背景：fully_async 的 decoupled 模式每步要把模型换成 v1 参数、算完再换回来。
+# 原实现拷贝全部 named_parameters（Qwen3-4B+LoRA 实测 8.309 GB），而冻结基座
+# 跨版本逐字节相同 —— 只有 3.18% 的 LoRA 参数会变。见 docs/infra_exp/E13-*.md。
+
+
+def _lora_like_model() -> torch.nn.Module:
+    """模拟 PEFT 的形状：大的冻结基座 + 小的可训练 adapter。"""
+    m = torch.nn.Module()
+    m.base = torch.nn.Linear(64, 64)          # 冻结
+    m.lora_A = torch.nn.Linear(64, 4, bias=False)   # 可训练
+    m.lora_B = torch.nn.Linear(4, 64, bias=False)   # 可训练
+    for p in m.base.parameters():
+        p.requires_grad = False
+    return m
+
+
+def test_snapshot_only_stores_trainable_params() -> None:
+    model = _lora_like_model()
+    state, spec = ddp_save_to_cpu(model)
+    assert spec is None
+    assert set(state) == {"lora_A.weight", "lora_B.weight"}, \
+        f"冻结基座不该进快照，实际存了 {sorted(state)}"
+
+
+def test_restore_recovers_trainable_and_leaves_frozen_untouched() -> None:
+    model = _lora_like_model()
+    state, spec = ddp_save_to_cpu(model)
+    base_before = model.base.weight.detach().clone()
+
+    with torch.no_grad():                      # 模拟又训了几步
+        model.lora_A.weight.add_(1.0)
+        model.lora_B.weight.add_(1.0)
+    ddp_load_from_cpu(model, state, spec)
+
+    assert torch.equal(model.lora_A.weight, state["lora_A.weight"][0]), "可训练参数没恢复"
+    assert torch.equal(model.base.weight, base_before), "冻结基座被动过"
+
+
+def test_full_finetune_model_still_saves_everything() -> None:
+    """前提失效时要自动退回全量：全参微调下不能漏存。"""
+    model = _lora_like_model()
+    for p in model.base.parameters():
+        p.requires_grad = True
+    state, _ = ddp_save_to_cpu(model)
+    assert "base.weight" in state and "base.bias" in state

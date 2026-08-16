@@ -391,10 +391,21 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             #    （update_actor 98.1 / old_log_prob 76.3 / param_sync 55.8 / ref 39.2 / gen 18.6）
             #    ⇒ **低估了 8–13 倍。** 详见 docs/infra_exp/E12-weight-sync.md §4.4 与 §6-②。
             #
-            # 「值得」这个判断是基于 6–10 s 做出的，**现在要重新算这笔账**：
-            # 76.3 s 换来的是 rollout_corr/* 那套 ESS 刹车。刹车仍然要（P6 停止条件靠它），
-            # 但代价要如实标价。可考虑的折中：ESS **降频采样**（每 N 步算一次 old_log_prob）
-            # 而不是每步都算 —— ⚠️ 做之前先设计对照，别直接改。
+            # 代价要如实标价：76.3 s × 37 步 = 47 分钟，占全程 224 分钟的 21%。
+            #
+            # ⛔ **但别把它理解成「花 76 秒买一个 ESS 刹车」——那个说法是错的。**
+            # 读码查实（experimental/separation/ray_trainer.py:503-530）：
+            #     bypass    old_log_prob := rollout_log_prob，走 compute_policy_loss_bypass_mode()
+            #     decoupled 重算 old_log_prob 当 **proximal anchor π_old**，走标准 PPO loss + IS 修正
+            #               源码注释：「π_old ... serves as stable reference during mini-batch updates」
+            # ⇒ `old_log_prob` **不是指标，是损失函数的一部分**（= AReaL 的 π_prox）。
+            #   AReaL 消融：decoupled 下 η≤4 安全，朴素 PPO 超 η=1 就崩。
+            #   ⇒ 这 76.3 s 买的是「异步在高陈旧度下还能训」本身，ESS 指标只是副产品。
+            #
+            # ⇒ ⛔ **因此「ESS 降频采样（每 N 步算一次 old_log_prob）」不可行** ——
+            #   那不是少测几次，是**在 decoupled PPO 和 bypass PPO 两个目标函数之间横跳**。别做。
+            # ⇒ ✅ 该查的是：old_log_prob(76.3s) ≈ ref(39.2s) 的 1.95×，而两者都是同批数据的纯前向。
+            #   这一倍差从哪来？→ 挂 E01/E12 查。另外 E11 稀疏 logprob 直接命中它。
             #
             # ★ 教训：**注释里的估算数字会被后人当实测引用。** 估算就标「估算」，
             #   拿到实测后回填。（同一天在 E11 已经犯过一次：拿配置上限当实际值。）
@@ -429,9 +440,35 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             f"actor_rollout_ref.model.lora_rank={args.lora_rank}",
             f"actor_rollout_ref.model.lora_alpha={args.lora_rank * 2}",
             # 挂全部线性层。只挂注意力容量差 2.8 倍——这是最常见的 LoRA 配置错误。
-            "actor_rollout_ref.model.target_modules=all-linear",
+            #
+            # ⚠️⚠️ **但这条只对 dense 成立。MoE 上 all-linear 是灾难**（2026-08-14 实测，E07 §4.5.3）：
+            #   Qwen3-30B-A3B 的 Linear 总数 18,673，其中 **18,432（98.7%）在专家里**
+            #   （gate/up/down × 128 专家 × 48 层）。挂 all-linear 的后果：
+            #       可训练参数 1696 M（dense 4B 是 66M，**26×**）
+            #       LoRA 张量 37,346 个（dense 是 504 个，**74×**）
+            #       每步权重同步 3.39 GB（dense 0.13 GB）
+            #   而 E13 已证明**逐张量拷贝是瓶颈**：504 个要 0.037 s，
+            #   37,346 个线性外推 ≈ 2.7 s，proximal anchor 每步拷三趟 ⇒ **光快照就 ~8 s/步**。
+            #   更根本：top-8/128 ⇒ 每个专家只见 1/16 的 token，绝大多数梯度极稀疏。
+            #
+            # ⇒ 做成显式参数。**dense 保持 all-linear（默认不变），MoE 请显式传 attn-router。**
+            f"actor_rollout_ref.model.target_modules={args.target_modules}",
             "actor_rollout_ref.rollout.load_format=safetensors",
-            "actor_rollout_ref.rollout.layered_summon=True",
+            # ★★ `layered_summon`：**在这台机器上很可能是净亏损，做成显式参数以便对照**
+            #
+            # 它的作用（`fsdp_utils.layered_summon_lora_params`）：逐层 summon 参数、
+            # 取出该层的 LoRA、拷到 CPU，**并且每层结束都调一次 `empty_cache()`**：
+            #     for 36 层: with FSDP.summon_full_params(layer): layer.state_dict() ... ; empty_cache()
+            #
+            # 它是为**真正分片的 FSDP** 设计的——分片时一次性 gather 整个模型会爆显存，
+            # 所以宁可逐层来。**但我们跑的是 `--fsdp-size 1`（DDP，不分片）**，
+            # 参数本来就是完整的，整体 summon 几乎免费，而逐层路径要付
+            # 36×(summon + 全量 state_dict + empty_cache)。
+            #
+            # 实测线索（E12，2026-08-14）：trainer 侧 `update_weights` 耗时
+            #     首次(推 8 GB 基座) 67.1 s  vs  稳态(只推 132 MB LoRA) 69.9 s
+            # ⇒ **数据量差 60× 而耗时不变 ⇒ 成本与传输量无关，就在"取参数"这一步。**
+            f"actor_rollout_ref.rollout.layered_summon={args.layered_summon}",
         ]
 
     # ---- Ostinato A1 实验入口：KV cache 量化（fp8_e4m3 / fp8_e5m2）----
@@ -575,6 +612,17 @@ def main(argv: list[str] | None = None) -> int:
     # vLLM 第一次 `sleep()` 时静默杀掉 VllmWorker。⇒ 保持 False，要开先单独验。
     parser.add_argument("--param-offload", default="False", choices=["True", "False"],
                         help="rollout 期间把 actor 参数挪到 CPU。默认 False（实测跑通的那次就是 False）")
+    parser.add_argument("--target-modules", default="all-linear",
+                        # ⚠️ argparse 的 help 会走 %-格式化 —— 里面的百分号必须写成 %%，
+                        #    否则 `--help` 直接抛 ValueError（2026-08-14 踩过）。
+                        help="LoRA 挂在哪些线性层。**dense 用默认 all-linear**；"
+                             "★ **MoE 千万别用 all-linear**（Qwen3-30B-A3B 上 98.7%% 的 Linear 在专家里，"
+                             "可训练参数 26×、LoRA 张量 74×、每步同步 3.39 GB）—— "
+                             "传 `[q_proj,k_proj,v_proj,o_proj,gate]` 之类的显式列表。见 E07 §4.5.3。")
+    parser.add_argument("--layered-summon", default="True", choices=["True", "False"],
+                        help="LoRA 权重同步时逐层 summon（每层 summon+state_dict+empty_cache）。"
+                             "★ 默认 True 只是**保持现状以便对照**——它是为分片 FSDP 设计的，"
+                             "而本机 --fsdp-size 1 不分片，很可能是净亏损。见 E12 与代码处注释。")
     parser.add_argument("--fsdp-size", type=int, default=1,
                         help="FSDP 的切分组大小。★ **本机默认 1 = 不切分 = DDP**。"
                              "-1 是 verl 的默认（全部切分 / FULL_SHARD），"

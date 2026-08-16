@@ -9,10 +9,10 @@
 | **Track / 兑现物** | **B** · 「权重同步的根因与优化」 |
 | **需求从哪来** | 主线实测：`update_weights` 恒定且与 attention / 打包 / 卡数**全无关**；LoRA 仅 132 MB，6.4 GB/s 上应为 0.02 s。M7 fully_async 实测稳态 **55.8 s** |
 | **问题** | 这笔时间到底花在哪？是传输吗？ |
-| **答案** | **不是传输。反解出固定开销 ≈ 55.0 s、传输 ≈ 0.8 s ⇒ 约 98.6% 与传输无关。** 根因不是单点，是每次同步要走完 **8 个步骤**，真正传数据的只有第 5 步 |
-| **信心** | 高（37 次同步、标准差仅 1.79 s = 3.2%；首次 vs 稳态的数据量差 60× 而时间只差 1.85×，构成两点反解） |
-| **推翻了什么** | ① 「权重同步 13.3 s」→ fully_async 下是 **55.8 s**；② `launch_rl` 注释「decoupled 代价 +6–10 s」→ 实测 **76.3 s**（§6） |
-| **下一步** | 给 8 个步骤分别加计时（需一次独占 GPU 跑），确认是 `empty_cache` / KV cache 重建 / partial rollout 恢复 哪一个 |
+| **答案** | **既不是传输，也不是编排。** 分步实测：编排 8 步里的 5 步合计 **0.038 s（0.06%）**，**99.94% 在第 5 步「传输 + 两侧 update_weights」**；而两点反解说真正的数据传输只有 **~0.8 s（1.4%）** ⇒ **约 59 秒花在「处理/装载 132 MB LoRA」上** |
+| **信心** | 高（两条独立证据：37 次同步的两点反解 + 独占跑的分步计时；两者互相印证） |
+| **推翻了什么** | ①「权重同步 13.3 s」→ fully_async 下 55.8 s；② 注释「decoupled +6–10 s」→ 实测 25.7%；③ **我自己的「KV cache 拆建是大头」**→ 实测 0.06%；④ **我自己的「build_process_group 占 82%」**→ 第二次同步就掉到 0.023 s（§6） |
+| **下一步** | 拆第 5 步：trainer 侧（取参数+send）vs rollout 侧（recv+装进 vLLM）。**探针已加好**，待下一跑 |
 
 ---
 
@@ -95,7 +95,15 @@
 | sleep/wake 搬 7.6 GB | ❌ **排除**：`free_cache_engine=False` 生效，全程日志只出现 3 次 sleep（非每次同步） |
 | 遍历全部 4B 参数而非 LoRA | ❌ **排除**：`get_per_tensor_param(base_sync_done=...)` → `collect_lora_params(...)`，首次之后只收 LoRA |
 
-### 4.4 ★ 意外收获：日志里有完整的步骤分解（37 步均值）
+### 4.4 ★ 意外收获：日志里有完整的步骤分解
+
+> ⚠️⚠️ **口径（2026-08-14 补正，之前漏了）**：每条 timing 行覆盖**恰好 4 个 global step**
+> —— `training/global_step` 序列为 3, 7, 11, …, 147，**相邻差全为 4**，共 37 行 = 148 步。
+> ⇒ **下表是「每 4 个 global step 的和」，不是「每步」。百分比不受影响**（同窗口内的比值），
+> **但绝对秒数要除以 4 才是每步**。`param_sync` 例外：它每 4 步只发生一次，
+> 所以 55.8 s 就是**一次同步的真实时长**，摊到每步是 13.9 s。
+> ⇒ 每 global step：update_actor 24.5 · old_log_prob 19.1 · param_sync(摊) 13.9 ·
+> ref 9.8 · gen 4.7 · adv 2.4 · **合计 74.1 s**。
 
 | 项 | 中位 (s) | 均值 (s) | 占 step |
 |---|---|---|---|
@@ -109,6 +117,189 @@
 
 ★ **分项合计 297.7 s vs step 296.4 s —— 账几乎完全对上，没有黑洞。**
 （每条 step 行覆盖 4 个 global step + 1 次同步，`--sync-every 4`。）
+
+## 4.5 ★★ E12-b 分步计时（2026-08-14，独占，`SYNCOPATE_SYNC_TIMING=1`）
+
+台架：`verl_patches._patch_sync_step_timing`（可选补丁，挂 `setup_worker`——
+`CheckpointEngineManager` 活在 **FullyAsyncTrainer 这个 Ray actor** 里，driver 侧打无效）。
+判据行 `[verl-patch] 权重同步分步计时已启用` 已在日志确认。
+运行：`logs/e12b_synctiming.log`，配置与 M7 完全一致，`--steps 12`。
+
+### 第一次同步（param_version 0，推基座 + LoRA）
+
+| 步骤 | 耗时 | 占比 |
+|---|---|---|
+| 1 `abort_replicas` | **0.008 s** | 0.0% |
+| 3 `release_kv_cache_replicas` | **0.003 s** | 0.0% |
+| 4 `build_process_group` | **45.967 s** | **42.6%** |
+| 7 `resume_kv_cache_replicas` | **0.002 s** | 0.0% |
+| 8 `resume_generation_replicas` | **0.002 s** | 0.0% |
+| — 未计量（2 建 WorkerGroup + **5 传输** + 6 finalize） | 62.05 s | 57.4% |
+| **param_sync 总计** | **108.034 s** | 100% |
+
+⇒ **⛔ 推翻了 §4.2 之后写下的主假设**（见 §6-③）：
+「KV cache 拆了重建 + partial rollout 中断恢复是大头」——
+**这四步加起来只有 0.015 秒**，完全不是。
+
+### ★★★ 第二次同步（param_version 1，稳态：只推 LoRA 132 MB）——**结案**
+
+| 步骤 | 耗时 | 占比 |
+|---|---|---|
+| 1 `abort_replicas` | 0.008 s | 0.01% |
+| 3 `release_kv_cache_replicas` | 0.004 s | 0.01% |
+| 4 `build_process_group` | **0.023 s** | 0.04% |
+| 7 `resume_kv_cache_replicas` | 0.002 s | 0.00% |
+| 8 `resume_generation_replicas` | 0.001 s | 0.00% |
+| **已计量小计** | **0.038 s** | **0.06%** |
+| **未计量 = 第 5 步（传输 + 两侧 update_weights）** | **59.76 s** | **99.94%** |
+| **param_sync 总计** | **59.797 s** | 100% |
+
+★ **`build_process_group` 从 45.967 s 掉到 0.023 s（2000×）** ——
+它是**一次性**开销（首次建 NCCL 组），`rebuild_group=False` 完全按设计工作。
+⇒ 我在第一次同步后写下的「它占稳态 82%」的推测**当场被第二次数据推翻**（见 §6-④）。
+
+### 4.5.1 首次 `build_process_group` 的 50 s 是什么（`logs/e12c_step5.log`）
+
+再拆一层（探针打在 `NCCLCheckpointEngine` 上）：
+
+```
+engine.prepare(分配 2×2048MB buffer)      0.133 s   ← 0.3%
+engine.init_process_group(rank=0)        50.083 s
+engine.init_process_group(rank=1)        50.095 s
+build_process_group 合计                 50.239 s
+```
+
+⇒ **首次开销 99.7% 是 `init_process_group`，即 NCCL 通信组的建立**，
+和 buffer 分配无关（0.133 s，与空卡微基准 2.6 ms 同量级，说明"在被 vLLM 占满的卡上分配 4 GB 很贵"
+这个猜测也**不成立**）。
+⇒ 且它是**一次性**的（第二次起 0.023 s）⇒ **不在优化的关键路径上**，如实记录、不再追。
+
+### 4.5.2 ★ 第 5 步拆成 trainer 侧 / rollout 侧（`logs/e12c_step5b.log`）
+
+探针打在 `ActorRolloutRefWorker.update_weights`（trainer 侧）与
+`CheckpointEngineWorker.update_weights`（rollout 侧）。
+⚠️ 两者**并发执行**（`ray.get(trainer.update_weights(...) + rollout.update_weights(...))`），
+**不能相加**。
+
+**首次同步（param_version 0，推基座 8 GB + LoRA）**：
+
+| 步骤 | 耗时 |
+|---|---|
+| `build_process_group`（其中 `init_process_group` 53.87） | 54.087 s |
+| **trainer 侧：取参数 + send** | **67.086 s** |
+| **rollout 侧：recv + 装进 vLLM** | **70.978 s** |
+| 其余编排（abort / KV 拆建 / 恢复）合计 | 0.014 s |
+| **param_sync 总计** | **125.103 s** |
+
+⇒ **rollout 侧（71.0）≈ trainer 侧（67.1）+ 4 s**，而两者并发
+⇒ **rollout 大部分时间在等着收，瓶颈在 trainer 侧。**
+⇒ 首次推 8 GB 用 67 s ⇒ 有效带宽 ≈ **120 MB/s**，与 §4.1 两点反解出的 168 MB/s 同量级
+（口径不同：那里是端到端反解，这里是单侧墙钟）。
+
+### 4.5.3 ★★★ 稳态：trainer 侧的成本**与传输量完全无关**
+
+```
+首次同步（推 8 GB 基座 + LoRA）   trainer侧 取参数+send  67.086 s
+第二次同步（只推 132 MB LoRA）    trainer侧 取参数+send  69.887 s
+```
+
+**数据量差 60×，耗时反而略涨。** ⇒ **成本不在 send，在"取参数"那一步。**
+
+### 4.5.4 根因：`layered_summon` —— 为分片 FSDP 设计的路径，被用在了不分片的机器上
+
+`ActorRolloutRefWorker.update_weights` → `get_per_tensor_param` → `collect_lora_params`。
+我们**已经开着** `layered_summon=True`（`launch_rl.py`，跟 LoRA 配置一起写死、无注释），
+所以走的是 `fsdp_utils.layered_summon_lora_params`：
+
+```python
+for prefix in prefix_list:
+    for name, submodule in __prefix_submodules(fsdp_module, prefix):   # ← 36 层
+        if fsdp_version(submodule) > 0:
+            with FSDP.summon_full_params(submodule, writeback=False):
+                sub = get_peft_model_state_dict(peft_model, state_dict=submodule.state_dict())
+                ...拷 LoRA 到 CPU...
+            get_torch_device().empty_cache()        # ← ★ 每层都调一次
+```
+
+**每步付 36 × (summon + 该层全量 `state_dict()` 物化 + `empty_cache()`)。**
+
+★ **它是为「真正分片的 FSDP」设计的**——分片时一次性 gather 整个模型会爆显存，
+所以宁可逐层。**但我们跑的是 `--fsdp-size 1`（DDP，不分片）**：
+参数本来就在每张卡上完整存着，整体 summon 近乎免费，
+而逐层路径把一个免费操作拆成 36 份收费操作。
+
+⇒ **这是今天第三次遇到同一个形状**（另两次：E13 存整个模型只为取 3% 的 LoRA；
+E11 对全部 token 算 logprob 只为用 4%）：
+**「机制是对的，但它假设的运行条件和我们的不一样。」**
+
+### 4.5.5 ⛔ A/B 结果：`layered_summon` **不是**原因，预测被推翻
+
+`--layered-summon False`（`logs/e12d_nolayered.log`，只变这一个变量，
+判据已核：日志里 `'layered_summon': False` ×2，基线是 True）：
+
+| | 基线 True | 对照 False |
+|---|---|---|
+| 首次同步 trainer 侧 | 67.086 s | 58.775 s |
+| **稳态 trainer 侧** | 55.76 / 66.24 / 58.40（均值 **60.13**） | **61.443** |
+
+⇒ **对照值正好落在基线的波动区间内，无改善。**
+
+> **原猜想**：`layered_summon` 逐层 summon（36×(summon + state_dict + empty_cache)）
+> 是那 60 s 的主因；关掉它 trainer 侧应降到 **< 10 s**。
+> **实测**：60.13 → 61.443，**没动**。
+> **推翻后**：这反而是一次**高价值的排除**——
+> `layered_summon=False` 走的是 `summon_full_params(整个模型)` 这条**完全不同**的取参数路径，
+> **两条路径都是 ~60 s** ⇒ **成本不在「取参数」，在两条路径共有的部分。**
+> 结合"与数据量无关"（8 GB 与 132 MB 同耗时），**只剩 `send_weights`**。
+> **教训**：**A/B 的负结果能一次砍掉一整条分支**——
+> 比"再读一遍代码找可疑处"有效得多，因为读码只能生成假设，不能排除假设。
+
+### 4.5.6 ⚠️ 顺带炸出一个真实脆弱点：`gpu_util 0.75` 也是贴着墙的
+
+`layered_summon=False` 那一跑在**第 4 次同步 OOM**（数据已够，A/B 结论不受影响）：
+
+```
+rollout 卡（31.37 GB）
+  vLLM 进程                    24.65 GB
+  CheckpointEngineWorker        4.71 GB   （自身 ~2.71 + 已分配的一个 2 GB bucket）
+  ────────────────────────────────────
+  已用                         29.36 GB
+  剩余                          1.99 GB
+  要再分配                      2.00 GB   ← 差 0.01 GB
+```
+
+⇒ **和文档里记的 `gpu_util 0.85` 那次 OOM 是同一个形状**（当时"差 0.13 GB"），
+只是这次发生在 **0.75** 上 ⇒ **0.75 也不是安全边际，前几跑只是运气好擦过去了。**
+
+**根因**：`prepare()` 在**每个 worker** 上分配 **send_buf + recv_buf 各 2048 MB = 4 GB**，
+其中一份就住在被 vLLM 占了 24.65 GB 的 rollout 卡上。
+
+⛔ **要更正的旧结论**：`gpu_util 0.75` 被记成"安全值"（记忆 + 分布式文档 §7.3）。
+**正确的说法是：0.75 只是勉强够，实测会在第 4 次同步 OOM。
+真正的解法不是压 `gpu_util`，是调小 bucket** ——
+那 4 GB 里绝大部分根本用不上（实际只推 132 MB）。
+
+★ **由此，下一个 A/B 一箭双雕**：调小 `--weight-sync-bucket-mb`
+① 若耗时按比例下降 ⇒ 坐实"广播整个定长 buffer"的猜想；
+② 无论如何都解除这个 OOM 脆弱点（2048→512 MB 可给 rollout 卡腾出 3 GB）。
+
+⬜ **下一层探针已加**：单独给 `NCCLCheckpointEngine.send_weights` 计时，
+把 60 s 切成「取参数」与「发」两半。⚠️ 新的可疑点：
+`prepare()` 分配的是 **2048 MB 定长 buffer**，而 `collective.broadcast(self.bucket, ...)`
+广播的是**整个 buffer**，与实际装了多少无关 —— 这与"耗时和数据量无关"的观测吻合。
+若成立，`--weight-sync-bucket-mb` 调小应按比例降耗时，是下一个一行开关的 A/B。
+
+### ⇒ E12 的答案（终）
+
+```
+稳态权重同步 59.8 s
+  ├─ 编排（abort / KV cache 拆建 / 建组 / 恢复）  0.038 s   ← 0.06%，全部免费
+  └─ 第 5 步：传输 + 两侧 update_weights        59.76 s   ← 99.94%
+       └─ 其中真正的数据传输（两点反解）           ~0.8 s   ← 1.4%
+```
+
+**⇒ 约 59 秒花在「处理/装载 132 MB 的 LoRA」上，既不是编排，也不是传输。**
+下一层（trainer 侧取参数+send vs rollout 侧 recv+装进 vLLM）的探针已加好，待下一跑。
 
 ## 5 · 结论
 
@@ -151,12 +342,48 @@
 > **原猜想 ②**（`launch_rl.py` 的注释）：decoupled 模式「每步多一次 actor 前向算 old_log_prob
 > （**约 +6–10 s**）。**值得。**」
 > **实测**：`old_log_prob` = **76.3 s，占 25.7%**。**低估 8–13 倍。**
-> **推翻后**：「值得」这个判断是基于 6–10 s 做的，**必须重新算这笔账**——
-> 76.3 s 换来的是 `rollout_corr/*` 那套 ESS 刹车指标。刹车仍然要，但代价要如实标价。
-> ⇒ 可考虑的折中：ESS 是否可以**降频采样**（比如每 N 步算一次 old_log_prob），
-> 而不是每步都算。**做之前先设计对照。**
+> **推翻后**：「值得」这个判断是基于 6–10 s 做的，代价要如实标价：
+> 76.3 s × 37 步 = **47 分钟，占全程 224 分钟的 21%**。
+>
+> ⛔ **但「换来的是 ESS 刹车」这个说法本身也是错的，我一度也这么写过（已更正）。**
+> 读码查实（`experimental/separation/ray_trainer.py:503-530` + `config/algorithm.py:123-131`）：
+> ```
+> bypass  (2 policies)  old_log_prob := rollout_log_prob，走 compute_policy_loss_bypass_mode()
+> decoupled(3 policies) 重算 old_log_prob 作为**proximal anchor π_old**，走标准 PPO loss + IS 权重修正
+>                       源码注释：「π_old computed once per data batch,
+>                                  serves as stable reference during mini-batch updates」
+> ```
+> ⇒ **`old_log_prob` 不是指标，是损失函数的一部分。** 它就是 AReaL 的 π_prox ——
+> 「用 π_prox 而不是 π_behav 算 IS 比率，防止当前策略被陈旧的低质策略拽偏」。
+> AReaL 的消融：decoupled 下 η≤4 安全，**朴素 PPO 超过 η=1 就崩**。
+> ⇒ **这 76.3 s 买的是「异步在高陈旧度下还能训」这件事本身，ESS 指标只是副产品。**
+>
+> ⇒ ⛔ **因此「ESS 降频采样（每 N 步算一次 old_log_prob）」不可行**——
+> 那不是「少测几次」，那是**在两个不同的目标函数之间来回横跳**
+> （decoupled PPO ↔ bypass PPO）。**别做。**
+>
+> ⇒ ✅ **真正可查的优化方向**：`old_log_prob`（76.3 s）约是 `ref`（39.2 s）的 **1.95×**，
+> 而两者**都是同一批数据上的纯前向**。差这一倍是从哪来的？
+> （old_log_prob 顺带算 entropy，但 `use_fused_kernels=True` 下 entropy 应该几乎免费。）
+> **若两者本该相当，则每步有约 37 s 是没有解释的** → 挂到 E01 一起查。
+> ⇒ 另外 **E11（稀疏 logprob）直接命中它**：old_log_prob 是纯 logprob 前向，正是 E11 优化的形状。
 > **教训**：**注释里的估算数字会被后人当实测引用。** 估算就要标「估算」，
 > 并在拿到实测后回填——这条已经在 E11 犯过一次（配置上限当实际值）。
+
+> **原猜想 ③（读码之后、分步计时之前）**：55 s 的固定开销大头是
+> **KV cache 拆了重建 + partial rollout 的中断/恢复 + `empty_cache()`**。
+> **实测**：这四步加起来 **0.015–0.038 s**，占比 **0.06%**。`empty_cache` 微基准 12.2 ms。
+> **推翻后**：编排**全部免费**，钱在第 5 步的**权重处理**上。
+> **教训**：**「读码列出来的步骤多」不等于「那些步骤贵」。** 我从调用链上数出 8 步，
+> 就默认成本分散在这 8 步里——实际是 7 步几乎为 0、1 步占 99.94%。
+> ⇒ **列出候选之后要逐个称重，不能按"看起来重"排序。**
+
+> **原猜想 ④（第一次同步数据出来之后，当场写下的）**：
+> `build_process_group` 46 s ⇒「若每次都这样，它占稳态同步的 ~82%」。
+> **实测**：第二次同步 **0.023 s**，掉了 2000 倍。
+> **推翻后**：它是**一次性**建组开销，`rebuild_group=False` 按设计工作。
+> **教训**：**n=1 的推断连一次都撑不过。** 这条猜想从写下到被推翻只隔了约 6 分钟——
+> 便宜是因为它写在报告里而不是写进了代码。**先记录假设、再等第二个数据点，成本极低。**
 
 ## 7 · 踩的坑
 
@@ -164,6 +391,7 @@
 |---|---|---|
 | 日志里 `timing_s/timing_s/param_sync` 键名重复 | verl 拼前缀时重复加了一层 | 解析时按 `timing_s/timing_s/param_sync` 匹配 |
 | 一开始以为 fully_async 每 step 74 s 比 one_step_off 32.6 s 慢一倍多 | **基线不可比**：one_step_off 那个数是 `bypass_mode=True` 跑的（不含 old_log_prob 的 76.3 s） | **不下这个结论**；需要 E08-b 的同机分母 |
+| ⛔ **给第 5 步加探针，整跑崩了**：`AttributeError: 'RayWorkerGroup' object has no attribute 'update_weights'` | `update_weights` 上有 verl 的 `@register(...)`，它把 `{dispatch_mode, execute_mode, blocking}` 挂在函数的 **`MAGIC_ATTR = "attrs_3141562937"`** 上（`decorator.py:440`），**`RayWorkerGroup` 靠扫描这个属性自动生成组级方法**。我用裸的 `async def` 换掉方法，把元数据丢了 ⇒ 组级方法直接不存在 | 包装时 `functools.wraps` **并把 `MAGIC_ATTR` 原样复制过去**；拿不到该属性就**跳过探针**而不是硬装。★ 教训：**包装带装饰器的方法，必须把装饰器挂的属性一起带过去**——"看起来只是加一层计时"是最容易忽略这点的场景 |
 
 ## 8 · 下一步 / 衍生问题
 

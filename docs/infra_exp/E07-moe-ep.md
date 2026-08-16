@@ -7,8 +7,8 @@
 | | |
 |---|---|
 | **问题** | 在 4×5090（无 P2P，卡间 6.4 GB/s）上训一个 MoE 的最佳「模型×框架×并行」组合是什么 |
-| **答案（决策，待实测验证）** | **GLM-4.7-Flash（30B-A3B，MIT）+ verl + LoRA + GSPO**；训推分离：trainer FSDP2×3 + rollout 4bit 量化×1。EP 先用手写 toy 台架感受，Megatron 探针通过后上真的 |
-| **信心** | 中。显存账是推算的，探针 P1–P6 一个没跑；量化 rollout 的 mismatch 和 MoE 路由问题是已知风险 |
+| **答案（决策，2026-08-14 更正）** | ~~GLM-4.7-Flash~~ → **`Qwen3-30B-A3B` + verl + LoRA + GSPO**（GLM-4.7-Flash 的 `Glm4MoeLiteForCausalLM` 当前栈不支持，需 transformers 5.0rc，见 §4.5.1）；训推分离：trainer×3 + rollout 4bit 量化×1 |
+| **信心** | 中→**中高**。显存/通信账**已用真 config 算过**（§4.5.2）：bf16 61.1 GB、4bit 16.8 GB、分片每 micro-batch gather 61.1 GB 而只用 10%。探针 P1–P6 仍未跑；量化 mismatch 与 MoE 路由仍是已知风险 |
 | **决策日期** | 2026-08-13，Chaoyu 批准（「研究 MoE 是主目的，框架是其次」） |
 | **下一步** | 跑探针 P1–P3 |
 
@@ -91,6 +91,101 @@ MoE 的 RL 有一个专属问题（Miles 的 R3）：**推理和训练两侧的 
 | P4 | TE bf16-only 在 sm_120 编译（后台挂着） | 真 EP / verl-Megatron 的生死；有 4×4090 先例（§1.2） |
 | P5 | AReaL-lite 有没有 FSDP 后端（读仓库） | 异步研究线的第二条腿 |
 | P6 | bitsandbytes 4bit 在 sm_120 + verl FSDP 下能不能构建 actor | 配置 C 的生死 |
+
+## 4.5 ⛔ 选型更正 + 显存账校准（2026-08-14，实测）
+
+### 4.5.1 GLM-4.7-Flash **在当前栈上跑不了** —— 决策要改
+
+只下了 `config.json`（几 KB）就查实：
+
+```
+GLM-4.7-Flash 的 architectures   ['Glm4MoeLiteForCausalLM']
+                 model_type       glm4_moe_lite
+                 config 自述      transformers_version: 5.0.0rc0
+本机 transformers 4.57.6          models/ 下只有 glm4_moe，❌ 无 glm4_moe_lite
+本机 vLLM 0.12.0 registry         只有 Glm4MoeForCausalLM，❌ 无 Lite
+```
+
+⇒ **探针 P1（vLLM 加载）与 P2（verl FSDP 建 actor）会当场失败。**
+§1.3 里写的「vLLM day-0 支持」对的是更早的 GLM MoE，**4.7-Flash 用的是全新架构类**。
+
+⇒ 要用它就得升 transformers 到 5.0rc + 换 vLLM ——
+而这套栈是硬啃下来的（sm_120 + FA2 真轮子 + vLLM 0.12），**动它风险远大于收益**。
+
+★ **改用本文档 §1.3 自己写的备选 `Qwen3-30B-A3B`**（当时评价"最稳妥"）：
+`Qwen3MoeForCausalLM` / `qwen3_moe` 在 **transformers 4.57.6 与 vLLM 0.12.0 中均原生支持**（已验证）。
+已下载 `models/Qwen3-30B-A3B-Instruct-2507`（26 文件 / 16 safetensors / 57 GB）。
+
+**教训**：**「day-0 支持」这类说法必须落到 `architectures` 字段上验证，不能引用新闻稿。**
+成本：下一个 config.json，10 分钟；省下的：几天的白工。
+
+### 4.5.2 显存与通信账（§5 说"全是推算"，现在用真 config 算了）
+
+`Qwen3-30B-A3B`：hidden 2048 · 48 层 · **128 专家 top-8** · moe_inter 768 · vocab 151936（不共享 embedding）
+
+```
+每层   attention 18.9M  +  MoE 604.0M   ⇒  623.1M
+总参数 30.53 B     bf16 61.1 GB     4bit(含 scale) ≈ 16.8 GB
+激活/token 3.04 B  ⇒ 名副其实的 A3B（10%）
+```
+
+| 摆法 | 每次通信 | @6.4 GB/s |
+|---|---|---|
+| **A · FSDP 分片** | 每 micro-batch all-gather **全部专家 61.1 GB** | **9.5 s 纯通信/micro-batch** |
+| | ★ 但只有 **10%（3.04B）** 真被用到——top-8/128，**其余 90% 是白 gather** | |
+| **C · 4bit 复制** | 每步只同步 LoRA ≈ **0.13 GB** | **20 ms** |
+| | | ⇒ **通信量差 470×** |
+
+**单卡能否装下（32 GB）**：bf16 61.1 GB ❌ / **4bit 16.8 GB ✅**（余 15.2 GB 给激活+KV+LoRA）
+
+⇒ **§2 的核心洞见被真数字加强了**：MoE + 无 P2P 的组合下，
+分片不只是"通信贵"，而是**贵在 gather 了 90% 用不到的专家**。
+这正是「通信最贵的机器上，最好的并行是不通信」最锋利的例证。
+
+⚠️ 原 §2 表里「~90GB 跨卡 ⇒ 15–20 s」是按 GLM 推的，**现在的实测口径是 61.1 GB ⇒ 9.5 s**。
+
+### 4.5.3 ★★★ `target_modules=all-linear` 在 MoE 上是灾难（纯 CPU 探针，2 分钟）
+
+meta 设备实例化骨架（不读权重、不占显存）后数 Linear：
+
+```
+Linear 总数 18,673
+  gate_proj / up_proj / down_proj  各 6,144   ⇒ 专家里 18,432（**98.7%**）
+  q/k/v/o_proj                     各    48   ⇒ 注意力      192
+  router(gate)                          48
+  lm_head                                1
+```
+
+`launch_rl` 目前对 dense 写死 `all-linear`（注释说明了理由：只挂注意力容量差 2.8 倍）。
+**但那条推理只对 dense 成立**：
+
+| 方案 | 可训练参数 | bf16 体积 = 每步同步量 | LoRA 张量个数 |
+|---|---|---|---|
+| **all-linear** | **1696 M** | **3.39 GB** | **37,346** |
+| 仅注意力 q/k/v/o | 26.7 M | 0.05 GB | 384 |
+| **注意力 + router** ★ | **30.1 M** | **0.06 GB** | **480** |
+| 对照：dense Qwen3-4B all-linear | 66 M | 0.13 GB | 504 |
+
+⇒ **MoE 上 all-linear 是 dense 的 26×（参数）/ 74×（张量数）。**
+
+★★ **和 E13 叠加起来更糟**：E13 已证明**逐张量 CPU 拷贝是 proximal anchor 的瓶颈**
+（504 个张量 0.037 s）。线性外推 **37,346 个 ≈ 2.7 s**，
+而每步要拷三趟（save + 2×restore）⇒ **光快照就约 8 s/步**，
+还没算 `collect_lora_params` 同样逐张量的遍历。
+
+★ **更根本的问题**：top-8/128 ⇒ **每个专家平均只见到 1/16 的 token**，
+1696 M 可训练参数里绝大多数梯度极稀疏 —— 花 26× 的代价买到的是稀疏更新。
+
+⇒ **决策：MoE 线用「注意力 + router」（30.1 M，与 dense 的 66 M 同量级）。**
+router 尤其要挂——它直接决定专家选择，正是 §5 里 R3（训推路由不一致）的作用点。
+⚠️ 但「注意力 vs all-linear 的容量差」在 MoE 上是多少，**没人测过**，
+所以这是**基于成本的默认选择，不是已验证的最优**；真要比容量，得单独设对照。
+
+⇒ 已把 `target_modules` 从写死改成显式参数 `--target-modules`（dense 默认不变）。
+
+**教训**：**继承来的默认值要跟着模型结构一起重新审。**
+`all-linear` 这四个字在 dense 上是最佳实践，在 MoE 上是 26× 的账 ——
+而这个差别，**用 meta 设备数一下 Linear 就能发现，两分钟、零显存。**
 
 ## 5 · 已知风险
 

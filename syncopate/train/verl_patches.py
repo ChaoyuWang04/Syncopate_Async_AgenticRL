@@ -60,6 +60,8 @@
 
 from __future__ import annotations
 
+import os
+
 
 def _patch_one_step_off_dump_executor() -> None:
     """给 OneStepOffRayTrainer 补上漏掉的 _init_dump_executor()。"""
@@ -100,10 +102,23 @@ def ddp_save_to_cpu(model):
     是空操作，返回的是**共享存储的视图** —— 快照会跟着后续训练一起漂，MIS 就拿到了错的 v1，
     而且不报错。GPU 上碰巧不中招（跨设备必然拷贝），但这不该靠运气；
     `param_offload` 一开参数就在 CPU 上了。测试里钉死了这条。
+
+    ★★ **只存可训练参数**（2026-08-14，E13）。原实现遍历全部 `named_parameters()`，
+    实测 Qwen3-4B + LoRA r32 下是 **902 个张量 / 8.309 GB，而可训练的只有 504 个 /
+    0.264 GB（3.18%）**。冻结基座 `requires_grad=False`、优化器从不更新它 ⇒
+    **v1 与当前版本的基座逐字节相同，存了也是白存**。
+    实测收益：`save` 3.579 → 0.037 s（96×），按 fully_async 的调用序列
+    （3/4 的步要 1 save + 2 restore）**平均每步 4.34 → 0.083 s，省 74.1 s 的 5.7%**。
+    ⇒ 详见 `docs/infra_exp/E13-proximal-anchor-snapshot.md`。
+
+    ⚠️ 这个优化**依赖「基座确实冻结」这个前提**。若哪天改成全参微调（`requires_grad`
+    全为 True），本函数自动退回全量拷贝——语义仍然正确，只是不再省。
+    测试里钉死了「只存可训练参数 + 全参模型照常全存」两条。
     """
     state = {
         name: (param.detach().to("cpu", copy=True), None)
         for name, param in model.named_parameters()
+        if param.requires_grad
     }
     return state, None
 
@@ -148,6 +163,154 @@ def _patch_fsdp_cpu_copy_for_ddp() -> None:
     print("[verl-patch] fsdp2 CPU 快照支持 DDP（无 DTensor）路径", flush=True)
 
 
+def _patch_sync_step_timing() -> None:
+    """★ 实验用（可选，`SYNCOPATE_SYNC_TIMING=1` 才装）：把权重同步的 8 步分别计时。
+
+    动机（E12）：稳态 `param_sync` 55.8 s，两点反解出 **98.6% 不是传输**；
+    而 buffer 分配（2.6 ms）与 `empty_cache`（12.2 ms）微基准也已排除。
+    剩下的嫌疑只能靠真跑分步计时来分：abort / release_kv / build_group / resume_kv / resume_gen。
+
+    ⚠️ `CheckpointEngineManager` 活在 **FullyAsyncTrainer 这个 Ray actor** 里，
+    所以必须挂 `setup_worker`（worker_process_setup_hook），driver 侧打无效 —— P2 的同一条教训。
+    """
+    import time
+
+    from verl.checkpoint_engine.base import CheckpointEngineManager as M
+
+    if getattr(M, "_syncopate_sync_timing", False):
+        return
+
+    def wrap_async(name):
+        orig = getattr(M, name)
+
+        async def inner(self, *a, **kw):
+            t0 = time.perf_counter()
+            r = await orig(self, *a, **kw)
+            print(f"[sync-timing] {name}: {time.perf_counter() - t0:.3f} s", flush=True)
+            return r
+
+        return inner
+
+    def wrap_sync(name):
+        orig = getattr(M, name)
+
+        def inner(self, *a, **kw):
+            t0 = time.perf_counter()
+            r = orig(self, *a, **kw)
+            print(f"[sync-timing] {name}: {time.perf_counter() - t0:.3f} s", flush=True)
+            return r
+
+        return inner
+
+    for n in ("abort_replicas", "release_kv_cache_replicas",
+              "resume_kv_cache_replicas", "resume_generation_replicas"):
+        # 这四个挂了 @auto_await，取到的是包装后的可调用；直接换掉属性即可
+        setattr(M, n, wrap_async(n))
+    M.build_process_group = wrap_sync("build_process_group")
+
+    # ★ 第二层：`build_process_group` 实测 46 s（占一次同步的绝大部分），
+    #   它内部还有两段，必须再拆一层才知道是哪段：
+    #     prepare()            每个 worker 分配 2×bucket buffer
+    #                          ——空卡上微基准只要 2.6 ms，但 rollout 卡被 vLLM 占了 75%，
+    #                            在快满的卡上分配 4 GB 可能完全是另一回事
+    #     init_process_group() 建组（rebuild_group=False 时应跳过）+ **collective.barrier()**
+    #                          ——barrier 会等所有 worker 到齐，
+    #                            很可能在这里替 abort/release_kv 那两个"立刻返回"的异步调用**补等**
+    #   这两个跑在 **worker 进程**里，同样靠 setup_worker 覆盖到。
+    from verl.checkpoint_engine.nccl_checkpoint_engine import NCCLCheckpointEngine as E
+
+    # ★ 第四层：A/B 实测 `layered_summon` True/False **都是 ~60 s**（2026-08-14），
+    #   而两者走的是完全不同的取参数路径（逐层 summon vs 整体 summon_full_params）
+    #   ⇒ **成本不在"取参数"，在两条路径共有的部分** ⇒ 只剩 `send_weights`。
+    #   `send_weights` 是 async，单独包一层就能把 60 s 切成「取参数」和「发」两半。
+    if not getattr(E, "_syncopate_send_timing", False):
+        _orig_send = E.send_weights
+
+        async def _timed_send(self, *a, **kw):
+            t0 = time.perf_counter()
+            r = await _orig_send(self, *a, **kw)
+            print(f"[sync-timing]     engine.send_weights: {time.perf_counter() - t0:.3f} s", flush=True)
+            return r
+
+        E.send_weights = _timed_send
+        E._syncopate_send_timing = True
+
+    if not getattr(E, "_syncopate_sync_timing", False):
+        for n in ("prepare", "init_process_group", "finalize"):
+            orig_e = getattr(E, n)
+
+            def mk(name, f):
+                def inner(self, *a, **kw):
+                    t0 = time.perf_counter()
+                    r = f(self, *a, **kw)
+                    dt = time.perf_counter() - t0
+                    if dt > 0.05:      # 只报值得看的，别刷屏
+                        print(f"[sync-timing]   engine.{name}(rank={getattr(self,'rank',None)}): "
+                              f"{dt:.3f} s", flush=True)
+                    return r
+                return inner
+
+            setattr(E, n, mk(n, orig_e))
+        E._syncopate_sync_timing = True
+
+    # ★ 第三层：实测（2026-08-14）第二次同步起 `build_process_group` 只剩 0.023 s
+    #   （首次 45.967 s 是一次性建 NCCL 组），而稳态 param_sync 仍是 ~56 s
+    #   ⇒ **钱在第 5 步「传输 + 两侧 update_weights」里**，而两点反解说传输本身只有 0.8 s
+    #   ⇒ 必须把 trainer 侧（取参数 + send）和 rollout 侧（recv + 装进 vLLM）分开量。
+    # ⛔ **2026-08-14 踩过的坑，别再犯**：第一版这里用一个裸的 `async def inner` 换掉方法，
+    #    结果整跑崩在
+    #        AttributeError: 'RayWorkerGroup' object has no attribute 'update_weights'
+    #    根因：`update_weights` 上有 verl 的 `@register(...)` 装饰器，它把
+    #    `{"dispatch_mode", "execute_mode", "blocking"}` 挂在函数的
+    #    `MAGIC_ATTR = "attrs_3141562937"` 属性上（decorator.py:440-441），
+    #    **`RayWorkerGroup` 靠扫描这个属性自动生成组级方法**。
+    #    我的包装把它丢了 ⇒ 组级 `update_weights` 直接不存在。
+    #    ⇒ **包装带装饰器的方法时，必须把装饰器挂的属性一起带过去。**
+    import functools
+
+    MAGIC_ATTR = "attrs_3141562937"
+
+    def wrap_worker(cls, name, tag):
+        if getattr(cls, f"_syncopate_t_{name}", False):
+            return
+        orig_w = getattr(cls, name)
+
+        @functools.wraps(orig_w)
+        async def inner(self, *a, **kw):
+            t0 = time.perf_counter()
+            r = await orig_w(self, *a, **kw)
+            print(f"[sync-timing]   {tag}: {time.perf_counter() - t0:.3f} s", flush=True)
+            return r
+
+        # ★ 把 verl 的 dispatch 元数据原样带过去，否则 RayWorkerGroup 生成不出组级方法
+        if hasattr(orig_w, MAGIC_ATTR):
+            setattr(inner, MAGIC_ATTR, getattr(orig_w, MAGIC_ATTR))
+        else:
+            print(f"[verl-patch] ⚠️ {cls.__name__}.{name} 没有 {MAGIC_ATTR}，跳过探针以免破坏 dispatch",
+                  flush=True)
+            return
+
+        setattr(cls, name, inner)
+        setattr(cls, f"_syncopate_t_{name}", True)
+
+    try:
+        from verl.checkpoint_engine.base import CheckpointEngineWorker as CEW
+
+        wrap_worker(CEW, "update_weights", "rollout侧 recv+装进vLLM")
+    except Exception as exc:      # 探针失败不许拖垮训练
+        print(f"[verl-patch] ⚠️ rollout 侧探针未装上: {exc}", flush=True)
+
+    try:
+        from verl.workers.engine_workers import ActorRolloutRefWorker as ARW
+
+        wrap_worker(ARW, "update_weights", "trainer侧 取参数+send")
+    except Exception as exc:
+        print(f"[verl-patch] ⚠️ trainer 侧探针未装上: {exc}", flush=True)
+
+    M._syncopate_sync_timing = True
+    print("[verl-patch] 权重同步分步计时已启用（SYNCOPATE_SYNC_TIMING=1）", flush=True)
+
+
 def setup_worker() -> None:
     """★ Ray **worker 进程**的启动钩子（`runtime_env.worker_process_setup_hook`）。
 
@@ -163,6 +326,8 @@ def setup_worker() -> None:
     **判据行打出来了 ≠ 补丁在需要它的那个进程里生效。** 判据要和作用域一起看。
     """
     _patch_fsdp_cpu_copy_for_ddp()
+    if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
+        _patch_sync_step_timing()
 
 
 def apply(mode: str) -> None:
