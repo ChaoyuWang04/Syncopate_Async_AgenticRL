@@ -5,20 +5,14 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-16T13:36:47.875Z
+  modified: 2026-08-16T13:52:23.285Z
 ---
 
-🔴🔴 **2026-08-16 起这台机器不是 4×5090 了**（容器被重建）：实测 **1×RTX 4090 / sm_89 /
-22.04 GB，而且 18.5 GB 被别的租户占着，实际只有 3.5 GB 可用**。`/workspace` 网络盘活着
-（models/checkpoints/wheels 都在）。⇒ **下面这一整段描述的是 4×5090 那台机器**，
-它对历史数据仍然成立（E00–E13 的环境指纹全是那台），
-**但不能拿来指导今天的实验**。当前状态见 `docs/infra_exp/00-INFRA-HANDOFF.md` §0.5。
-⇒ 顺带被弄坏又修好的两样：**venv 解释器断链**（`.venv/bin/python` 指向不存在的
-`/usr/local/bin/python`，site-packages 完好别重装，重新 `ln -sf` 到
-`/workspace/tools/uv-python/cpython-3.12-.../python3.12` 即可）、
-**git 凭据全没了**（⇒ 凭据/私钥该放 `/workspace/tools/` 下才活得过容器重建）。
-
----
+⚠️ **容器可能被重建**（临时换卡、重启等）。若重建后 `.venv/bin/python` 断链
+（它指向 `/usr/local/bin/python`，新镜像里可能没有），**site-packages 是完好的、别重装**，
+重新 `ln -sf /workspace/tools/uv-python/cpython-3.12-linux-x86_64-gnu/bin/python3.12 .venv/bin/python`
+并同步改 `.venv/pyvenv.cfg` 的 `home` 即可。git 凭据同样会丢
+⇒ **凭据/私钥放 `/workspace/tools/` 下才活得过重建。**
 
 2026-08-13 搬到 4×RTX 5090（RunPod）后实测：
 

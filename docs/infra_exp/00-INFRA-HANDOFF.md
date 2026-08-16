@@ -16,34 +16,13 @@ infra 线的目标：做出**两个有真实需求支撑、可验证的简历项
 实验以 **E 编号报告**组织（编号是身份、永不重排），track 是叠加的索引视图。
 
 ```
-TRACK-A-hardware-kernel.md   负载形状 × 硬件拓扑 决定该写什么算子   ← ⚠️ 偏薄，明天的重心
-TRACK-B-framework-async.md   agentic RL 训练系统的框架级改造        ← ✅ 已够撑一个项目
+TRACK-A-hardware-kernel.md   负载形状 × 硬件拓扑 决定该写什么算子   ← ~30%，四条兑现物只落地一条
+TRACK-B-framework-async.md   agentic RL 训练系统的框架级改造        ← ~50%，诊断够了但没有 after
+NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：面试官审视 / 故事线 / 简历两版本
 ```
 
-## 0.5 · 🔴🔴 2026-08-16：**机器换了，下面的队列全部作废**
-
-容器被重建，`/workspace` 网络盘活着，但**卡不是 4×5090 了**（实测，不是推断）：
-
-```
-nvidia-smi -L        GPU 0: NVIDIA GeForce RTX 4090     ← 只有一张
-torch.cuda           1 device · sm_89 · 22.04 GB
-mem_get_info(0)      free 3.50 GB / total 22.04 GB      ← 18.5 GB 被别的租户占着
-nvidia-smi 进程列表   No running processes found         （占用方不在我们的 PID 命名空间）
-```
-
-| 影响 | 说明 |
-|---|---|
-| **§5 的四项队列** | ⛔ 全部落不了地（①③要 3+1 分卡；②的 30B 4bit 也要 16.8 GB） |
-| **E16 sm_120 探底** | ⛔⛔ **实验前提消失**——这张卡是 sm_89（Ada），有 FP8 没有 FP4，`tl.dot_scaled` 静默退化是 5090 专属命题 |
-| **所有历史数字** | ⚠️ E00–E13 的环境指纹全是 4×5090 ⇒ **在这台机器上跑出的任何数都不能续到那些表里，只能开新行** |
-
-**容器重建顺带弄坏的两样（已修，记在这里防复发）**：
-1. **venv 解释器断链**：`.venv/bin/python → /usr/local/bin/python`，新镜像里没有这个路径
-   （系统 python 变成 3.11，而 venv 是 3.12/cp312）。site-packages 完好，**别重装**。
-   修法：`ln -sf /workspace/tools/uv-python/cpython-3.12-linux-x86_64-gnu/bin/python3.12 .venv/bin/python`
-   （并同步改 `.venv/pyvenv.cfg` 的 `home`）。已验证 verl/vllm/torch/flash_attn 全部 import 正常。
-2. **git 凭据全没了**（无 helper / 无 `~/.git-credentials` / 无 gh / 无 SSH 私钥）。
-   ⇒ **建议把私钥或凭据放 `/workspace/tools/` 下**，容器再重建才不用重来。
+⚠️ **2026-08-16 的重估**：B 那句「已经够撑一个项目」要加限定词——**够撑的是「诊断」，不是「成果」**。
+手上的数几乎全是 before。⇒ **实验优先级从此只看「能不能把某个 before 变成 after」**（见 §5）。
 
 ## 1 · ★★ 2026-08-14 的头号结论（三个数，互相印证）
 
@@ -89,43 +68,38 @@ nvidia-smi 进程列表   No running processes found         （占用方不在�
    今天差点把 61 GB 的 MoE 下载挤爆。⇒ **计时/探针类短跑，跑完就删 `checkpoints/grpo/<exp>/global_step_*`**
    （`dispatched.jsonl` 和 `rollout_dumps` 要留）。
 
-## 5 · 队列（⛔ 下面这版是 2026-08-14 排的，**已被 §0.5 的机器变更作废**，保留作记录）
+## 5 · 队列（🆕 2026-08-16 重排：**按「把 before 变成 after」排序**）
+
+★ **重排的理由（用面试官视角审出来的）**：**两条 track 手上的数几乎全是 before，没有 after。**
+「占空比 31%」「只快 1.59×」是**现状陈述不是成果陈述**，孤立地放进简历反而像自曝短板。
+⇒ **优先级只看一件事：它能不能把某个 before 变成 after。**
+完整审视 + 叙事 + 简历两个版本见 **[`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md)**；
+欠的实验清单见 `TRACK-B §3.5` / `TRACK-A §7.5`。
 
 ```
-🔴① bucket A/B（512 vs 2048 MB）   ~25 min  收尾 E12 + 解除 OOM 脆弱点 + 补上 one_step_off 那一格
-🔴② E07 P2 探针                     ~30 min  verl 能否加载 Qwen3-30B-A3B + LoRA 前向一步
-🟠③ 长跑复核（~40 步）              ~60 min  让「整机 31%」和 E13 端到端有足够样本
-⚪④ E16 sm_120 能力探底              ~1 周    ⛔ 前提消失（这张卡是 sm_89）
-```
+🔴 B2  bucket 512 vs 2048 A/B          ~25 min   一箭双雕：验猜想 + 解 OOM（它挡着 B3）
+🔴 B1  E12 最后一刀 + 真的做优化        1–2 天    唯一能把 18.8% 变成收益的路径，探针已写好
+🔴 B3  补上 one_step_off 那一格         ~30 min   「三模式对照」这句话现在是假的
+🔴 A1  E07 P2 探针                     ~30 min   Track A 的 go/no-go，gate 住整条②
+🔴 B5  过一次任务级尺子（EVAL 128×8）   1 跑      自己定的纪律，至今一次没过
+🟠 A4  E11-b 切片对照组落地             ~1 天     ①在 RL 侧唯一的 after，改动小
+🟠 A2  E07 三摆法实测                   2–3 天    把②从「推算」变成「实测」
+⚪ A3  E16 sm_120 能力探底              ~1 周     唯一的「硬手艺」产出，最健壮
 
-### 5.1 🆕 2026-08-16 起的队列（**按「把 before 变成 after」排序**）
-
-★ **重排的理由（2026-08-16 用面试官视角审出来的）**：
-**两条 track 手上的数几乎全是 before，没有 after。**
-「占空比 31%」「只快 1.59×」是**现状陈述不是成果陈述**，
-孤立地放进简历反而像自曝短板。⇒ **从今天起，优先级只看一件事：它能不能把某个 before 变成 after。**
-完整审视 + 叙事 + 简历两个版本见 **[`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md)**。
-
-```
-等卡回来（要多卡，一项都跑不了）
-  🔴 B2  bucket 512 vs 2048 A/B          ~25 min   一箭双雕：验猜想 + 解 OOM（它挡着 B3）
-  🔴 B1  E12 最后一刀 + 真的做优化        1–2 天    唯一能把 18.8% 变成收益的路径，探针已写好
-  🔴 B3  补上 one_step_off 那一格         ~30 min   「三模式对照」这句话现在是假的
-  🔴 B5  过一次任务级尺子（EVAL 128×8）   1 跑      自己定的纪律，至今一次没过
-  🔴 A?  Track A 的队列见 TRACK-A §7.5
-
-现在就能做（不吃 GPU）
-  🟢 B4  E08-c 仪器移到真下发点（写码）    0.5 天    差异化的核心，AReaL 明说没做的那格
-  🟢 B7  E15 η 换算                       分析      让 AReaL 的消融曲线变成我们的坐标系
-  🟢 B6  动态分池 patch（写码，验证等卡）   —        往 setup_worker() 加一行
+不吃 GPU，可与上面并行推进：
+🟢 B4  E08-c 仪器移到真下发点（写码）    0.5 天    差异化的核心，AReaL 明说没做的那格
+🟢 B7  E15 η 换算                       分析      让 AReaL 的消融曲线变成我们的坐标系
+🟢 B6  动态分池 patch（写码，验证要卡）   —        往 setup_worker() 加一行
 ```
 
 ⚠️ **`bitsandbytes` 未装**，4bit 相关探针要先装。
+★ **完成度**：Track B ~50%（诊断 85 / 优化 15 / 验收 0）、Track A ~30%（论证 80 / 兑现 25 / 硬手艺 0）。
 
 ## 6 · 新窗口阅读顺序
 
 ```
-本文档 → TRACK-A / TRACK-B（看接哪条线）→ README.md（E 索引/模板/纪律）
+本文档 → TRACK-A / TRACK-B（看接哪条线）→ NARRATIVE-AND-RESUME.md（这些实验最后要变成什么）
+→ README.md（E 索引/模板/纪律）
 → E12（权重同步查因，方法论样板）→ E08（占空比与同机分母）→ E13（一行改动的全过程）
 → E07（MoE 决策 + 今天的三处更正）
 → ../syncopate/08-machine-and-environment.md（环境怎么跑起来）
