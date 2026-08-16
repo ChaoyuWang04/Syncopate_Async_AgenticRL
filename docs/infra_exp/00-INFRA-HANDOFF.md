@@ -18,7 +18,7 @@ infra 线的目标：做出**两个有真实需求支撑、可验证的简历项
 ```
 TRACK-A-hardware-kernel.md   负载形状 × 硬件拓扑 决定该写什么算子   ← ~30%，四条兑现物只落地一条
 TRACK-B-framework-async.md   agentic RL 训练系统的框架级改造        ← ~50%，诊断够了但没有 after
-NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：面试官审视 / 故事线 / 简历两版本
+NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简历（未测的留〔 〕）
 ```
 
 ⚠️ **2026-08-16 的重估**：B 那句「已经够撑一个项目」要加限定词——**够撑的是「诊断」，不是「成果」**。
@@ -73,7 +73,7 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：面试官审视 / 故事线 
 ★ **重排的理由（用面试官视角审出来的）**：**两条 track 手上的数几乎全是 before，没有 after。**
 「占空比 31%」「只快 1.59×」是**现状陈述不是成果陈述**，孤立地放进简历反而像自曝短板。
 ⇒ **优先级只看一件事：它能不能把某个 before 变成 after。**
-完整审视 + 叙事 + 简历两个版本见 **[`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md)**；
+**完成态**的叙事与简历见 **[`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md)**（只写终点，不写现状）；
 欠的实验清单见 `TRACK-B §3.5` / `TRACK-A §7.5`。
 
 ```

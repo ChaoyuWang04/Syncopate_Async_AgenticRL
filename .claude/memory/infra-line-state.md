@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-16T13:52:43.802Z
+  modified: 2026-08-16T14:01:45.960Z
 ---
 
 infra 线与主线**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
@@ -72,7 +72,9 @@ Track A  ~30%   论证 80% / 兑现 25% / 硬手艺 0%    ← 三条腿断了两
   **B 里降级成背景句**，别一份素材写两个项目 —— 面试官会当成灌水。
 - **A 有两条「证明了不该做」**（E11 降级、ostinato §4.0 因果链被推翻）：
   工程上是产出，**简历成果栏写不进去，只能进面试的故事** ⇒ 要主动讲，别等被问。
-- 新文档 **`docs/infra_exp/NARRATIVE-AND-RESUME.md`**：面试官审视 / 故事线 / 简历两版本。
+- 新文档 **`docs/infra_exp/NARRATIVE-AND-RESUME.md`**：完成态的故事线 + 简历。
+  ★ **它只写终点**（所有实验做完的样子），没测的数字留 `〔 〕` 由实验填；
+  **刻意不维护「现在能写的」那一版**——进度归 track 文档，两份并存最后两份都不准。
   欠的实验清单在 `TRACK-B §3.5`（B1–B9）和 `TRACK-A §7.5`（A1–A6）。
 
 ## 队列

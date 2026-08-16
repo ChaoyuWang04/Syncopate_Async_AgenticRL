@@ -97,6 +97,98 @@ def stratum(cid: str, b: CaseBundle) -> tuple[str, ...]:
             tags.get("outcome", "-"), tags.get("entry", "-"))
 
 
+def _tags(b: CaseBundle) -> dict[str, str]:
+    return {t.split(":", 1)[0]: t.split(":", 1)[1] for t in b.case.metadata.tags if ":" in t}
+
+
+# ★★★ SFT 桶的三条保底线（2026-08-16 由一次验收审计推出）
+#
+# 背景：v12 的 SFT 桶里 M8 新增的两个模板 **POL=0 / CONF=0**，一条都没有。
+# 机制不是"选得不好"，是**保底只写在 dead_grid 分支里，而 v12 走的是
+# difficulty_proxy 分支**（v11 走 dead_grid，所以以前没暴露）。
+# `_difficulty_rank` 按 (难度, gold 链长) 降序取前 20%，而 POL 的 gold 只有
+# 「一次 policy.search + 终答」，链最短 ⇒ 整个模板被挤到桶外。
+#
+# 后果不是"少学一点"，是**M8 的验收路径整个断掉**：
+# 07 文档开头那句「p=0 的格子 RL 永远够不着」⇒ POL/CONF 没进 SFT，
+# 冻结 EVAL 上量出来的一定是"没学会"，**而这个结果和 RAG 实现好坏无关** ——
+# 会把一个分桶 bug 误判成 RAG 设计问题，然后去改根本没错的地方。
+#
+# ⇒ 所以保底从 dead_grid 分支里提出来，**两个分支共用**（见 _apply_sft_floors）。
+#   「换一条代码分支，保底就悄悄没了」这个形状，正是本项目反复栽的那个
+#   （05-handoff §6「机制在，但没接上」）。
+#
+# 为什么三个轴都要，少一个都不行：
+#   behavior  某个**行为**太稀薄 —— 实测 defer 只有 4 条 ⇒ SFT 后从 77% 崩到 36%
+#   template  某个**模板整个没进桶** —— 就是这次 POL/CONF 撞的
+#   outcome   进了桶但**只进了一档** —— 坑 #6 的第一种形态（只装死格 ⇒ defer 97%→0%）
+TEMPLATE_SFT_FLOOR = 12      # 每个模板至少这么多条（对齐 RARE_BEHAVIOR_SFT_FLOOR）
+OUTCOME_SFT_FLOOR = 4        # 且每个 (模板, 结局) 档至少这么多 —— 只喂一档等于没喂
+
+
+def _apply_sft_floors(
+    pool: list[str], chosen: list[str], bundles: dict[str, CaseBundle],
+) -> tuple[list[str], dict[str, dict[str, int]]]:
+    """把"某一类在 SFT 桶里太稀薄"补上来。**dead_grid 和 difficulty_proxy 共用。**
+
+    ★ 补进去的明细一并返回并写进 `split_report.json` —— 保底如果是静默发生的，
+    下次它没生效同样是静默的，而这正是本项目最贵的那类 bug。
+
+    ⚠️ 取样一律走 `pool` 的既有顺序（= case_id 排序），不随机：
+    切分必须可复现，随机化会让「换了配额」和「换了种子」在结果里分不开。
+    """
+    from syncopate.pipeline.dead_grid import RARE_BEHAVIOR_SFT_FLOOR
+
+    chosen = list(chosen)
+    chosen_set = set(chosen)
+    added: dict[str, dict[str, int]] = {}
+
+    # 每组在池子里总共有多少条 —— 保底的上限要按它算，见下面 allowance。
+    supply: dict[Any, int] = {}
+
+    def top_up(axis: str, group_of, floors: dict[Any, int]) -> None:
+        # 每个轴开始前重算一次 have：前一个轴补进来的 case 在这个轴上同样算数。
+        have: dict[Any, int] = {}
+        for cid in chosen_set:
+            key = group_of(cid)
+            have[key] = have.get(key, 0) + 1
+        supply.clear()
+        for cid in pool:
+            key = group_of(cid)
+            supply[key] = supply.get(key, 0) + 1
+        detail: dict[str, int] = {}
+        for group, floor in sorted(floors.items(), key=lambda kv: str(kv[0])):
+            # ★ 保底**不能把一个组吃光**：RL 那边也要有这个模板/行为的题，
+            #   否则该模板在 RL 阶段一条梯度来源都没有 —— 那是把这次修的坑
+            #   原样搬到了下一个阶段。⇒ 每组最多让一半进 SFT 桶。
+            #   （真实规模上这条不会绑定：v12 的 POL 池子有 78 条，一半 39 ≫ 保底 12；
+            #    只有小批量/冒烟用例才会撞到它。）
+            allowance = max(1, supply.get(group, 0) // 2)
+            missing = min(floor, allowance) - have.get(group, 0)
+            if missing <= 0:
+                continue
+            # 同一个轴内各组互斥（一条 case 只有一个 behavior / 模板 / 结局），
+            # 所以循环里不必刷新 have，只需刷新 chosen_set。
+            spare = [c for c in pool if c not in chosen_set and group_of(c) == group]
+            take = spare[:missing]
+            chosen.extend(take)
+            chosen_set.update(take)
+            if take:
+                detail[str(group)] = len(take)
+        if detail:
+            added[axis] = detail
+
+    top_up("behavior", lambda c: bundles[c].verifier.expected_behavior,
+           RARE_BEHAVIOR_SFT_FLOOR)
+    top_up("template", lambda c: c.split("_")[0],
+           {c.split("_")[0]: TEMPLATE_SFT_FLOOR for c in pool})
+    top_up("outcome", lambda c: (c.split("_")[0], _tags(bundles[c]).get("outcome", "-")),
+           {(c.split("_")[0], _tags(bundles[c]).get("outcome", "-")): OUTCOME_SFT_FLOOR
+            for c in pool})
+
+    return sorted(set(chosen)), added
+
+
 def load_bundles(batch_dir: Path) -> dict[str, CaseBundle]:
     manifest = json.loads((batch_dir / "manifest.json").read_text(encoding="utf-8"))
     entries = sorted(manifest["entries"], key=lambda e: e["case_id"])
@@ -117,6 +209,33 @@ def load_bundles(batch_dir: Path) -> dict[str, CaseBundle]:
 RARE_BEHAVIOR_EVAL_QUOTA = {"clarify": 4, "reject": 4, "defer": 4, "answer": 3}
 
 
+# ★★ 同一条道理的第二个轴：**按结局档加厚**（2026-08-16）。
+#
+# 上面那条按 behavior 加厚，而 M8 两项验收（过期检出率 / 无检索幻觉率，§14 都要求
+# 趋近 0）考的档位 behavior 恰好是最常见的 `tool_call` ⇒ 它们只拿到
+# `eval_per_stratum=2`。实测 v12 的冻结 EVAL：
+#
+#     rag_state:superseded   4 条   ← 过期检出率的**全部**分母
+#     rag_state:empty        4 条   ← 无检索幻觉率的**全部**分母
+#
+# **4 条题，错一条就是 25%** —— 用它去判定一个"趋近 0"的指标，
+# 和 M7 那个「配对 MDE 0.013 比效应量本身还大」是同一种病：尺子比要量的东西粗。
+#
+# ⚠️⚠️ 这个加厚是**严格增量**的，这一点是构造保证的、不是事后 diff 出来的：
+# 取样写法是 `sorted(strata[key])[:take]`，**调大 take 只会在尾部追加**，
+# 已有成员一个都不动 ⇒ 冻结 EVAL 的老 case_id 全部保留，
+# `_audit/v11_sft_e1_m2.json` 这类历史基线对它们仍然逐条配对可比。
+# （同 `set_tool_menus.py --freeze-from` 那条纪律：「哪些基线仍可比」要由构造保证。）
+OUTCOME_EVAL_QUOTA = {
+    # POL（政策演练）—— 半结构化侧
+    "answered_v2_from_superseded": 6,   # 过期检出率
+    "escalated_no_policy": 6,           # 无检索幻觉率（policy 侧）
+    # CONF（结论冲突）—— 非结构化侧
+    "answered_from_absent": 6,          # 无检索幻觉率（insight 侧）
+    "conflict_reported": 6,             # 历史结论与实测数据打架时怎么办
+}
+
+
 def split(
     batch_dir: Path,
     *,
@@ -134,6 +253,7 @@ def split(
     按其 `kind` 到 `quota_by_kind` 查这一格取几条。
     """
     bundles = load_bundles(batch_dir)
+    sft_floors: dict[str, dict[str, int]] = {}
 
     # ---- 1. EVAL：分层冻结 ----
     strata: dict[tuple[str, ...], list[str]] = {}
@@ -141,8 +261,11 @@ def split(
         strata.setdefault(stratum(cid, b), []).append(cid)
     buckets = Buckets()
     for key in sorted(strata):
-        # key[1] 是 expected_behavior。稀有行为多取几条，见 RARE_BEHAVIOR_EVAL_QUOTA。
-        take = max(eval_per_stratum, RARE_BEHAVIOR_EVAL_QUOTA.get(key[1], 0))
+        # key[1] 是 expected_behavior，key[2] 是结局档。
+        # 两条加厚规则取**较大者**，见 RARE_BEHAVIOR_EVAL_QUOTA / OUTCOME_EVAL_QUOTA。
+        take = max(eval_per_stratum,
+                   RARE_BEHAVIOR_EVAL_QUOTA.get(key[1], 0),
+                   OUTCOME_EVAL_QUOTA.get(key[2], 0))
         buckets.eval.extend(sorted(strata[key])[:take])
     eval_set = set(buckets.eval)
 
@@ -172,38 +295,20 @@ def split(
                 "available": len(available),
                 "taken": len(taken),
             }
-        # ★★ 稀有行为的保底：dead_grid 只按「哪些格子死了」选，
-        # 做得好的行为一个格子都不会进桶 —— 而"训练集里太稀薄"照样会被挤掉。
-        # 2026-08-13 实测：defer 只有 4 条 ⇒ SFT 后从 77% 崩到 36%。
-        from syncopate.pipeline.dead_grid import RARE_BEHAVIOR_SFT_FLOOR
-        chosen_set = set(chosen)
-        floor_added: dict[str, int] = {}
-        for behavior, floor in sorted(RARE_BEHAVIOR_SFT_FLOOR.items()):
-            have = [c for c in chosen_set if bundles[c].verifier.expected_behavior == behavior]
-            if len(have) >= floor:
-                continue
-            spare = [c for c in pool
-                     if c not in chosen_set
-                     and bundles[c].verifier.expected_behavior == behavior]
-            take = spare[:floor - len(have)]
-            chosen.extend(take)
-            chosen_set.update(take)
-            if take:
-                floor_added[behavior] = len(take)
-        if floor_added:
-            selection["__rare_behavior_floor__"] = {
-                "kind": "floor", "eval_evidence": "-", "available": 0,
-                "taken": sum(floor_added.values()), "detail": floor_added,
-            }
-        buckets.sft = sorted(set(chosen))
+        # ★★ 保底：dead_grid 只按「哪些格子死了」选，做得好的行为一个格子都不会进桶。
+        # 三个轴见 _apply_sft_floors 的说明。
+        buckets.sft, sft_floors = _apply_sft_floors(pool, chosen, bundles)
         sft_set = set(buckets.sft)
         buckets.rl = [c for c in pool if c not in sft_set]
         mode = "dead_grid"
     else:
         ranked = sorted(pool, key=lambda c: _difficulty_rank(bundles[c]), reverse=True)
         cut = max(1, int(len(pool) * sft_ratio))
-        buckets.sft = sorted(ranked[:cut])
-        buckets.rl = sorted(ranked[cut:])
+        # ★ 保底和 dead_grid 分支**共用同一个函数**。
+        # 这条分支以前一条保底都没有，v12 因此把 POL / CONF 整个挤出了 SFT 桶。
+        buckets.sft, sft_floors = _apply_sft_floors(pool, ranked[:cut], bundles)
+        sft_set = set(buckets.sft)
+        buckets.rl = sorted(c for c in ranked[cut:] if c not in sft_set)
         mode = "difficulty_proxy"
 
     # ---- 3. 互斥性实测（不看代码猜）----
@@ -226,11 +331,24 @@ def split(
         "overlaps_by_content_sha256": overlaps,
         "duplicate_content_pairs": dupes,
         "eval_strata_coverage": {"|".join(k): len(v) for k, v in sorted(strata.items())},
+        # ★ 保底补了什么必须可见。静默的保底，下次它没生效同样是静默的 ——
+        #   而"机制在但没接上"正是本项目最贵的那类 bug（05-handoff §6）。
+        "sft_floors_applied": sft_floors,
+        # 每个模板在 SFT 桶里最终有几条。**0 就是这次要修的那个 bug 又回来了。**
+        "sft_template_counts": _count_by_template(buckets.sft),
     }
     if selection is not None:
         report["dead_grid_selection"] = selection
         report["quota_by_kind"] = dict(quota_by_kind or {})
     return buckets, report
+
+
+def _count_by_template(case_ids: list[str]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for cid in case_ids:
+        t = cid.split("_")[0]
+        out[t] = out.get(t, 0) + 1
+    return dict(sorted(out.items()))
 
 
 def write(buckets: Buckets, report: dict[str, Any], out_dir: Path) -> None:

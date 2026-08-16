@@ -174,7 +174,7 @@ sm_120 是消费级 Blackwell：**有原生 FP4/FP8，没有 TMEM**（数据中�
 
 ### 6.5.1 · 2026-08-16 补：用面试官视角量一下这条线的完成度
 
-对着简历的尺子重审（方法与结论见 [`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md) 第二部分）：
+对着简历的尺子重审（**完成态**的叙事与简历见 [`NARRATIVE-AND-RESUME.md`](NARRATIVE-AND-RESUME.md) 第二部分）：
 
 ```
 筛子/需求论证（证明该做什么）   ████████░░  80%   ← 三条前置探查 + E11 完整调研，这块很扎实
