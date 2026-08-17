@@ -116,4 +116,22 @@ if want b2redo "${TARGETS[@]}"; then
   done
 fi
 
+# ═══════════════════════════════════════════════════════════════════════
+# ⑤ B15 · 那 6 倍是谁干的：param_sync 55.8 s（M7）→ 9.0 s（今天）
+#
+# B2 已经排除 bucket（512 vs 2048 只差 7.7%）。E12 §4.5 有一张**分步表**
+# （8 个步骤各自耗时、第 5 步占 99.94%），今天同样开 `SYNCOPATE_SYNC_TIMING=1`
+# 就能**逐项对照**，看 6 倍掉在哪一格。
+#
+# ★ 预测：仍然是第 5 步占 ~99%，但它的绝对值从 59.76 s 降到 ~9 s。
+#   若**不是**第 5 步（比如编排那几步涨了），说明 M7 那次的分步测量本身有问题
+#   ⇒ E12 的招牌数字要重写。
+# ⚠️ 判据行：`[verl-patch] 权重同步分步计时已启用`（worker 进程打的），没有就是没接上。
+if want b15 "${TARGETS[@]}"; then
+  ( export SYNCOPATE_SYNC_TIMING=1
+    run b15_synctiming --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 12 --sync-every 4 )
+  log "   分步计时行："
+  grep -E "\[sync-timing\]" logs/b15_synctiming.log | tail -20 | tee -a "$QUEUE_LOG"
+fi
+
 log "════════ batch3 结束"
