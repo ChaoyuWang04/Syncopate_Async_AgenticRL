@@ -29,7 +29,10 @@ def _asset_id(campaign_id: str, creative_name: str) -> str:
 
 @REGISTRY.tool(
     name="creative.upload",
-    description="上传一条素材到指定 campaign。上传后进入平台审核队列，需要用 creative.poll_review 查询审核结果。",
+    description=(
+        "上传一条素材到指定 campaign。上传后进入平台审核队列，需要用 creative.poll_review 查询审核结果。"
+        "· 只负责上传，**不返回**审核结论 —— 审核是异步的，结果要用 creative.poll_review 查。上传成功 ≠ 审核通过。"
+    ),
     parameters={
         "type": "object",
         "properties": {

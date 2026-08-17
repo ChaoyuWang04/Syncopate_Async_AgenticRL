@@ -131,21 +131,40 @@ def test_old_and_new_versions_state_different_numbers() -> None:
 
 
 def test_prompt_is_identical_across_arms_for_same_entry_mode() -> None:
-    """★★ 「同一句话、不同世界、不同正确动作」—— 三档的问法必须逐字相同。
+    """★★ 「同一句话、不同世界、不同正确动作」——**问法不能泄露这是哪一档**。
 
-    问法一变，模型就能从措辞猜出这是哪一档，而不是从**检索回来的东西**判断。
+    ⚠️ **判据在 2026-08-17 改过一次**：原来断言三档的问法**逐字相同**，
+    那是"每个模板只有一句话"时代的写法。上了题面改写之后逐字相同不再成立，
+    但要守的东西没变 —— **句式不许携带任何关于档位的信息**。
+
+    ⇒ 新判据：**每一档用到的句式集合必须完全相同**（不是"差不多"）。
+      某个句式只在 empty 档出现，模型看到它就知道这题会查空，
+      根本不用等检索结果 —— 那正是这条测试要挡的。
+
+    ★ 而这是**构造保证**的，不是碰巧：`_phrase` 按 (档 × entry_mode) 轮转选变体。
+      第一版用哈希选，实测就漏了 —— empty 独有 2 条、superseded 独有 2 条，
+      这条测试当场把它判红了。
     """
+    import re as _re
+
+    N = 150
     for mode in ("id_given", "must_discover"):
-        msgs = {}
-        for p, b in _bundles():
+        by_arm: dict[str, set[str]] = {}
+        for i in range(N):
+            p = params_for(i)
             if p.entry_mode != mode:
                 continue
-            # 只有 id_given 会把 campaign_id 拼进问句，按 case 归一化后比较
-            msgs.setdefault(p.rag_state, set()).add(
-                b.case.user_message.replace(p.campaign_id, "<CID>"))
-        assert len(msgs) == 3
-        variants = set().union(*msgs.values())
-        assert len(variants) == 1, f"{mode} 下三档问法不一致: {variants}"
+            bundle = MAKE(p)
+            msg = bundle.case.user_message
+            for value in (p.campaign_id, p.product, p.region, p.account_id):
+                msg = msg.replace(str(value), "§")
+            by_arm.setdefault(getattr(p, "rag_state"), set()).add(_re.sub(r"\d+", "#", msg))
+        union = set().union(*by_arm.values())
+        for arm, phrasings in sorted(by_arm.items()):
+            missing = union - phrasings
+            assert not missing, (
+                f"{mode} 下 {arm} 档缺了 {len(missing)} 种句式 —— "
+                f"句式泄露了档位：看到这些说法就知道是哪一档。缺的：{sorted(missing)[:2]}")
 
 
 def test_outcomes_do_not_collapse_into_one_grid_cell() -> None:

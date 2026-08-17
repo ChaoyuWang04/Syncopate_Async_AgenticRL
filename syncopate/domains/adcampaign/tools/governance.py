@@ -27,7 +27,10 @@ PAGE_SIZE = 3
 
 @REGISTRY.tool(
     name="policy.get_budget_rule",
-    description="查询预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。",
+    description=(
+        "查询预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。"
+        "· 只给**账户级**的预算调整规则，**不含**平台侧的广告政策条款（那要用 policy.search 检索），也**不做**风控判断（那在 risk.check_account）。"
+    ),
     parameters={
         "type": "object",
         "properties": {"account_id": {**_STR, "description": "账户主键，如 ACC_01"}},
@@ -53,7 +56,10 @@ def get_budget_rule(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="risk.check_account",
-    description="账户风控检查：是否有风险标记、是否处于冻结/受限状态、是否允许提额。改预算前必须先过。",
+    description=(
+        "账户风控检查：是否有风险标记、是否处于冻结/受限状态、是否允许提额。改预算前必须先过。"
+        "· 只看**账户**的风控状态，**不判断**具体金额合不合政策（那在 policy.get_budget_rule），也**不返回**投放指标。"
+    ),
     parameters={
         "type": "object",
         "properties": {"account_id": _STR},
@@ -141,7 +147,7 @@ def update_budget(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         f"· **分页返回**，每页最多 {PAGE_SIZE} 条。返回里的 next_cursor 非空表示还有下一页，"
         "把它传回来继续取。\n"
         "· 需要「全部/所有 campaign」才能得出的结论，必须翻到 next_cursor 为空为止。"
-    ),
+        "· 只给 campaign 的基本信息，**不含**任何效果指标（那在 campaign.get_metrics）。"),
     parameters={
         "type": "object",
         "properties": {

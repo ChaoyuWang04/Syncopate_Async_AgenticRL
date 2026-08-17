@@ -43,7 +43,7 @@ def _subject_from(args: dict[str, Any]) -> dict[str, Any]:
         "分区：episodic=历史投放动作 / semantic=素材与受众属性 / "
         "business=优化干预效果 / risk=风控标记。"
         "涉及重复投放、频繁调预算、历史干预是否有效时必须先查。"
-    ),
+        "· 只检索我们**自己写下**的历史记忆，**不含**平台政策（policy.search）和团队复盘结论（insight.search_claims）—— 三者是不同的库，别混用。"),
     parameters={
         "type": "object",
         "properties": {
@@ -76,7 +76,10 @@ def memory_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="memory.read",
-    description="按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。",
+    description=(
+        "按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。"
+        "· 只按 id 取一条，**不做**检索；也**不校验**这条记忆现在还成不成立。"
+    ),
     parameters={"type": "object", "properties": {"record_id": _STR}, "required": ["record_id"]},
     kind="read",
 )
@@ -157,7 +160,10 @@ def _called_risk_check(ctx: ToolContext) -> bool:
 
 @REGISTRY.tool(
     name="memory.invalidate",
-    description="提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。同样需要审核。",
+    description=(
+        "提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。同样需要审核。"
+        "· 只是**提议**作废，**不会**立即生效，也**不删除**原记录 —— 你需要知道「我们曾经这么以为」。"
+    ),
     parameters={
         "type": "object",
         "properties": {"record_id": _STR, "reason": _STR},
@@ -183,7 +189,7 @@ def memory_invalidate(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     description=(
         "两条记忆互相矛盾时，提议如何处置：supersede=用新的取代旧的，merge=合并。"
         "record_ids 必须至少给两条。"
-    ),
+        "· 只是**提议**处置方式，**不自动**执行；也**不判断**哪条是对的 —— 那要拿实际数据核。"),
     parameters={
         "type": "object",
         "properties": {

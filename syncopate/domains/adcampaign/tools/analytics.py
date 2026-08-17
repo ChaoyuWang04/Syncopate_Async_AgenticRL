@@ -99,7 +99,10 @@ def _ratio(row: dict[str, Any], actual_key: str, baseline_key: str) -> float:
 
 @REGISTRY.tool(
     name="campaign.detect_anomalies",
-    description="诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。要拿优化方案必须先用它确定异常类型。",
+    description=(
+        "诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。要拿优化方案必须先用它确定异常类型。"
+        "· 只**定性**给出异常类型，**不给**优化方案（那在 playbook.get_optimization），也**不判断**数据成熟到能不能下结论（那在 metrics.get_freshness）。"
+    ),
     parameters={
         "type": "object",
         "properties": {"campaign_id": _STR},

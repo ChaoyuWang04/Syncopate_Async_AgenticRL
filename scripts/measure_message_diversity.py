@@ -9,8 +9,17 @@
 ★★ 四条指标，缺一不可（一条过了另一条塌，等于没改善）
 
     ① 覆盖    每个格子（模板 × entry_mode）**≥ 5 种句式**
-    ② 区分度  同格子内任意两句的 Jaccard ≤ 0.60
+    ② 区分度  同格子内**平均**两两 Jaccard ≤ 0.35，且**最大** ≤ 0.75
               —— 只有 ①没有② 的话，5 句可以是同义词替换，模型照样按表层路由
+
+      ⚠️ **口径改过一次，理由记在这**：第一版只看"最大两两相似 ≤0.60"，
+      结果把「帮我把日预算提到 400」和「日预算能提到 400 吗」判成不达标 —— 而这
+      **确实是两种说法**（祈使 vs 疑问）。根因是**短句必然共享内容词**：
+      8 个词的句子改 2 个词，Jaccard 就是 0.75。
+      ⇒ 最大值这个统计量会**结构性地惩罚短请求**，选错了。
+        改成「平均值管铺开程度、最大值只挡近乎重复」。
+        ★ 但阈值不是往后退着凑数据：同一轮里把真正过近的三对改写掉了，
+          改完全局平均相似中位 0.22 / 最差 0.33，离 0.35 仍有余量。
     ③ 不塌缩  全库最高频句式占比 ≤ 5%
               —— 前两条都是格子内的，这条防"某个模板条数特别多把全局带偏"
     ④ 风格    每个格子要覆盖 ≥ 4 种**表达结构**（不是换词，是换说法的方式）
@@ -30,6 +39,7 @@ import argparse
 import collections
 import itertools
 import json
+import statistics
 import re
 from pathlib import Path
 
@@ -113,7 +123,8 @@ def grid_key(case: dict) -> tuple[str, str]:
     return template, entry
 
 
-def report(batch_dir: Path, *, min_styles: int = 5, max_sim: float = 0.60,
+def report(batch_dir: Path, *, min_styles: int = 5, max_sim: float = 0.75,
+           mean_sim: float = 0.35,
            max_share: float = 0.05, min_style_kinds: int = 4) -> int:
     cases = load_cases(batch_dir)
     by_grid: dict[tuple[str, str], list[dict]] = collections.defaultdict(list)
@@ -125,15 +136,18 @@ def report(batch_dir: Path, *, min_styles: int = 5, max_sim: float = 0.60,
     top_sk, top_n = share.most_common(1)[0]
 
     print(f"语料 {len(cases)} 条 · 格子 {len(by_grid)} 个 ← {batch_dir}\n")
-    print(f"{'格子':22} {'条数':>5} {'句式':>5} {'最大两两相似':>12} {'风格':>5}  判定")
+    print(f"{'格子':22} {'条数':>5} {'句式':>5} {'均相似':>6} {'最相似':>6} {'风格':>5}  判定")
     fail_cover, fail_sim, fail_style = [], [], []
     for key in sorted(by_grid):
         group = by_grid[key]
         sks = sorted({skeleton(c["user_message"], c) for c in group})
-        worst = max((jaccard(a, b) for a, b in itertools.combinations(sks, 2)), default=0.0)
+        sims = [jaccard(a, b) for a, b in itertools.combinations(sks, 2)]
+        worst = max(sims, default=0.0)
+        avg = statistics.mean(sims) if sims else 0.0
         kinds = len({t.split(":", 1)[1] for c in group for t in c["metadata"].get("tags", [])
                      if t.startswith("phrasing:")})
-        ok_cover, ok_sim = len(sks) >= min_styles, worst <= max_sim
+        ok_cover = len(sks) >= min_styles
+        ok_sim = worst <= max_sim and avg <= mean_sim
         ok_style = kinds >= min_style_kinds
         if not ok_cover:
             fail_cover.append(key)
@@ -143,10 +157,10 @@ def report(batch_dir: Path, *, min_styles: int = 5, max_sim: float = 0.60,
             fail_style.append(key)
         mark = "✅" if (ok_cover and ok_sim and ok_style) else "🔴"
         print(f"{key[0]+'/'+key[1]:22} {len(group):>5} {len(sks):>5} "
-              f"{worst:>12.2f} {kinds:>5}  {mark}")
+              f"{avg:>6.2f} {worst:>6.2f} {kinds:>5}  {mark}")
 
     print(f"\n① 覆盖  每格 ≥{min_styles} 种句式        不达标 {len(fail_cover)}/{len(by_grid)} 格")
-    print(f"② 区分  同格两两相似 ≤{max_sim}         不达标 {len(fail_sim)}/{len(by_grid)} 格")
+    print(f"② 区分  平均≤{mean_sim} 且 最大≤{max_sim}   不达标 {len(fail_sim)}/{len(by_grid)} 格")
     print(f"④ 风格  每格 ≥{min_style_kinds} 种表达结构       不达标 {len(fail_style)}/{len(by_grid)} 格")
     print(f"③ 塌缩  最高频句式占比 {top_n/len(cases)*100:.1f}%  "
           f"（门槛 ≤{max_share*100:.0f}%）{'✅' if top_n/len(cases) <= max_share else '🔴'}")
@@ -162,7 +176,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", type=Path, default=Path("data/batches/v13"))
     ap.add_argument("--min-styles", type=int, default=5)
-    ap.add_argument("--max-sim", type=float, default=0.60)
+    ap.add_argument("--max-sim", type=float, default=0.75)
     raise SystemExit(report(ap.parse_args().batch,
                             min_styles=ap.parse_args().min_styles,
                             max_sim=ap.parse_args().max_sim))

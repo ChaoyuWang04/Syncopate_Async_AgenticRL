@@ -59,7 +59,7 @@ def get_safety_line(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         "查询当前时间点附近的时令活动（万圣节、黑五、圣诞等），"
         "返回距离天数、出量放大倍数和对应的素材标签。"
         "判断某类主题素材现在是否适合投放时用。"
-    ),
+        "· 只给时令背景，**不判断**你的素材现在该不该投、也**不含**任何投放指标。"),
     parameters={
         "type": "object",
         "properties": {
@@ -108,7 +108,7 @@ def get_seasonal_context(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     description=(
         "读取素材的视觉标签与历史表现（标签由离线视觉分析产出）："
         "主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM/CTR/d7 CPI 和投放地域。"
-    ),
+        "· 只给单条素材的标签和历史表现，**不做**跨素材的对比归因（那在 analysis.feature_lift），也**不返回** campaign 层数据。"),
     parameters={
         "type": "object",
         "properties": {"creative_id": _STR, "creative_name": _STR},
@@ -132,7 +132,7 @@ def get_asset_tags(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     description=(
         "按视觉标签检索素材库，可按地域、平台过滤并设 IPM 下限，"
         "结果按 IPM 从高到低。用于找当前表现好的同主题替代素材。"
-    ),
+        "· 只按标签检索现有素材，**不生成**新素材，也**不判断**检索到的素材适不适合当前 campaign。"),
     parameters={
         "type": "object",
         "properties": {
