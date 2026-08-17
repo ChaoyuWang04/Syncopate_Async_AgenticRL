@@ -284,25 +284,40 @@ GPU 3   (rollout)      0% 利用率        9–10 W      ← 整卡闲置
 | 先去 `checkpoints/grpo/m7_v11e1_fullyasync/` 找产物，只有 63 条 8-13 的旧数据 | 今天这轮的 `--save-path` 是 `m7_v11e1`（`--mode` 不进路径名） | 认准 `ps` 里的实际 `--save-path`，别按 experiment 名猜 |
 | 两端数字完全相同，一度以为脚本写错了 | 它们**真的**相同 | 逐桶打印 + 查 `dropped_stale_samples` 交叉验证 |
 
-### 7.x 🆕 `save_freq` 在 fully_async 下会**大部分静默失效**（2026-08-17 发现）
+### 7.x 🆕 `save_freq` 在 fully_async 下按 **param_version** 计，不是按 step（2026-08-17）
 
-`global_steps` 在 fully_async 下**每个 fit_step 跳 `sync_every` 步**（本项目 4），
-实测取值是 `3, 7, 11, 15, …` 即恒 **≡3 (mod 4)**；
-而保存判据是 `global_steps % save_freq == 0`（`separation/ray_trainer.py:687`）。
+**判据式子在子类里被覆盖了**（`fully_async_trainer._fit_save_checkpoint`）：
 
-⇒ **只有那些「既是 save_freq 的倍数、又 ≡3 (mod 4)」的步会触发保存。**
-
-```
-save_freq=25，跑 110 步   本应 25/50/75/100 存四次 → **实际只在 75 存一次**
-save_freq=999            110 步内**一次都不触发**（收尾那次是 force=True，与它无关）
+```python
+if self.config.trainer.save_freq > 0 and (
+    force or self.current_param_version % self.config.trainer.save_freq == 0 or …):
 ```
 
-⇒ ★ 这解释了两件此前分开记着的事：① 为什么 `--save-freq 999` 仍会落一个 27 GB ckpt
-（收尾 `force=True`）；② 为什么中途没看到预期的周期性 ckpt。
-⚠️ **风险是给主线的**：以为每 25 步有个还原点，实际整跑只有一个 —— 崩了就全丢。
-⇒ 判据：`ls checkpoints/grpo/<exp>/global_step_*`，别信 `save_freq` 的字面值。
+而 `current_param_version` **每次权重同步 +1**（`sync_every=4` ⇒ 每 4 个 rollout step 一次）。
+⇒ **`--steps` 和 `save_freq` 的单位差 `sync_every` 倍**：
 
-★ 又一个「**空门槛不等于通过**」的变种：判据式子成立，但**它的自变量取不到那些值**。
+```
+--steps 110 · sync_every 4   ⇒ 只有 **27** 个 param_version
+save_freq=25                 ⇒ 110 步里只触发 **1 次**（版本 25）+ 收尾 force 一次
+save_freq=999                ⇒ **一次都不触发**（收尾那次是 force=True，与它无关）
+save_freq=5                  ⇒ 5/10/15/20/25 + 收尾 27（主线 17:38 那跑实测，目录名即版本号）
+```
+
+⚠️ 同一份日志里**有两个都叫 step 的计数器**，别混用：
+```
+metric `training/global_step`   = self.global_steps，每个 fit_step 跳 sync_every ⇒ 3,7,11,…,107
+ckpt 目录名 `global_step_<N>`   = **current_param_version**，每个 fit_step +1 ⇒ 1..27
+```
+⇒ 目录叫 `global_step_25`，里面装的其实是 **param_version 25**。
+
+⛔ **本节 2026-08-17 首版写错过一次，留在这里当教训**：
+> 原写法说判据是 `self.global_steps % save_freq`（因此推出「save_freq=25 会在 75 触发」）。
+> **那是基类 `separation/ray_trainer.py:687` 的式子 —— fully_async 覆盖了它。**
+> 结论（110 步里只存一次）碰巧是对的，**机制是错的**。
+> ★ 教训：**读到一个判据式子就下结论之前，先查子类有没有覆盖它。**
+> 这和「判据行打出来了 ≠ 补丁在那个进程里生效」是同一族问题：**式子对 ≠ 这次跑的是这个式子**。
+
+⇒ 实用判据：**别信 `save_freq` 的字面值，`ls checkpoints/grpo/<exp>/global_step_*` 看实际落了几个。**
 
 ## 8 · 下一步 / 衍生问题
 
