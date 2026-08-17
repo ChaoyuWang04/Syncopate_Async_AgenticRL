@@ -1,0 +1,257 @@
+{
+  "db": "logs/nsys/e01_rl_v13.sqlite",
+  "window_seconds": 75.171,
+  "devices": {
+    "0": {
+      "kernel_seconds": 72.909,
+      "busy_share": 0.9699
+    }
+  },
+  "processes": {
+    "ray::WorkerDict(pid=909636)@gpu0": {
+      "kernel_seconds": 39.082,
+      "busy_share": 0.5199,
+      "by_category": {
+        "gemm": {
+          "seconds": 22.59,
+          "share": 0.578,
+          "calls": 110955
+        },
+        "elementwise": {
+          "seconds": 9.494,
+          "share": 0.2429,
+          "calls": 408701
+        },
+        "attention": {
+          "seconds": 4.772,
+          "share": 0.1221,
+          "calls": 6576
+        },
+        "reduce": {
+          "seconds": 0.756,
+          "share": 0.0193,
+          "calls": 31863
+        },
+        "norm_softmax": {
+          "seconds": 0.699,
+          "share": 0.0179,
+          "calls": 962
+        },
+        "nccl": {
+          "seconds": 0.632,
+          "share": 0.0162,
+          "calls": 31
+        },
+        "other": {
+          "seconds": 0.139,
+          "share": 0.0036,
+          "calls": 1349
+        }
+      }
+    },
+    "VLLM::Worker(pid=912294)@gpu0": {
+      "kernel_seconds": 24.979,
+      "busy_share": 0.3323,
+      "by_category": {
+        "gemm": {
+          "seconds": 13.121,
+          "share": 0.5253,
+          "calls": 230460
+        },
+        "attention": {
+          "seconds": 10.612,
+          "share": 0.4248,
+          "calls": 87264
+        },
+        "norm_softmax": {
+          "seconds": 0.628,
+          "share": 0.0252,
+          "calls": 178164
+        },
+        "elementwise": {
+          "seconds": 0.414,
+          "share": 0.0166,
+          "calls": 78769
+        },
+        "other": {
+          "seconds": 0.148,
+          "share": 0.0059,
+          "calls": 43991
+        },
+        "reduce": {
+          "seconds": 0.056,
+          "share": 0.0023,
+          "calls": 16142
+        }
+      }
+    },
+    "ray::WorkerDict(pid=909637)@gpu0": {
+      "kernel_seconds": 4.341,
+      "busy_share": 0.0577,
+      "by_category": {
+        "gemm": {
+          "seconds": 2.541,
+          "share": 0.5852,
+          "calls": 12703
+        },
+        "elementwise": {
+          "seconds": 1.079,
+          "share": 0.2485,
+          "calls": 45489
+        },
+        "attention": {
+          "seconds": 0.442,
+          "share": 0.1019,
+          "calls": 571
+        },
+        "reduce": {
+          "seconds": 0.097,
+          "share": 0.0223,
+          "calls": 3819
+        },
+        "norm_softmax": {
+          "seconds": 0.091,
+          "share": 0.021,
+          "calls": 125
+        },
+        "nccl": {
+          "seconds": 0.069,
+          "share": 0.0158,
+          "calls": 2
+        },
+        "other": {
+          "seconds": 0.023,
+          "share": 0.0053,
+          "calls": 223
+        }
+      }
+    },
+    "ray::WorkerDict(pid=909641)@gpu0": {
+      "kernel_seconds": 4.293,
+      "busy_share": 0.0571,
+      "by_category": {
+        "gemm": {
+          "seconds": 2.567,
+          "share": 0.598,
+          "calls": 12630
+        },
+        "elementwise": {
+          "seconds": 1.07,
+          "share": 0.2492,
+          "calls": 45244
+        },
+        "attention": {
+          "seconds": 0.445,
+          "share": 0.1036,
+          "calls": 568
+        },
+        "reduce": {
+          "seconds": 0.097,
+          "share": 0.0227,
+          "calls": 3800
+        },
+        "norm_softmax": {
+          "seconds": 0.091,
+          "share": 0.0212,
+          "calls": 125
+        },
+        "other": {
+          "seconds": 0.023,
+          "share": 0.0054,
+          "calls": 223
+        },
+        "nccl": {
+          "seconds": 0.0,
+          "share": 0.0,
+          "calls": 2
+        }
+      }
+    },
+    "ray::Checkpoint(pid=911422)@gpu0": {
+      "kernel_seconds": 0.213,
+      "busy_share": 0.0028,
+      "by_category": {
+        "nccl": {
+          "seconds": 0.213,
+          "share": 0.9971,
+          "calls": 19
+        },
+        "elementwise": {
+          "seconds": 0.001,
+          "share": 0.0029,
+          "calls": 2
+        }
+      }
+    }
+  },
+  "top_kernels": [
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_tn_align8>(T1::Params)",
+      "seconds": 19.201
+    },
+    {
+      "name": "kernel_unified_attention_2d",
+      "seconds": 10.102
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8>(T1::Params)",
+      "seconds": 6.237
+    },
+    {
+      "name": "void flash::flash_fwd_kernel<Flash_fwd_kernel_traits<(int)128, (int)128, (int)64, (int)4, (bool)0, (bool)0, cutlass::bfloat16_t, Flash_kernel_traits<(int)128, (int)128, (int)64, (int)4, cutlass::bfloat16_t>>, (bool)0, (bool)1, (bool)0, (bool)0, (bool)0, (bool)1, (bool)0, (bool)0>(flash::Flash_fwd_params)",
+      "seconds": 3.977
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8>(T1::Params)",
+      "seconds": 3.655
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(T1::Params)",
+      "seconds": 1.983
+    },
+    {
+      "name": "void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<c10::BFloat16>, std::array<char *, (unsigned long)3>>(int, T2, T3)",
+      "seconds": 1.85
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_nn_align8>(T1::Params)",
+      "seconds": 1.678
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x128_32x4_tn_align8>(T1::Params)",
+      "seconds": 1.66
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x128_32x4_nn_align8>(T1::Params)",
+      "seconds": 1.614
+    },
+    {
+      "name": "void flash::flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel<Flash_bwd_kernel_traits<(int)128, (int)64, (int)64, (int)8, (int)4, (int)2, (int)2, (bool)1, (bool)0, cutlass::bfloat16_t, Flash_kernel_traits<(int)128, (int)64, (int)64, (int)8, cutlass::bfloat16_t>>, (bool)0, (bool)1, (bool)0, (bool)0, (bool)0, (bool)1, (bool)0>(flash::Flash_bwd_params)",
+      "seconds": 1.355
+    },
+    {
+      "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(T1::Params)",
+      "seconds": 1.248
+    },
+    {
+      "name": "void at::native::vectorized_elementwise_kernel<(int)4, at::native::BinaryFunctor<c10::BFloat16, c10::BFloat16, c10::BFloat16, at::native::binary_internal::MulFunctor<float>>, std::array<char *, (unsigned long)3>>(int, T2, T3)",
+      "seconds": 0.979
+    },
+    {
+      "name": "void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<c10::BFloat16, c10::BFloat16, c10::BFloat16, at::native::binary_internal::MulFunctor<float>>>(at::TensorIteratorBase &, const T1 &)::[lambda(int) (instance 1)]>(int, T3)",
+      "seconds": 0.957
+    },
+    {
+      "name": "void at::native::elementwise_kernel<(int)128, (int)2, void at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float>>>(at::TensorIteratorBase &, const T1 &)::[lambda(int) (instance 1)]>(int, T3)",
+      "seconds": 0.955
+    }
+  ],
+  "memcpy": [
+    {
+      "device": 0,
+      "seconds": 7.774,
+      "gigabytes": 232.867,
+      "calls": 58007
+    }
+  ]
+}

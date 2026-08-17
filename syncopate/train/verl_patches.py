@@ -340,10 +340,110 @@ def setup_worker() -> None:
     #    ⇒ 教训：判据行只许写观测，不许写断言（05-handoff §6 变种②）。
     if os.environ.get("SYNCOPATE_POOL", "1") == "1":
         _defer_until_imported("verl.trainer.main_ppo", _patch_pool_sampler)
+    if os.environ.get("SYNCOPATE_NVTX") == "1":
+        # 源模块 + 三个已知的消费方都要挂：谁先被 import 都能兜住（见 _patch_nvtx_timers 注释①）
+        for _m in ("verl.utils.profiler.performance",
+                   "verl.utils.debug",
+                   "verl.trainer.ppo.ray_trainer",
+                   "verl.experimental.fully_async_policy.fully_async_trainer",
+                   "verl.experimental.fully_async_policy.fully_async_rollouter",
+                   "verl.experimental.one_step_off_policy.ray_trainer"):
+            _defer_until_imported(_m, _patch_nvtx_timers_or_rebind)
     if os.environ.get("SYNCOPATE_DEVICE_PROBE") == "1":
         _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
+
+
+# ★★★ NVTX 阶段标注（E01 / A5 的门槛，2026-08-17 加）
+#
+# nsys 采到 trace 之后才发现：**切不开阶段**。verl 里那个上下文管理器叫
+# `marked_timer`，docstring 写着 "adds platform markers for profiling" ——
+# 而**函数体只是 `yield from _timer(...)`，一个 marker 都没有**
+# （`verl/utils/profiler/performance.py:172`）。
+# ⇒ 又一个「名字在、机制没接上」，这次在上游。
+#
+# 打上之后，nsys 的 trace 里就有 `gen / old_log_prob / ref / update_actor / param_sync`
+# 这些 range，kernel 才能按阶段归属 —— **这是 B12/E17 的门槛**：
+# 没有阶段归属，「ref 那一遍前向能省多少」就只能猜。
+#
+# ⚠️ 两个作用域细节（都踩过同型的坑）：
+#   ① 消费方写的是 `from verl.utils.debug import marked_timer` ⇒ **import 时就绑死了名字**，
+#      只改源模块**对已经导过的模块无效** ⇒ 必须把所有 sys.modules 里指向原函数的名字一起换。
+#   ② 阶段 range 打在 **trainer driver** 进程，kernel 跑在 **WorkerDict** 进程 ——
+#      两者靠 nsys 的**同一条时间轴**对齐（按时间区间归属），不是靠同进程。
+_NVTX_ORIGINALS: set = set()
+
+
+def _rebind_everywhere(mapping: dict) -> int:
+    """把 sys.modules 里所有指向 `mapping` 里旧函数的属性换成新函数。返回换了几处。"""
+    import sys
+
+    n = 0
+    for mod in list(sys.modules.values()):
+        if mod is None:
+            continue
+        for attr in ("marked_timer", "simple_timer"):
+            cur = getattr(mod, attr, None)
+            if cur is not None and cur in mapping:
+                try:
+                    setattr(mod, attr, mapping[cur])
+                    n += 1
+                except Exception:      # noqa: BLE001 - 只读模块跳过即可
+                    pass
+    return n
+
+
+def _patch_nvtx_timers() -> None:
+    """给 verl 的每个计时段套一层 NVTX range（`SYNCOPATE_NVTX=1` 才开）。"""
+    from contextlib import contextmanager
+
+    from verl.utils.profiler import performance as perf
+
+    if getattr(perf, "_syncopate_nvtx", False):
+        return
+
+    def wrap(orig, tag):
+        @contextmanager
+        def inner(name, timing_raw, *a, **kw):
+            import torch
+
+            torch.cuda.nvtx.range_push(f"syncopate/{name}")
+            try:
+                with orig(name, timing_raw, *a, **kw):
+                    yield
+            finally:
+                torch.cuda.nvtx.range_pop()
+
+        inner.__name__ = tag
+        return inner
+
+    mapping = {}
+    for attr in ("marked_timer", "simple_timer"):
+        orig = getattr(perf, attr, None)
+        if orig is None:
+            continue
+        new = wrap(orig, attr)
+        mapping[orig] = new
+        setattr(perf, attr, new)
+    _NVTX_ORIGINALS.update(mapping)
+    n = _rebind_everywhere(mapping)
+    perf._syncopate_nvtx = True
+    # 判据行：没有这行就是没生效（本项目纪律）。带上换了几处，方便判断是不是只改到源模块。
+    print(f"[verl-patch] NVTX 阶段标注 ✓ 已替换 {n} 处引用（marked_timer/simple_timer）", flush=True)
+
+
+def _patch_nvtx_timers_or_rebind() -> None:
+    """第一次调用 = 打补丁；之后每次 = 把新导入的模块里那份旧引用再换掉。"""
+    _patch_nvtx_timers()
+    if _NVTX_ORIGINALS:
+        from contextlib import suppress
+        with suppress(Exception):
+            import sys
+
+            from verl.utils.profiler import performance as perf
+            _rebind_everywhere({o: getattr(perf, o.__name__, None) for o in _NVTX_ORIGINALS
+                                if getattr(perf, o.__name__, None) is not None})
 
 
 def _patch_pool_sampler() -> None:
@@ -486,3 +586,13 @@ def apply(mode: str) -> None:
         _patch_one_step_off_dump_executor()
     if mode == "fully_async":
         _patch_fsdp_cpu_copy_for_ddp()
+    # ★ NVTX 阶段标注要**两侧都打**：range 打在 driver（阶段边界在这），
+    #   kernel 跑在 worker（setup_worker 那边挂）。两边靠 nsys 的同一条时间轴对齐。
+    if os.environ.get("SYNCOPATE_NVTX") == "1":
+        for _m in ("verl.utils.profiler.performance",
+                   "verl.utils.debug",
+                   "verl.trainer.ppo.ray_trainer",
+                   "verl.experimental.fully_async_policy.fully_async_trainer",
+                   "verl.experimental.fully_async_policy.fully_async_rollouter",
+                   "verl.experimental.one_step_off_policy.ray_trainer"):
+            _defer_until_imported(_m, _patch_nvtx_timers_or_rebind)

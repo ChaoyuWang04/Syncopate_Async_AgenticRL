@@ -85,7 +85,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | # | 实验组 | 一句话 | Track | 状态 | 优先 | GPU |
 |---|---|---|---|---|---|---|
 | **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | A+B | 🟡 | 🔴 | 🔴 |
-| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台） | A+B | ⬜ | 🔴 | 🐟 |
+| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台）。🆕 **算子构成已拿到**（trainer gemm 58%/attn 12%/elementwise 24%；rollout gemm 53%/attn 42%），**全部 GEMM 是 `cutlass_80`（Ampere 代）**，且 **E13 的修复在 kernel 层被证实**（每步 CPU 快照 8.31→0.26 GB）。⚠️ **阶段归属还差 NVTX** —— verl 的 `marked_timer` 名字在、marker 一个没有 ⇒ 已写补丁（`--nvtx`） | A+B | 🟡 **部分完成** | 🔴 | 🐟 采 + 🔴 重采 |
 | **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 结论方向已定（DDP 赢），⚠️ **三档稳态对照在当前拓扑下尚无数据** ⇒ 队列 **A6**，它决定筛子②还剩多少力气 | 🔴 | 🔴 |
 | **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮、重叠率、bucket 大小 | **A** | 🟡 数据已有待成文：CUMEM=0 6.4GB/s vs SHM_DISABLE 2.1 | 🟠 | 🟢 成文 |
 | **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 🆕 **TP=2 限制在同一 socket 内**（组内 28.8 GB/s）净正还是净负 | **A** | ⬜ | 🔴 探针 | 🔴 |

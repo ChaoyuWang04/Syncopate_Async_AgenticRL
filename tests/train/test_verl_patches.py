@@ -132,3 +132,63 @@ def test_full_finetune_model_still_saves_everything() -> None:
         p.requires_grad = True
     state, _ = ddp_save_to_cpu(model)
     assert "base.weight" in state and "base.bias" in state
+
+
+def test_nvtx_wrapper_keeps_timing_semantics(monkeypatch):
+    """NVTX 包装**不许**改变计时语义：耗时照记、异常照抛、range 成对。
+
+    ★ 为什么要守：这层包装是为了让 nsys 能按阶段归属 kernel（E01 §8-1 / B12 的门槛）。
+    如果它顺手吞了异常或漏了 `range_pop`，后果是**trace 里的层级全乱**，
+    而且要等到分析 trace 那一刻才发现 —— 那时 GPU 时间已经花掉了。
+    """
+    import sys
+    from contextlib import contextmanager
+    from types import ModuleType, SimpleNamespace
+
+    from syncopate.train import verl_patches as vp
+
+    pushed: list[str] = []
+    fake_torch = ModuleType("torch")
+    fake_torch.cuda = SimpleNamespace(nvtx=SimpleNamespace(
+        range_push=lambda n: pushed.append(n),
+        range_pop=lambda: pushed.append("<pop>"),
+    ))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    # 造一个最小的 verl.utils.profiler.performance
+    calls: dict = {}
+
+    @contextmanager
+    def orig_marked(name, timing_raw, *a, **kw):
+        timing_raw[name] = timing_raw.get(name, 0) + 1
+        calls["entered"] = name
+        yield
+
+    perf = ModuleType("verl.utils.profiler.performance")
+    perf.marked_timer = orig_marked
+    profiler_pkg = ModuleType("verl.utils.profiler")
+    profiler_pkg.performance = perf
+    profiler_pkg.marked_timer = orig_marked          # 模拟「已经被别人绑走的名字」
+    for name, mod in [("verl", ModuleType("verl")), ("verl.utils", ModuleType("verl.utils")),
+                      ("verl.utils.profiler", profiler_pkg),
+                      ("verl.utils.profiler.performance", perf)]:
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    vp._patch_nvtx_timers()
+
+    timing: dict = {}
+    with perf.marked_timer("update_actor", timing):
+        pass
+    assert timing["update_actor"] == 1          # 原来的计时行为没变
+    assert pushed == ["syncopate/update_actor", "<pop>"]
+    # ★ 已经被别的模块绑走的那份引用也要换掉（否则补丁只对源模块生效）
+    assert profiler_pkg.marked_timer is perf.marked_timer
+
+    # 异常路径：必须抛出去，且 range 仍然闭合
+    pushed.clear()
+    try:
+        with perf.marked_timer("ref", timing):
+            raise ValueError("boom")
+    except ValueError:
+        pass
+    assert pushed == ["syncopate/ref", "<pop>"]

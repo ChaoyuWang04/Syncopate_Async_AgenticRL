@@ -1,0 +1,204 @@
+# E01 · 一步的时间去哪了（nsys 拆解）
+
+> 状态：🟡 **部分完成**（算子构成已拿到，阶段归属还差 NVTX）　最后更新：2026-08-17
+
+## 0 · 结论卡片
+
+| | |
+|---|---|
+| **Track / 兑现物** | **A + B 共用的分母与裁判**。队列 **A5**，同时是 **B12/E17**（三次前向占步 84.9%）与 **E14**（消泡）的门槛 |
+| **需求从哪来** | 占空比 31%、三次前向占步 72–85% —— 这些都是**从 timing 行外部**量的。要问「那 72% 里到底在算什么」，只能进到 kernel 层 |
+| **这次拿到了什么** | ① trainer / rollout 各自的**算子构成**；② 所有 GEMM 都是 `cutlass_80_*`（Ampere 代 tensorop）；③ **E13 的修复被独立证实**：稳态每步 CPU 快照只剩 **0.26 GB**；④ 一次 **8.31 GB 的 D2H→H2D 往返**（一次性事件，疑似 ckpt 保存） |
+| **这次没拿到什么** | **阶段归属**（update_actor / old_log_prob / ref 各占多少 GPU 时间）—— verl 默认不打 NVTX，trace 里只有 3 条 NCCL 自带的 range。⇒ 必须先给 verl 打 NVTX，见 §8 |
+| **信心** | 构成比 **中高**（三个 trainer rank 各自独立算出来几乎相同：gemm 58/59/60%）；**绝对时长不可用**（trace 被截断，见 §7-2） |
+| **成本** | **零 GPU** —— 这份 trace 是主线自己采的，我们只读（`logs/nsys/e01_rl_v13.nsys-rep`） |
+
+---
+
+## 1 · 问题与预测
+
+**问题**：`update_actor + old_log_prob + ref` 占一步的 72–85%。**那段时间的 GPU 在算什么？**
+
+**★ 预测（看数据之前写死）**
+
+> **P1**：trainer 侧 GPU 时间以 **GEMM 为主（>50%）**，其中 lm_head 投影是可辨认的一大块
+> —— 这是 E11「监督密度 4.17%，95.8% 的 lm_head 白算」赖以成立的前提。
+> **如果 GEMM 不占大头**，E11 的整条论证就要重估。
+>
+> **P2**：attention 占比**不大**（<20%）—— 我们的序列只有 3.5k+1.5k，不是长上下文负载。
+>
+> **P3**：能按阶段切开。（⛔ **这条当场就错了** —— 没有 NVTX 就切不开，见 §6.1）
+
+---
+
+## 2 · 环境指纹
+
+```
+日期        2026-08-17 16:35–16:37（主线 m7b_v13e1 那一跑的采样窗口）
+采集        nsys profile --delay 900 --duration 180 --trace=cuda,nvtx,osrt
+            ★ 不是我们发起的 —— 主线为自己的目的采的，我们零成本复用
+            ⚠️ 那一跑随后被主线弃掉重跑（ckpt 目录改名 m7b_v13e1_nsys_aborted）
+机器        4×RTX 5090 / sm_120 · 2 socket EPYC 9V74（2+2）· P2P 全关
+配置        fully_async 3 trainer + 1 rollout · Qwen3-4B + LoRA r32 · bucket 512
+            dynamic_bsz=False · max_prompt 3584 / max_response 1536 · rollout.n=8
+尺子        scripts/analyze_nsys_step.py（🆕）
+原始数据    logs/nsys/e01_rl_v13.nsys-rep（386 MB）
+            _audit/infra/e01_nsys.json · _audit/infra/nsys/e01_*.csv
+⚠️ 中间产物 logs/nsys/e01_rl_v13.sqlite 有 **9.4 GB**，分析完就删（要用再 export 一次）
+```
+
+---
+
+## 3 · 方法
+
+```
+① nsys stats --report cuda_gpu_kern_sum/cuda_gpu_sum/cuda_api_sum   全局排行（先看有没有料）
+② export sqlite → 按 **进程 × 算子类别** 聚合                         ★ trainer 和 rollout 靠这个分开
+③ 按 5 秒分桶看 H2D/D2H 的时间分布                                    区分「一次性事件」和「每步都在搬」
+```
+
+★ ②是关键：`trainer` 与 `rollout` 在同一份 trace 里，不按进程拆就分不出
+`update_actor` 和 `gen`。而 ③ 是把「8.31 GB」从「每步 8 GB」的误读里救出来的那一步。
+
+---
+
+## 4 · 数据
+
+### 4.1 算子构成（占各自 GPU kernel 时间）
+
+| 进程 | 角色 | gemm | attention | elementwise | reduce | norm/softmax |
+|---|---|---|---|---|---|---|
+| `ray::WorkerDict` ×3 | trainer | **58 / 59 / 60%** | 12 / 10 / 10% | 24 / 25 / 25% | 2% | 2% |
+| `VLLM::Worker` | rollout | **53%** | **42%** | 2% | — | 3% |
+
+⇒ **P1 成立**（GEMM 过半）、**P2 成立**（trainer 侧 attention 只有 10–12%）。
+⇒ ★ **三个 trainer rank 各自独立算出来几乎相同** —— 这是构成比可信的最好证据
+（绝对时长不可信，见 §7-2）。
+⇒ rollout 侧 attention 占 42%，是 trainer 的 4 倍 —— decode 阶段本来就是 attention-bound。
+
+### 4.2 最贵的 kernel
+
+```
+19.20 s  cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_tn_align8   27996 次
+10.10 s  kernel_unified_attention_2d                                            32652 次   ← vLLM
+ 6.24 s  cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8    7786 次
+ 3.98 s  flash::flash_fwd_kernel<128,128,64,4,…>                                 4979 次   ← FA2 前向
+ 3.65 s  cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x256_32x4_tn_align8     29004 次
+ 1.98 s  cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8    47294 次
+ 1.36 s  flash::flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel<128,64,64,8,…>        816 次   ← FA2 反向
+```
+
+★★ **全部 GEMM 都是 `cutlass_80_*`** —— 即 **SM80（Ampere）代的 tensorop 路径**
+（`s16816` = `mma.sync.m16n8k16`）。这台是 **sm_120**，跑的却是 Ampere 代 kernel。
+
+⇒ 这与 `TRACK-A §2.3` 的论断**一致且是第一次有实测支撑**：
+sm_120 没有 TMEM，编程模型退回 Ampere 式 `mma.sync`；生态几乎没人为它单独点亮什么。
+⇒ **E16（sm_120 能力探底）的立足点从「文档这么说」变成「我们自己的热点路径就是这样」。**
+⚠️ 成立范围：这只说明**当前栈选了 Ampere 路径**，不等于「sm_120 上不可能更快」——
+后者正是 E16 要回答的。
+
+### 4.3 ★ H2D / D2H 的时间分布（每 5 秒一桶，只列 >0.05 GB）
+
+```
+pid=909641(trainer)   t= 0- 5s  D2H  8.31 GB    t= 5-10s  H2D  8.31 GB    t=20-25s  D2H 0.26 GB
+pid=909637(trainer)   t= 0- 5s  D2H  8.31 GB    t= 5-10s  H2D  8.31 GB    t=20-25s  D2H 0.26 GB
+pid=909636(trainer)   t= 0- 5s  D2H  8.31 GB    t= 5-10s  H2D 17.13 GB    t=20-25s  D2H 0.26 GB
+                      t=50-55s  H2D 0.26 / D2H 0.26 GB   t=60-65s  H2D 0.27 GB
+```
+
+**两条结论，方向相反，必须分开读：**
+
+1. ✅ **E13 的修复被独立证实**。稳态里每次 CPU 快照只搬 **0.26 GB**
+   —— 正是 LoRA 那 3.18%。E13 修的是 `ddp_save_to_cpu` 加一行 `if param.requires_grad`，
+   **这里第一次在 kernel 层看到它生效**（而不是只看 timing 行变快了）。
+   ★ 8.309 GB → 0.26 GB，与 E13 报告的比例吻合。
+
+2. ⚠️ **窗口开头有一次 8.31 GB 的 D2H → H2D 往返，每个 rank 都付。**
+   **一次性，不是每步**（③ 的分桶就是为了区分这个）。
+   **假设**：这是 `save_freq=25` 在 global_step 25 的那次 ckpt 保存
+   （模型整体下 CPU → 写盘 → 再上来），rank0 多出的 8.8 GB 是它额外承担的聚合。
+   ⛔ **未验证** —— 那一跑被弃掉、日志被覆盖，`global_step_25` 目录也没留下。
+   ⇒ 复现方法写在 §8-2（在我们自己的跑上开一次 `--save-freq` 对照）。
+
+### 4.4 CUDA API 侧（全局）
+
+```
+32.1%  cudaStreamSynchronize   23110 次  中位 3.2 µs / 最大 267 ms   ← 等
+23.2%  cudaMemcpyAsync         58006 次
+15.9%  cudaEventSynchronize     1212 次  最大 356 ms
+14.2%  cudaLaunchKernel       925307 次  中位 4.2 µs
+```
+
+⇒ **92.5 万次 kernel launch**，中位 4.2 µs ⇒ 光启动开销就有 **~3.9 s**（占窗口 5%）。
+⚠️ 这个数**只在「小 kernel 太多」时才值得动**，而现在 GEMM 占 58%、单个 GEMM 中位 560 µs
+⇒ **不是瓶颈，别去优化它**（记下来是为了防止后人把它当成一个靶子）。
+
+---
+
+## 5 · 结论
+
+1. **trainer 侧 GPU 时间的主体是 GEMM（58%）**，attention 只有 10–12%，
+   elementwise 有 24–25%（比预期高，值得下一轮细看是谁）。
+2. **当前栈在 sm_120 上跑的是 Ampere 代（`cutlass_80` / `s16816`）的 tensorop kernel。**
+   E16 的立足点从「文档这么说」升级成「热点路径实测如此」。
+3. **E13 已落地的优化在 kernel 层被独立证实**：每步 CPU 快照 8.309 GB → **0.26 GB**。
+4. **一步的时间没能按阶段切开** —— 缺 NVTX，这是本实验唯一真正的缺口（§8-1）。
+
+---
+
+## 6 · ⛔ 推翻了什么
+
+### 6.1 「有了 nsys trace 就能把一步按阶段切开」
+
+> **原猜想**：采到 trace 就能回答「update_actor / old_log_prob / ref 各占多少」——
+> A5 因此被标成「🐟 挂在任意一次训练上零成本做掉」。
+> **实测**：trace 里 NVTX 只有 3 条，全是 NCCL 自己打的（`NCCL Progress 0` ×8、`NCCL` ×4、`CCCL` ×4）。
+> **verl 默认不打阶段 range**，而 CUDA kernel 名字里没有阶段信息。
+> **推翻后**：A5 = 「采 trace」+「**先给 verl 打 NVTX**」两件事，不是一件。
+> 前者零成本、后者要写码，而且**要挂在我们自己的跑上**（改的是启动路径）。
+> **教训**：**「挂在别人的跑上零成本」只对「不需要改被测对象」的观测成立。**
+> 需要打标记的观测，天然要求控制启动 —— 这一条在排队列时被漏掉了，
+> 于是 B12 的门槛看起来比实际低。
+
+### 6.2 「每 rank 每步都在搬 8 GB」（差点写进结论）
+
+> **看到的**：三个 trainer rank 各有 8.31 GB 的 D2H 和 8.31 GB 的 H2D。
+> **差点得出**：E13 的修复没生效 / 又退化了。
+> **实测**：按 5 秒分桶一看，**全部集中在窗口开头的两个桶**，之后每次只有 0.26 GB。
+> **推翻后**：那是一次性事件（疑似 ckpt 保存），稳态是 0.26 GB，**E13 的修复好着**。
+> **教训**：**总量除以时间会把「一次性事件」摊成「持续开销」。**
+>   凡是要区分「一次性 vs 每步」的量，**先按时间分桶再下结论**。
+
+---
+
+## 7 · 踩的坑
+
+1. **`deviceId` 全是 0，不能当成「都在 GPU0 上」。**
+   Ray 给每个 worker 只设一张卡的 `CUDA_VISIBLE_DEVICES` ⇒ 每个进程眼里自己那张卡就是 0。
+   ⇒ 按 `deviceId` 聚合会把四张卡叠成一张，算出「GPU0 忙 97%」这种假数。
+   **正确做法是按进程聚合**（一个进程 = 一张物理卡）。
+   ★ 这和 E18 §7-1（`/proc/<pid>/environ` 是 exec 时快照）同一个形状：
+   **拿到的字段名对，含义却是进程局部的。**
+2. **trace 被截断，绝对时长不可用。**
+   请求 180 s，实际 kernel 只覆盖 **75.17 s**；而且三个 trainer rank 里有两个在 t≈30 s
+   就不再有 kernel（rank0 到 75 s）。
+   ⇒ **不能**据此说「rank0 干了 9 倍的活」。构成比可用（三个 rank 互相印证），时长不可用。
+   ⚠️ 顺带：那一跑的守卫日志显示 **step=25 卡了 12 分钟**（16:38→16:50 无进展），
+   而 `save_freq=25` —— 两条线索**方向一致但都不足以定论**，记在这里供下次核对。
+3. **sqlite 中间产物 9.4 GB**（.nsys-rep 只有 386 MB）。分析完就删，别让它躺在盘上。
+
+---
+
+## 8 · 下一步
+
+1. 🔴 **给 verl 打 NVTX**（🟢 写码，然后挂我们自己的一跑）——
+   在 `update_actor` / `old_log_prob` / `ref` / `gen` / `param_sync` 五处包
+   `torch.cuda.nvtx.range`，**做成可选探针**（沿用 `SYNCOPATE_SYNC_TIMING=1` 那个模式）。
+   ⇒ 这才是 **B12/E17 真正的门槛**：没有阶段归属，就只能猜 ref 那一遍前向省得掉多少。
+2. 🟠 **核实 4.3-② 那次 8.31 GB 往返是不是 ckpt 保存**：在我们自己的短跑上做
+   `--save-freq 999`（不存）vs 存一次的对照，看这个往返在不在。
+   ⇒ 如果是，**「计时短跑必须关保存」就从经验变成有 kernel 级证据的纪律**。
+3. 🟠 **trainer 侧 elementwise 占 24–25%** 是谁 —— 比预期高。
+   最大的一个是 `vectorized_elementwise_kernel<CUDAFunctor_add<BFloat16>>`（1.85 s / 48790 次）。
+   若其中很大一块是 LoRA 的加法或 masking，可能有便宜的合并机会。
+4. ⬜ **E14（消泡）** 的门槛现在只剩 ①。

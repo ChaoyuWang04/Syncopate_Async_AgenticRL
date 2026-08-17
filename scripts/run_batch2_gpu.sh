@@ -136,4 +136,39 @@ if want b3 "${TARGETS[@]}"; then
   run b3_fullyasync    --mode fully_async  --trainer-gpus 3 --rollout-gpus 1 --steps 12 --sync-every 4
 fi
 
-log "════════ 队列结束（本脚本只含 ①②③；④⑤⑥⑦⑧ 由窗口按结果决定后续，见 handoff §5 第 1.6 批）"
+# ═══════════════════════════════════════════════════════════════════════
+# ④ A5 · E01 的阶段归属（nsys + NVTX）—— B12/E17 的门槛
+#
+# ⚠️ 为什么必须是**我们自己**的一跑：`nsys` **只能包住启动，不能事后 attach**；
+#    而且要打 NVTX（`--nvtx`），改的是启动路径。
+#    ⇒ 「挂在别人的跑上零成本」只对不需要改被测对象的观测成立（E01 §6.1 的教训）。
+#
+# ★ 预测：三次前向（update_actor/old_log_prob/ref）在 **kernel 层**的占比与 timing 行
+#   一致（±10 个百分点内）。若差很多，说明有一大块时间**不在 kernel 上**
+#   （等 / H2D / Python），那本身就是更值钱的发现。
+if want a5 "${TARGETS[@]}"; then
+  NSYS=/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys
+  name=a5_e01_nvtx
+  log "════════ $name 开始（nsys 包住启动 + NVTX）"
+  ( set -x; "$NSYS" profile -o logs/nsys/${name} --force-overwrite true \
+      --trace=cuda,nvtx,osrt --delay 420 --duration 180 \
+      .venv/bin/python -m syncopate.train.launch_rl \
+        --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 16 \
+        --sync-every 4 --nvtx \
+        "${COMMON[@]}" --weight-sync-bucket-mb "$BUCKET_DEFAULT" \
+        --save-path "checkpoints/grpo/$name" --experiment "$name" \
+  ) > "logs/${name}.log" 2>&1
+  log "──────── $name 退出码 $?"
+  # 判据①：两侧各一行 NVTX 判据（只有一行 = 作用域漏了一半）
+  grep -c "NVTX 阶段标注 ✓" "logs/${name}.log" | xargs -I{} log "   NVTX 判据行 {} 条（要 ≥2）"
+  "$NSYS" stats --report cuda_gpu_kern_sum --format csv \
+      --output "_audit/infra/nsys/${name}" "logs/nsys/${name}.nsys-rep" >> "$QUEUE_LOG" 2>&1
+  .venv/bin/python scripts/analyze_nsys_step.py "logs/nsys/${name}.sqlite" \
+      --json "_audit/infra/${name}_nsys.json" 2>&1 | tee -a "$QUEUE_LOG"
+  rm -rf "checkpoints/grpo/$name"/global_step_* 2>/dev/null
+  # ⚠️ sqlite 中间产物 9 GB 级，留 .nsys-rep 就够（要用再 export）
+  rm -f "logs/nsys/${name}.sqlite"
+  log "──────── $name 清理完成"
+fi
+
+log "════════ 队列结束（本脚本含 ①A14 ②B2 ③B3 ④A5；⑤B12 ⑥B11 ⑦B10 ⑧A9 由窗口按结果决定，见 handoff §5 第 1.6 批）"

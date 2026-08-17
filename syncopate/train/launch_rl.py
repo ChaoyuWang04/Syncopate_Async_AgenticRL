@@ -651,6 +651,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="LoRA 权重同步时逐层 summon（每层 summon+state_dict+empty_cache）。"
                              "★ 默认 True 只是**保持现状以便对照**——它是为分片 FSDP 设计的，"
                              "而本机 --fsdp-size 1 不分片，很可能是净亏损。见 E12 与代码处注释。")
+    parser.add_argument("--nvtx", action="store_true",
+                        help="给 verl 的每个计时段套一层 NVTX range（E01/A5 的门槛）。"
+                             "★ verl 自己那个 `marked_timer` 的 docstring 说会打 marker，"
+                             "**函数体里一个都没有** ⇒ 不打这个，nsys 的 trace 切不开阶段。"
+                             "只在采 profile 的那一跑开，平时别开。")
     parser.add_argument("--fsdp-size", type=int, default=1,
                         help="FSDP 的切分组大小。★ **本机默认 1 = 不切分 = DDP**。"
                              "-1 是 verl 的默认（全部切分 / FULL_SHARD），"
@@ -767,6 +772,10 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_POOL_STATE"] = str(
         Path(args.pool_state) if args.pool_state else ROOT / args.save_path / "pool_state.json")
     env["SYNCOPATE_POOL"] = "0" if args.no_pool else "1"
+    if args.nvtx:
+        env["SYNCOPATE_NVTX"] = "1"
+        print("[rl] NVTX 阶段标注已开 —— 判据是两侧各一行 `[verl-patch] NVTX 阶段标注 ✓`"
+              "（driver 一行、worker 进程一行）。只有一行就说明作用域又漏了一半。")
     # 薄壳按它选 verl 的哪个 main（三套不同的 trainer，不是一个开关）
     env["SYNCOPATE_RL_MODE"] = args.mode
     # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
