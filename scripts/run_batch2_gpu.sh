@@ -43,15 +43,25 @@ COMMON=(
 # ⚠️ bucket 单独拎出来：B2 要把它当唯一变量扫，塞进 COMMON 里就没法只改它
 BUCKET_DEFAULT=512
 
-# 跑一个 RL 实验：run <名字> <额外参数...>
+# 跑一个 RL 实验：run <名字> <该跑特有的参数...> [Hydra override…]
+#
+# ⚠️ 参数顺序有讲究，两条都踩过或差点踩：
+#   ① **COMMON 在前、单跑参数在后** —— argparse 里后出现的同名参数覆盖前面的，
+#      B2 要把 bucket 当唯一变量扫，就靠这个顺序。
+#   ② **Hydra 的位置参数（`++x=y`）必须排在最后** —— argparse 的 `nargs="*"`
+#      位置参数和选项交错时会解析失败，报错还很难看懂。
+# ⚠️ 每跑套 timeout：夜里没人盯，一次挂死不能把整批吃掉。
+RUN_TIMEOUT="${RUN_TIMEOUT:-5400}"     # 单跑上限（秒）
 run () {
   local name="$1"; shift
   local logf="logs/${name}.log"
   log "════════ $name 开始"
-  ( set -x; .venv/bin/python -m syncopate.train.launch_rl "$@" "${COMMON[@]}" \
-      --weight-sync-bucket-mb "$BUCKET_DEFAULT" \
-      --save-path "checkpoints/grpo/$name" --experiment "$name" ) > "$logf" 2>&1
+  ( set -x; timeout "$RUN_TIMEOUT" .venv/bin/python -m syncopate.train.launch_rl \
+      "${COMMON[@]}" --weight-sync-bucket-mb "$BUCKET_DEFAULT" \
+      --save-path "checkpoints/grpo/$name" --experiment "$name" \
+      "$@" ) > "$logf" 2>&1
   local rc=$?
+  [ "$rc" = "124" ] && log "🔴 $name 撞到 ${RUN_TIMEOUT}s 超时被杀 —— 后面的照跑，别让它吃掉整批"
   log "──────── $name 退出码 $rc"
   .venv/bin/python scripts/parse_fully_async_timing.py "$logf" \
       --json "_audit/infra/${name}_timing.json" 2>&1 | tee -a "$QUEUE_LOG"
@@ -85,7 +95,7 @@ if want a14 "${TARGETS[@]}"; then
     logf="logs/${name}.log"
     log "════════ $name 开始（NCCL_PROTO=$proto，抓 AllGather 字节数）"
     ( set -x; NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING \
-      .venv/bin/python -m syncopate.train.launch_rl \
+      timeout "$RUN_TIMEOUT" .venv/bin/python -m syncopate.train.launch_rl \
         --mode colocate --trainer-gpus 3 \
         --fsdp-size 3 --steps 2 --rollout-gpu-util 0.35 \
         "${COMMON[@]}" --weight-sync-bucket-mb "$BUCKET_DEFAULT" \
@@ -112,7 +122,7 @@ if want b2 "${TARGETS[@]}"; then
     name="b2_bucket${mb}"
     logf="logs/${name}.log"
     log "════════ $name 开始"
-    ( set -x; .venv/bin/python -m syncopate.train.launch_rl \
+    ( set -x; timeout "$RUN_TIMEOUT" .venv/bin/python -m syncopate.train.launch_rl \
         --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 12 \
         --sync-every 4 --staleness-threshold 0.1 \
         "${COMMON[@]}" --weight-sync-bucket-mb "$mb" \
@@ -150,7 +160,7 @@ if want a5 "${TARGETS[@]}"; then
   NSYS=/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys
   name=a5_e01_nvtx
   log "════════ $name 开始（nsys 包住启动 + NVTX）"
-  ( set -x; "$NSYS" profile -o logs/nsys/${name} --force-overwrite true \
+  ( set -x; timeout "$RUN_TIMEOUT" "$NSYS" profile -o logs/nsys/${name} --force-overwrite true \
       --trace=cuda,nvtx,osrt --delay 420 --duration 180 \
       .venv/bin/python -m syncopate.train.launch_rl \
         --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 16 \
