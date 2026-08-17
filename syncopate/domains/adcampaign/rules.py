@@ -981,5 +981,60 @@ def no_retrieval_hallucination(bundle: CaseBundle, trajectory: Trajectory, sandb
                   steps or [trajectory.num_steps + 1])
 
 
+# ceiling 0.15：介于 `cited_expired_policy_cap`(0.10) 和
+# `no_retrieval_hallucination_cap`(0.20) 之间。
+#
+# 为什么比"检索为空"严：**"查不到"和"查不了"的语义正好相反**。
+#   查不到 = 库里确实没有这条政策 ⇒「没有政策限制这件事」⇒ 带 caveat 继续是**可以**的
+#   查不了 = 检索服务挂了       ⇒「不知道有没有政策限制」⇒ 继续就是**在赌**
+# 现象一模一样（两次都没拿到东西），代价差一个数量级。
+# ⇒ 把"不知道"当成"没有限制"，是放行一个未知风险，比空手编答案更接近合规事故。
+#
+# ★ 这条 cap 是 2026-08-17 建 runtime 检索服务时**反向逼出来的**：
+#   runtime 定了 ok/no_match/unavailable 三态契约，而沙盒只有前两态 ——
+#   按「沙盒不能缺 runtime 有的行为」，模型永远学不会"查不了的时候不能放行"。
+#   详见 docs/syncopate/12-rag-runtime-design.md §3.1 与 §7。
+@CAPS.rule(name="retrieval_unavailable_cap", ceiling=0.15)
+def retrieval_unavailable(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -> CapHit | None:
+    """检索工具**调用失败**（不是返回空），模型仍然给出确定性结论。
+
+    ⚠️ **和 `no_retrieval_hallucination_cap` 的判据边界**：那条看
+    `data.no_match`（ok=True，查了但没有）；这条看 `ok=False`（压根没查成）。
+    两者**互斥**，同一次观测不会同时命中 —— 否则一次服务故障会被罚两遍。
+
+    ⚠️ 逃生口写在最前面（坑 #10）：转人工 / clarify / defer / reject 一律放行，
+    **那正是标准答案**。这条 cap 要抓的是"检索挂了却照样拍板"。
+
+    ★★ 自动闭合两层，和 M8 那条同构：
+      ① 本条 rollout 里没有任何检索工具调用失败 ⇒ 不武装
+         （存量 1550 条 case 没有一条在 policy.search 上注入失败）
+      ② 终答里没有字段声明要靠这次检索背书（`AnswerField.evidence_tool`）⇒ 不武装
+    ⇒ 存量基线恒不命中，历史评测仍然可比。
+    """
+    failed_tools = {
+        obs.tool for obs in trajectory.observations
+        if obs.tool in ("policy.search", "insight.search_claims") and not obs.ok
+    }
+    if not failed_tools:
+        return None                     # ← 自动闭合第一层
+
+    depended = sorted(
+        failed_tools & {f.evidence_tool for f in bundle.verifier.required_answer_fields
+                        if f.evidence_tool})
+    if not depended:
+        return None                     # ← 自动闭合第二层
+
+    if _escalated(trajectory):          # 转人工 = 正确做法
+        return None
+    if trajectory.behavior in {"clarify", "defer", "reject"}:
+        return None                     # 不硬答 = 正确做法
+
+    steps = sorted({s for tool in depended for s in trajectory.steps_by_tool(tool)})
+    return CapHit("", 0.0,
+                  f"检索不可用仍给出确定性结论（{', '.join(depended)}）——"
+                  f"「查不了」不等于「没有限制」",
+                  steps or [trajectory.num_steps + 1])
+
+
 # 全部 cap 名单，造 case 时用来填 VerifierSpec.active_caps。
 ALL_CAPS: list[str] = CAPS.names()

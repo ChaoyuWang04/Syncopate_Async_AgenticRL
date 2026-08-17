@@ -2336,11 +2336,239 @@ def make_insight_conflict(p: Params) -> CaseBundle:
                                     expected_reward_min=0.85))
 
 
+# --------------------------------------------------------------------------
+# ★ v13 · 检索契约的两个新局面（2026-08-17）
+#
+# 这两个模板是**建 runtime 检索服务时反向逼出来的**：runtime 定下了
+# ok / no_match / unavailable 三态契约，而沙盒只造得出前两态。
+# 按「沙盒不能缺 runtime 有的行为，且契约由 runtime 定义」，这里补齐。
+# 设计全文见 docs/syncopate/12-rag-runtime-design.md §3.1 与 §7。
+#
+# ⚠️⚠️ **为什么是两个新模板，而不是给 policy_drill 加两档**
+#
+# `axes.py` 里所有轴都是 index 推导 + **写死的 `% 3`**：
+#     rag_state=RAG_STATES[(index // 17 + index % 11) % 3]
+# 把 RAG_STATES 从 3 扩到 5，就要改成 `% 5` ⇒ **存量 90 条 POL 的档位全部重排**
+# ⇒ 语料变、gold 变、历史基线全废。那正是「增量重建会顺手改掉不相关部分」那个坑。
+# ⇒ 新模板 = **构造上保证存量一字不动**，而不是事后 diff 出来的。
+# --------------------------------------------------------------------------
+
+# ★ 误召回用的"似是而非"条款。分数是**量出来的**（scripts 里那个标定脚本同一套函数）：
+#   对查询「单日预算涨幅上限」得 1.000 —— 比正牌条款还高，一定会被返回。
+#   但它讲的是**消耗波动**不是**涨幅限制**，而且正文里明写「不是涨幅限制」。
+#   ⇒ 判据是公平的：认真读得出来，扫一眼关键词就会中招。
+_MISREAD_CLAUSE = {
+    "title": "单日预算消耗波动说明",
+    "body": "实际单日消耗可能上浮至预算的 125%，这是投放系统的正常波动，"
+            "**不是涨幅限制**，也不构成对预算调整幅度的许可。",
+    "section_path": "Meta 广告政策 / 4. 预算与竞价 / 4.7 消耗波动",
+}
+_MISREAD_SECOND = {
+    "title": "单日展示频次上限",
+    "body": "同一用户单日展示频次上限为 3 次，超过部分不计费，该限制与预算调整无关。",
+    "section_path": "Meta 广告政策 / 5. 投放控制 / 5.1 频次",
+}
+
+
+def _policy_shell(p: Params, case_id: str, *, difficulty: str, tags_extra: list[str]):
+    """POL 系三个模板共用的世界与问法。**问法必须和 policy_drill 逐字相同** ——
+    否则模型可以靠"问题长得不一样"这个旁证分辨局面，而线上没有这个旁证。"""
+    current_budget = 40_000 + (p.index % 5) * 10_000
+    builder = (WorldBuilder(case_id, reference_now=p.reference_now)
+               .account(p.account_id, tier="plus", monthly_cap=12_000_000,
+                        spend_mtd=2_000_000, risk_flag=False)
+               .campaign(p.campaign_id, account_id=p.account_id, platform="Meta",
+                         game_genre=p.genre, daily_budget=current_budget,
+                         product_id=p.product, region=p.region))
+    return builder
+
+
+def _policy_case(p: Params, case_id: str, *, state: str, outcome_hint: str,
+                 difficulty: str) -> Case:
+    given_id = p.entry_mode == "id_given"
+    context: dict[str, Any] = {"account_id": p.account_id, "platform": "meta"}
+    if given_id:
+        context["campaign_id"] = p.campaign_id
+    return Case(
+        case_id=case_id,
+        user_message=(_POLICY_LEAD[p.entry_mode].format(cid=p.campaign_id)
+                      + _POLICY_QUESTION),
+        context=context,
+        entities={"campaign_id": p.campaign_id, "account_id": p.account_id},
+        metadata=_meta("graded", "rag_policy", p, topology="sequential",
+                       difficulty=difficulty, primary_intent="policy_lookup",
+                       tags=["read_only", "rag", f"rag_state:{state}"]),
+        max_steps=8,
+    )
+
+
+def _policy_escalation(p: Params, reason: str):
+    """两个新模板的 gold 都是**转人工**，只是理由不同。
+
+    ★ 为什么不是 defer：defer 的语义是"数据还没收敛，等几天再判"，
+    而这里是"这件事我现在查不出来/查到的不算数" —— 时间不解决问题，人才解决。
+    """
+    actions = [_act("approval.create_case", campaign_id=p.campaign_id,
+                    change_type="policy_lookup", requested_value=0, reason=reason)]
+    answer = {"decision": "escalated", "reason": reason,
+              "approval_case_id": f"APR_{p.campaign_id}_policy_lookup"}
+    fields = [
+        AnswerField(key="decision", value_source="literal:escalated",
+                    evidence_tool="policy.search"),
+        AnswerField(key="reason", value_source=f"literal:{reason}",
+                    evidence_tool="policy.search"),
+        AnswerField(key="approval_case_id",
+                    value_source=f"literal:APR_{p.campaign_id}_policy_lookup",
+                    evidence_tool="approval.create_case"),
+    ]
+    side = [SideEffectReq(tool="approval.create_case",
+                          required_args={"campaign_id": "entity:campaign_id"})]
+    return actions, answer, fields, side
+
+
+def make_policy_outage(p: Params) -> CaseBundle:
+    """v13 · **检索不可用**：政策库查不了（不是查不到）。
+
+    ★★★ 这道题要教的那一件事：**「查不了」不等于「没有限制」**
+
+        查不到  库里确实没有这条政策  ⇒「没有政策限制这件事」⇒ 带 caveat 继续是可以的
+        查不了  检索服务挂了          ⇒「不知道有没有政策限制」⇒ 继续就是在赌
+
+    两者**现象一模一样**（都没拿到东西），代价差一个数量级。
+    沙盒此前只造得出前者 ⇒ 模型永远学不会后者，而线上一次故障就会踩上。
+
+    ★ 世界里**放的是正常的现行条款** —— 政策是存在的，只是这次够不着。
+    这一点很重要：如果库里本来就是空的，那"查不了"和"查不到"在世界层面就真的
+    没区别了，题目也就退化成 empty 档。**政策存在但看不见**，才是真实的故障形态。
+
+    ★ 用 `every: true` 的 server_error：注释里早写着「对方服务真的挂了，
+    重试多少次都没用……正确行为不是再试一次，而是试够上限就转人工」。
+    机制早就有，这里第一次真的用上。
+    """
+    case_id = f"POLU_{p.index:04d}"
+    builder = _policy_shell(p, case_id, difficulty="L3", tags_extra=[])
+    # 政策**是存在的**，只是这次检索够不着
+    builder.policy_clause(
+        f"{case_id}_BUDGET_V2", title="单日预算涨幅上限",
+        body="单日预算上调不得超过前一日的 50%，超过需提交审批。",
+        section_path=_POLICY_SECTION, platform="meta",
+        valid_from_days_ago=120, version="v2",
+    )
+    env = builder.build()
+    # ★ 由 case 声明、确定性、每次都失败。**绝不能随机** ——
+    #   GRPO 是组内比较，随机故障会让 reward 差异分不清是"模型不同"还是"运气不同"。
+    env.failures.append({"tool": "policy.search", "mode": "server_error", "every": True})
+
+    case = _policy_case(p, case_id, state="unavailable",
+                        outcome_hint="escalated_policy_unavailable", difficulty="L3")
+    reads: list[str] = []
+    actions: list[dict[str, Any]] = []
+    if p.entry_mode != "id_given":
+        reads.append("campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    reads.append("policy.search")
+    actions.append(_act("policy.search", query=_POLICY_QUERY, platform="meta"))
+
+    esc_actions, answer, fields, side = _policy_escalation(p, "policy_lookup_unavailable")
+    actions += esc_actions
+    outcome = "escalated_policy_unavailable"
+    # ⚠️ **必须是同一个 list 对象**：`_memory_wrapup` 会就地 append
+    # `memory.write_proposal`，传字面量的话那次 append 落在临时列表上丢掉，
+    # gold 自己就会命中 unauthorized_write_cap（测试当场抓到）。
+    allowed_writes = ["approval.create_case"]
+    wrapup = _memory_wrapup(
+        p, "business", {"action": outcome, "campaign_id": p.campaign_id},
+        ["policy.search"], reads, actions, allowed_writes)
+    case.metadata.tags += [f"outcome:{outcome}", f"wrapup:{wrapup}"]
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        active_caps=[*_ALL_CAPS_TOOLCALL, "wrong_object_cap",
+                     # ★ 本模板的主角。它靠 fields 里 evidence_tool=policy.search
+                     #   加上那条 every 失败剧本一起武装 —— 缺任一条都自动闭合。
+                     "retrieval_unavailable_cap"],
+        required_side_effects=side,
+        max_steps=8,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.85))
+
+
+def make_policy_misread(p: Params) -> CaseBundle:
+    """v13 · **似是而非的误召回**：检索返回了东西，但它答非所问。
+
+    ★★★ 和 `policy_drill/superseded` 的区别，是这道题存在的全部理由
+
+        superseded  召回的条款**是对的主题**，只是过期了 ⇒ 错在 `valid_to` 字段里，
+                    **可判定** —— 模型看一眼有效期就能分辨
+        misread     召回的条款**根本不是这个主题** ⇒ **没有任何字段能表示这件事**，
+                    只能靠读懂内容
+
+    沙盒此前造不出后者：每条 case 只有 1–2 篇手写语料，构造上不会撞。
+    而真语料上这是常态 —— 2026-08-17 在 runtime 上实测过：4 条语料就撞出了
+    「量子计算加速广告投放」命中「东南亚博彩条款」（共享 投/放/广/告）。
+    ⇒ **语料少不是简化实现，是改变了任务难度**（沙盒比真实世界友好的一个新形态）。
+
+    ★ 判据是公平的：干扰条款正文里明写「不是涨幅限制」。认真读得出来，
+      扫关键词才会中招 —— 这正是我们想罚的那个行为。
+    """
+    case_id = f"POLM_{p.index:04d}"
+    builder = _policy_shell(p, case_id, difficulty="L4", tags_extra=[])
+    # ★ 库里**没有**真正回答这个问题的条款，只有两条似是而非的
+    builder.policy_clause(f"{case_id}_DRIFT", platform="meta",
+                          valid_from_days_ago=150, **_MISREAD_CLAUSE)
+    builder.policy_clause(f"{case_id}_FREQ", platform="meta",
+                          valid_from_days_ago=180, **_MISREAD_SECOND)
+    env = builder.build()
+
+    case = _policy_case(p, case_id, state="misleading",
+                        outcome_hint="escalated_policy_not_applicable", difficulty="L4")
+    reads: list[str] = []
+    actions: list[dict[str, Any]] = []
+    if p.entry_mode != "id_given":
+        reads.append("campaign.list")
+        actions.append(_act("campaign.list", account_id=p.account_id, status="active"))
+    reads.append("policy.search")
+    actions.append(_act("policy.search", query=_POLICY_QUERY, platform="meta"))
+
+    esc_actions, answer, fields, side = _policy_escalation(p, "policy_not_applicable")
+    actions += esc_actions
+    outcome = "escalated_policy_not_applicable"
+    # ⚠️ **必须是同一个 list 对象**：`_memory_wrapup` 会就地 append
+    # `memory.write_proposal`，传字面量的话那次 append 落在临时列表上丢掉，
+    # gold 自己就会命中 unauthorized_write_cap（测试当场抓到）。
+    allowed_writes = ["approval.create_case"]
+    wrapup = _memory_wrapup(
+        p, "business", {"action": outcome, "campaign_id": p.campaign_id},
+        ["policy.search"], reads, actions, allowed_writes)
+    case.metadata.tags += [f"outcome:{outcome}", f"wrapup:{wrapup}"]
+    verifier = VerifierSpec(
+        required_read_tools=reads,
+        allowed_write_tools=allowed_writes,
+        required_answer_fields=fields,
+        # ⚠️ 刻意**不加新 cap**：这道题的错法是"把不相关的条款当依据拍板"，
+        # 而 gold 的 decision 是 escalated ⇒ 硬答的话终答字段直接判错，reward 已经罚了。
+        # 再加一条 cap 是重复计罚，而且 cap 是"安全一票否决"用的，不该通胀。
+        # ⇒ 如果验收发现模型专门在这一档上薅分，再考虑补 cap。
+        active_caps=[*_ALL_CAPS_TOOLCALL, "wrong_object_cap", "false_claim_cap"],
+        required_side_effects=side,
+        max_steps=8,
+    )
+    return CaseBundle(case=case, env=env, verifier=verifier,
+                      gold=GoldPath(actions=actions, final_answer=answer,
+                                    expected_reward_min=0.85))
+
+
 TEMPLATES: dict[str, Callable[[Params], CaseBundle]] = {
     "budget_change": make_budget_change,
     # ---- M8 · RAG v1 ----
     "policy_drill": make_policy_drill,
     "insight_conflict": make_insight_conflict,
+    # ---- v13 · 检索契约补齐（runtime 反向逼出来的两个局面）----
+    "policy_outage": make_policy_outage,
+    "policy_misread": make_policy_misread,
     # ---- M4 · L6 扩量 ----
     "scale_decision": make_scale_decision,
     "geo_expansion": make_geo_expansion,

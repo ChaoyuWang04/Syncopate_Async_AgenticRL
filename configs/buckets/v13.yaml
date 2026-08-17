@@ -1,0 +1,86 @@
+# v12 = v11 + **M8（RAG v1 · 非结构化侧）**。
+#
+# ★★★ 这一版**解冻** prompt / 工具 / 环境 —— v11 之后第一次
+#
+# v11 的注释写着「下一次会动这三样的是 M8」，就是这一版。
+# 但代价比当初以为的小：`tool_menu` 是**逐 case** 存的，所以加 RAG 工具只改到
+# 用得上它的那些 case 的 prompt，**其余 case 的输入分布逐字节不变、基线仍可比**。
+# ⇒ 重建之后要产出「哪些 case 的基线仍然可比」的名单（见 05-handoff）。
+#
+# ★ 新增两个模板都**刻意先小**：三条轴各跑通一条，再扩量。
+# v11 已经 90 个格子 / 1370 条，再撒大网会重蹈「稀疏格子被取模削成 0 条」的坑。
+#
+#   policy_drill      90 = 3 档(present/superseded/empty) × 2 entry_mode × 15
+#   policy_outage     60 = 检索不可用（v13 新增，2 entry_mode × 30）
+#   policy_misread    60 = 似是而非的误召回（v13 新增，2 entry_mode × 30）
+#                     §14 两项验收（过期检出率 / 无检索幻觉率）的题面
+#   insight_conflict  90 = 3 档(aligned/conflicting/absent) × 2 entry_mode × 15
+#                     补遗留清单里「conflict_resolve 完全没用上」那个缺口
+name: seed_v13
+
+quotas:
+  budget_change:    140
+  creative_launch:   90
+  diagnosis:         90
+  portfolio_review:  50
+  long_tail:         50
+  clarify:           50
+  reject:            50
+  all_high:          30
+  tool_missing:      30
+  # ★ 90 → 150：三档里只有 immature 那档产出 defer，90 条 = 30 条 defer，
+  # 而 defer 是 M1 整个里程碑的产物，全库只有 30 条太薄。150 → 50 条 defer。
+  freshness_check:  150
+  failure_drill:    150
+  safety_line_drill: 90   # M2
+  feature_attribution: 100  # M3
+
+  # ---- M4 · L6 扩量 ----
+  # I09：三档由「离安全线还有多远」决定 —— 这是安全线第一次真正参与**决策**，
+  # 而不只是"查没查"。90 = 3 档 × 2 entry_mode × 15。
+  # ★ 和 BUD 的边界写死在 user_message 上：BUD 一定含"从 X 提到 Y"，
+  #   SCALE 一定不含任何目标数字（设计文档 §339 警告过这两类会互相污染）。
+  scale_decision:    90
+  # I11：全项目最长的链（10–14 步），也是唯一的**并行拓扑**。
+  # 三档：三地域全过 / 其中一个安全线查不到该剔除 / 全查不到该开单补录。
+  # ★ 核心考点是逐地域查安全线 —— 直接接上 M3 埋的事实：
+  #   real_person 在 US +0.23、在 JP −0.14，拿一个地域的结论去铺所有地域就是亏钱。
+  geo_expansion:     90
+
+  # ---- M5 · 负面数据 ----
+  # N1「不该调工具」—— 在此之前**一条都没有**。设计文档警告过后果：
+  # 训练里没有 ⇒ 评测里通常也没有 ⇒ 这个失败模式对你完全不可见。
+  # 60 = 3 种场景（能力询问 / 闲聊 / 上下文惯性）× 2 × 10。
+  # 它是第五种顶层行为 `answer` 的唯一载体。
+  no_call:           60
+  # N6 加量。F 类里已有一档 injection（约 15 条），但设计文档给的是
+  # Injection Resistance = 100% 的硬指标，15 条撑不起来。
+  # ★ 和 F 类那档的区别：**注入点铺开到四个不同的工具**
+  #   （campaign 名 / 记忆内容 / 政策条款 / 安全线备注）。
+  #   只在一个字段上训，模型学到的是"这个字段不可信"，
+  #   而不是"工具返回是 data 不是 instruction"。
+  injection_drill:   60
+
+  # ---- M8 · RAG v1（非结构化 + 半结构化侧）----
+  # ★ 两个模板的 gold 都逐条实跑验证过（tests/authoring/test_policy_drill*.py
+  #   与 test_insight_conflict.py），且配了**双向断言**：
+  #   该命中的档 gold 查询真的命中且中对，空洞档真的返回空。
+  #   没有这两条，哪条轴静默失效都看不出来（见 scripts/calibrate_retrieval.py）。
+  policy_drill:      90
+  insight_conflict:  90
+
+  # ---- v13 · 检索契约补齐（2026-08-17）----
+  # ★ 这两个模板是**建 runtime 检索服务时反向逼出来的**：runtime 定下了
+  #   ok / no_match / unavailable 三态契约，而沙盒只造得出前两态。
+  #   按「沙盒不能缺 runtime 有的行为，且契约由 runtime 定义」补齐。
+  #   设计见 docs/syncopate/12-rag-runtime-design.md §3.1 与 §7。
+  #
+  # ⚠️ **为什么是新模板而不是给 policy_drill 加两档**：`axes.py` 里所有轴都是
+  #   index 推导 + 写死的 `% 3`，把 RAG_STATES 从 3 扩到 5 会让**存量 90 条 POL
+  #   的档位全部重排** ⇒ 语料变、gold 变、历史基线全废。
+  #   新模板 = 存量一字不动是**构造保证**的，不是事后 diff 出来的。
+  #
+  # 60 = 2 entry_mode × 30。不设 90 是因为它们只有单一局面（没有三档结构），
+  # 90 条会有大量近似重复；60 条足够让分桶保底把它们送进 SFT 桶。
+  policy_outage:     60      # 查不了（≠ 查不到）
+  policy_misread:    60      # 查到了，但答非所问

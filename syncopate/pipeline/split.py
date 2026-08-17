@@ -264,6 +264,13 @@ OUTCOME_EVAL_QUOTA = {
     # CONF（结论冲突）—— 非结构化侧
     "answered_from_absent": 6,          # 无检索幻觉率（insight 侧）
     "conflict_reported": 6,             # 历史结论与实测数据打架时怎么办
+    # v13 · 检索契约的两个新局面。★ 加厚的理由和上面四条**一模一样**：
+    # 不加厚的话，(模板 × behavior × 结局 × entry_mode) 这个分层下每格只拿
+    # eval_per_stratum=2，两个 entry_mode 合计 **4 条** —— 错一题就是 25%，
+    # 而这两项要判的是"该转人工的时候有没有转"，同样是趋近某个硬值。
+    # **尺子比要量的东西粗，量出来的数谁也不是**（M8 §6-② 那次已经栽过一回）。
+    "escalated_policy_unavailable": 6,  # 查不了 ≠ 没有限制
+    "escalated_policy_not_applicable": 6,  # 查到了但答非所问
 }
 
 
