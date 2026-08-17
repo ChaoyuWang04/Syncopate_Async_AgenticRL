@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     lease_expires_at  TIMESTAMPTZ,
     attempt           INTEGER     NOT NULL DEFAULT 0,
     user_message      TEXT,
+    -- ★ 端到端延迟的两个锚点（§19 要求「按意图分」的 P50/P95/P99）。
+    -- 不能用 created_at→updated_at 代替：那里面混着排队时间，
+    -- 而"用户等了多久"和"我们跑了多久"是两个不同的问题，混在一起两个都答不了。
+    started_at        TIMESTAMPTZ,
+    ended_at          TIMESTAMPTZ,
     result            JSONB,
     error             TEXT,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -113,7 +118,10 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     external_idempotency_key TEXT,
     -- 同一个幂等键第二次调用时，这里记它命中了哪一行（用于返回原结果而不是重放）
     replayed_from BIGINT REFERENCES tool_calls (id),
-    latency_ms TEXT,
+    -- ⚠️ 这一列**曾经是 TEXT**（而 model_calls.latency_ms 是 INTEGER）。
+    -- 一直没往里写值所以没暴露，但 §19 的「工具调用 P95 < 2s」要按它算 ——
+    -- 类型错了那条门槛就量不了。2026-08-17 改正并接上写入。
+    latency_ms INTEGER,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

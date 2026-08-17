@@ -244,3 +244,42 @@ def test_runtime_threshold_is_deliberately_not_the_sandbox_one() -> None:
     重标定：`python scripts/calibrate_runtime_retrieval.py`。
     """
     assert rt.RUNTIME_MATCH_THRESHOLD > sandbox_corpus.MATCH_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
+# 数据成熟度：归因延迟是第一性约束，这条降级不该缺生产者
+# ---------------------------------------------------------------------------
+
+
+def test_immature_data_stops_the_run_for_approval() -> None:
+    """★ 设计 §0.3：**D7 才知对错，D1 数据极易被误当结论**。
+
+    此前 worker 把 `data_maturity` 硬编码成 `"mature"` ⇒ `data_immature` 这个降级
+    在真实路径上**永远不会发生**。现在它从平台查（`get_freshness`），
+    剧本把数据调成 2 天大 ⇒ 必须停下来开审批单。
+    """
+    import uuid as _uuid
+
+    from syncopate.runtime.db import create_run
+    from syncopate.runtime.platform import FakeAdPlatform, FaultPlan
+    from syncopate.runtime.worker import Worker, WorkerConfig
+
+    async def body(db, _svc):
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE agent_runs SET status='cancelled' WHERE status='queued' "
+                "OR (status='running' AND lease_expires_at < now())")
+        org, run = f"org_{_uuid.uuid4().hex[:8]}", f"run_{_uuid.uuid4().hex[:8]}"
+        await create_run(db, org_id=org, run_id=run, user_message="D1 就砍预算")
+        plat = FakeAdPlatform(faults=FaultPlan(data_age_days=2))     # 远没到 D7
+        w = Worker(db, plat, WorkerConfig(concurrency=1, amount_threshold=10_000_000))
+        for _ in range(50):
+            if await w.run_once() == run:
+                break
+        async with db.tx() as conn:
+            return await conn.fetchval(
+                "SELECT trigger_reason FROM approval_cases WHERE org_id=$1", org)
+
+    reason = with_svc(body)
+    assert reason and "data_immature" in reason, \
+        f"D7 未收敛却没停下来，实得 {reason!r}"

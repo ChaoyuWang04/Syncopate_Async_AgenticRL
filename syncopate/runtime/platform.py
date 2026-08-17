@@ -55,6 +55,8 @@ class FaultPlan:
     timeout_at: set[int] = field(default_factory=set)
     # ★ 超时的那次，副作用**到底发生了没有**。这是两种超时的唯一区别。
     side_effect_applied: bool = False
+    # ★ 数据有多老（天）。默认 7 = 已收敛；调小就能造出「D7 未收敛」的局面。
+    data_age_days: int = 7
     rate_limit_at: set[int] = field(default_factory=set)
     server_error_at: set[int] = field(default_factory=set)
     latency_seconds: float = 0.0
@@ -102,6 +104,19 @@ class FakeAdPlatform:
         if idempotency_key:
             self._seen_keys[idempotency_key] = result
         return result
+
+    async def get_freshness(self, *, campaign_id: str) -> dict[str, Any]:
+        """数据成熟度。★ **归因延迟是第一性约束**（设计 §0.3）：D7 才知对错，
+        D1 数据极易被误当结论。
+
+        真实世界里这个信号来自 MMP 的归因窗口，沙盒里由 case 声明；
+        这里由剧本给（`data_age_days`），**不随机** —— 同失败注入那条纪律。
+        """
+        self.calls += 1
+        age = self.faults.data_age_days
+        maturity = "mature" if age >= 7 else ("partial" if age >= 3 else "immature")
+        return {"campaign_id": campaign_id, "data_age_days": age, "maturity": maturity,
+                "d7_available": age >= 7}
 
     async def get_metrics(self, *, campaign_id: str) -> dict[str, Any]:
         self.calls += 1

@@ -28,7 +28,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from syncopate.runtime.db import Database, create_run
+from syncopate.runtime.db import Database, create_run, resume_after_approval
 
 # --------------------------------------------------------------------------
 # 鉴权：token → org。最小实现，形状是对的。
@@ -215,6 +215,9 @@ def create_app(db: Database | None = None) -> FastAPI:
                 """, org_id, case_ref, body.decision, body.reviewer_id, body.modified_params)
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "审批单不存在或已处理")
+        # ★★ 裁决完必须把 run 放回队列 —— 否则它永远停在 waiting_for_user。
+        # 「暂停就必须能恢复」：网关的输出是暂停不是拒绝，只做前半截等于永久卡死。
+        await resume_after_approval(db, org_id=org_id, run_id=row["run_id"])
         return ApprovalView(**dict(row))
 
     # ---- M9.6 · SSE：事件流 + 断线补发 ----------------------------------

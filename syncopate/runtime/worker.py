@@ -19,7 +19,7 @@ import contextlib
 from dataclasses import dataclass
 from typing import Any
 
-from syncopate.runtime.db import Database, claim_run, finish_run
+from syncopate.runtime.db import Database, approved_action, claim_run, finish_run
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
 from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
@@ -85,6 +85,10 @@ class WorkerConfig:
     poll_interval: float = 0.2
     # 单 org 日预算（微单位）。压测场景⑤「单 org 刷爆预算」要靠它。
     daily_cost_cap_micros: int = 10_000_000
+    # ★ 同时在跑几条。1 = 串行（老行为）。
+    # §19 要求「长任务（480s 审核）**不阻塞其他任务**」+「并发 run 数 ≥ 8」——
+    # 串行实现下这两条**结构上不可能通过**，压测场景①⑤ 也就无从谈起。
+    concurrency: int = 8
     # 审批金额阈值。None = 用 gateway 的默认值。
     # ⚠️ 走配置而不是改模块常量：常量被当默认参数值绑定过一次，改了不生效（见 gateway）。
     amount_threshold: int | None = None
@@ -129,10 +133,12 @@ class Worker:
             return None
         org_id, run_id = claimed["org_id"], claimed["run_id"]
         await emit(self.db, org_id=org_id, run_id=run_id, kind="run.started",
-                   payload={"attempt": claimed["attempt"]})
+                   payload={"attempt": claimed["attempt"],
+                            "automation_tier": claimed.get("automation_tier")})
         try:
             await self._execute(org_id=org_id, run_id=run_id,
-                                user_message=claimed["user_message"] or "")
+                                user_message=claimed["user_message"] or "",
+                                automation_tier=claimed.get("automation_tier"))
         except Exception as exc:                      # noqa: BLE001
             # ★ 兜底：worker 不能因为一条 run 挂掉而停摆（压测场景②）。
             await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
@@ -141,7 +147,32 @@ class Worker:
                              status="failed", error=str(exc)[:500])
         return run_id
 
-    async def _execute(self, *, org_id: str, run_id: str, user_message: str) -> None:
+    async def _execute(self, *, org_id: str, run_id: str, user_message: str,
+                       automation_tier: str | None = None) -> None:
+        # ---- D 档：永不自动，连审批单都不开 ----
+        # ★ §3 的四档里 D 是「不可逆**且**不可验证」（跨账户 / 竞品 / 合规边界 /
+        #   账户级预算）。它和 C 档的区别是**性质**不是程度：C 是"要人点头"，
+        #   D 是"这件事不该由 agent 发起" ⇒ 开审批单反而是错的，那等于把它降成了 C。
+        if automation_tier == "D":
+            await audit(self.db, org_id=org_id, run_id=run_id,
+                        action="tier_d_refused", object_key=None, param_source="system",
+                        detail={"automation_tier": "D"})
+            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
+                       payload={"error": "tier_d_never_automated"})
+            await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
+                             error="tier_d_never_automated")
+            return
+
+        # ---- 已经被人裁决过？那这一跑是**恢复**，不是重新决策 ----
+        decided = await approved_action(self.db, org_id=org_id, run_id=run_id)
+        if decided is not None and decided["status"] == "rejected":
+            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
+                       payload={"error": "approval_rejected",
+                                "case_ref": decided["case_ref"]})
+            await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
+                             error="approval_rejected")
+            return
+
         # ---- 成本闸先于一切：超预算直接降级，不烧模型也不打平台 ----
         if await self._over_budget(org_id):
             await emit(self.db, org_id=org_id, run_id=run_id, kind="run.degraded",
@@ -150,7 +181,9 @@ class Worker:
                              error="daily_cost_cap_exceeded")
             return
 
-        ctx = DecisionContext(automation_tier=None)
+        # ★ automation_tier 终于有消费者了。此前它被 API 校验、被 schema 约束、
+        #   被落库，然后**没有任何人读它** ⇒ C 档动作一路直接执行到底。
+        ctx = DecisionContext(automation_tier=automation_tier)
 
         # ---- step 0：查政策 ----
         # ★ 这一步存在的意义不是"查得准"，是让**「查不到」和「查不了」两个信号
@@ -173,8 +206,13 @@ class Worker:
             ctx.retrieval_unavailable_tools.append("policy.search")
 
         # ---- step 1：读 ----
+        # ★ 数据成熟度**从平台查，不再硬编码**。此前这里写死 `"mature"`，
+        #   于是 `data_immature` 这个降级在真实路径上永远不会发生 ——
+        #   而归因延迟是本项目的第一性约束，这一条是最不该缺生产者的。
+        fresh = await self.platform.get_freshness(campaign_id="CMP_1")
+        ctx.data_maturity = fresh["maturity"]
         await record_step(self.db, org_id=org_id, run_id=run_id, step=1,
-                          phase="investigate", data_maturity="mature")
+                          phase="investigate", data_maturity=fresh["maturity"])
         metrics = await self.tools.call(
             org_id=org_id, run_id=run_id, step=1, tool="campaign.get_metrics",
             arguments={"campaign_id": "CMP_1"},
@@ -186,10 +224,27 @@ class Worker:
         if not metrics.ok:
             ctx.tool_failed = "campaign.get_metrics"
 
+        # ---- 成本闸再查一次：一条 run 自己也可能把额度烧穿 ----
+        # ★ 只在跑之前查一次是不够的：进来时没超，读完之后可能就超了。
+        #   写动作是花钱的那一侧 ⇒ **闸门要放在写之前**，不是只放在门口。
+        if await self._over_budget(org_id):
+            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.degraded",
+                       payload={"reason": "daily_cost_cap", "at": "before_write"})
+            await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
+                             error="daily_cost_cap_exceeded")
+            return
+
         # ---- step 2：决策 + 写 ----
+        # ★ 恢复执行时用**人裁决过的参数**：`modified_params` 优先于 `proposed_params`。
+        #   否则"人工修正"这条飞轮回路只是在记账，改了什么并不影响世界。
         new_budget = 120_000
+        if decided is not None:
+            new_budget = int(decided["params"].get("new_budget", new_budget))
         ctx.write_amount = new_budget
-        triggers = evaluate_triggers(ctx, amount_threshold=self.config.amount_threshold)
+        # ★ 已裁决的动作**不再过网关** —— 否则刚批准就又被同一个触发器拦下来，
+        #   run 在 waiting_for_user 和 queued 之间来回弹，永远跑不完。
+        triggers = ([] if decided is not None
+                    else evaluate_triggers(ctx, amount_threshold=self.config.amount_threshold))
         if triggers:
             # ★ 停下来 ≠ 拒绝：开一张**带证据**的审批单，人看的是证据不是结论。
             case_ref = await open_approval_case(
@@ -236,10 +291,23 @@ class Worker:
         await emit(self.db, org_id=org_id, run_id=run_id, kind="run.succeeded",
                    payload={"new_budget": new_budget})
 
-    async def serve(self, *, stop: asyncio.Event) -> None:
-        """长跑循环。★ 没活干时**睡一下再看**，不是空转 —— 空转会把 CPU 吃满，
+    async def _loop(self, *, stop: asyncio.Event) -> None:
+        """一条工作线。★ 没活干时**睡一下再看**，不是空转 —— 空转会把 CPU 吃满，
         而压测场景①（突发 10× 流量）需要 CPU 留给真正的活。"""
         while not stop.is_set():
             if await self.run_once() is None:
                 with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(stop.wait(), timeout=self.config.poll_interval)
+
+    async def serve(self, *, stop: asyncio.Event) -> None:
+        """长跑。**并发跑 `config.concurrency` 条**。
+
+        ★ 为什么并发放在这里而不是"起多个进程"：一条 run 的时间绝大部分花在
+        **等外部**（打平台、等审核），不是算。等待期让出事件循环就能叠很多条，
+        而 `claim_run` 的 `FOR UPDATE SKIP LOCKED` 保证它们不会抢到同一条。
+
+        ⚠️ 每条工作线用**同一个** `stop`：停的时候要一起停，
+        否则会留下几条还在跑的把 lease 攥着不放。
+        """
+        n = max(1, self.config.concurrency)
+        await asyncio.gather(*(self._loop(stop=stop) for _ in range(n)))

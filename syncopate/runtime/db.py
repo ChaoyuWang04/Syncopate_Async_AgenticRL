@@ -123,23 +123,35 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60) ->
     async with db.tx() as conn:
         row = await conn.fetchrow(
             """
-            WITH claimable AS (
-                SELECT id FROM agent_runs
-                WHERE status = 'queued'
-                   OR (status = 'running' AND lease_expires_at < now())
-                ORDER BY created_at
+            WITH inflight AS (
+                -- 每个 org 当前有多少条在跑（含 lease 还没过期的）
+                SELECT org_id, count(*) AS n FROM agent_runs
+                 WHERE status='running' AND lease_expires_at >= now()
+                 GROUP BY org_id
+            ), claimable AS (
+                SELECT r.id FROM agent_runs r
+                LEFT JOIN inflight i ON i.org_id = r.org_id
+                WHERE r.status = 'queued'
+                   OR (r.status = 'running' AND r.lease_expires_at < now())
+                -- ★★ 公平分配：先按"这个 org 手上已经有几条在跑"排，再按先来后到。
+                -- 之前是纯全局 FIFO ⇒ **一个 org 灌满队列就把别人饿死**
+                -- （压测场景⑤「单 org 刷爆预算」考的正是这个）。
+                -- 它同时也是"长任务不阻塞其他任务"的一半：另一半是并发（见 Worker.serve）。
+                ORDER BY COALESCE(i.n, 0), r.created_at
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE agent_runs r
                SET status = 'running',
+                   started_at = COALESCE(r.started_at, now()),   -- ★ 只记第一次
                    lease_owner = $1,
                    lease_expires_at = now() + make_interval(secs => $2),
                    attempt = r.attempt + 1,
                    updated_at = now()
               FROM claimable c
              WHERE r.id = c.id
-            RETURNING r.run_id, r.org_id, r.user_message, r.attempt
+            RETURNING r.run_id, r.org_id, r.user_message, r.attempt,
+                      r.intent, r.automation_tier, r.requires_approval
             """,
             worker_id, lease_seconds)
         return dict(row) if row else None
@@ -151,9 +163,59 @@ async def finish_run(db: Database, *, org_id: str, run_id: str, status: str,
         await conn.execute(
             """
             UPDATE agent_runs SET status=$3, result=$4, error=$5,
+                   ended_at=now(),
                    lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
              WHERE org_id=$1 AND run_id=$2
             """, org_id, run_id, status, result, error)
+
+
+async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> None:
+    """审批有了结论之后，把 run 放回可抢队列。
+
+    ★★★ 这条函数补的是一个**断掉的闭环**：以前 `POST /approvals/{case_ref}`
+    只 UPDATE 审批单，而 `claim_run` 不认 `waiting_for_user`
+    ⇒ **人点了同意，run 永远不会继续**，飞轮回路 2 的 `modified_params`
+    落了库却没有任何东西会去执行它。
+
+    ★ 恢复语义选的是**从头重跑**，不是从断点续：
+
+        重跑安全   工具级幂等键是 (org, run, 工具, 参数) 的确定性函数 ⇒
+                   已经做过的写动作第二次会命中幂等，**不会重复扣款**
+        断点续贵   要先给 `checkpoints` 补写入路径，而那张表现在没人写
+        代价       重跑一遍读操作。读是便宜的那一侧，这个代价可以接受
+
+    ⇒ 记在这里，因为"为什么不做断点续"以后一定会被再问一次。
+    """
+    async with db.tx() as conn:
+        await conn.execute(
+            """
+            UPDATE agent_runs
+               SET status='queued', lease_owner=NULL, lease_expires_at=NULL,
+                   updated_at=now()
+             WHERE org_id=$1 AND run_id=$2 AND status='waiting_for_user'
+            """, org_id, run_id)
+
+
+async def approved_action(db: Database, *, org_id: str, run_id: str) -> dict | None:
+    """这条 run 有没有一个**已经被人裁决过**的动作。
+
+    ★ 返回 `modified_params`（人改过的）优先于 `proposed_params`（agent 提的）——
+    **人改了什么就执行什么**，否则"人工修正"这条飞轮回路只是记账，不影响世界。
+    """
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT case_ref, action_type, status, proposed_params, modified_params
+              FROM approval_cases
+             WHERE org_id=$1 AND run_id=$2 AND status IN ('approved','modified','rejected')
+             ORDER BY reviewed_at DESC NULLS LAST, id DESC
+             LIMIT 1
+            """, org_id, run_id)
+    if row is None:
+        return None
+    out = dict(row)
+    out["params"] = out["modified_params"] or out["proposed_params"] or {}
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -168,6 +230,45 @@ class ToolCallResult:
     error: str | None
     replayed: bool         # True = 命中幂等键，**没有真的再执行一次**
     call_id: int
+
+
+async def _await_settled_prior(db: Database, org_id: str, key: str,
+                               *, timeout_seconds: float = 5.0,
+                               poll_seconds: float = 0.05):
+    """查同一幂等键的上一次调用；如果它**还在执行中**，等它落定（有上限）。
+
+    ★★★ 为什么需要这个：**"命中一条还在执行中的记录"是第三种情况**
+
+    设计文档 §38 只定义了"已完成"的命中。并发重复投递时（压测场景①、队列重投），
+    第二次命中的是一条**占了坑但 ok/result 还是 NULL** 的行。
+    第一版直接把它当"原结果"返回 ⇒ 调用方拿到 `ok=None`：
+
+        worker 判 `not written.ok` ⇒ run 记成 failed（error 还是 None）
+        **而钱其实已经花出去了** —— 用户被告知失败，账单上却有这一笔。
+
+    ⚠️ 这是**返回空比报错更毒**的又一例（同 flash-attn 反向恒 0 那条）：
+    没有异常、没有日志、状态机看着也正常。
+
+    ⇒ 处理办法两段：① 有界等待，让绝大多数并发重复投递拿到**真的原结果**；
+    ② 等不到就**如实说"处理中"**（`ok=False` + 明确的 error），
+    **绝不冒充成功，也绝不冒充失败**。
+    """
+    import asyncio as _asyncio
+    import time as _time
+
+    deadline = _time.monotonic() + timeout_seconds
+    while True:
+        async with db.tx() as conn:
+            prior = await conn.fetchrow(
+                """
+                SELECT id, ok, result, error FROM tool_calls
+                 WHERE org_id=$1 AND external_idempotency_key=$2 AND replayed_from IS NULL
+                """, org_id, key)
+        if prior is None or prior["ok"] is not None:
+            return prior
+        if _time.monotonic() >= deadline:
+            return prior                     # 仍未落定 ⇒ 上面会返回"处理中"
+        await _asyncio.sleep(poll_seconds)
 
 
 async def record_tool_call(
@@ -187,13 +288,9 @@ async def record_tool_call(
     执行是外部副作用（HTTP 调用），事务回滚**撤销不了它**。
     """
     if external_idempotency_key is not None:
-        async with db.tx() as conn:
-            prior = await conn.fetchrow(
-                """
-                SELECT id, ok, result, error FROM tool_calls
-                 WHERE org_id=$1 AND external_idempotency_key=$2 AND replayed_from IS NULL
-                """, org_id, external_idempotency_key)
-            if prior is not None:
+        prior = await _await_settled_prior(db, org_id, external_idempotency_key)
+        if prior is not None:
+            async with db.tx() as conn:
                 # 命中 ⇒ **返回原结果，不重放**。同时记一条"这次被幂等挡下了"的痕迹，
                 # 否则"到底重试了几次"在事后完全不可见。
                 await conn.execute(
@@ -203,9 +300,16 @@ async def record_tool_call(
                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                     """, run_id, org_id, step, tool, arguments,
                     prior["ok"], prior["result"], prior["error"], prior["id"])
-                return ToolCallResult(ok=prior["ok"], data=prior["result"],
-                                      error=prior["error"], replayed=True,
-                                      call_id=prior["id"])
+            # ok 仍是 NULL ⇒ 那一次至今没跑完（等超时了）。**如实上报"处理中"**，
+            # 绝不冒充成功 —— 见 _await_settled_prior 的说明。
+            if prior["ok"] is None:
+                return ToolCallResult(
+                    ok=False, data=None, replayed=True, call_id=prior["id"],
+                    error="tool_call_in_progress: 同一幂等键的上一次调用仍在执行中，"
+                          "本次**没有**重复执行；结果未知，不要当成失败处理")
+            return ToolCallResult(ok=prior["ok"], data=prior["result"],
+                                  error=prior["error"], replayed=True,
+                                  call_id=prior["id"])
 
     # 占坑（独立事务，先提交）
     async with db.tx() as conn:
@@ -217,9 +321,14 @@ async def record_tool_call(
             """, run_id, org_id, step, tool, arguments, external_idempotency_key)
         call_id = row["id"]
 
+    # ★ 计时从**执行**开始，不含占坑那次写库 —— §19 量的是"打平台花了多久"。
+    import time as _time
+    t0 = _time.perf_counter()
     ok, data, error = await execute()
+    latency_ms = int((_time.perf_counter() - t0) * 1000)
 
     async with db.tx() as conn:
-        await conn.execute("UPDATE tool_calls SET ok=$2, result=$3, error=$4 WHERE id=$1",
-                           call_id, ok, data, error)
+        await conn.execute(
+            "UPDATE tool_calls SET ok=$2, result=$3, error=$4, latency_ms=$5 WHERE id=$1",
+            call_id, ok, data, error, latency_ms)
     return ToolCallResult(ok=ok, data=data, error=error, replayed=False, call_id=call_id)

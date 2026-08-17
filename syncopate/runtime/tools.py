@@ -32,12 +32,22 @@ from typing import Any, Awaitable, Callable
 from syncopate.runtime.db import Database, ToolCallResult, record_tool_call
 from syncopate.runtime.platform import PlatformError
 
-# 写工具白名单 → 需要的权限。不在表里的工具一律当读工具。
+# 写工具白名单 → 需要的权限。
+#
+# ⚠️⚠️ **不在这张表里的工具会被当成读工具** —— 既不校验权限，**也不生成外部幂等键**。
+# 所以"漏登记"的代价不是报错，是**一个写动作悄悄没有幂等保护**。
+# ⇒ `tests/runtime/test_design_conformance.py` 有一条测试守着：
+#   沙盒里每多一个 kind="write" 的工具，这里没跟上就会红。
 WRITE_TOOLS: dict[str, str] = {
     "campaign.update_budget": "budget:write",
     "campaign.create": "campaign:write",
     "campaign.scale_budget": "budget:write",
     "approval.create_case": "approval:write",
+    # 🆕 2026-08-17 补齐：此前这四个在 runtime 侧被当读工具处理
+    "creative.upload": "creative:write",
+    "memory.write_proposal": "memory:write",
+    "memory.invalidate": "memory:write",
+    "memory.conflict_resolve": "memory:write",
 }
 
 MAX_ATTEMPTS = 3          # 和沙盒 core/failures.py 的 MAX_ATTEMPTS 保持一致
@@ -79,7 +89,11 @@ class ToolRuntime:
     def __init__(self, db: Database, *, permissions: set[str] | None = None,
                  timeout_seconds: float = 30.0) -> None:
         self.db = db
-        self.permissions = permissions if permissions is not None else set(WRITE_TOOLS.values())
+        # ⚠️ **默认不是"全给"。** 第一版默认值是 `set(WRITE_TOOLS.values())`，
+        # 而 worker 用的正是这个默认值 ⇒ **权限闸在真实路径上从不拒绝**，
+        # 那道闸等于不存在。改成最小权限：不传就只有当前编排真正需要的那一个。
+        # 要更多权限得**显式**要 —— 忘了要会报 PermissionDenied，比悄悄放行好。
+        self.permissions = set(permissions) if permissions is not None else {"budget:write"}
         self.timeout_seconds = timeout_seconds
 
     def _check_permission(self, tool: str) -> None:

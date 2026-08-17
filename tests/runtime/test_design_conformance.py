@@ -89,10 +89,10 @@ def _ids() -> tuple[str, str]:
 
 
 @pg_only
-@pytest.mark.xfail(strict=True, reason="【自动化档位没有消费者】claim_run 不返回 automation_tier，"
-                                       "worker 硬编码 DecisionContext(automation_tier=None) "
-                                       "⇒ tier_c 触发器在真实路径上永远不可达")
 def test_tier_c_action_must_go_through_approval() -> None:
+    # ✅ 2026-08-17 已修：`claim_run` 的 RETURNING 补上 automation_tier，
+    #    worker 把它传进 DecisionContext。此前这个字段被 API 校验、被 schema 约束、
+    #    被落库，**然后没有任何人读它** —— 「字段全程有效但没有消费者」那一形态。
     """★ 设计文档 §3：C 档 = 不可逆或代价高（建 campaign / 大幅扩量 / 关停）
     ⇒ **一律提议 + 人工点确认**。
 
@@ -123,17 +123,22 @@ def test_tier_c_action_must_go_through_approval() -> None:
 
 
 @pg_only
-@pytest.mark.xfail(strict=True, reason="【审批通过后没有恢复路径】没有任何代码把 run 从 waiting_for_user "
-                                       "放回 queued，claim_run 也不认这个状态 "
-                                       "⇒ 审批通过后 run 永久停住")
 def test_approved_case_lets_the_run_continue() -> None:
     """★ 09 §3：网关的输出不是"拒绝"，是"暂停"。**暂停就必须能恢复。**
 
-    判据：开单 → 人点同意 → worker 应该能重新抢到这条 run。
-    ⚠️ 开单那半边是对的（审批单与 run 状态同事务翻转，见 gateway.open_approval_case），
-    断的是**回来**那半边 —— 所以这条测的是闭环，不是开单。
+    判据：开单 → 人**通过真实的 API** 点同意 → worker 能重新抢到这条 run，
+    并且**用人裁决过的参数**执行。
+
+    ⚠️ 这条测试改过一次口径：第一版用裸 SQL 改 `approval_cases` 来模拟"人点同意"，
+    注释还写着「和 API 走同一条 UPDATE」。补上恢复逻辑之后那句话就不成立了 ——
+    恢复发生在 API 层，裸 SQL 绕过了它，**测试会为错误的理由继续失败**。
+    ⇒ 模拟一条真实路径的时候，"它和真实路径等价"这句话本身要被复查。
+
+    ✅ 2026-08-17 已修（`db.resume_after_approval` + API 裁决后调用它）。
     """
-    async def body(db: Database) -> str | None:
+    from syncopate.runtime.db import resume_after_approval
+
+    async def body(db: Database):
         await _drain(db)
         org, run = _ids()
         await create_run(db, org_id=org, run_id=run, user_message="大额扩量")
@@ -143,15 +148,28 @@ def test_approved_case_lets_the_run_continue() -> None:
             case = await conn.fetchval(
                 "SELECT case_ref FROM approval_cases WHERE org_id=$1", org)
             assert case is not None, "前提不成立：这一跑没开出审批单"
-            # 人点「同意」——和 API 的 POST /approvals/{case_ref} 走同一条 UPDATE
+            # 人点「同意」并改了金额 —— API 的 POST /approvals/{case_ref} 做的两件事
             await conn.execute(
                 "UPDATE approval_cases SET status='approved', reviewer_id='u1', "
-                "reviewed_at=now() WHERE org_id=$1 AND case_ref=$2", org, case)
-        got = await claim_run(db, worker_id="w-resume")
-        return got["run_id"] if got else None
+                "reviewed_at=now(), modified_params=$3 "
+                " WHERE org_id=$1 AND case_ref=$2",
+                org, case, {"campaign_id": "CMP_1", "new_budget": 90_000})
+        await resume_after_approval(db, org_id=org, run_id=run)
 
-    org_run = with_db(body)
-    assert org_run is not None, "审批通过后 run 没有回到可抢队列"
+        resumed = await _run_until_mine(w, run)
+        async with db.tx() as conn:
+            status = await conn.fetchval(
+                "SELECT status FROM agent_runs WHERE org_id=$1 AND run_id=$2", org, run)
+            result = await conn.fetchval(
+                "SELECT result FROM agent_runs WHERE org_id=$1 AND run_id=$2", org, run)
+        return resumed, status, result
+
+    resumed, status, result = with_db(body)
+    assert resumed, "审批通过后 run 没有回到可抢队列"
+    assert status == "succeeded", f"恢复后没跑完，实得 {status}"
+    # ★ 人改过的参数必须真的被执行 —— 否则「人工修正」这条飞轮回路只是在记账
+    assert result and result.get("new_budget") == 90_000, (
+        f"执行的是 agent 原提议而不是人改过的参数，实得 {result}")
 
 
 # ---------------------------------------------------------------------------
@@ -160,10 +178,9 @@ def test_approved_case_lets_the_run_continue() -> None:
 
 
 @pg_only
-@pytest.mark.xfail(strict=True, reason="【并发重复调用返回空结果】record_tool_call 命中 prior 时不看它是否"
-                                       "还在执行中（ok/result 仍为 NULL）"
-                                       "⇒ 并发第二次拿到 ok=None/data=None")
 def test_concurrent_same_key_returns_the_original_result() -> None:
+    # ✅ 2026-08-17 已修（`db._await_settled_prior`：有界等待 + 如实上报"处理中"）。
+    #    xfail 标记按纪律翻掉 —— 留着的话它会变成 XPASS 报错。
     """★★★ §38 第三层 + db.py 自己的承诺：「命中 ⇒ **返回原结果**而不是重放」。
 
     既有的 10 条幂等测试都是**顺序**投两次 —— 第一次早就写完了 ok/result。
@@ -208,8 +225,10 @@ def test_concurrent_same_key_returns_the_original_result() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="【降级信号缺生产者】worker 只赋 tool_failed / write_amount，"
-                                       "另外 5 个信号没有任何生产者")
+@pytest.mark.xfail(strict=True, reason="【降级信号缺生产者】还差 2 个：validation_errors（无参数校验层）"
+                                       "· cap_hits（runtime 侧还没有护栏这一层）。"
+                                       "2026-08-17 已补上 automation_tier / data_maturity / "
+                                       "retrieval_empty / retrieval_unavailable")
 def test_every_decision_signal_has_a_producer() -> None:
     """★ 这个项目最反复的失效形状是「机制建好了，但没接上」。
 
@@ -219,10 +238,26 @@ def test_every_decision_signal_has_a_producer() -> None:
 
     ⚠️ 用源码扫描而不是行为测试，是因为「不可达」这件事**没有行为可测** ——
     你测不出一个永远不会发生的事件。
+
+    ⚠️⚠️ **判据本身修过一次**：第一版只找字符串 `ctx.<字段>`，于是把
+    `DecisionContext(automation_tier=...)` 这种**构造时就给**的写法漏判成"没生产者"，
+    报了个假阴性。⇒ 改成 AST 解析，两种写法都认。
+    **一个"看起来很硬"的判据，可能只覆盖了它作者当时想到的那一种写法。**
     """
-    src = inspect.getsource(rt_worker)
-    signals = [f for f in DecisionContext.__dataclass_fields__]
-    missing = [f for f in signals if f"ctx.{f}" not in src]
+    import ast
+
+    tree = ast.parse(inspect.getsource(rt_worker))
+    produced: set[str] = set()
+    for node in ast.walk(tree):
+        # ① `ctx.<字段> = ...` / `ctx.<字段>.append(...)`
+        if isinstance(node, ast.Attribute):
+            produced.add(node.attr)
+        # ② `DecisionContext(<字段>=...)` —— 构造时直接给
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "DecisionContext"):
+            produced.update(k.arg for k in node.keywords if k.arg)
+
+    missing = [f for f in DecisionContext.__dataclass_fields__ if f not in produced]
     assert not missing, f"这些降级信号在 worker 里没有任何生产者：{missing}"
 
 
@@ -231,10 +266,10 @@ def test_every_decision_signal_has_a_producer() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="【写工具登记不全】沙盒 8 个写工具，runtime WRITE_TOOLS 只有 4 个 "
-                                       "⇒ 另外 4 个在 runtime 侧会被当读工具"
-                                       "（不校验权限、不生成幂等键）")
 def test_every_sandbox_write_tool_is_known_to_runtime() -> None:
+    # ✅ 2026-08-17 已修（补齐 creative.upload / memory.{write_proposal,invalidate,
+    #    conflict_resolve}）。**这条测试从此是那条纪律的常驻物理载体**：
+    #    沙盒里再加写工具而 runtime 没跟上，它就会红。
     """★★ 09 §1-③：「沙盒可以简化实现，但**不能有 runtime 没有的行为**。」
 
     这条纪律此前**没有物理载体** —— 谁在沙盒里加一个写工具，runtime 这边
