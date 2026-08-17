@@ -339,6 +339,15 @@ def main(argv: list[str] | None = None) -> int:
                          job_type="sft",
                          config={**vars(args), "trainable": trainable_summary(model),
                                  "balance": balance_report})
+        # ★ 让 W&B 自己把面板分区（train/ val/ health/ perf/ 各一块），
+        #   并给关键量定 summary 口径 —— 否则 summary 默认取"最后一个值"，
+        #   而我们要看的是**最小 val loss** 和**最大位移**。
+        for metric, summary in (("val/loss", "min"), ("val/ppl", "min"),
+                                ("train/grad_norm", "max"),
+                                ("health/delta_w_ratio", "max"),
+                                ("health/skipped_micro_steps", "max"),
+                                ("perf/peak_memory_gb", "max")):
+            wandb.define_metric(metric, summary=summary)
         print(f"[wandb] {args.wandb_mode}  {run.url if args.wandb_mode == 'online' else run.dir}")
 
     def log(payload: dict[str, Any], step: int) -> None:
@@ -378,16 +387,37 @@ def main(argv: list[str] | None = None) -> int:
         prof.start()
         prof_left = 4 + args.profile_steps
 
+    # ★★ 训练开始前留一份可训练权重的快照 —— 用来算 ||ΔW||/||W||。
+    #
+    # M7 那次「没测出差异」的根因就是这个数：模型只动了 **0.0093%**
+    # （正常 LoRA 微调 0.5–5%）。**它不看曲线看不出来** —— loss 降了、
+    # 指标好看，而权重几乎没动。SFT 这边同样要盯：位移过小说明白训，
+    # 过大说明 lr 太猛、多样性会塌。
+    _w0 = {n: p.detach().clone() for n, p in model.named_parameters() if p.requires_grad}
+    _w0_norm = float(torch.sqrt(sum((v.float() ** 2).sum() for v in _w0.values())))
+
+    def _delta_w_ratio() -> float:
+        num = sum(((p.detach().float() - _w0[n].float()) ** 2).sum()
+                  for n, p in model.named_parameters() if n in _w0)
+        return float(torch.sqrt(num)) / max(_w0_norm, 1e-12)
+
     global_step = 0
+    skipped = 0                 # ★ 没有监督 token 被跳过的 micro-step 数
+    sup_tokens = 0              # ★ 真正参与 loss 的 token 数（不是序列 token 数）
     started = time.time()
     for epoch in range(1, args.epochs + 1):
         running, seen = 0.0, 0
+        epoch_started = time.time()
         optimizer.zero_grad(set_to_none=True)
         for micro_step, batch in enumerate(train_loader, start=1):
             batch = {k: v.to(device) for k, v in batch.items()}
             token_loss, _ = token_losses(model, batch)
             if token_loss.numel() == 0:
-                continue                       # 这一条没有监督 token，跳过
+                # ⚠️ **静默跳过是这个项目最贵的失效形状**（SFT 标签 bug 那次
+                # val_loss 降到 0.0000 却什么都没学对）。所以跳过要计数、要上报。
+                skipped += 1
+                continue
+            sup_tokens += int(token_loss.numel())
             # mean over 被监督 token —— 和 HF 的 `model(**batch).loss` 同口径
             loss = token_loss.mean() / args.grad_accum
             loss.backward()
@@ -400,11 +430,17 @@ def main(argv: list[str] | None = None) -> int:
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
+                elapsed = max(1e-6, time.time() - started)
                 log({"train/loss": float(loss) * args.grad_accum,
                      # grad_norm 是最早能看出训练崩没崩的信号：突然飙高 = 有坏样本或 lr 过大
                      "train/grad_norm": float(grad_norm),
                      "train/lr": scheduler.get_last_lr()[0],
-                     "train/epoch": epoch}, step=global_step)
+                     "train/epoch": epoch,
+                     # ★ 下面四条是 2026-08-17 补的「健康度」，见 14-sft-health-metrics.md
+                     "health/skipped_micro_steps": skipped,
+                     "health/supervised_tokens": sup_tokens,
+                     "perf/supervised_tokens_per_sec": sup_tokens / elapsed,
+                     "perf/steps_per_sec": global_step / elapsed}, step=global_step)
             if prof is not None:
                 prof.step()
                 prof_left -= 1
@@ -428,6 +464,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"          {group:<10} loss={stat['loss']:.4f}  ppl={stat['ppl']:.2f}")
         else:
             print(line)
+        # ★★★ 位移：||ΔW||/||W||。**这是判断"到底训没训动"的唯一直接证据。**
+        ratio = _delta_w_ratio()
+        print(f"          ||ΔW||/||W|| = {ratio*100:.4f}%  "
+              f"（正常 LoRA 0.5%–5%；M7 那次只有 0.0093% ⇒ 白训）")
+        log({"health/delta_w_ratio": ratio,
+             "health/epoch_seconds": time.time() - epoch_started}, step=global_step)
         if device.type == "cuda":
             peak = torch.cuda.max_memory_allocated() / 1e9
             print(f"          显存峰值 {peak:.1f} GB")
