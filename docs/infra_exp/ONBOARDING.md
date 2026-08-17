@@ -70,19 +70,28 @@ colocate     1 卡  67.2 s/步
 
 ---
 
-## 4 · ★ 第一件事：**A14**（约 10 分钟）
+## 4 · ★ 第一件事：**先确认卡是空的**，再按第 1.6 批的队列跑
 
-这是上一轮唯一没闭合的环。**机制已证实，但还没证明 verl 的 ZeRO-3 真的撞在上面。**
+⛔⛔ **训练是最高优先级，严禁抢卡**（用户 2026-08-17 明令）。主线 RL **和 eval 及其后续管线**
+全部跑完之前，一个 🔴 实验都不许起。判据是**产物落地 + 进程退出 + 显存归还**，
+不是日志里那句「完成」（`scripts/wait_for_gpu.sh` 开头记着这个坑）。
 
 ```bash
-NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING \
-  python -m syncopate.train.launch_rl --mode colocate --trainer-gpus 3 \
-    --fsdp-size 3 '++actor_rollout_ref.actor.fsdp_config.reshard_after_forward=True' \
-    --steps 1 --weight-sync-bucket-mb 256 --rollout-gpu-util 0.35 ...
-# 抓所有 "AllGather: N Bytes"，统计 %16 != 0 的**按字节加权**占比
+scripts/gpu_gate.sh          # 🆕 三条判据一起查：显存 / 训练进程 / 主线产物
 ```
 
+卡空之后，**按 `00-INFRA-HANDOFF §5 第 1.6 批` 的 8 项按序跑**（队首就是 A14）：
+
+```bash
+bash scripts/run_batch2_gpu.sh          # 🆕 串行跑完，每项自带预测与判据
+```
+
+**队首 A14**（~20 分钟）是上一轮唯一没闭合的环 —— **机制已证实，但还没证明 verl 的
+ZeRO-3 真的撞在上面**：抓所有 `AllGather: N Bytes`，统计 `%16 != 0` 的**按字节加权**占比。
+
 ⚠️ **必须按字节加权，不能按调用次数** —— 小张量再多也解释不了 6.02×。
+⚠️🆕 **`--fsdp-size 3` 会让 `launch_rl` 自动加 `NCCL_PROTO=LL128`** ⇒ 那一跑**不再是**
+47.94 s 那条基线。要复现基线必须显式压回 Simple（`run_batch2_gpu.sh` 里两跑都做了）。
 
 ```
 占比高 ⇒ 因果链闭合，接着 A15（决定给 NCCL 还是 FSDP 提 upstream issue）
@@ -92,9 +101,9 @@ NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING \
 ⛔ **A14 出结果之前，不要把「6.02× 由对齐造成」写成定论。**
 E18 §11 结尾和记忆里都钉了这条限定。
 
-之后按 `00-INFRA-HANDOFF §5` 的队列走。下一个大头是
-**B12 / E17 · 训练侧三次前向占步 72%**（占空比里最大的一块，纯计算、不受通信发现影响），
-门槛 **A5**（nsys 拆解，🐟 类，可挂在任意一次训练上零成本做掉）。
+★ 本批的大头是 **B12 / E17 · 训练侧三次前向**（🆕 v13 实测占步 **84.9%**，比原记录的 72% 还大），
+门槛 **A5**（nsys 拆解）—— ⚠️ **nsys 只能包住启动、不能事后 attach**，所以它必须挂在**我们自己**
+的某一跑上，错过就再等一轮。
 
 ---
 
@@ -110,6 +119,13 @@ E18 §11 结尾和记忆里都钉了这条限定。
 4. **`--save-freq 999` 挡不住收尾保存** —— 每个短跑结束落一个 **27 GB** ckpt。跑完就删
    `checkpoints/grpo/<exp>/global_step_*`（`dispatched.jsonl` 和 `rollout_dumps` 要留）。
 5. **fully_async 的 timing 行覆盖 4 个 global step**，绝对秒数要 ÷4。
+   ⇒ 🆕 别再靠人记：用 `scripts/parse_fully_async_timing.py`，它按 `global_step` 差分**实测**覆盖步数。
+6. 🆕 **引用「权重同步占步 18.8% / 55.8 s」之前先看 bucket**。同为 fully_async 稳态，
+   bucket 2048 是 55.8 s、bucket 512 是 **8.43 s**（差 6.6×，README §7.4）。
+   ⇒ 「同一个指标换个模式就不是一件事」的**下一层**：同一个模式换个默认参数也不是。
+7. 🆕 **`nsys` 装了但不在 PATH**：`/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys`。
+   ⚠️ 它**只能包住启动**，不能对已经在跑的 Ray 作业 attach ⇒ A5 必须提前规划进某一跑。
+   （`py-spy` 在 `.venv/bin/`，那个**可以** attach，用于 Python 栈采样。）
 
 ---
 
@@ -135,6 +151,10 @@ scripts/probe_alignment_cliff.py       ★ 16 字节对齐悬崖
 scripts/probe_power_throttle.py        满载功耗与降频
 scripts/check_flash_attn_backward.py   ★ flash-attn **反向**数值判据
 scripts/check_data_gates.py            数据门槛
+scripts/parse_fully_async_timing.py 🆕 timing 行 → 每 global step 的口径（自动求覆盖步数）
+scripts/gpu_gate.sh                 🆕 ★ 抢卡门禁：显存 + 训练进程 + 主线产物 三条一起查
+scripts/run_batch2_gpu.sh           🆕 第 1.6 批 8 项串行跑（每项自带预测与判据）
+scripts/wait_for_gpu.sh                等显存释放（教训：日志说完了 ≠ 资源还回来了）
 logs/e00_*.json · logs/e02_*.json      以上所有原始数据
 ```
 

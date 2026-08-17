@@ -279,6 +279,9 @@ flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.
     原始日志 logs/probe_fa2_static.log / probe_fa2_dyn.log / probe_fa2_dyn_3c.log
 
 ★ 权重同步 —— ⚠️ **按模式分别记，不能跨模式引用**（E12 §6-①）
+    ⚠️⚠️ 🆕 2026-08-17：**还要记「bucket 拧在哪」** —— 同为 fully_async 稳态，
+    bucket 2048 是 **55.8 s**，bucket 512 实测 **8.43 s**（差 6.6×，见 §7.4 与 E12 §4.6）。
+    ⇒ 下面这行 55.8 s **绑死在 bucket=2048**，引用它必须带上这个前提。
     one_step_off  update_weights  11.1–13.6 s（与 attention/打包/卡数全无关）
     fully_async   param_sync      首次 103.3 s（推基座+LoRA）/ **稳态 55.8 s**（只推 LoRA 132 MB）
                                   中位 56.0 · 标准差 1.79（3.2%）· 37 次
@@ -447,6 +450,26 @@ Ring+Simple           17.9         3.2           20.9          37.3     无效
 
 ⇒ **普适性**：任何在消费级无 P2P 硬件上用**非 2 幂次 rank 数 + 分片策略**的人都会撞上，
 不是本机特有的怪毛病。
+
+### 7.4 🐟 白捡的观测：主线 v13-e1 跑（bucket 512）——**两个数各挪了一大截**
+
+> 零成本旁观主线正在跑的 `logs/rl_v13e1.log`，**没有占用 GPU**。
+> 尺子 `scripts/parse_fully_async_timing.py`（🆕）· 数据 `logs/e12d_v13e1_timing.json`
+> 完整记录与限定条件见 **E12 §4.6**。
+
+```
+param_sync 稳态   55.8 s（bucket 2048）→ **8.43 s**（bucket 512）      ⇒ 差 6.6×
+三次前向占步       72.0%（M7）          → **84.9%**
+权重同步占步       18.8%（M7）          → **6.5%**
+每 global step     74.1 s（M7）         → 32.7 s
+```
+
+⚠️ **不是同尺子 A/B**：同时变了数据版本 / 底座 / `dynamic_bsz` / `rollout.n` / bucket 五项。
+**方向可信，数值待复核**（B2 补 bucket 分母、B3 补三模式分母）。
+
+⇒ **对队列的直接影响**（已同步进 `00-INFRA-HANDOFF §5`）：
+**B12/E17 的地位上升**（占空比最大的一块从 72% 涨到 84.9%）、
+**B1 的可回收空间缩水到 1/3**（18.8% → 6.5%）⇒ B1 从「第 2 批之首」降到 B2/B3 之后。
 
 ### 附 · `dynamic_bsz` 在当前 FA2 下的 A/B（one_step_off 3+1，稳态）
 
