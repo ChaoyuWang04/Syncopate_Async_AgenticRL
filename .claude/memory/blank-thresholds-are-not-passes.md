@@ -54,5 +54,20 @@ D1 通用能力未退化                        没有域外数据，测不了
 **补了新尺子不必重跑几小时 GPU**。⚠️ 必须用那份审计当初跑的 batch，
 拿另一版 gold 分组，数看起来正常但它谁也不是。
 
+---
+
+## ★★ 2026-08-17 第三条：**判据太宽 ⇒ 它会为错误的理由"通过"**
+
+M9 那条「C 档动作必须走审批」的测试，第一版判据是
+`count(approval_cases) == 1`。后来给 worker 接上检索，这条测试**当场变绿了** ——
+不是因为 C 档修好了，是因为「检索为空」触发了**另一个**降级，照样开出一张单。
+
+⇒ **判据要指名道姓**：改成断言审批单的 `trigger_reason` 里含 `tier_c`，立刻又红了。
+
+★ 这条比「门槛空着」更隐蔽：门槛空着至少一眼看得出没填；
+**判据写满了、还真的在跑、还变绿了 —— 只是它量的不是你以为的那件事。**
+⚠️ 用 `xfail(strict=True)` 钉缺口时尤其危险：**xfail 会把"为错误理由失败/通过"一起吞掉。**
+⇒ 配套动作：每次改完实现，用 `pytest --runxfail` 看一眼**它到底停在哪一行**。
+
 相关：[[project-mechanism-not-wired]] [[rl-step-size-is-lr-times-steps]]
-[[feedback-measure-dont-infer]] [[syncopate-docs-map]]
+[[feedback-measure-dont-infer]] [[syncopate-docs-map]] [[sandbox-is-subset-of-runtime]]

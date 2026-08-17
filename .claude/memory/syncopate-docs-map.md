@@ -15,6 +15,10 @@ docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令�
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/12-rag-runtime-design.md   ★ Runtime 侧检索（2026-08-17 新建）：
+                                          三态契约「查到/查不到/**查不了**」· 阈值为什么
+                                          不能沿用沙盒的 0.35 · 向量什么时候上（门槛已写死）
+                                          · 沙盒欠的两样（等 M8 验收后再动，会推到 v13）
 docs/syncopate/11-runtime-acceptance.md   ★ M9 验收权威文档（2026-08-17 新建）：
                                           40 条判据逐条 · 五个确认缺口 F1–F5 ·
                                           压测前先做两件（填【待定】+ 场景②④没有被测对象）

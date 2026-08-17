@@ -5,9 +5,9 @@
 - [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第六形态 = 字段全程有效但没有消费者（M9 的 C 档审批从没被接上）
-- [空门槛不等于通过](blank-thresholds-are-not-passes.md) — M7「已验收」撑不住；补上读/写分桶才发现写操作成功率只有 20%
+- [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★第三条：判据太宽会**为错误的理由通过**（xfail 会把它一起吞掉）
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
 - [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
-- [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义，否则训出来的策略上线不成立
+- [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证

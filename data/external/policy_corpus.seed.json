@@ -1,0 +1,70 @@
+{
+  "_note": "runtime 侧检索的种子语料。三条轴按 10-rag-retrieval.md 的纪律成对出现：版本对 / 空洞 / 矛盾对。入库：python scripts/ingest_corpus.py",
+  "version": "seed-2026-08-17",
+  "policy_clauses": [
+    {
+      "clause_id": "POL_BUDGET_DAILY_V1",
+      "title": "单日预算涨幅上限",
+      "body": "单个 campaign 的单日预算上调幅度不得超过前一日的 20%，超出部分将触发学习期重置。",
+      "section_path": "Meta 广告政策 / 4. 预算与竞价 / 4.2 单日涨幅",
+      "platform": "meta", "region": null,
+      "valid_from": "2026-01-01T00:00:00+00:00", "valid_to": "2026-09-05T23:59:59+00:00",
+      "version": "v1", "supersedes": null, "source_doc": "meta_ads_policy_2026Q1.pdf#4.2"
+    },
+    {
+      "clause_id": "POL_BUDGET_DAILY_V2",
+      "title": "单日预算涨幅上限",
+      "body": "单个 campaign 的单日预算上调幅度不得超过前一日的 50%。2026-09-06 起生效，取代此前的 20% 限制。",
+      "section_path": "Meta 广告政策 / 4. 预算与竞价 / 4.2 单日涨幅",
+      "platform": "meta", "region": null,
+      "valid_from": "2026-09-06T00:00:00+00:00", "valid_to": null,
+      "version": "v2", "supersedes": "POL_BUDGET_DAILY_V1",
+      "source_doc": "meta_ads_policy_2026Q3.pdf#4.2"
+    },
+    {
+      "clause_id": "POL_CREATIVE_REVIEW",
+      "title": "素材审核时长",
+      "body": "新提交的视频素材需经过人工审核，通常在 24 小时内完成；节假日期间可能延长至 72 小时。",
+      "section_path": "Meta 广告政策 / 7. 素材 / 7.1 审核",
+      "platform": "meta", "region": null,
+      "valid_from": "2026-01-01T00:00:00+00:00", "valid_to": null,
+      "version": "v1", "supersedes": null, "source_doc": "meta_ads_policy_2026Q1.pdf#7.1"
+    },
+    {
+      "clause_id": "POL_SEA_GAMBLING",
+      "title": "东南亚地区博彩类素材限制",
+      "body": "东南亚地区禁止投放含有博彩、赌场、抽奖元素的广告素材，违规账户将被限制投放。",
+      "section_path": "各国广告法 / 东南亚 / 敏感品类",
+      "platform": null, "region": "SEA",
+      "valid_from": "2026-01-01T00:00:00+00:00", "valid_to": null,
+      "version": "v1", "supersedes": null, "source_doc": "sea_ad_law_2026.pdf#3"
+    }
+  ],
+  "insights": [
+    {
+      "claim_id": "CLAIM_SEA_LIVE_ACTION",
+      "claim": "东南亚地区，真人出镜素材的 D7 ROAS 显著高于纯 CG 素材",
+      "scope": {"region": "SEA", "product": "PROD_A", "period": "2026Q2"},
+      "evidence": "复盘会议 2026-07-15，样本 N=42 campaigns",
+      "confidence": "medium", "status": "active",
+      "source_doc": "2026Q2复盘.md#L120", "recorded_at": "2026-07-15T00:00:00+00:00"
+    },
+    {
+      "claim_id": "CLAIM_SEA_CG_OLD",
+      "claim": "东南亚地区纯 CG 素材的留存表现更好，应优先铺量",
+      "scope": {"region": "SEA", "product": "PROD_A", "period": "2025Q4"},
+      "evidence": "复盘会议 2025-12-02，样本 N=11 campaigns",
+      "confidence": "low", "status": "refuted",
+      "superseded_by": "CLAIM_SEA_LIVE_ACTION",
+      "source_doc": "2025Q4复盘.md#L44", "recorded_at": "2025-12-02T00:00:00+00:00"
+    },
+    {
+      "claim_id": "CLAIM_BUDGET_STEP",
+      "claim": "预算单次上调超过 30% 时，次日 CPI 波动明显放大，建议分两次调整",
+      "scope": {"region": "GLOBAL", "period": "2026Q2"},
+      "evidence": "复盘会议 2026-06-20，样本 N=63 campaigns",
+      "confidence": "high", "status": "active",
+      "source_doc": "2026Q2复盘.md#L88", "recorded_at": "2026-06-20T00:00:00+00:00"
+    }
+  ]
+}
