@@ -3,11 +3,11 @@
 > 写于 **2026-08-17**。**每个大版本重建之前跑一遍，不过就不许开训。**
 >
 > ```bash
-> python scripts/check_diversity.py --batch data/batches/v13            # 退出码 0 才算过
-> python scripts/check_diversity.py --batch data/batches/v13 --verbose  # 打全表
+> python scripts/check_data_gates.py --batch data/batches/v13            # 退出码 0 才算过
+> python scripts/check_data_gates.py --batch data/batches/v13 --verbose  # 打全表
 > ```
 >
-> 判据实现在 `scripts/check_diversity.py`（**那份是真相来源**，本文档只解释为什么）。
+> 判据实现在 `scripts/check_data_gates.py`（**那份是真相来源**，本文档只解释为什么）。
 > 回归守卫在 `tests/authoring/test_message_diversity.py`。
 
 ---
@@ -125,7 +125,7 @@ D11 题面长度 8–75 字 · 变异系数 0.31
 
 ## 5 · 怎么加新指标
 
-`scripts/check_diversity.py` 里每个 `check_*` 返回 `(通过与否, 打印行)`，在 `CHECKS` 注册。
+`scripts/check_data_gates.py` 里每个 `check_*` 返回 `(通过与否, 打印行)`，在 `CHECKS` 注册。
 
 ⚠️ **新指标必须能回答两个问题，否则不要加**：
 

@@ -68,7 +68,7 @@ def _meta(signal: str, bucket: str, p: Params, **kwargs: Any) -> CaseMetadata:
     """把控制轴写进 tags，方便事后按轴切片分析 reward 分布。"""
     tags = [f"entry:{p.entry_mode}", f"mem:{p.memory_state}",
             f"season:{p.season_phase}", f"amount:{p.amount_band}"]
-    # ★ 题面风格也进 tags：`scripts/check_diversity.py` 按它算「风格覆盖」，
+    # ★ 题面风格也进 tags：`scripts/check_data_gates.py` 按它算「风格覆盖」，
     #   而且事后能按风格切片看 reward —— "模型是不是只在某一种说法上表现好"。
     style = kwargs.pop("phrasing_style", None)
     if style:

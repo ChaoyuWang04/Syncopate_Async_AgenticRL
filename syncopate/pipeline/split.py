@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from syncopate.core.schemas import CaseBundle
+from syncopate.pipeline import leakage
 from syncopate.train.rollout_loop import build_messages
 
 
@@ -297,15 +298,43 @@ def split(
     strata: dict[tuple[str, ...], list[str]] = {}
     for cid, b in bundles.items():
         strata.setdefault(stratum(cid, b), []).append(cid)
+    # ★★★ 分层取样在**泄露组**上做，不在单条 case 上做。
+    #
+    # 泄露组 = 同一个泄露键的所有 case（`leakage.grouping_key`）。**组是原子的**：
+    # 要么整组进 EVAL，要么整组不进。
+    #
+    # 为什么不能"先按 case 选完再把孪生拉进来"：实测那样 EVAL 会从 278 膨胀到 507
+    # （拉进来 229 条），SFT/RL 被抽干。按组取样则 EVAL 规模基本不变。
+    #
+    # ⇒ 这是**构造保证**：EVAL 里任何一条的孪生都不可能留在训练桶里。
+    #   判据定义见 `syncopate/pipeline/leakage.py`。
+    key_groups: dict[tuple[str, str], list[str]] = {}
+    for cid, b in bundles.items():
+        key_groups.setdefault(leakage.grouping_key(b), []).append(cid)
+    group_of = {cid: key for key, cids in key_groups.items() for cid in cids}
+
     buckets = Buckets()
+    eval_set: set[str] = set()
+    taken_groups: set[tuple[str, str]] = set()
     for key in sorted(strata):
         # key[1] 是 expected_behavior，key[2] 是结局档。
         # 两条加厚规则取**较大者**，见 RARE_BEHAVIOR_EVAL_QUOTA / OUTCOME_EVAL_QUOTA。
         take = max(eval_per_stratum,
                    RARE_BEHAVIOR_EVAL_QUOTA.get(key[1], 0),
                    OUTCOME_EVAL_QUOTA.get(key[2], 0))
-        buckets.eval.extend(sorted(strata[key])[:take])
-    eval_set = set(buckets.eval)
+        picked = 0
+        for cid in sorted(strata[key]):
+            if picked >= take:
+                break
+            gkey = group_of[cid]
+            if gkey in taken_groups:
+                continue
+            members = sorted(key_groups[gkey])
+            taken_groups.add(gkey)
+            eval_set.update(members)
+            picked += len(members)
+    buckets.eval = sorted(eval_set)
+
 
     # ---- 2. 剩余池 → SFT（最难的）/ RL ----
     pool = [cid for cid in sorted(bundles) if cid not in eval_set]
@@ -368,6 +397,9 @@ def split(
         "strata_count": len(strata),
         "overlaps_by_content_sha256": overlaps,
         "duplicate_content_pairs": dupes,
+        # ★ 泄露审计：content_hash 的盲区（同题同答但 ID 不同）由它兜住
+        "leakage": leakage.audit(bundles, {"eval": buckets.eval, "sft": buckets.sft,
+                                           "rl": buckets.rl}),
         "eval_strata_coverage": {"|".join(k): len(v) for k, v in sorted(strata.items())},
         # ★ 保底补了什么必须可见。静默的保底，下次它没生效同样是静默的 ——
         #   而"机制在但没接上"正是本项目最贵的那类 bug（05-handoff §6）。

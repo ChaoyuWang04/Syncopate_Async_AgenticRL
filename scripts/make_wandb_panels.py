@@ -77,15 +77,34 @@ RL_SECTIONS = [
             line("ESS/N（跌破 0.3 立即停）",
                  ["rollout_corr/rollout_is_eff_sample_size"]),
             line("grad_norm（跳两个数量级立即停）", ["actor/grad_norm"]),
-            line("response_length（暴涨 = 长度 hacking）",
-                 ["response_length/mean"]),
+            # ⚠️ 长度上涨可能是学会推理，也可能是刷长度然后被 max_len 砍掉 ——
+            #   后者的 reward 是假的。**必须和截断率一起看**，单看均值分不出来。
+            line("response_length + 截断率（单看长度分不出是推理还是刷长度）",
+                 ["response_length/mean", "syncopate/truncated"]),
             line("IS ratio 超界比例（最早的信号）",
                  ["rollout_corr/rollout_is_ratio_fraction_high"]),
         ],
         is_open=True,
     ),
     ws.Section(
-        name="② reward 与护栏（必须同向）",
+        name="② ★ 零梯度（GRPO 的头号杀手，默认指标里没有）",
+        panels=[
+            # ⚠️ `critic/rewards/std` 是 **batch 内** std，而 advantage 是**组内**归一化。
+            # 某个 prompt 的一组 rollout 全对或全错 ⇒ σ_g→0 ⇒ 这条样本零梯度。
+            # 这个数从 10% 涨到 60% 时有效样本已经塌一半，**而 reward 曲线还在涨**。
+            line("组内 std=0 的占比（rl_report 补报）",
+                 ["syncopate/zero_grad_group_ratio"]),
+            # ★ 全对 / 全错分开：都零梯度，但处理方式相反 ——
+            #   全对 = 学会了该降权；全错 = 够不着该补 SFT。
+            line("全对 vs 全错（处理方式相反）",
+                 ["syncopate/group_all_correct_ratio", "syncopate/group_all_wrong_ratio"]),
+            line("组内 reward std 均值", ["syncopate/group_reward_std_mean"]),
+            line("clip 比例（长度 hacking 的证据）", ["actor/pg_clipfrac"]),
+        ],
+        is_open=True,
+    ),
+    ws.Section(
+        name="③ reward 与护栏（必须同向）",
         panels=[
             line("reward", ["critic/rewards/mean"]),
             # ★ verl 的 compute_data_metrics 只认两个字段 ⇒ cap 分解由
@@ -96,11 +115,17 @@ RL_SECTIONS = [
         is_open=True,
     ),
     ws.Section(
-        name="③ 异步与吞吐",
+        name="④ 异步与漂移（★ 这套 harness 就是围绕它建的）",
         panels=[
             line("陈旧轨迹比例", ["fully_async/count/stale_trajectory_processed"]),
             line("partial_ratio（=0 说明没有漂移可测）",
                  ["fully_async/partial/partial_ratio"]),
+            # ★ rollout 用的权重和 update 时的权重不是同一份 —— 两者 logprob 的偏离度
+            #   是 async RL 的头号故障源。别当噪声删掉。
+            line("模板混合漂移 TV（rl_report 补报）",
+                 ["syncopate/mix_drift/total_variation"]),
+            line("IS ratio 均值（应≈1.0，<0.5 或 >2.0 告警）",
+                 ["rollout_corr/rollout_is_mean"]),
             line("rollouter 空闲率", ["fully_async/rollouter/idle_ratio"]),
             line("每步秒数", ["timing_s/step"]),
         ],

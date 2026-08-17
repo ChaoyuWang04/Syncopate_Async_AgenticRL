@@ -387,19 +387,34 @@ def main(argv: list[str] | None = None) -> int:
         prof.start()
         prof_left = 4 + args.profile_steps
 
-    # ★★ 训练开始前留一份可训练权重的快照 —— 用来算 ||ΔW||/||W||。
+    # ★★★ ‖ΔW‖/‖W‖ —— 判断「到底训没训动」的唯一直接证据。
     #
-    # M7 那次「没测出差异」的根因就是这个数：模型只动了 **0.0093%**
-    # （正常 LoRA 微调 0.5–5%）。**它不看曲线看不出来** —— loss 降了、
-    # 指标好看，而权重几乎没动。SFT 这边同样要盯：位移过小说明白训，
-    # 过大说明 lr 太猛、多样性会塌。
-    _w0 = {n: p.detach().clone() for n, p in model.named_parameters() if p.requires_grad}
-    _w0_norm = float(torch.sqrt(sum((v.float() ** 2).sum() for v in _w0.values())))
-
+    # M7 那次「没测出差异」的根因就是这个数：只动了 **0.0093%**
+    # （正常 LoRA 微调 0.5–5%）。**loss 降了、指标好看，而权重几乎没动。**
+    #
+    # ⚠️⚠️ **口径踩过一次坑，记在这**：第一版图省事算的是
+    #     ‖Δθ_trainable‖ / ‖θ_trainable(初始)‖
+    # 而 **LoRA 的 B 矩阵初始化为零** ⇒ 分母里只有 A、B 从 0 长起来
+    # ⇒ 第一个 epoch 就报 **15.99%**，看着像"训过头"，其实**尺子错了 33 倍**
+    #   （正确口径同一份权重量出来是 0.485%）。而且那个数**不能和 M7 的 0.0093% 比**。
+    #
+    # ⇒ 正确口径：**LoRA 实际叠加到基座上的增量，比基座本身**，且只对被适配的层算：
+    #     ΔW_eff = scaling · B @ A        ratio = ‖ΔW_eff‖_F / ‖W_base‖_F
+    #   定义与命令行工具在 `syncopate/train/weight_shift.py`（跑完可对任意 adapter 复算）。
     def _delta_w_ratio() -> float:
-        num = sum(((p.detach().float() - _w0[n].float()) ** 2).sum()
-                  for n, p in model.named_parameters() if n in _w0)
-        return float(torch.sqrt(num)) / max(_w0_norm, 1e-12)
+        num_sq = den_sq = 0.0
+        for module in model.modules():
+            lora_a = getattr(module, "lora_A", None)
+            if lora_a is None or not hasattr(module, "base_layer"):
+                continue
+            for key, a_mod in lora_a.items():
+                b_mod = module.lora_B[key]
+                scaling = float(module.scaling[key])
+                delta = (b_mod.weight.detach().float() @ a_mod.weight.detach().float()) * scaling
+                base = module.base_layer.weight.detach().float()
+                num_sq += float(torch.linalg.matrix_norm(delta)) ** 2
+                den_sq += float(torch.linalg.matrix_norm(base)) ** 2
+        return (num_sq ** 0.5) / max(den_sq ** 0.5, 1e-12)
 
     global_step = 0
     skipped = 0                 # ★ 没有监督 token 被跳过的 micro-step 数

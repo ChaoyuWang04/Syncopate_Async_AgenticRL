@@ -1,7 +1,11 @@
-"""★ 数据多样性门禁：每个大版本重建之前跑一遍，不过就不许开训。
+"""★ 数据门禁：每个大版本重建之前跑一遍，不过就不许开训。
 
-    python scripts/check_diversity.py --batch data/batches/v13
-    python scripts/check_diversity.py --batch data/batches/v13 --verbose   # 打全表
+    python scripts/check_data_gates.py --batch data/batches/v13 --split-dir data/splits/v13
+    python scripts/check_data_gates.py --batch data/batches/v13 --verbose        # 打全表
+
+两组判据，性质不同：
+    **D1–D11 多样性**（只要 --batch）    见 docs/syncopate/13-diversity-gates.md
+    **L1–L2  泄露**（要 --split-dir）    见 docs/syncopate/15-leakage-gates.md
 
 退出码 0 = 全部达标；非 0 = 有门禁没过（可直接接进 CI / Makefile）。
 
@@ -417,16 +421,69 @@ CHECKS: list[tuple[str, str, Callable[[Batch, bool], tuple[bool, list[str]]]]] =
 ]
 
 
+# ---------------------------------------------------------------------------
+# L1 / L2 · 三桶泄露（要 --split-dir）
+# ---------------------------------------------------------------------------
+
+
+def check_leakage(batch: Batch, split_dir, verbose: bool) -> tuple[bool, list[str]]:
+    """★★★ 三桶之间不许有「同一道题」跨桶。
+
+    ⚠️ **和 split_report 里那条 `overlaps_by_content_sha256` 不是一回事**：
+    那条算的是**完整渲染后的 prompt** 的哈希，两条 case 只要 campaign_id 不同
+    哈希就不同、检查就过 —— 而它们要答的那件事完全一样。
+    2026-08-17 实测 v13：**62/278 = 22.3% 的 EVAL 有这样的孪生**。
+
+    判据与模板豁免见 `syncopate/pipeline/leakage.py`。
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from syncopate.core.schemas import CaseBundle
+    from syncopate.pipeline import leakage as _leak
+
+    buckets = {b: _json.loads((_Path(split_dir) / f"{b}_cases.json").read_text("utf-8"))["case_ids"]
+               for b in ("eval", "sft", "rl")}
+    wanted = {c for ids in buckets.values() for c in ids}
+    bundles = {c: CaseBundle.read(_Path(batch.dir), c) for c in sorted(wanted)}
+    report = _leak.audit(bundles, buckets)
+
+    l1, l2 = report["L1_exact_message_and_answer"], report["L2_skeleton_and_answer_non_exempt"]
+    lines = [
+        f"  L1 题面原文+答案 跨桶组 {l1['cross_bucket_groups']:>4} · "
+        f"受影响 EVAL {l1['affected_eval']:>3} ({l1['affected_eval_ratio']*100:.1f}%)",
+        f"  L2 题面句式+答案 跨桶组 {l2['cross_bucket_groups']:>4} · "
+        f"受影响 EVAL {l2['affected_eval']:>3} ({l2['affected_eval_ratio']*100:.1f}%)"
+        f"   （豁免 {sorted(report['L2_exempt_templates'])}）",
+    ]
+    if l1["by_template"] or l2["by_template"]:
+        lines.append(f"    受影响模板 L1={l1['by_template']} L2={l2['by_template']}")
+    # ★ 训练池内的重复是**效率问题不是有效性问题**：RL 在学 SFT 已经教会的东西
+    #   ⇒ 组内方差为 0 ⇒ 零梯度。报出来但不阻塞。
+    lines.append(f"  🟡 训练池内(SFT∩RL)重复组 {report['train_pool_overlap_groups']} "
+                 f"—— 效率问题（会推高 RL 零梯度率），不阻塞门禁")
+    return report["passed"], lines
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="数据多样性门禁（大版本重建前必跑）")
     ap.add_argument("--batch", type=Path, default=Path("data/batches/v13"))
+    ap.add_argument("--split-dir", type=Path, default=None,
+                    help="给了才跑 L1/L2 泄露门禁（它要三桶名单）")
     ap.add_argument("--verbose", action="store_true", help="打全表，不只打不达标的")
     args = ap.parse_args()
 
     batch = Batch(args.batch)
     print(f"多样性门禁 · {len(batch.cases)} 条 case ← {args.batch}\n")
     failed = []
-    for code, title, fn in CHECKS:
+    checks = list(CHECKS)
+    if args.split_dir:
+        checks.append(("L1-L2", "★ 三桶泄露（同一道题不许跨桶）",
+                       lambda b, v: check_leakage(b, args.split_dir, v)))
+    else:
+        print("⚠️ 没给 --split-dir ⇒ **跳过 L1/L2 泄露门禁**。"
+              "跳过不是通过 —— 大版本重建前必须带上它。\n")
+    for code, title, fn in checks:
         ok, lines = fn(batch, args.verbose)
         print(f"{'✅' if ok else '🔴'} {code:8} {title}")
         for line in lines:

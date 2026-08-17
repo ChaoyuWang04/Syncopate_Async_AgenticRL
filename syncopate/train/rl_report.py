@@ -52,6 +52,34 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, float]:
     for key in rows[0]:
         if key.startswith(("cap/", "subscore/")):
             out[f"syncopate/{key}"] = sum(r[key] for r in rows) / n
+    # ★★★ GRPO 的零梯度杀手 —— **verl 的默认指标里没有这个**
+    #
+    # `critic/rewards/std` 是 **batch 内** std，而 GRPO 的 advantage 是**组内**归一化：
+    #     A_i = (r_i − μ_g) / σ_g
+    # 当某个 prompt 的一组 rollout 全对或全错，σ_g → 0 ⇒ **这条样本贡献零梯度**。
+    #
+    # ⚠️ 这个数从 10% 涨到 60% 时，batch 里的有效样本已经塌了一半，
+    #    **而 reward 曲线看起来还在涨** —— 所以它必须单独 log，不能靠看 reward。
+    #
+    # ★ 分母是「这一步有多少个不同的 prompt」，不是 rollout 数。
+    groups: dict[str, list[float]] = {}
+    for row in rows:
+        if "case_id" in row and "reward" in row:
+            groups.setdefault(row["case_id"], []).append(row["reward"])
+    sized = [v for v in groups.values() if len(v) > 1]
+    if sized:
+        zero = sum(1 for v in sized if statistics.pstdev(v) < 1e-6)
+        out["syncopate/zero_grad_group_ratio"] = zero / len(sized)
+        out["syncopate/group_reward_std_mean"] = statistics.mean(
+            statistics.pstdev(v) for v in sized)
+        # 全对 / 全错 分开报：全对是"学会了"（该降权），全错是"够不着"（该补 SFT）——
+        # 两者都零梯度，但**处理方式相反**，合成一个数就分不出来了。
+        out["syncopate/group_all_correct_ratio"] = sum(
+            1 for v in sized if statistics.pstdev(v) < 1e-6 and statistics.mean(v) > 0.9) / len(sized)
+        out["syncopate/group_all_wrong_ratio"] = sum(
+            1 for v in sized if statistics.pstdev(v) < 1e-6 and statistics.mean(v) < 0.3) / len(sized)
+        out["syncopate/groups"] = len(sized)
+
     # ★ 阻塞代价：最慢的一条 vs 平均。sync 下整批等最慢的，这个比值就是浪费的上界
     walls = [r["wall_seconds"] for r in rows if "wall_seconds" in r]
     if walls:

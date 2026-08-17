@@ -458,6 +458,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split-dir", default="data/splits/v2",
                         help="用冻结 EVAL 桶（推荐）；设为空字符串则退回旧的 per-class 取样")
     parser.add_argument("--limit", type=int, default=None)
+    # ★★ 按 case 分片，配合 `scripts/eval_parallel.sh` 做多卡并行。
+    #
+    # 评测天生可分：每条 case 的 Sandbox 按 namespace **每次新建**（账本 / 失败计数器 /
+    # BUC 积分全在它身上），共享的 `bundle.env` 只读、registry 只持只读工具规格。
+    # 这是当年修「rollout_id 固定导致 artifact 互相覆盖」时立下的设计，
+    # 现在直接成了分片的通行证 —— **不需要 tensor parallel**（4B 单卡装得下，
+    # 而这台机器 P2P 全关，TP 只会让通信变瓶颈）。
+    parser.add_argument("--shard", default=None, metavar="I/N",
+                        help="只跑第 I 片（0-indexed）共 N 片，如 --shard 0/4")
     parser.add_argument("--per-class", type=int, default=4, help="每个 signal_class 取几条")
     parser.add_argument("--split-every", type=int, default=8, help="和 data build 的 val_every 对齐")
     parser.add_argument("--max-new-tokens", type=int, default=256)
@@ -497,6 +506,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[评测] {label}   {len(bundles)} 条 case，temperature={args.temperature}")
 
     rows = []
+    if args.shard:
+        index_str, total_str = args.shard.split("/")
+        shard_i, shard_n = int(index_str), int(total_str)
+        assert 0 <= shard_i < shard_n, f"--shard {args.shard} 越界"
+        # ★ 交错取（i, i+n, i+2n…）而不是切块：模板是按 case_id 排序聚在一起的，
+        #   切块会让某一片全是 GEO（14 步）、另一片全是 HIGH（1 步），**负载差好几倍**。
+        bundles = bundles[shard_i::shard_n]
+        print(f"[分片] {shard_i+1}/{shard_n} —— 本片 {len(bundles)} 条", file=sys.stderr)
+
     started = time.time()
 
     async def _one_sample(bundle: CaseBundle, k: int) -> dict[str, Any]:
