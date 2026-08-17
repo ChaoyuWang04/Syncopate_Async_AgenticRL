@@ -68,7 +68,8 @@ def main() -> int:
 
     # ⚠️ 判据的一部分：**不许**开 expandable_segments —— 它在真训练路径上用不了，
     #    开着测出来的「不碎」是假的（A1 就是这么被骗过一次的）。
-    if os.environ.get("PYTORCH_CUDA_ALLOC_CONF"):
+    # （`save` 是离线的一次性动作，不进训练路径 ⇒ 它可以开；测量的那两个阶段不许开）
+    if args.stage != "save" and os.environ.get("PYTORCH_CUDA_ALLOC_CONF"):
         print(f"⛔ 检测到 PYTORCH_CUDA_ALLOC_CONF={os.environ['PYTORCH_CUDA_ALLOC_CONF']}"
               f" —— 本探针必须在**没有**它的情况下跑，否则结论不成立")
         return 2

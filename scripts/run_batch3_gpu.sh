@@ -146,4 +146,21 @@ if want e16 "${TARGETS[@]}"; then
       --json logs/e16_fp8.json ) 2>&1 | tee -a "$QUEUE_LOG"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════
+# ⑦ A9 · 4bit MoE 的加载路径（A2 的前置）—— 三阶段**必须分进程**
+#
+# ★ 判据写在探针里：在线量化应复现 >3 GB 碎片；预量化加载应 <1 GB 且不靠
+#   expandable_segments（那个开关在真训练路径上用不了，pytorch#147851）。
+# ⚠️ `save` 阶段会往盘上写 ~16 GB 的预量化模型 —— 先看一眼剩余空间。
+if want a9 "${TARGETS[@]}"; then
+  log "════════ a9 · 4bit MoE 加载路径（盘剩余 $(df -h /workspace | awk 'NR==2{print $4}')）"
+  ( set -x; CUDA_VISIBLE_DEVICES=0 timeout 1800 .venv/bin/python scripts/probe_moe_4bit_load.py \
+      --stage online --json logs/a9_online.json ) 2>&1 | tee -a "$QUEUE_LOG"
+  ( set -x; CUDA_VISIBLE_DEVICES=0 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+      timeout 3600 .venv/bin/python scripts/probe_moe_4bit_load.py \
+      --stage save --out models/Qwen3-30B-A3B-nf4 ) 2>&1 | tee -a "$QUEUE_LOG"
+  ( set -x; CUDA_VISIBLE_DEVICES=0 timeout 1800 .venv/bin/python scripts/probe_moe_4bit_load.py \
+      --stage preload --pre models/Qwen3-30B-A3B-nf4 --json logs/a9_preload.json ) 2>&1 | tee -a "$QUEUE_LOG"
+fi
+
 log "════════ batch3 结束"
