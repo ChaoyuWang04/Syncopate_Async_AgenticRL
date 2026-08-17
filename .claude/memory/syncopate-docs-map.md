@@ -15,6 +15,10 @@ docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令�
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/13-diversity-gates.md      ★ 数据多样性门禁（2026-08-17 新建）：
+                                          D1–D11 · **大版本重建前必跑**
+                                          `python scripts/check_diversity.py --batch <批次>`
+                                          ★ D5「句式不能预测档位」是唯一真抓到过 bug 的一条
 docs/syncopate/12-rag-runtime-design.md   ★ Runtime 侧检索（2026-08-17 新建）：
                                           三态契约「查到/查不到/**查不了**」· 阈值为什么
                                           不能沿用沙盒的 0.35 · 向量什么时候上（门槛已写死）

@@ -12,6 +12,8 @@
 > **M9 Runtime（真服务）→ `09-runtime-handoff.md`**　**RAG/检索 → `10-rag-retrieval.md`**
 > **M9 验收 / 设计符合性 → `11-runtime-acceptance.md`**（2026-08-17 审计）
 > **Runtime 侧检索 → `12-rag-runtime-design.md`**（🆕 三态契约：查到 / 查不到 / **查不了**）
+> **★ 数据多样性门禁 → `13-diversity-gates.md`**（D1–D11，**大版本重建前必跑**：
+> `python scripts/check_diversity.py --batch data/batches/<版本>`，退出码 0 才算过）
 > 多卡实验设计 → `../distributed-training-design-v0.1.md`
 > **焦点是怎么定下来的 → `../focus-migration-2026-08.md`**（唯一记录迁移历史的地方）
 

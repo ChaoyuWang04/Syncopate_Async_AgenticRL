@@ -68,7 +68,7 @@ def _meta(signal: str, bucket: str, p: Params, **kwargs: Any) -> CaseMetadata:
     """把控制轴写进 tags，方便事后按轴切片分析 reward 分布。"""
     tags = [f"entry:{p.entry_mode}", f"mem:{p.memory_state}",
             f"season:{p.season_phase}", f"amount:{p.amount_band}"]
-    # ★ 题面风格也进 tags：`scripts/measure_message_diversity.py` 按它算「风格覆盖」，
+    # ★ 题面风格也进 tags：`scripts/check_diversity.py` 按它算「风格覆盖」，
     #   而且事后能按风格切片看 reward —— "模型是不是只在某一种说法上表现好"。
     style = kwargs.pop("phrasing_style", None)
     if style:
@@ -104,7 +104,7 @@ _PHRASINGS: dict[str, list[dict[str, str]]] = json.loads(
     _PARAPHRASE_PATH.read_text(encoding="utf-8"))["phrasings"]
 
 
-def _stratum_rank(p: Params, attr: str) -> int:
+def _stratum_rank(p: Params, attr: "str | Callable[[int], Any]") -> int:
     """这条 case 在**同一档**里排第几（0-indexed）。
 
     ★★★ 为什么需要它：**句式必须在各档之间轮转，不能靠哈希碰运气**
@@ -121,13 +121,17 @@ def _stratum_rank(p: Params, attr: str) -> int:
     ⚠️ 必须按 **(档 × entry_mode)** 细分，不能只按档：只按档的话，
     档内的轮转序列会被 entry_mode 再切一刀，某个 entry_mode 下就可能漏掉一种句式
     —— 实测 `insight_conflict` 就少了 1 条。而测试正是按 (档, entry_mode) 查的。
+
+    ★ `attr` 可以是 Params 的属性名，也可以是 `index -> 档` 的函数 ——
+      有些模板的档是用局部的 `_mix(p.index, ...)` 算的，不在 Params 上。
     """
-    mine = (getattr(p, attr), p.entry_mode)
+    pick = attr if callable(attr) else (lambda idx: getattr(params_for(idx), attr))
+    mine = (pick(p.index), p.entry_mode)
     return sum(1 for j in range(p.index)
-               if (lambda q: (getattr(q, attr), q.entry_mode))(params_for(j)) == mine)
+               if (pick(j), params_for(j).entry_mode) == mine)
 
 
-def _phrase(key: str, p: Params, *, stratum: str | None = None,
+def _phrase(key: str, p: Params, *, stratum: "str | Callable[[int], Any] | None" = None,
             **slots: Any) -> tuple[str, str]:
     """按 key 取一条题面，返回 (文本, 风格名)。
 
@@ -287,7 +291,7 @@ def make_budget_change(p: Params) -> CaseBundle:
     context: dict[str, Any] = {"account_id": p.account_id, "requested_budget": requested}
     if given_id:
         context["campaign_id"] = p.campaign_id
-    _msg, _style = _phrase("budget_raise", p, cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
+    _msg, _style = _phrase("budget_raise", p, stratum="season_phase", cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
     case = Case(
         case_id=case_id,
         user_message=_msg,
@@ -430,7 +434,7 @@ def make_creative_launch(p: Params) -> CaseBundle:
                             "verdict": "above_safety_line"})
     env = builder.build()
 
-    _msg, _style = _phrase("creative_launch", p, name=p.creative_name, cid=p.campaign_id, region=p.region)
+    _msg, _style = _phrase("creative_launch", p, stratum="season_phase", name=p.creative_name, cid=p.campaign_id, region=p.region)
     case = Case(
         case_id=case_id,
         user_message=_msg,
@@ -1268,7 +1272,7 @@ def make_failure_drill(p: Params) -> CaseBundle:
     if variant.get("api_budget"):
         env.api_budget = dict(variant["api_budget"])
 
-    _msg, _style = _phrase("budget_raise", p, cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
+    _msg, _style = _phrase("budget_raise", p, stratum="season_phase", cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
     case = Case(
         case_id=case_id,
         user_message=_msg,
@@ -1719,7 +1723,7 @@ def make_scale_decision(p: Params) -> CaseBundle:
                                "region": p.region}
     if given_id:
         context["campaign_id"] = p.campaign_id
-    _msg, _style = _phrase("scale_decision", p, cid=p.campaign_id)
+    _msg, _style = _phrase("scale_decision", p, stratum=lambda i: SCALE_STATES[_mix(i, len(SCALE_STATES), 5)], cid=p.campaign_id)
     case = Case(
         case_id=case_id,
         # ★ 刻意不出现任何目标数字 —— 这是和 BUD 的分界线
@@ -1825,7 +1829,7 @@ def make_geo_expansion(p: Params) -> CaseBundle:
     env = builder.build()
 
     approved = sorted(r for r in GEO_CANDIDATES if r not in drop)
-    _msg, _style = _phrase("geo_expansion", p, regions="、".join(GEO_CANDIDATES))
+    _msg, _style = _phrase("geo_expansion", p, stratum=lambda i: GEO_STATES[_mix(i, len(GEO_STATES), 3)], regions="、".join(GEO_CANDIDATES))
     case = Case(
         case_id=case_id,
         # ★ 题面刻意不用祈使句。原文是「想铺到 X 去。看看哪些能上」——
@@ -2051,7 +2055,7 @@ def make_injection_drill(p: Params) -> CaseBundle:
     context: dict[str, Any] = {"account_id": p.account_id, "requested_budget": requested}
     if given_id:
         context["campaign_id"] = p.campaign_id
-    _msg, _style = _phrase("budget_raise", p, cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
+    _msg, _style = _phrase("budget_raise", p, stratum="season_phase", cid=p.campaign_id, old=f"{current/100:.0f}", new=f"{requested/100:.0f}")
     case = Case(
         case_id=case_id,
         user_message=_msg,
