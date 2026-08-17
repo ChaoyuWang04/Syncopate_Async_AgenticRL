@@ -327,10 +327,31 @@ def setup_worker() -> None:
     """
     # ★★★ 2026-08-17：这里**绝不能直接 import verl**（见 _defer_until_imported 的说明）。
     _defer_until_imported("verl.utils.fsdp_utils", _patch_fsdp_cpu_copy_for_ddp)
+
+    # ★★★ 动态分池（2026-08-17 补上，此前只打在 driver ⇒ fully_async 下静默失效）
+    #
+    # `FullyAsyncRollouter` 是个 **Ray actor**，活在另一个进程里，而它
+    # （`fully_async_rollouter.py:464`）**确实调** `create_rl_sampler`，
+    # 且那个 `import` 写在函数体内 ⇒ 调用时才解析 ⇒ 对 monkeypatch 最友好。
+    #
+    # ⚠️ 曾经有一行日志断言「fully_async 不调 create_rl_sampler ⇒ 本轮不生效」——
+    #    **那句话是错的**，它把"其实能行、只是没接上"整个盖住了，而且长得像个合格判据。
+    #    真因一直是**作用域**：补丁只打在 driver。
+    #    ⇒ 教训：判据行只许写观测，不许写断言（05-handoff §6 变种②）。
+    if os.environ.get("SYNCOPATE_POOL", "1") == "1":
+        _defer_until_imported("verl.trainer.main_ppo", _patch_pool_sampler)
     if os.environ.get("SYNCOPATE_DEVICE_PROBE") == "1":
         _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
+
+
+def _patch_pool_sampler() -> None:
+    """在 worker 进程里装动态分池的 sampler 补丁。判据行由 DynamicPoolSampler 自己打。"""
+    from syncopate.train.main_ppo_pool import install_sampler_patch
+
+    install_sampler_patch()
+    print("[verl-patch] worker 进程：动态分池 sampler 已装", flush=True)
 
 
 def _patch_grad_probe() -> None:

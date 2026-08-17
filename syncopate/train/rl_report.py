@@ -32,6 +32,34 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def weight_shift_per_ckpt(ckpt_root: Path, base: Path) -> dict[int, float]:
+    """逐个 ckpt 量 ‖ΔW_eff‖/‖W_base‖，得到「位移 vs 步数」这条曲线。
+
+    ★★★ **这是 M7 那次唯一真正解释了结论的数**，而它当时是事后手算的、
+    口径还存疑（0.0093% 那个比值 0.93，而 SFT 用正确口径量出来的比值是 0.24
+    —— 差 4 倍 ⇒ 两次的数根本不可比）。
+
+    ⇒ 这次直接把它做进 `rl_report`：**曲线自己会说话，不用再外推。**
+    位移不动 = lr 太小（M7 的病）；位移飙升 = lr 太大，熵会塌。
+    """
+    from syncopate.train.weight_shift import lora_effective_shift
+
+    out: dict[int, float] = {}
+    for path in sorted(ckpt_root.glob("global_step_*")):
+        try:
+            step = int(path.name.split("_")[-1])
+        except ValueError:
+            continue
+        adapter = path / "actor" / "lora_adapter"
+        if not (adapter / "adapter_config.json").exists():
+            continue
+        try:
+            out[step] = lora_effective_shift(base, adapter)["ratio"]
+        except Exception as exc:                      # noqa: BLE001
+            print(f"  ⚠️ {path.name} 量不了：{type(exc).__name__}", flush=True)
+    return out
+
+
 def load_steps(dump_dir: Path) -> dict[int, list[dict[str, Any]]]:
     """按 step 读 dump。文件名就是 global_step。"""
     steps: dict[int, list[dict[str, Any]]] = {}

@@ -171,9 +171,20 @@ _MAINS = {
 }
 
 
-def _install(mode: str) -> None:
-    """把 verl 的 create_rl_sampler 换掉。必须在 TaskRunner 跑起来之前做。"""
+def install_sampler_patch() -> None:
+    """把 verl 的 `create_rl_sampler` 换成动态分池。
+
+    ★ 抽成公开函数，是因为它要在**两个进程**里各装一次：
+      driver（TaskRunner）—— `_install()` 调
+      Ray worker         —— `verl_patches.setup_worker()` 调（fully_async 的
+                            `FullyAsyncRollouter` 是个 Ray actor，活在另一个进程里）
+
+    ⚠️ **幂等**：装第二次会把补丁版当成 original 套娃，权重更新就乱了。
+    """
     from verl.trainer import main_ppo
+
+    if getattr(main_ppo.create_rl_sampler, "_syncopate_pool", False):
+        return                                  # 已经装过
 
     original = main_ppo.create_rl_sampler
 
@@ -186,6 +197,7 @@ def _install(mode: str) -> None:
             seed=int(data_config.get("seed") or 0),
         )
 
+    patched._syncopate_pool = True              # 幂等标记
     main_ppo.create_rl_sampler = patched
     # ⚠️ colocate 下 TaskRunner 是同模块内直接调用（`train_sampler = create_rl_sampler(...)`），
     # 所以改模块属性就够了。
@@ -201,7 +213,7 @@ def main() -> None:
     if mode not in _MAINS:
         raise SystemExit(f"未知的 {MODE_ENV}={mode}，可选：{'/'.join(_MAINS)}")
 
-    _install(mode)
+    install_sampler_patch()
     # verl 自己的 bug 补在这里（见该模块的 docstring）。必须在 verl 的 main 被 import
     # 之前调 —— 补丁换的是模块属性，import 之后再换就来不及了。
     verl_patches.apply(mode)

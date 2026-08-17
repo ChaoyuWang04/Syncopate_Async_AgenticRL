@@ -72,8 +72,11 @@ SFT_SECTIONS = [
 
 RL_SECTIONS = [
     ws.Section(
-        name="① 停止条件（优先级高于分数曲线）",
+        name="① 训没训动 + 停止条件（都优先于分数曲线）",
         panels=[
+            # ★★★ M7 那次唯一真正解释了「什么都没测出」的数：位移只有 0.0093%。
+            #     位移不动 = lr 太小；飙升 = lr 太大、熵会塌。**先看这条再看 reward。**
+            line("‖ΔW‖/‖W‖ 位移（rl_report 补报）", ["syncopate/weight_shift"]),
             line("ESS/N（跌破 0.3 立即停）",
                  ["rollout_corr/rollout_is_eff_sample_size"]),
             line("grad_norm（跳两个数量级立即停）", ["actor/grad_norm"]),
@@ -100,6 +103,9 @@ RL_SECTIONS = [
                  ["syncopate/group_all_correct_ratio", "syncopate/group_all_wrong_ratio"]),
             line("组内 reward std 均值", ["syncopate/group_reward_std_mean"]),
             line("clip 比例（长度 hacking 的证据）", ["actor/pg_clipfrac"]),
+            # ★ 动态分池的判据行：抽中的题里有梯度的占多少。
+            #   分池没接上时这个数会退化成"题库里有梯度题的自然占比"。
+            line("分池：抽中题的组内 std 分布", ["syncopate/group_reward_std_mean"]),
         ],
         is_open=True,
     ),
@@ -115,7 +121,15 @@ RL_SECTIONS = [
         is_open=True,
     ),
     ws.Section(
-        name="④ 异步与漂移（★ 这套 harness 就是围绕它建的）",
+        name="④ 动态分池是否真的在起作用",
+        panels=[
+            line("零梯度组占比（分池应压住它）", ["syncopate/zero_grad_group_ratio"]),
+            line("每步不同 prompt 数", ["syncopate/groups"]),
+            line("轨迹步数均值（短任务被降权后应上升）", ["syncopate/num_steps"]),
+        ],
+    ),
+    ws.Section(
+        name="⑤ 异步与漂移（★ 这套 harness 就是围绕它建的）",
         panels=[
             line("陈旧轨迹比例", ["fully_async/count/stale_trajectory_processed"]),
             line("partial_ratio（=0 说明没有漂移可测）",
