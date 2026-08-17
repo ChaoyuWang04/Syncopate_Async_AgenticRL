@@ -171,4 +171,21 @@ if want a5 "${TARGETS[@]}"; then
   log "──────── $name 清理完成"
 fi
 
-log "════════ 队列结束（本脚本含 ①A14 ②B2 ③B3 ④A5；⑤B12 ⑥B11 ⑦B10 ⑧A9 由窗口按结果决定，见 handoff §5 第 1.6 批）"
+# ═══════════════════════════════════════════════════════════════════════
+# ⑤ B12 / E17 · 三次前向里 `ref` 那一遍值不值（占空比最大的一块）
+#
+# ★ 预测写在 E17 §1，一句话：关掉 KL ⇒ 每步墙钟降 12–15%，而 KL 项当前只贡献
+#   损失的 0.011%（E17 §4.1 的零 GPU 账）。
+# ★ 机制是读码确证的：use_kl_in_reward=False + use_kl_loss=False
+#   ⇒ need_reference_policy=False ⇒ **整个 ref 段被跳过**（verl/trainer/ppo/utils.py:79）。
+# **判据**：B 臂的 timing 行里**不该再有 `timing_s/ref`**。有就是没关掉。
+# ⚠️ 吞吐赢了**不算完成** —— 必须再过一次 B5 的任务级尺子（E17 §8-2）。
+if want b12 "${TARGETS[@]}"; then
+  run b12_ref_on   --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 12 --sync-every 4
+  run b12_ref_off  --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 12 --sync-every 4 \
+                   '++actor_rollout_ref.actor.use_kl_loss=False'
+  log "   ★ 判据：ref_off 那跑里 timing_s/ref 应当消失 —— 实际出现次数："
+  grep -c "timing_s/ref" logs/b12_ref_off.log | xargs -I{} log "     {} 次（要 0）"
+fi
+
+log "════════ 队列结束（本脚本含 ①A14 ②B2 ③B3 ④A5 ⑤B12；⑥B11 ⑦B10 ⑧A9 由窗口按结果决定，见 handoff §5 第 1.6 批）"

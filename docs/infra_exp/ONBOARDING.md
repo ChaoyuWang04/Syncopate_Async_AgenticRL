@@ -152,6 +152,8 @@ scripts/probe_power_throttle.py        满载功耗与降频
 scripts/check_flash_attn_backward.py   ★ flash-attn **反向**数值判据
 scripts/check_data_gates.py            数据门槛
 scripts/parse_fully_async_timing.py 🆕 timing 行 → 每 global step 的口径（自动求覆盖步数）
+scripts/analyze_drift.py            🆕 发出/完成/训练到 三段的漂移（⚠️ 跑完再读）
+scripts/analyze_nsys_step.py        🆕 nsys sqlite → 按**进程**（不是 deviceId！）拆算子构成
 scripts/gpu_gate.sh                 🆕 ★ 抢卡门禁：显存 + 训练进程 + 主线产物 三条一起查
 scripts/run_batch2_gpu.sh           🆕 第 1.6 批 8 项串行跑（每项自带预测与判据）
 scripts/wait_for_gpu.sh                等显存释放（教训：日志说完了 ≠ 资源还回来了）
