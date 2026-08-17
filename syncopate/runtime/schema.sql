@@ -1,7 +1,8 @@
 -- M9 · Runtime 的 8+1 张表（设计文档 §37）
 --
 -- ★ 这个文件是**真相来源**。数据库本身是派生产物 —— `scripts/pg_bootstrap.sh`
---   一条命令从这里重建（PGDATA 放不进 /workspace，原因见那个脚本的头部注释）。
+--   一条命令从这里重建。PGDATA 在 `/workspace/pgdata/16/syncopate`
+--   （2026-08-17 换机器后：/workspace 是本地 XFS、权限位生效；旧机器的 mfs 才放不进）。
 --
 -- ★ 幂等：全部 `IF NOT EXISTS`，可以反复应用。
 --
@@ -191,3 +192,60 @@ CREATE INDEX IF NOT EXISTS approval_pending ON approval_cases (org_id, status, c
 -- 飞轮回路 3 的扫描入口：已批准但还没回填 D7 结果的
 CREATE INDEX IF NOT EXISTS approval_awaiting_outcome
     ON approval_cases (outcome_checked_at) WHERE status IN ('approved','modified');
+
+-- ---------------------------------------------------------------------------
+-- ★ RAG 语料（M9 之后新增，设计见 docs/syncopate/12-rag-runtime-design.md）
+--
+-- 在这两张表之前，项目里**根本没有"语料"这个东西** —— 政策条款和复盘结论
+-- 由 WorldBuilder 每条 case 现造、只活在内存里、跑完就没了。
+--
+-- ★ scope 是多租户边界：平台政策（Meta 的规矩）是全局的，内部 SOP 是 org 私有的。
+--   查询一律 `WHERE scope='global' OR scope=$org` —— 越权在 SQL 里挡，同 §36 的纪律。
+--
+-- ★ 生效期与取代关系**存原始事实**，`expired` / `superseded_by` 是**查询时算**的：
+--   取代关系从新条款反查（新版本声明 supersedes=<旧 id>），不在旧条款上回写 ——
+--   语料是增量追加的，回写等于每加一版都要改历史。
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS policy_clauses (
+    id           BIGSERIAL PRIMARY KEY,
+    scope        TEXT        NOT NULL DEFAULT 'global',   -- 'global' | <org_id>
+    clause_id    TEXT        NOT NULL,
+    title        TEXT        NOT NULL,
+    body         TEXT        NOT NULL,
+    section_path TEXT        NOT NULL DEFAULT '',
+    platform     TEXT,
+    region       TEXT,
+    valid_from   TIMESTAMPTZ,
+    valid_to     TIMESTAMPTZ,                             -- NULL = 长期有效
+    version      TEXT        NOT NULL DEFAULT 'v1',
+    supersedes   TEXT,                                    -- ★ 指向被它取代的旧 clause_id
+    source_doc   TEXT        NOT NULL DEFAULT '',
+    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (scope, clause_id)
+);
+CREATE INDEX IF NOT EXISTS policy_by_scope  ON policy_clauses (scope);
+-- 反查取代关系用（§4）
+CREATE INDEX IF NOT EXISTS policy_supersedes ON policy_clauses (scope, supersedes)
+    WHERE supersedes IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS insights (
+    id            BIGSERIAL PRIMARY KEY,
+    scope         TEXT        NOT NULL DEFAULT 'global',
+    claim_id      TEXT        NOT NULL,
+    claim         TEXT        NOT NULL,
+    scope_json    JSONB       NOT NULL DEFAULT '{}'::jsonb,  -- region / product / period
+    evidence      TEXT        NOT NULL DEFAULT '',
+    confidence    TEXT        NOT NULL DEFAULT 'medium'
+                  CHECK (confidence IN ('low','medium','high')),
+    source_doc    TEXT        NOT NULL DEFAULT '',
+    -- ★ status 是 M12 飞轮的物理接口：跑出相反结论时把旧条目标 refuted 而不是删掉，
+    --   **你需要知道"我们曾经这么以为"**。
+    status        TEXT        NOT NULL DEFAULT 'active'
+                  CHECK (status IN ('active','superseded','refuted')),
+    superseded_by TEXT,
+    recorded_at   TIMESTAMPTZ,
+    ingested_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (scope, claim_id)
+);
+CREATE INDEX IF NOT EXISTS insights_by_scope ON insights (scope, status);

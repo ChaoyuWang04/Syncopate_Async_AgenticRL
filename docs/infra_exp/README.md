@@ -412,3 +412,37 @@ DDP 走 all_reduce（3 卡 24.4 GB/s 正常）**所以现在没事**，但这是
 ★ 方法学备注：这是今天**第一个被证实的预测**，因为它建立在 A8 的测量上；
 此前三个建立在推理上的预测（带宽 ×4 惩罚减半 / 是次数的代价 / all_gather 天生慢）全错。
 ⇒ 又一次验证 [[feedback-measure-dont-infer]]。
+
+### A12 · 3 rank 的 all_gather 退化是**协议选择**，而且能治（E00/E02）✅ ★★★ 有 after 了
+
+NCCL 旋钮扫描（3 卡，256 MB，algbw GB/s）：
+
+```
+                 all_reduce   all_gather   reduce_scatter   broadcast
+默认                  18.3        ★3.2           21.0          37.6
+NCCL_ALGO=Ring        18.2         3.2           20.9          37.3     无效
+NCCL_PROTO=Simple     18.3         3.2           21.0          37.6     无效
+**NCCL_PROTO=LL128**  12.9      **22.2**         23.4          22.1     ★ all_gather ↑6.9×
+Ring+Simple           17.9         3.2           20.9          37.3     无效
+（NCCL_ALGO=Tree 对 all_gather 不适用，该组报错，属预期）
+```
+
+⇒ **不是硬件限制，是协议选择。** 但 LL128 有代价：**all_reduce −30%、broadcast −41%**。
+
+**端到端验证**（3 卡 colocate，只改这一个环境变量）：
+
+```
+3卡 DDP（现用）          7.97 s   1.00×
+3卡 ZeRO-3 默认         47.94 s   6.02×   超出 DDP 40.0 s
+3卡 ZeRO-3 + LL128      14.40 s   **1.81×**  超出 DDP  6.4 s   ← ★ 一个环境变量 3.33× 提速
+4卡 ZeRO-3 默认         12.31 s   1.54×   超出 DDP  4.3 s
+```
+
+★ **微基准预测 all_gather ↑6.9× ⇒ 比值应降到 ~1.7×，实测 1.81×** —— 预测被证实。
+
+⇒ **纪律：NCCL 协议要按并行策略分别设。**
+走 all_reduce 的（DDP）用默认；走 all_gather 的（FSDP/ZeRO）开 LL128。
+**已写进 `launch_rl`：`fsdp_size>1` 时自动带 LL128 并打判据行。**
+
+⇒ **普适性**：任何在消费级无 P2P 硬件上用**非 2 幂次 rank 数 + 分片策略**的人都会撞上，
+不是本机特有的怪毛病。

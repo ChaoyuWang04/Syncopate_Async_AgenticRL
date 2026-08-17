@@ -22,6 +22,7 @@ from typing import Any
 from syncopate.runtime.db import Database, claim_run, finish_run
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
+from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
 from syncopate.runtime.tools import PermissionDenied, ToolRuntime
 
 
@@ -87,15 +88,27 @@ class WorkerConfig:
     # 审批金额阈值。None = 用 gateway 的默认值。
     # ⚠️ 走配置而不是改模块常量：常量被当默认参数值绑定过一次，改了不生效（见 gateway）。
     amount_threshold: int | None = None
+    # ★★ 这次政策检索是不是**本次决策的证据来源**。
+    #
+    # doc 10 §5 用一次实测换来的纪律：「有过空检索 + 给了确定结论 = 幻觉」这个判据
+    # **当场把自己的 gold 判错了** —— 复盘库里没有历史结论、但模型手里有实际数据时，
+    # 照数据作答是**对的**，不是编造。⇒ 判据必须挂在「**这个答案依赖那次检索**」上。
+    #
+    # 当前的最小编排**表达不了"答案依赖哪次检索"**（那要等真 Agent Loop），
+    # 所以默认 False：检索照查、信号照产、但不拿它阻断。
+    # ⇒ 这是一笔明写的欠债，不是忘了接。
+    policy_lookup_is_evidence: bool = False
 
 
 class Worker:
     def __init__(self, db: Database, platform: FakeAdPlatform,
-                 config: WorkerConfig | None = None) -> None:
+                 config: WorkerConfig | None = None,
+                 retrieval: RetrievalService | None = None) -> None:
         self.db = db
         self.platform = platform
         self.config = config or WorkerConfig()
         self.tools = ToolRuntime(db)
+        self.retrieval = retrieval or RetrievalService(db)
 
     # ---- 成本闸：压测场景⑤ ------------------------------------------------
 
@@ -138,6 +151,26 @@ class Worker:
             return
 
         ctx = DecisionContext(automation_tier=None)
+
+        # ---- step 0：查政策 ----
+        # ★ 这一步存在的意义不是"查得准"，是让**「查不到」和「查不了」两个信号
+        #   第一次有了生产者**。在此之前 gateway 的 retrieval_empty 是个孤儿触发器。
+        policy = await self.retrieval.search_policy(
+            org_id=org_id, query=user_message or "预算调整")
+        await emit(self.db, org_id=org_id, run_id=run_id, kind="retrieval.result",
+                   payload={"tool": "policy.search", "status": policy.status.value,
+                            "hits": len(policy.hits), "latency_ms": policy.latency_ms})
+        if policy.status is RetrievalStatus.NO_MATCH:
+            # 只有当这次检索是决策的证据来源时，"查不到"才阻断（见 WorkerConfig 那条注释）。
+            if self.config.policy_lookup_is_evidence:
+                ctx.retrieval_empty_tools.append("policy.search")
+        elif policy.status is RetrievalStatus.UNAVAILABLE:
+            # ⚠️ **不能和上面那条合并，而且阻断强度刻意不对称**：
+            #   查不到 = 「没有政策限制这件事」    ⇒ 依赖它才阻断
+            #   查不了 = 「不知道有没有政策限制」  ⇒ **一律阻断**
+            # 因为两种误判的代价不对称：把"没有政策"当成"不知道"，最多多问人一次；
+            # 把"不知道"当成"没有政策"，是**放行一个未知风险**。
+            ctx.retrieval_unavailable_tools.append("policy.search")
 
         # ---- step 1：读 ----
         await record_step(self.db, org_id=org_id, run_id=run_id, step=1,

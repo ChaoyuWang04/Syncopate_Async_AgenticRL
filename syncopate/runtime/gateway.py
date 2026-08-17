@@ -3,7 +3,7 @@
 ★★★ 触发条件**不能靠 token 概率**（设计文档 §39）
 
 原话：「LLM 的 token 概率和"答案对不对"关系很弱（**编造时往往最自信**）。」
-所以下面六个触发器**全部是外部信号**，没有一个读模型的置信度：
+所以下面**七个**触发器全部是外部信号，没有一个读模型的置信度：
 
     ① 工具调用失败（重试用尽）
     ② 参数校验不通过
@@ -11,6 +11,7 @@
     ④ 命中任一 cap
     ⑤ 写动作且金额 > 阈值
     ⑥ RAG 检索为空                  ← ★ 直接接上 M8 的 `no_match`
+    ⑦ RAG 检索**不可用**             ← 🆕 和⑥分开：查不到 ≠ 查不了
 
 ★ ⑥ 为什么值得单独列：M8 之前"检索为空"这件事在系统里**没有表示**，
 所以它不可能成为降级条件。M8 把 `no_match` 做成明确的信号位之后，
@@ -54,6 +55,10 @@ class DecisionContext:
     cap_hits: list[str] = field(default_factory=list)            # ④
     write_amount: int | None = None           # ⑤
     retrieval_empty_tools: list[str] = field(default_factory=list)  # ⑥ M8 的 no_match
+    # ⑦ 🆕 **查不了 ≠ 查不到**。见 runtime/retrieval.py 与 12-rag-runtime-design.md §3.1：
+    #    no_match 的语义是「没有政策限制这件事」，unavailable 的语义是
+    #    「**我们不知道有没有限制**」。合并的话一次故障看起来就是放行信号。
+    retrieval_unavailable_tools: list[str] = field(default_factory=list)
     automation_tier: str | None = None        # C 档天然要审批（§3）
 
 
@@ -86,6 +91,13 @@ def evaluate_triggers(ctx: DecisionContext, *,
         # ★ M8 的接口：no_match 是明确的信号位，不是"结果长度为 0"这种推断。
         fired.append(Trigger("retrieval_empty",
                              "检索为空：" + "、".join(ctx.retrieval_empty_tools)))
+    if ctx.retrieval_unavailable_tools:
+        # ★★ 和上面那条**必须分开**：人看到"检索为空"和"检索挂了"要做的判断完全不同。
+        # 前者是「查过了，没有相关政策」，后者是「查不了，不知道有没有政策」——
+        # 后者下**任何**放行都是在赌。⇒ trigger_reason 不同，审批单上写得清清楚楚。
+        fired.append(Trigger("retrieval_unavailable",
+                             "检索不可用（**不是**查不到）：" +
+                             "、".join(ctx.retrieval_unavailable_tools)))
     if ctx.automation_tier == "C":
         fired.append(Trigger("tier_c", "C 档动作按 §3 一律走审批"))
     return fired

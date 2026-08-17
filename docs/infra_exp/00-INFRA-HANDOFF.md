@@ -126,9 +126,12 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
         ⇒ DDP 不受影响（它走 all_reduce）；**踩坑的只有 FSDP/ZeRO 这类靠 all_gather 的**。
 ✅ A11 ZeRO-3 在 4 卡上重测              E02   **已完成**：3卡 6.02× → **4卡 1.54×**
         ⇒ 「分片慢 6 倍」大部分是「3 个 rank」的锅 ⇒ **筛子②的说法已改写**（README §7.2）
-🟠 A12🆕 3 rank all_gather 退化的机理        ~1 h   E00   NCCL_ALGO/PROTO 扫一遍，看是
-        ring/tree 选择还是 chunk 对齐；顺带验 5/6/7 rank 是否同样塌 ⇒ 「避开非 2 幂次」
-        这条建议要不要写成硬纪律
+✅ A12 3 rank all_gather 退化的机理        E00   **已完成**：不是硬件限制，是**协议选择**。
+        `NCCL_PROTO=LL128` 把 3 卡 all_gather 拉回 6.9×，实跑 ZeRO-3 **47.94→14.40 s（3.33×）**，
+        比值 6.02×→**1.81×**。⚠️ 代价 all_reduce −30%/broadcast −41% ⇒ **不能全局开**，
+        已写进 `launch_rl`：`fsdp_size>1` 时自动带上并打判据行。（README §7.3）
+        ⚠️ 「验 5/6/7 rank」做不到：NCCL 禁止同卡多 rank（实测 invalid usage），
+        rank 数被物理卡数卡死在 2/3/4，三个都已测。
 🔴 A9🆕 4bit MoE 的加载路径                ~1 h     E07   ★ **A2 的前置**：bnb 逐层量化
         造成严重碎片（权重 13.32 GB，却 17.43 GB reserved 未分配 ⇒ OOM）。
         本次靠 `expandable_segments:True` 解，**但它在真训练路径上用不了**

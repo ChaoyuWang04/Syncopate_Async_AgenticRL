@@ -325,6 +325,23 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
     # （`one_step_off_ppo_trainer` / `fully_async_ppo_trainer`）、不同的 worker 栈
     # （`separation.engine_workers.DetachActorWorker`，不是 colocate 那套 FSDP worker）、
     # 不同的入口 main。⇒ 由 `main_ppo_pool` 按 SYNCOPATE_RL_MODE 分发。
+    # ★★★ 分片时自动切 NCCL 协议（2026-08-17 A8/A12 实测）
+    #
+    # NCCL 在 **3 个 rank** 上给 all_gather 选了坏协议：实测 2卡 51.0 / 4卡 37.9 /
+    # **3卡 3.2 GB/s**（差 12×），而同样 3 卡上 all_reduce/reduce_scatter/broadcast 都正常。
+    # 后果：3 卡 ZeRO-3 的 update_actor 47.94 s = DDP 的 6.02×。
+    # ⇒ `NCCL_PROTO=LL128` 把 3 卡 all_gather 拉回 22.2 GB/s（6.9×），
+    #   实跑 ZeRO-3 **47.94 → 14.40 s（3.33×）**，比值 6.02× → 1.81×。
+    #
+    # ⚠️ **不能全局开**：LL128 让 all_reduce −30%、broadcast −41%。
+    #    而 **DDP 走的正是 all_reduce** ⇒ 只在 fsdp_size>1（真分片）时才开。
+    if args.fsdp_size and args.fsdp_size > 1:
+        overrides += [
+            '+ray_kwargs.ray_init.runtime_env.env_vars.NCCL_PROTO="LL128"',
+        ]
+        print(f"[rl] 分片模式（fsdp_size={args.fsdp_size}）⇒ 自动 NCCL_PROTO=LL128 "
+              f"（3 rank 上 all_gather 会塌 12×，见 infra_exp/README §7.3）")
+
     # ★ 权重同步 bucket：**所有模式**都要（colocate 也走 NCCL checkpoint engine，
     #   见上面那段更正）。放在分支之前，避免再次只接一半。
     overrides += [

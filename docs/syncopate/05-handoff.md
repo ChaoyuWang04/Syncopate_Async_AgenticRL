@@ -11,6 +11,7 @@
 > 沙盒设计 → `07-toolbox-and-runtime-design.md`　权威设计 → `syncopate-project-design-v0.1.md`
 > **M9 Runtime（真服务）→ `09-runtime-handoff.md`**　**RAG/检索 → `10-rag-retrieval.md`**
 > **M9 验收 / 设计符合性 → `11-runtime-acceptance.md`**（2026-08-17 审计）
+> **Runtime 侧检索 → `12-rag-runtime-design.md`**（🆕 三态契约：查到 / 查不到 / **查不了**）
 > 多卡实验设计 → `../distributed-training-design-v0.1.md`
 > **焦点是怎么定下来的 → `../focus-migration-2026-08.md`**（唯一记录迁移历史的地方）
 
