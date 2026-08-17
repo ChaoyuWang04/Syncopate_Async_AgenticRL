@@ -101,4 +101,19 @@ if want b10 "${TARGETS[@]}"; then
   done
 fi
 
+# ═══════════════════════════════════════════════════════════════════════
+# ④ B2-redo · 只有在 batch2 的 2048 档 OOM 时才跑（`bash scripts/run_batch3_gpu.sh b2redo`）
+#
+# 历史坑：bucket 2048 会在**第一次权重同步**时 OOM —— CheckpointEngine 在**目标卡**上
+# 分配一个 bucket 大小的暂存区，而 rollout 卡上还住着 vLLM（默认 gpu_util 0.85）。
+# ⇒ 重跑时把两档**同时**降到 0.65，保持「只改 bucket 这一个变量」。
+# ⚠️ 降 gpu_util 会缩小 KV 池 ⇒ 生成会变慢 ⇒ **这一对的绝对值不能和别的跑比**，只看两档之差。
+if want b2redo "${TARGETS[@]}"; then
+  for mb in 512 2048; do
+    run "b2redo_bucket${mb}" --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 12 \
+        --sync-every 4 --rollout-gpu-util 0.65 --weight-sync-bucket-mb "$mb"
+    log "   param_sync：$(grep -oE 'param_sync: [0-9.]+ seconds' "logs/b2redo_bucket${mb}.log" | tr '\n' ' ')"
+  done
+fi
+
 log "════════ batch3 结束"
