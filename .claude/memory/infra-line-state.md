@@ -34,9 +34,32 @@ infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，�
 ⚠️ **fully_async 的 timing 行覆盖 4 个 global step，绝对秒数要 ÷4** —— 我因此报错过一次。
 ⚠️ 三模式**尚未同尺子对照**（步数/配置不完全同源）⇒ 队列 B3。
 
-⇒ **明天第一件：A14**（~10 min）—— 验证 verl 的 ZeRO-3 是否真的产生 16 字节错位分片，
-**按字节加权**统计。它决定「6.02× 由对齐造成」这条因果链闭不闭合、
-以及要不要给 NCCL/FSDP 提 upstream issue（A15）。
+## ★★ 2026-08-17 晚（A14 闭环 + 夜间批开跑）
+
+```
+✅ A14  真实 ZeRO-3 的分片确实错位：all_gather 335.5 GB 里 **99.9% 的字节** %16≠0
+        主体 67,287,212 B（%16=12，每 rank **只差 4 个字节**）；同跑 Broadcast 0% 错位＝对照组
+        ⇒ E18 因果链闭合（§12）。同尺子对：Simple 96.08 vs LL128 29.76 = **3.23×**（此前 3.33×）
+        ⚠️ 绝对值不可引用 —— 这跑开着 NCCL_DEBUG=INFO（光 AllGather 71677 行）
+🟡 A15  上游归属草稿（E18 §13）：**先提 PyTorch**（per-rank numel 补到 16/itemsize 的倍数），
+        NCCL 那条引用它作下游实证。⛔ 更正：我们走 **FSDP1**（`_flat_param._get_shard`）不是 FSDP2
+        ⚠️ 提之前先做 **A16**（在真实尺寸 67,287,212 上验「补 4 字节就恢复」）；提 issue 要 Chaoyu 点头
+✅ E03  NCCL 旋钮层结案：只有 CUMEM_ENABLE=0 与（分片路径的）PROTO=LL128 有用；
+        ALGO/Simple/BUFFSIZE(1–32MB)/NUMA绑定/切分次数 全部无效
+✅ E01  白捡主线 nsys：trainer gemm 58%/elementwise 24%/attn 12%；**GEMM 全是 cutlass_80（Ampere 代）**；
+        E13 的修复在 kernel 层被证实（每步 CPU 快照 8.31 GB → 0.26 GB）
+        ⚠️ 阶段归属还差 NVTX —— verl 的 `marked_timer` 名字在、marker 一个没有 ⇒ 已写补丁 `--nvtx`
+✅ B4写码 下发记账三类事件（dispatch/complete/abort）+ 修 Pool.ingest 把无 reward 行当 0 分的污染
+```
+
+⇒ **占空比的两个数各挪了一大截**（bucket 512 的白捡观测，待 B2/B3 补同尺子分母）：
+权重同步占步 **18.8% → 6.5%**、三次前向 **72% → 84.9%** ⇒ **B12/E17 升、B1 降**。
+
+⇒ **抢卡纪律（用户 2026-08-17 明令）**：主线训练/评测跑完之前一个 GPU 实验都不许起。
+判据是**进程退出 + 显存归还 + 产物目录静默 10 分钟**三条一起查 ⇒ `scripts/gpu_gate.sh`。
+
+⇒ 夜间批：`scripts/run_batch2_gpu.sh`（A14/B2/B3/A5/B12）→ `run_batch3_gpu.sh`（A16/B11/B10）。
+⚠️ **正在跑的 bash 脚本一个字都不能改**（按字节偏移增量读）⇒ 后续项另开文件。
 
 ## 已定决策（别重新讨论）
 

@@ -71,3 +71,23 @@ M9 那条「C 档动作必须走审批」的测试，第一版判据是
 
 相关：[[project-mechanism-not-wired]] [[rl-step-size-is-lr-times-steps]]
 [[feedback-measure-dont-infer]] [[syncopate-docs-map]] [[sandbox-is-subset-of-runtime]]
+
+---
+
+## ★★ 2026-08-17 第四、五条：同一族的两个新变种（都在半天内撞到）
+
+**④「式子对 ≠ 这次跑的是这个式子」。** 我读了 verl 基类 `separation/ray_trainer.py` 的保存判据
+（`global_steps % save_freq`）就下了结论，**而 fully_async 覆盖了它**
+（`current_param_version % save_freq`，param_version 每次权重同步才 +1）。
+结论碰巧对（110 步只存一次），**机制全错**。
+⇒ **读到一个判据式子，先查子类有没有覆盖它**；判据是**这次真正加载的那条路径**（看日志里的 import），
+不是记忆里的实现。同族：归属 16 字节对齐时我点了 FSDP2 的函数，而我们跑的是 FSDP1。
+
+**⑤「判据为空时，先怀疑解析器，再怀疑现象」。** 分析 NCCL 日志的正则只认数字格式
+（`Algo 1 proto 2`），而这台打的是名字（`Algo RING proto SIMPLE`）⇒ 「协议选择」整列空白，
+**我差点写下「本次没拿到协议选择」当成一条观测**。
+同族：nsys 的 `deviceId` 全是 0（Ray 给每个 worker 只设一张卡 ⇒ 进程眼里自己那张就是 0），
+按它聚合会算出「GPU0 忙 97%」这种假数 —— **字段名对，含义却是进程局部的**。
+
+⇒ 合起来一句：**判据失效有三种长相 —— 空着、太宽、以及"看起来在量但量错了对象"。
+第三种最贵，因为它会产出一个具体的数字。**
