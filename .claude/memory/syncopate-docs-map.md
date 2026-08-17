@@ -15,6 +15,10 @@ docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令�
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/11-runtime-acceptance.md   ★ M9 验收权威文档（2026-08-17 新建）：
+                                          40 条判据逐条 · 五个确认缺口 F1–F5 ·
+                                          压测前先做两件（填【待定】+ 场景②④没有被测对象）
+                                          ⚠️ 09 只写「怎么起/施工抓到什么」，验收结论一律在这
 docs/syncopate/10-rag-retrieval.md        ★ RAG/检索权威文档（2026-08-16 新建）：
                                             **我们没做向量化** —— BM25「是排序器不是判定器」、
                                             Qwen3-0.6B 向量「没有分离带」，两条都是实测淘汰；
@@ -47,6 +51,11 @@ docs/llm-rl-framework.md                  RL 框架全景调查（Chaoyu 写的�
 ⇒ **track 文档答「这条线要兑现什么、现在在哪」，E 报告答「量到了什么」，README 是索引。三者不重复。**
 新纪律：每个实验必须能答「服务哪条 track 的哪条兑现物 / 需求由哪个测量指出」，
 答不上就**显式停放**（E04/E05/E06 已停，理由写在 README §2.1，不删）。
+
+**章节验收的做法**（M8 立的，M9 照做）：**先立判据再看代码**（反过来是自证）→
+**每条缺口要有复现**（不能只写"读代码看着不对"）→ **缺口变成机器可见的东西**
+（M8 是 cap，M9 是 `xfail(strict=True)`）→ **未修的债显式挂账 + 写「谁在打」** →
+收尾写「别再重新讨论的」。范本：`10-rag-retrieval.md` 与 `11-runtime-acceptance.md`。
 
 方法论问题先查 `核心手册/AgenticRL/sft-finetune-takeaways.md`，别凭通用经验答。
 

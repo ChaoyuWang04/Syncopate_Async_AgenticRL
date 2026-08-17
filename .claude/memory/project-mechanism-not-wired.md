@@ -119,5 +119,37 @@ dead_grid 说得出（这个模板在 EVAL 上是活的），difficulty_proxy �
 （override 只写在分卡分支里，注释还断言「分卡模式独有的开销」——那句话是错的，
 colocate 一样走 NCCL checkpoint engine）⇒ 吃 verl 默认 2048 MB，第一次同步就 OOM。
 
+---
+
+## ★★★ 2026-08-17 第六形态：**字段全程有效，只是没有消费者**
+
+M9 符合性审计（`docs/syncopate/11-runtime-acceptance.md`）：`automation_tier='C'`
+的 run **不走审批，写动作直接执行、run succeeded**。而 §3 里 C 档 = 不可逆/代价高。
+
+链路是这样断的：
+
+    API   pattern="^[ABCD]$"  校验 ✅
+    schema CHECK (... IN ('A','B','C','D'))  约束 ✅
+    落库   agent_runs.automation_tier = 'C'   ✅
+    claim_run 的 RETURNING **没有这一列**      ← 断在这
+    worker  DecisionContext(automation_tier=None)  硬编码
+    ⇒ tier_c 触发器**在真实路径上永远不可达**
+
+⚠️ **前五种形态至少有个"接"的动作**（接错了作用域、接在另一条分支、接的时机不对）；
+这一种**连接的动作都不存在**，而且**两头的关卡都做得一丝不苟** —— 所以它长得特别像做完了。
+
+⇒ **判据：一个字段被收下、校验、落库之后，去问"谁读它"。** 只有写没有读 = 没接上。
+⇒ 同一轮还查出：六个降级触发器只有 2 个有生产者、`checkpoints`/`model_calls`
+两张表**建了但没有写入路径**、`outcome_*` 除 schema 外零引用 —— **全是同一形态。**
+
+★ 「不可达」这件事**没有行为可测** —— 你测不出一个永远不会发生的事件。
+所以判据只能是**源码扫描**（`DecisionContext` 每个字段在 worker 里有没有被赋值），
+不是行为测试。这不是偷懒，是这类缺陷唯一可测的形状。
+
+★★ 配套手法：缺口用 **`xfail(strict=True)`** 钉住，不用注释。
+现在不满足所以标 xfail；**修好那天会变成 XPASS = 失败**，逼下一个人回来翻标记。
+⇒ **让缺口自己会喊**，这是 [[observed-needs-an-owner]] 在代码里的落法。
+
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
-[[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]]
+[[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]] [[observed-needs-an-owner]]
+[[sandbox-is-subset-of-runtime]]

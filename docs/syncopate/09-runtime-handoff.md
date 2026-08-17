@@ -1,7 +1,10 @@
 # Syncopate · 09 — M9 Runtime 上线态
 
-> 更新于 **2026-08-14**。M9.1–M9.6 施工完成，**M9.7 压测未做**（那是最终的考试）。
-> 环境怎么起（PostgreSQL 的持久化限制）→ `08-machine-and-environment.md`
+> 更新于 **2026-08-17**。M9.1–M9.6 施工完成，**M9.7 压测未做**（那是最终的考试）。
+> ★★ **验收 / 设计符合性 → `11-runtime-acceptance.md`**（2026-08-17 独立审计，40 条判据
+> 逐条核对；**结论：45 条测试全绿，但设计 §3 的 C 档审批一次都没被接上**）——
+> 这一份只写「怎么起、施工时抓到了什么」，**别在这里找验收结论**。
+> 环境怎么起 → `08-machine-and-environment.md`
 > 设计依据 → `../syncopate-project-design-v0.1.md` §36–39
 
 ---
@@ -25,7 +28,12 @@ uvicorn syncopate.runtime.api:app --port 8000   # 起服务
 | M9.4 | Tool Runtime + Worker | ✅ 含假平台与故障注入 |
 | M9.5 | 审批网关 + 六个降级触发器 | ✅ |
 | M9.6 | SSE + 观测 + 成本控制 | ✅ 9 条，主验收是断线补发 |
-| **M9.7** | **压测五场景** | ⬜ **最终的考试** |
+| **M9.7** | **压测五场景** | ⬜ **最终的考试**。⚠️ 场景②④ 现在**没有被测对象**（无模型服务 / 无 RAG），见 `11 §5` |
+
+⚠️ **上表是"施工"状态，不是"验收"状态。** 2026-08-17 的符合性审计结论：
+40 条判据 **✅20 / 🟡7 / ⛔11 / ⬜2**，五个确认缺口 F1–F5 已变成
+`tests/runtime/test_design_conformance.py` 里 5 条 `xfail(strict=True)`。
+**全表见 `11-runtime-acceptance.md`。**
 
 ---
 
@@ -142,6 +150,11 @@ M8 把 `no_match` 做成明确的信号位之后，runtime 才拿得到它。
 | 假平台 vs 真 API | 按 2026-08-14 的决定不接真 Meta（会真烧钱），真接入留到 M10 影子模式 |
 | `latency_ms` 列类型写成了 TEXT | `tool_calls.latency_ms` 应该是 INTEGER。现在没往里写值，改的时候一起修 |
 
-⚠️ **PGDATA 放不进 `/workspace`**（mfs 不支持权限位 × 无 `cap_sys_admin`）。
-数据库是**派生产物**：工具在 `/workspace/tools/postgres`、schema 在仓库、
-`pg_bootstrap.sh` 一条命令重建。详见 `08-machine-and-environment.md`。
+🔴 **2026-08-17 换机器后更正：PGDATA 现在就放在 `/workspace`。**
+`/workspace` 是本地 XFS，`chmod 700` 生效 ⇒ `PGDATA=/workspace/pgdata/16/syncopate`
+（已写进 `/workspace/.env`）。~~旧机器的 mfs 不支持权限位才放不进~~。
+⚠️ 但**数据库仍然是派生产物**，这条没变：工具在 `/workspace/tools/postgres`、
+schema 在仓库（`syncopate/runtime/schema.sql` 是真相来源）、
+`bash scripts/pg_bootstrap.sh` 一条命令重建。详见 `08-machine-and-environment.md` §1.1。
+⚠️ 干净机器上重建会撞两个坑（都已修进脚本）：`dpkg -x` **不跑 maintainer 脚本**
+⇒ 不建 `postgres` 用户；`libpq.so.5` 不进 ldconfig ⇒ 要 `LD_LIBRARY_PATH`。

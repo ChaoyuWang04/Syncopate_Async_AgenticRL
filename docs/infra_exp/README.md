@@ -301,3 +301,62 @@ flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.
     ⚠️ old_log_prob 占 25.7%，而 launch_rl 注释估的是「+6–10 s」——**低估 8–13 倍**（E12 §6-②）
     ⇒ old_log_prob(19.1) 与 ref(9.8) 的 9.3 s/步缺口：**47% 是 proximal anchor 的 CPU 快照**（E13）
 ```
+
+---
+
+## 7 · 2026-08-17 第 1 批实测（四项，约 3 小时）
+
+> 尺子：`scripts/probe_power_throttle.py` · `scripts/probe_allreduce_bw.py`
+> 原始数据：`logs/e00_power_throttle.json` · `logs/e00_allreduce_*.json` · `logs/e02_three_way.json`
+
+### A7 · 满载降频（E00）✅ 顾虑被证伪
+
+```
+        SM 频率     整机功耗   单卡 TFLOPS
+1 卡    2750 MHz     600 W       225.2
+4 卡    2706 MHz    2325 W       220.8      ⇒ 单卡算力 −2.0%（throttle=0x4 功耗墙）
+```
+⇒ **README 原来写的「满载降频会污染所有对照」不成立**：代价只有 2%。
+多卡加速比**不需要**扣这一项。
+
+### A6 · E02 三档稳态（同 3 卡，只改分片策略）✅ 结论比原来更硬
+
+```
+            update_actor 稳态   vs DDP      端到端 step
+DDP                 7.97 s      1.00×          23.8 s
+ZeRO-2             27.23 s      3.42×          48.6 s
+ZeRO-3             47.94 s      6.01×         104.0 s
+```
+⚠️ **预测错了**：迁移分析预测「带宽 ×4 ⇒ 惩罚降到 ~2 倍」，实测 **6.01×，纹丝不动**。
+⇒ **分片惩罚不是带宽瓶颈。** 假设是每层集合通信的**固定开销**（次数的代价，不是字节的代价）
+—— 这条**尚未证实**，要专门量一次每层集合通信的次数与单次耗时。
+★ 口径优于原版：原来是「3 卡分片 vs 1 卡不分片、且只有首步」（混了两个变量），
+现在是**同 3 卡、只改一个变量、稳态**，且 ZeRO-2 这一档是第一次量。
+
+### A1 · MoE go/no-go（E07-P2）✅ **GO**
+
+```
+arch = Qwen3MoeForCausalLM · 128 experts / 激活 8
+Linear 18673 个，专家里 18432 = 98.7%          ← E07 §4.5.3 预测精确命中
+4bit(nf4+双量化) 加载 15.6 GB · LoRA(注意力+router) 30.1 M = 0.193%   ← 预测也是 30.1 M
+前向+反向通过 · 峰值 21.4 GB · 480 个 LoRA 张量梯度全部有限
+```
+⇒ **A2（三摆法）的门槛开了。**
+⚠️ **新挖出的坑**：4bit 加载时 bnb 逐层量化造成严重碎片（权重仅 13.32 GB，
+却有 17.43 GB reserved-but-unallocated 直接 OOM）。本次靠 `expandable_segments:True` 解掉，
+**但该开关在真训练路径上用不了**（与 vLLM colocate 内存池冲突）
+⇒ **A2 真跑时须换办法**（分层加载 / CPU 侧先量化）。`bitsandbytes 0.50.1` 已装。
+
+### E04 · rollout 侧 TP=2（限同一 socket）⛔ 实测净负，再次停放
+
+```
+                              gen 稳态      端到端 step
+TP=1  trainer3 + rollout1     6.19–6.60 s   22.4–23.3 s
+TP=2  trainer2 + rollout2     7.68–7.70 s   27.3–28.9 s
+```
+⇒ **生成慢 20%**（gen 是干净信号；step 因 trainer 卡数同时变了，不可单独归因）。
+组内 28.8 GB/s 也救不回来 —— 小 batch 生成是**延迟/带宽受限**，TP 每层要多一次 all-reduce，
+而 4B 单卡本来就放得下，切开纯属多付通信。
+★ **这次的停放理由是实测的，不是推算的**（原理由「带宽上 TP 大概率净负」是推算）。
+⚠️ **成立范围**：只答了 **rollout 侧、4B、小 batch**。trainer 侧 TP 仍缺 megatron 后端未验；
+装不下单卡的模型是另一个命题。
