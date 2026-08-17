@@ -6,10 +6,12 @@
 **每张卡上、每个进程各自忙了多久、忙在什么类型的活上、剩下的时间在等谁**。
 `trainer` 和 `rollout` 在同一份 trace 里，不按进程拆开就分不出 update_actor 和 gen。
 
-⚠️ 本项目没有 NVTX 阶段标注（verl 默认不打）⇒ **不能**把 GPU 时间直接切成
-update_actor / old_log_prob / ref 三段。能给的是「算子类型 × 进程 × 卡」的分解，
-以及**kernel 级的占空比**（比 nvidia-smi 采样精确一个量级）。
-⇒ 想要真正的阶段归属，得给 verl 打 NVTX（记在 E01 §8）。
+两种模式：
+  ① 无 NVTX（旧 trace）：给「算子类型 × 进程 × 卡」的分解 + **kernel 级占空比**
+     （比 nvidia-smi 采样精确一个量级）。
+  ② 🆕 有 NVTX（`launch_rl --nvtx` 跑出来的）：**按阶段归属** kernel 时间
+     —— update_actor / old_log_prob / ref / gen / param_sync 各占多少，**这才是 A5 的正题**。
+     verl 自带的 `marked_timer` 名字里有 marker、函数体里一个都没有 ⇒ 我们自己打（verl_patches）。
 
 用法：
     python scripts/analyze_nsys_step.py logs/nsys/e01_rl_v13.sqlite --json _audit/infra/e01.json
@@ -42,6 +44,67 @@ def classify(name: str) -> str:
         if rx.search(name):
             return label
     return "other"
+
+
+def phase_attribution(con, window: tuple[int, int]) -> dict:
+    """★ A5 的正题：把 kernel 时间按 **NVTX 阶段** 归属。
+
+    ⚠️ 两个进程的事：range 打在 **trainer driver**（阶段边界在那里），
+    kernel 跑在 **WorkerDict**（另一个进程）⇒ 只能靠 nsys 的**同一条时间轴**对齐，
+    按时间区间归属，不是按进程。
+    ⚠️ range 会嵌套（`step` 套着 `gen`/`update_actor`…）⇒ 取**最内层**那个，否则重复计。
+    """
+    import bisect
+
+    rows = list(con.execute("""
+        SELECT s.value, e.start, e.end FROM NVTX_EVENTS e
+        JOIN StringIds s ON s.id = e.textId
+        WHERE s.value LIKE 'syncopate/%' AND e.end IS NOT NULL
+    """))
+    if not rows:
+        # 有些版本把文本直接写在 text 列
+        rows = list(con.execute("""
+            SELECT text, start, end FROM NVTX_EVENTS
+            WHERE text LIKE 'syncopate/%' AND end IS NOT NULL
+        """))
+    if not rows:
+        return {"error": "trace 里没有 syncopate/* 的 NVTX range —— "
+                         "是不是没传 --nvtx，或者补丁只在 driver 生效？"}
+
+    ranges = sorted(((int(a), int(b), t) for t, a, b in rows), key=lambda r: r[0])
+    starts = [r[0] for r in ranges]
+
+    per_phase: dict[str, dict] = defaultdict(lambda: {"ns": 0, "kernels": 0})
+    unattributed = {"ns": 0, "kernels": 0}
+    for kstart, kend in con.execute(
+            "SELECT start, end FROM CUPTI_ACTIVITY_KIND_KERNEL WHERE start >= ? AND end <= ?",
+            window):
+        j = bisect.bisect_right(starts, kstart) - 1
+        best = None
+        # 往回找有限几个（嵌套深度有限），取**包住它且最短**的那个 = 最内层
+        for i in range(j, max(-1, j - 12), -1):
+            a, b, t = ranges[i]
+            if a <= kstart and kend <= b and (best is None or (b - a) < (best[1] - best[0])):
+                best = ranges[i]
+        if best is None:
+            unattributed["ns"] += kend - kstart
+            unattributed["kernels"] += 1
+        else:
+            e = per_phase[best[2].split("/", 1)[1]]
+            e["ns"] += kend - kstart
+            e["kernels"] += 1
+
+    total = sum(v["ns"] for v in per_phase.values()) + unattributed["ns"]
+    return {
+        "n_ranges": len(ranges),
+        "by_phase": {k: {"seconds": round(v["ns"] / 1e9, 3),
+                         "share": round(v["ns"] / total, 4) if total else None,
+                         "kernels": v["kernels"]}
+                     for k, v in sorted(per_phase.items(), key=lambda kv: -kv[1]["ns"])},
+        "unattributed": {"seconds": round(unattributed["ns"] / 1e9, 3),
+                         "share": round(unattributed["ns"] / total, 4) if total else None,
+                         "kernels": unattributed["kernels"]},
+    }
 
 
 def analyze(db: Path) -> dict:
@@ -95,6 +158,7 @@ def analyze(db: Path) -> dict:
             for d, ns, b, n in memcpy
         ],
     }
+    out["phases"] = phase_attribution(con, (t0, t1)) if t0 is not None else {"error": "无 kernel"}
     for dev, ns in sorted(by_device.items()):
         out["devices"][str(dev)] = {
             "kernel_seconds": round(ns / 1e9, 3),
@@ -137,6 +201,17 @@ def main() -> int:
         cats = "  ".join(f"{k} {vv['share'] * 100:.0f}%" for k, vv in
                          list(v["by_category"].items())[:5])
         print(f"    {name:<44}{v['kernel_seconds']:>8.2f} s  忙 {v['busy_share'] * 100:>5.1f}%   {cats}")
+
+    ph = res.get("phases", {})
+    if ph.get("by_phase"):
+        print(f"\n  ★★ 按 NVTX 阶段归属（{ph['n_ranges']} 个 range）—— **这才是 A5 的正题**")
+        for k, v in ph["by_phase"].items():
+            print(f"    {k:<22}{v['seconds']:>9.2f} s{(v['share'] or 0) * 100:>8.1f}%   {v['kernels']} 个 kernel")
+        u = ph["unattributed"]
+        print(f"    {'（不在任何 range 内）':<22}{u['seconds']:>9.2f} s{(u['share'] or 0) * 100:>8.1f}%"
+              f"   {u['kernels']} 个 kernel   ← 大多是 rollout 侧（它不在 trainer 的 range 里）")
+    elif ph.get("error"):
+        print(f"\n  ⚠️ 阶段归属不可用：{ph['error']}")
 
     print("\n  ★ 最贵的 kernel")
     for k in res["top_kernels"][:8]:
