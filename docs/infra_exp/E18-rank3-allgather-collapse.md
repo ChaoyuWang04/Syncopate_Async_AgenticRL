@@ -462,8 +462,18 @@ NCCL 的 Simple 协议 kernel 按 16 字节打包搬运；**当分块字节数�
    两者之间还隔着「这些 all_gather 占 update_actor 多少时间」——
    那一步由 **B13**（字节账核对）回答。
 
-⚠️ **本次没拿到的**：日志里没有 `-> Algo X proto Y` 行（本次 NCCL 的 TUNING 输出格式与
-§10.1 那次不同），所以**没有重新确认协议选择**。这不影响 12.1 的统计（分块字节数与协议无关）。
+### 12.3 协议选择：**RING+SIMPLE**，与 §10.1 一致
+
+```
+AllGather / Broadcast / ReduceScatter   → RING + SIMPLE      （AllReduce 走 TREE+SIMPLE）
+```
+⇒ 强制 `NCCL_PROTO=Simple` 生效了，而且**和默认时的选择一样**（§10.1 已证：3 卡与 4 卡的
+选择完全相同）。⇒ 再次确认：差异不来自「选错协议」。
+
+⛔ **中途差点写错一句**：第一版分析脚本的正则只认数字格式（`Algo 1 proto 2`），
+而这台的 NCCL 打的是名字（`Algo RING proto SIMPLE`）⇒ 「选择」列全空，
+我差点在报告里写下「本次没拿到协议选择」。
+★ **教训：判据为空时，先怀疑解析器，再怀疑现象。**（同族：E01 §7-1 的 `deviceId` 全 0。）
 
 ---
 

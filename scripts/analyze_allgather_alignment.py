@@ -30,7 +30,10 @@ from pathlib import Path
 #   node:pid:tid [0] NCCL INFO AllGather: 22369620 Bytes -> Algo 1 proto 2 time ...
 _OP_RE = re.compile(r"NCCL INFO (\w+): (\d+) Bytes")
 # 它自己打的选择行：`-> Algo X proto Y`（不依赖我们对成本模型表的解读，见 E18 §10.1）
-_CHOICE_RE = re.compile(r"(\w+): \d+ Bytes -> Algo (\d+) proto (\d+)")
+# ⚠️ NCCL 这里**有两种输出格式**：数字（`Algo 1 proto 2`）和名字（`Algo RING proto SIMPLE`）。
+#    2026-08-17 第一版只认数字 ⇒ 「选择」列全空，差点写成「本次没拿到协议选择」。
+#    ★ 又一次：**判据为空，先怀疑解析器，再怀疑现象。**
+_CHOICE_RE = re.compile(r"(\w+): \d+ Bytes -> Algo (\w+) proto (\w+)")
 
 ALGO = {0: "Tree", 1: "Ring", 2: "CollNetDirect", 3: "CollNetChain", 4: "NVLS", 5: "NVLSTree", 6: "PAT"}
 PROTO = {0: "LL", 1: "LL128", 2: "Simple"}
@@ -60,9 +63,10 @@ def analyze(path: Path) -> dict:
                 e["misaligned_bytes"] += nbytes
             c = _CHOICE_RE.search(line)
             if c:
-                choices[c.group(1)].add(
-                    f"{ALGO.get(int(c.group(2)), c.group(2))}+{PROTO.get(int(c.group(3)), c.group(3))}"
-                )
+                a, pr = c.group(2), c.group(3)
+                a = ALGO.get(int(a), a) if a.isdigit() else a
+                pr = PROTO.get(int(pr), pr) if pr.isdigit() else pr
+                choices[c.group(1)].add(f"{a}+{pr}")
 
     out = {}
     for op, e in per_op.items():
