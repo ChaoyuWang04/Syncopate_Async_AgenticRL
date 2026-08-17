@@ -134,4 +134,16 @@ if want b15 "${TARGETS[@]}"; then
   grep -E "\[sync-timing\]" logs/b15_synctiming.log | tail -20 | tee -a "$QUEUE_LOG"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════
+# ⑥ E16 第一枪 · sm_120 上 FP8 到底点亮了没有（Track A 唯一的「硬手艺」，且完全独立）
+#
+# ★ 需求从哪来：E01 实测**我们自己的热点路径上所有 GEMM 都是 `cutlass_80_*`（Ampere 代）**
+#   —— 这块卡有原生 FP8/FP4，但没人为它点亮。
+# ★ 判据写死在探针里：FP8 相对 bf16 **≥1.5×** 才算"点亮了"；1.0–1.2× ⇒ 只是能跑。
+if want e16 "${TARGETS[@]}"; then
+  log "════════ e16 · sm_120 FP8 探底"
+  ( set -x; CUDA_VISIBLE_DEVICES=0 timeout 600 .venv/bin/python scripts/probe_sm120_fp8.py \
+      --json logs/e16_fp8.json ) 2>&1 | tee -a "$QUEUE_LOG"
+fi
+
 log "════════ batch3 结束"
