@@ -1,5 +1,7 @@
 # Infra 线交接（独立于主线训练）
 
+> ★★ **新窗口从这里开始：[`ONBOARDING.md`](ONBOARDING.md)** —— 读什么、第一件做什么、五条会踩的坑，20 分钟接上手。**每次收尾更新它**（它的 §8 写了怎么改）。
+>
 > 更新于 **2026-08-17**。给下一个上下文窗口。
 > **分工**：主线训练（数据/SFT/RL/RAG/Runtime 里程碑）看 `../syncopate/05-handoff.md`；
 > **本文档只管 infra 线**——多卡并行、异步 RL、通信、kernel、框架/模型选型。
@@ -222,7 +224,7 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 ## 6 · 新窗口阅读顺序
 
 ```
-本文档 → TRACK-A / TRACK-B（看接哪条线）→ NARRATIVE-AND-RESUME.md（这些实验最后要变成什么）
+ONBOARDING.md（20 分钟上手）→ 本文档 → TRACK-A / TRACK-B（看接哪条线）→ NARRATIVE-AND-RESUME.md（这些实验最后要变成什么）
 → README.md（E 索引/模板/纪律）
 → E12（权重同步查因，方法论样板）→ E08（占空比与同机分母）→ E13（一行改动的全过程）
 → E07（MoE 决策 + 三处更正）

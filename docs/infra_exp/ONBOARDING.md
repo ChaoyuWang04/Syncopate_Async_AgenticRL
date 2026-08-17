@@ -1,0 +1,155 @@
+# infra 线 · 新窗口对接
+
+> **每次收尾时更新这份文件**（怎么更新见文末 §7）。新窗口开场只说一句
+> 「读 `docs/infra_exp/ONBOARDING.md`」就够了。
+>
+> 最后更新：**2026-08-17**
+
+---
+
+你接手的是 **Syncopate 项目的 infra 线**（多卡 / 异步 RL / 通信 / kernel / 模型选型）。
+这条线和**主线训练**是**两条独立的线、共用一个 git 仓库**，由不同窗口负责 ——
+这一点很重要，见 §5-1。
+
+---
+
+## 1 · 按这个顺序读（约 20 分钟）
+
+```
+1. docs/infra_exp/00-INFRA-HANDOFF.md   ★ 先读。现在在哪 / §5 队列 = 下一步做什么
+2. docs/focus-migration-2026-08.md      焦点是怎么定下来的（唯一记录迁移历史的地方；
+                                        其余文档只写当前态、不做新旧对照）
+3. docs/infra_exp/E18-rank3-allgather-collapse.md   ★★ 最近一次完整实验，也是方法论样板
+4. docs/infra_exp/TRACK-A / TRACK-B     两条线各要兑现什么、现在在哪（A*/B* 全表）
+5. docs/infra_exp/README.md             E 编号索引 / §6 全局常量 / §7 最近实测 / 报告模板
+6. docs/syncopate/08-machine-and-environment.md   环境怎么跑起来（★ 尤其 §2.0 和 §2.2）
+```
+
+**记忆在 `.claude/memory/`（已进 git）**，`MEMORY.md` 是索引。软链断了就重建：
+
+```bash
+ln -s /workspace/Syncopate_Async_AgenticRL/.claude/memory \
+      /root/.claude/projects/-workspace-Syncopate-Async-AgenticRL/memory
+```
+
+---
+
+## 2 · 每个 shell 的第一件事
+
+```bash
+set -a; . /workspace/.env; set +a
+```
+
+`/` 只有 **16 GB overlay**，`/workspace` 才是 300 GB 持久卷。
+`.env` 里那十几条重定向（`RAY_TMPDIR` / `TRITON_CACHE_DIR` / `PGDATA` /
+`LD_LIBRARY_PATH` …）**少一条，Ray 一溢写就把盘撑爆**。
+
+---
+
+## 3 · 最近一轮做完了什么（2026-08-17）
+
+第 1 批四项 + 四条追加**全部完成**，结果在 `README §7`，完整叙事在 `E18`。一句话：
+
+> **3 卡 ZeRO-3 慢 6.02× 的根因，不是带宽、不是集合通信次数、不是拓扑、
+> 也不是 NCCL 选错协议 —— 是「每 rank 分块字节数不被 16 整除 ⇒ NCCL 的
+> Simple kernel 整段放弃向量化 ⇒ 掉 12×」。**
+> 常见张量是 2 的幂次，÷3 破坏对齐、÷4 天然保持 —— 这才是「3 卡受诅咒」的真相。
+
+已落地：`launch_rl` 在 `fsdp_size>1` 时自动 `NCCL_PROTO=LL128`
+（**应急手段，不能全局开** —— 它让 all_reduce −30% / broadcast −41%）。
+
+**RL 三模式实测**（v12 数据，Qwen3-4B + LoRA r32）：
+
+```
+fully_async  3+1   14.3–17.6 s/步   ← 最快
+one_step_off 3+1   22.9 s/步
+colocate     3 卡  29.2 s/步
+colocate     1 卡  67.2 s/步
+```
+⚠️ 三模式**尚未同尺子对照**（步数/配置不完全同源）⇒ 队列 **B3**。
+
+---
+
+## 4 · ★ 第一件事：**A14**（约 10 分钟）
+
+这是上一轮唯一没闭合的环。**机制已证实，但还没证明 verl 的 ZeRO-3 真的撞在上面。**
+
+```bash
+NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING \
+  python -m syncopate.train.launch_rl --mode colocate --trainer-gpus 3 \
+    --fsdp-size 3 '++actor_rollout_ref.actor.fsdp_config.reshard_after_forward=True' \
+    --steps 1 --weight-sync-bucket-mb 256 --rollout-gpu-util 0.35 ...
+# 抓所有 "AllGather: N Bytes"，统计 %16 != 0 的**按字节加权**占比
+```
+
+⚠️ **必须按字节加权，不能按调用次数** —— 小张量再多也解释不了 6.02×。
+
+```
+占比高 ⇒ 因果链闭合，接着 A15（决定给 NCCL 还是 FSDP 提 upstream issue）
+占比低 ⇒ 6.02× 另有原因，这条链还差一环
+```
+
+⛔ **A14 出结果之前，不要把「6.02× 由对齐造成」写成定论。**
+E18 §11 结尾和记忆里都钉了这条限定。
+
+之后按 `00-INFRA-HANDOFF §5` 的队列走。下一个大头是
+**B12 / E17 · 训练侧三次前向占步 72%**（占空比里最大的一块，纯计算、不受通信发现影响），
+门槛 **A5**（nsys 拆解，🐟 类，可挂在任意一次训练上零成本做掉）。
+
+---
+
+## 5 · ⚠️ 五条会让你踩坑的
+
+1. **提交时按路径 `git add <具体文件>`，绝不用 `-a`。**
+   训练线那个窗口在同一个仓库里工作（当前有 `data/splits/v13/`、`_audit/v13_*` 等
+   未提交产出）—— **别碰**。
+2. **换 flash-attn 轮子后先跑 `scripts/check_flash_attn_backward.py`。**
+   有个轮子**前向数值三项全过、反向全错**（nan 或恒为 0），会让 RL 完全空转且不报错。
+   ⇒ 「import 成功 ≠ 契约满足」的下一层是「**前向对 ≠ 反向对**」。
+3. **`--weight-sync-bucket-mb` 默认 2048 会 OOM**（所有模式，不只分卡），短跑显式传 512。
+4. **`--save-freq 999` 挡不住收尾保存** —— 每个短跑结束落一个 **27 GB** ckpt。跑完就删
+   `checkpoints/grpo/<exp>/global_step_*`（`dispatched.jsonl` 和 `rollout_dumps` 要留）。
+5. **fully_async 的 timing 行覆盖 4 个 global step**，绝对秒数要 ÷4。
+
+---
+
+## 6 · 三条纪律（这条线的立身之本）
+
+1. **先写预测再跑。** 错了就在报告 §6 写「原猜想 / 实测 / 推翻后 / 教训」四段。
+2. **每个加速比都要有同分母**，一次只变一个变量。
+3. **只报吞吐不报任务精度的优化不算完成**（队列 B5 至今一次没过）。
+
+★ 上一轮那条链上**错了三次、对了一次** —— 唯一对的那次是**基于测量**而不是推理的预测。
+停在「NCCL 选错了」会得到一个**看起来完整、实际是错的**根因，而且导出错误建议（换协议），
+真正的正解是补齐对齐。⇒ **多问一句「那它为什么选错」。**
+
+---
+
+## 7 · 现成的工具（别重写）
+
+```
+scripts/probe_allreduce_bw.py          卡间 all-reduce 带宽（E00 口径）
+scripts/probe_collective_bw.py         算子 × 卡数 的二维带宽扫描
+scripts/probe_collective_granularity.py 固定总字节、只改切分次数
+scripts/probe_alignment_cliff.py       ★ 16 字节对齐悬崖
+scripts/probe_power_throttle.py        满载功耗与降频
+scripts/check_flash_attn_backward.py   ★ flash-attn **反向**数值判据
+scripts/check_data_gates.py            数据门槛
+logs/e00_*.json · logs/e02_*.json      以上所有原始数据
+```
+
+---
+
+## 8 · 怎么维护这份文件（收尾时做）
+
+每次收尾，**只改这四处**，别让它增量堆长：
+
+| 改哪 | 改成什么 |
+|---|---|
+| §3 最近一轮做完了什么 | **整段换掉**，只留最新一轮。历史归 E 报告和 `focus-migration` |
+| §4 第一件事 | 换成新的队首任务，附**可直接粘贴的命令**和**判据** |
+| §5 踩坑 | 只留**仍然有效**的；修好的删掉（细节在 E 报告里） |
+| §7 工具 | 新增探针时加一行 |
+
+⇒ 目标是**新窗口 20 分钟内能接上手**，不是记录完整历史。
+完整历史在 E 报告、`focus-migration-2026-08.md` 和 `.claude/memory/`。

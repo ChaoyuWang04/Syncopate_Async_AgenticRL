@@ -34,6 +34,7 @@ docs/syncopate/10-rag-retrieval.md        ★ RAG/检索权威文档（2026-08-1
 docs/syncopate-project-design-v0.1.md     权威设计（里程碑 M0–M12）
 docs/ostinato-project-design-v0.2.md      单卡 infra 优化
 docs/distributed-training-design-v0.1.md  多卡实验设计（异步 / 并行策略 / 通信画像）
+docs/infra_exp/ONBOARDING.md              ★★ infra 新窗口从这里开始（20 分钟上手，收尾时更新）
 docs/infra_exp/00-INFRA-HANDOFF.md        ★ infra 线交接（与主线 05-handoff 平行的另一条线）
 docs/infra_exp/TRACK-A-hardware-kernel.md ★ 软硬结合线：负载稀疏结构 × 6.4GB/s 拓扑 决定写什么算子
 docs/infra_exp/TRACK-B-framework-async.md ★ 框架线：通用 RL 框架的假设在 agentic 负载上逐条失效

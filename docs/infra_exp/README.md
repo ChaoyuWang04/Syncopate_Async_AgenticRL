@@ -1,7 +1,7 @@
 # Infra 实验室 · 索引与规程
 
 > 2026-08-13 建。**这个目录只放实验报告**，一个实验组一份 markdown。
-> **新窗口先读 [`00-INFRA-HANDOFF.md`](00-INFRA-HANDOFF.md)**——infra 线现在在哪、下一步做什么。
+> **新窗口先读 [`ONBOARDING.md`](ONBOARDING.md)**（20 分钟上手），再看 [`00-INFRA-HANDOFF.md`](00-INFRA-HANDOFF.md)——现在在哪、下一步做什么。
 >
 > 三份设计文档负责「我们打算做什么、为什么」，**这里负责「我们真的做了什么、量到了什么」**：
 > - `docs/syncopate/05-handoff.md` —— 业务/数据/训练主线的交接
