@@ -9,6 +9,7 @@ metadata:
 ---
 
 ```
+docs/focus-migration-2026-08.md           ★ 焦点怎么定下来的（唯一记录迁移历史处）
 docs/syncopate/05-handoff.md              ★ 先读：现在在哪 / 下一步 / 已定的决策 / 反复栽的坑
 docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令、参数为什么是那个值
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）

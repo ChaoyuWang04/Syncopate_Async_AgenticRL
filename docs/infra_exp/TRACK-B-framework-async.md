@@ -15,7 +15,7 @@
 | 通用框架的假设 | 在 agentic 负载上的实际情况 |
 |---|---|
 | 「rollout 时长大致齐整，barrier 的代价可接受」 | 同批最慢/平均 **1.37–2.75×**（多轮 + 工具往返）⇒ barrier 浪费的就是这块 |
-| 「权重同步 = 传输，量小就便宜」 | LoRA 仅 132 MB（6.4 GB/s 上约 0.02 s），实测 **11.1–13.6 s 恒定**，占步 **36%**。差 600 倍，**时间不在传输上** |
+| 「权重同步 = 传输，量小就便宜」 | LoRA 仅 132 MB（按卡间带宽应是毫秒级），实测 **11.1–13.6 s 恒定**，占步 **36%**。差三个数量级，**时间不在传输上** |
 | 「训练到的样本 = 下发的样本」 | sync 下恒真（barrier 保证），**异步下短任务先回、长任务被切断** ⇒ 分布漂移。而长链正是 agentic 的核心能力 |
 | 「rollout 与训练的分布差是数值偏差」 | MoE 上两侧 router 可能选**不同专家** = 走了不同计算路径（Miles R3），verl 无路由重放 |
 | 「staleness 有人在记」 | verl 的 fully_async 要 `min/max_global_steps`，**我们的 agent loop 没透传** ⇒ 曾崩在 step 0（2026-08-14 已解，M7 正在跑 fully_async） |
@@ -436,7 +436,7 @@ reward = self.reward if self.reward is not None else 0.0
 - **分卡异步接线**：one_step_off 跑通并调优，3 卡 DDP 稳态 49.5 → **32.6 s/步**（FA2+dynamic 后）。
   过程中撞到四堵墙（三套 trainer / 动态分池只在一档生效 / rollout 卡不只有 vLLM / NCCL 以为 P2P 可用），
   全部记在 `../distributed-training-design-v0.1.md` §7。
-- **DDP 必选**的定论：3 卡 FULL_SHARD 1182 s/步 vs 单卡 198 s（**多给卡慢 6 倍**），DDP 3.00× 线性。
+- **DDP 必选**（`--fsdp-size 1`）：LoRA 下每步只同步 260 MB；FULL_SHARD / ZeRO-2 的稳态对照由 **A6** 补。
 - **fully_async 解封并上线**（2026-08-14）：`param_version` 透传补上，M7 已用
   fully_async + decoupled + partial_rollout + dynamic_bsz 跑完 147 步。
   ★ 修 bug 和拿数据是同一个动作——那个字段正是 staleness 经验分布的来源。

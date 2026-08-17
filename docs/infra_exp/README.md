@@ -86,9 +86,9 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 |---|---|---|---|---|---|---|
 | **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | A+B | 🟡 | 🔴 | 🔴 |
 | **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台） | A+B | ⬜ | 🔴 | 🐟 |
-| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 **已成文**：首步 FULL_SHARD×3 1182.1s vs 单卡 198.0s = **5.97×**（两边都是首步，口径一致）；⚠️ **FULL_SHARD 稳态数据不存在**（那次跑一步就崩）；ZeRO-2 档未测 | 🟠 | 🔴 补稳态 |
+| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档 | **A** | 🟡 结论方向已定（DDP 赢），⚠️ **三档稳态对照在当前拓扑下尚无数据** ⇒ 队列 **A6**，它决定筛子②还剩多少力气 | 🔴 | 🔴 |
 | **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮、重叠率、bucket 大小 | **A** | 🟡 数据已有待成文：CUMEM=0 6.4GB/s vs SHM_DISABLE 2.1 | 🟠 | 🟢 成文 |
-| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 后端可行性探针 → 扫曲线、量 PP 气泡 | ⚪ **无主** | ⬜ | ⚪ | — |
+| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 🆕 **TP=2 限制在同一 socket 内**（组内 28.8 GB/s）净正还是净负 | **A** | ⬜ | 🔴 探针 | 🔴 |
 | **E05** | [序列并行](E05-sequence-parallel.md) | Ulysses / Ring，多长的序列之后才划算 | ⚪ **无主** | ⬜ | ⚪ | — |
 | **E06** | [装更大的模型](E06-bigger-models.md) | 全参 vs LoRA 的可行域地图 | 🔻 并入 E07 | ⬜ | ⚪ | — |
 | **E07** | [MoE 与专家并行](E07-moe-ep.md) | 分片/复制/EP 三摆法 | **A**(通信动机) + B(路由) | 🟡 **模型改用 Qwen3-30B-A3B**（GLM-4.7-Flash 当前栈不支持，已下载 57 GB）；**账已用真 config 校准**（bf16 61.1 / 4bit 16.8 GB；分片每 micro-batch gather 61.1 GB 而只用 10%）；**★ MoE 上 `all-linear` 会挂 18,432 个专家 Linear ⇒ 必须改 target_modules** | 🔴 | 🟡 P2 探针 |
@@ -103,11 +103,11 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
 | **E17** 🆕 | [训练侧三次前向的必要性](E17-triple-forward.md) | `update_actor`+`old_log_prob`+`ref` 是同一批数据的三次前向，**合计占步 72%**——占空比最大的一块，至今没有实验正面打过。⚠️ `old_log_prob` 不能降频（decoupled 下它是损失函数的一部分），只能从 `ref` 与「共享前向」两个方向进 | **B** | ⬜ | 🟠 | 🔴（门槛 E01） |
 
-### 2.1 三个「无主」实验的停放理由（不删，理由是资产）
+### 2.1 「无主」实验的停放理由（不删，理由是资产）
 
 | # | 为什么停 | 什么条件下复活 |
 |---|---|---|
-| **E04** TP/PP | ① 训练侧 TP/PP **缺一整个后端**（megatron/torchtitan 均未装，sm_120 风险未验）；② 更要紧的是**没有真需求指向它**——4B+LoRA 单卡放得下，6.4 GB/s 上 TP 大概率净负 | E07 的真 EP 需要 Megatron 时，与 P4 探针一起复活 |
+| **E04** TP/PP | 🆕 **已复活**（2026-08-17）：原停放理由是「卡间带宽上 TP 大概率净负」，而**组内 28.8 GB/s** 让 **TP=2 限制在同一 socket 内**成为另一个命题。⚠️ 仍缺后端（megatron/torchtitan 均未装，sm_120 风险未验） | 已排成 30 min go/no-go 探针 |
 | **E05** SP | 同上：减的是单卡序列长度，而稀疏投影已经把 T=16384 变成可训 ⇒ **问题被别的手段解决了** | M8 长轨迹把序列推到稀疏投影也扛不住时 |
 | **E06** 装更大的模型 | 它问的「全参 vs LoRA 可行域」已被 E07 的三摆法覆盖，独立存在会重复记账 | 并入 E07，不单独复活 |
 
@@ -238,32 +238,23 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 
 > 这些数来自 E00，**是所有实验的分母**。改动时在 E00 里改，这里同步。
 
-🔴🔴 **2026-08-17 换机器了 —— 下面标「旧机」的数全部只对旧机器成立。**
-新机仍是 4×5090 且 P2P 仍全关，但 **2+2 跨 socket**（EPYC 9V74 ×2；GPU0/1@node0、
-GPU2/3@node1）且 **PCIe Gen5**（旧机 max Gen4）⇒ **带宽变成 4 倍**。
-**所有以 6.4 GB/s 为分母的推论都要重算**（首当其冲是 E02「FSDP 慢 6 倍」）。
-旧机已不存在 ⇒ 换机器救不回基线，只能在这台重测。
-
 ```
-🆕 卡间 all-reduce bus bandwidth（NCCL_CUMEM_ENABLE=0，尺子 scripts/probe_allreduce_bw.py）
+卡间 all-reduce bus bandwidth（NCCL_CUMEM_ENABLE=0，尺子 scripts/probe_allreduce_bw.py）
     组内(0,1)/(2,3)   1MB 18.1 · 8MB 26.6 · 64MB 28.0 · 256MB **28.8** GB/s
-    跨 socket(0,2)/(1,3)                                256MB **22.2** GB/s   ← 只掉 22%
+    跨 socket(0,2)/(1,3)                                256MB **22.2** GB/s   ← 掉 22%
     四卡 0-3（= DDP 实际走的）                           256MB **25.6** GB/s
     ⇒ NUMA 绑定无效（22.23→22.34，噪声内）⇒ 跨 socket 是 UPI 跳的物理代价，没有旋钮
-    ⇒ 换算负载：DDP 梯度 260MB 旧机 40.4ms → 新机 10.2ms；跨 socket 净代价 1.2ms/步
-       ÷ 一步 32–91s = **0.004%** ⇒ 跨 socket 对本项目实质无影响
-    ⇒ 传输通道实测 SHM/direct/direct（P2P 仍全 0），torch 2.9/NCCL 2.27.5 与
-       torch 2.11/2.28.9 量出来一致 ⇒ 对 NCCL 版本不敏感
+    ⇒ 换算负载：DDP 梯度 260MB ≈ 10.2 ms/步；跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+    ⇒ 传输通道实测 SHM/direct/direct（P2P 全 0）；torch 2.9/NCCL 2.27.5 与 2.11/2.28.9 一致
+    ⇒ 对照：H100 NVLink ≈ 900 GB/s，约是它的 1/35
     原始数据 logs/e00_allreduce_{default,default_bind,trainstack}.json
-
-〔旧机〕2 卡同 NUMA  1MB 5.20 · 8MB 5.60 · 64MB 5.56 · 256MB 6.44 GB/s
-    ⇒ 对照：H100 NVLink ≈ 900 GB/s，旧机是它的 1/140，新机约 1/35
 
 单卡 RL 每步（sync colocate, Qwen3-4B+LoRA r32, v11）   91–99 秒
 rollout 长尾（同批最慢/平均）                          1.37–2.75×
 actor 峰值 reserved（remove_padding+fused_kernels 后）  13.92 GB / 上限 ~18.8 GB
 prefix cache 命中率（单副本, gpu_util 0.40）            96.7–97.5%
-DDP vs FSDP（4B LoRA）: FULL_SHARD×3 = 1182 s/步, 单卡 198 s, DDP 3.00× 线性
+DDP vs FSDP（4B LoRA）: ⬜ 三档稳态待测（A6）。已知：DDP 每步只同步 260 MB
+RL 每步实测: colocate 1卡 67.2 s · colocate 3卡 29.2 · one_step_off 3+1 22.9
 flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.2`（补 libcudart.so.13）
     ⚠️ 之前那个社区 cu128 轮子**前向对、反向全错**（nan 或恒为 0）⇒ RL 空转，2026-08-17 换掉
     判据 `scripts/check_flash_attn_backward.py`（含反向）· update_actor 16.78 s vs sdpa 26.01 ⇒ 1.55×

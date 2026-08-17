@@ -1,22 +1,12 @@
 # Infra 线交接（独立于主线训练）
 
-> 🔴🔴 **2026-08-17 换机器了 —— §1 那三个招牌数字全部作废，必须在新机器重测。**
-> 新机仍是 4×5090、P2P 仍全关，但 **2+2 跨 socket + PCIe Gen5** ⇒ **卡间带宽 6.44 → 25.6 GB/s（四卡）**。
-> ⇒ 首当其冲要复查 **E02「FSDP 慢 6 倍」**（因果就是 6.4 GB/s，带宽 ×4 后可能只剩 ~2×）＝ 队列 **A6**；
-> **A7（E00 四卡曲线）今天已做掉一半**，数据在 `logs/e00_allreduce_*.json`、尺子 `scripts/probe_allreduce_bw.py`。
-> ⚠️ 旧机器已不存在 ⇒ **换机器救不回基线**，只能重测。细节见 `../syncopate/05-handoff.md` §0.1。
->
-> 🆕 **同日修好三个会静默毁掉训练的 bug**（详见 05-handoff §0.1）：
-> ① flash-attn 轮子**反向**坏（前向全过、反向 nan 或**恒为 0**）⇒ RL 完全空转；
->    已换官方 cu13 轮子 + CUDA13 运行时，判据 `scripts/check_flash_attn_backward.py`
-> ② 分卡模式 3 个 trainer rank **全挤 GPU0**（根因是我们自己的 `worker_process_setup_hook`
->    在 Ray 设 CVD 之前 import verl，把 CUDA 设备枚举固化了）
-> ③ `--weight-sync-bucket-mb` 在 colocate 下**被静默忽略**（⚠️ 默认值仍是 2048，短跑要显式传）
->
-> 更新于 **2026-08-16**。给下一个上下文窗口。
+> 更新于 **2026-08-17**。给下一个上下文窗口。
 > **分工**：主线训练（数据/SFT/RL/RAG/Runtime 里程碑）看 `../syncopate/05-handoff.md`；
 > **本文档只管 infra 线**——多卡并行、异步 RL、通信、kernel、框架/模型选型。
 > 按 Chaoyu 的约定：**短，只保证下一个窗口能接上**；细节全部指向对应文档。
+>
+> ★ **焦点是怎么定下来的 → [`../focus-migration-2026-08.md`](../focus-migration-2026-08.md)**
+> —— 唯一记录迁移历史的地方。其余文档只写当前焦点，不做新旧对照。
 
 ---
 
@@ -37,27 +27,43 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简�
 ⚠️ **2026-08-16 的重估**：B 那句「已经够撑一个项目」要加限定词——**够撑的是「诊断」，不是「成果」**。
 手上的数几乎全是 before。⇒ **实验优先级从此只看「能不能把某个 before 变成 after」**（见 §5）。
 
-## 1 · ★★ 2026-08-14 的头号结论（三个数，互相印证）
+## 1 · ★★ 头号诊断：闲置在哪
 
 ```
-① 用 4 张卡只换来 1.59× 加速     colocate 1卡 117.8 s/步 vs fully_async 3+1 74.1 s/步   [E08 §4.6]
-② 整机占空比只有 31%             trainer 空闲 54–57%，rollout 空闲 82.5% @ 47.7 W       [E08 §4.5.1]
-③ 权重同步 59.8 s 里 99.94%      不是传输（0.8 s）、不是编排（0.038 s）                 [E12 §4.5]
-   在「处理 132 MB 的 LoRA」上
+① 整机占空比约 31%          trainer 空闲 54–57%，rollout 空闲 82.5%      [E08]
+② 权重同步里 ~99.9% 不是传输 传输 0.8 s、编排 0.038 s，其余是固定开销      [E12]
+③ 训练侧三次前向占步 72%     update_actor + old_log_prob + ref 同一批数据 [E08 分解]
 ```
 
-**①从时间维度量，②从空间维度量，③指出其中一大块在哪 —— 三者说的是同一件事。**
-⇒ **在动任何算子之前，先把这 69% 的闲置搞清楚。**
+**①从空间维度量，②③指出大块在哪。** ⇒ **动任何算子之前，先把这 69% 的闲置搞清楚。**
 对照量级：Track A 全套自写 kernel 的端到端收益是 **4.3%**（E11 实测后主动降级）。
+
+⚠️ **绝对秒数与加速比正在重测**（队列 A6/A7）—— 上面三条的**构成比**是结论，
+绝对值以重测为准。★ 占空比的**四个成因与「谁在打」**见 `TRACK-B §3.5.1`。
+
+### 1.1 · 机器画像
+
+```
+4×RTX 5090 / sm_120，P2P 全关（NCCL 走 SHM/direct/direct）
+2 socket EPYC 9V74，**2+2**：GPU0/1@node0、GPU2/3@node1；PCIe Gen5 x16
+all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
+  ⇒ 跨 socket 掉 22%，NUMA 绑定无效（UPI 跳的物理代价）
+  ⇒ 换算 DDP 梯度 260MB ≈ 10.2 ms/步，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+尺子 scripts/probe_allreduce_bw.py · 数据 logs/e00_allreduce_*.json
+```
+
+★ **2+2 拓扑让「放置」第一次有了意义**：当前 trainer=GPU0/1/2 跨了 socket
+⇒ DDP 的 all-reduce 每步走 UPI。候选摆法（已并入 **B11**）：
+`trainer 0,1 + rollout 2,3`（两侧都不跨）/ `trainer 2,3 + rollout 0,1`（对称性检验）。
 
 ## 2 · 已定决策（别再重新讨论）
 
 | 决策 | 结论 | 详见 |
 |---|---|---|
 | 框架 | **verl 不换** | E07 §1 |
-| 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）。首步 FULL_SHARD×3 1182 s vs 单卡 198 s = **5.97×** | E02 |
+| 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）：LoRA 每步只同步 260 MB。⚠️ 三档稳态对照待 **A6** | E02 |
 | attention | `flash_attention_2` 默认 —— 🆕 **必须是官方 cu13torch2.9 轮子**（社区 cu128 那个**反向**是坏的，RL 会静默空转）。换轮子先跑 `scripts/check_flash_attn_backward.py` | 05-handoff §0.1 |
-| dynamic_bsz | ⚠️ 代码里**默认 False**（这行以前写「默认 True」，与代码不符）。符号由 attention 决定，新机器**未重测** | README §6 |
+| dynamic_bsz | 代码默认 **False**。⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测** | README §6 |
 | **MoE 模型** | 🆕 ~~GLM-4.7-Flash~~ → **`Qwen3-30B-A3B-Instruct-2507`**（已下载 57 GB）。GLM 的 `Glm4MoeLiteForCausalLM` **当前栈不支持**，要 transformers 5.0rc | **E07 §4.5.1** |
 | **MoE 的 LoRA** | 🆕 **绝不能用 `all-linear`**（98.7% 的 Linear 在专家里 ⇒ 参数 26×、张量 74×、每步同步 3.39 GB）。用「注意力+router」30.1 M | **E07 §4.5.3** |
 | E11 稀疏 logprob | 🔻 **降级，不写 kernel**（端到端仅 4.3%，切片就有 4.0%） | E11 §6-③ |
@@ -74,9 +80,10 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简�
 
 ## 4 · ⚠️ 两个已知的坑（下次开跑必撞）
 
-1. **`--weight-sync-bucket-mb 2048` 会 OOM。**（⇒ 队列第 1 批 B2 就是治它的）有**两跑**死在这（`e12d_nolayered`、`e08b_onestepoff`）：
-   rollout 卡 vLLM 24.65 GB + CE worker 4.71 GB，剩 1.99 要 2.00，**差 0.01 GB**。
-   ⇒ **`gpu_util 0.75` 不是安全值**；解法不是压 gpu_util，是**调小 bucket**（实际只推 132 MB）。
+1. **`--weight-sync-bucket-mb` 默认 2048 会 OOM**（⇒ 队列 B2 就是治它的）。
+   CheckpointEngine 会在**目标卡上**分配一个 bucket 大小的暂存区（`nccl_checkpoint_engine.py:142`），
+   而实际只推 132 MB。⇒ **`gpu_util` 不是安全阀**，解法是**调小 bucket**（短跑传 512）。
+   ⚠️ 它对**所有模式**生效，colocate 同样会撞。
 2. **`--save-freq 999` 挡不住收尾那次保存。** 每个短跑结束都落 **27 GB** ckpt。
    曾差点把 61 GB 的 MoE 下载挤爆。⇒ **计时/探针类短跑，跑完就删 `checkpoints/grpo/<exp>/global_step_*`**
    （`dispatched.jsonl` 和 `rollout_dumps` 要留）。
@@ -134,7 +141,7 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简�
                                                      它是 B12 的门槛，也是 P-A3 空着的原因
 🟠⑩ A4  E11-b 切片对照组落地        ~1 天    E11-b  ①在 RL 侧唯一的 after，改动小
                                                      （顺带答「省下的能否换更大 token 预算」）
-🟠⑪ A6  E02 补 FULL_SHARD 稳态      ~1 h     E02    让「慢 6 倍」不再只有首步支撑
+🔴⑪ A6  E02 重测三档稳态            ~1 h     E02    ★ 决定「模型内部并行是净亏损」还剩多少力气
 🟠⑫ B12 训练侧三次前向的必要性      —        E17🆕  占空比成因③（占步 72%，最大的一块）。
                                                      门槛 A5；⚠️ old_log_prob 不能降频（已论证），
                                                      只能从 ref 和「共享前向」两个方向进

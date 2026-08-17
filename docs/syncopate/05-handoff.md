@@ -11,6 +11,7 @@
 > 沙盒设计 → `07-toolbox-and-runtime-design.md`　权威设计 → `syncopate-project-design-v0.1.md`
 > **M9 Runtime（真服务）→ `09-runtime-handoff.md`**　**RAG/检索 → `10-rag-retrieval.md`**
 > 多卡实验设计 → `../distributed-training-design-v0.1.md`
+> **焦点是怎么定下来的 → `../focus-migration-2026-08.md`**（唯一记录迁移历史的地方）
 
 ---
 
@@ -30,70 +31,53 @@
 
 ---
 
-## 0.1 · ★★★ 2026-08-17：换了机器 + 修好三个会静默毁掉训练的 bug
+## 0.1 · 环境与管线现状（2026-08-17 验证）
 
-**机器换了**（仍是 4×5090，但换了一台）。git 之外的东西全没了，环境已完整重建。
-
-| | 旧机器 | 🆕 这台 |
-|---|---|---|
-| 拓扑 | 四卡对称、**单 NUMA** | **2 socket EPYC 9V74，2+2**（GPU0/1@node0、GPU2/3@node1，跨组走 UPI） |
-| PCIe | max Gen4 | **Gen5 x16** |
-| all-reduce busbw @256MB | **6.44 GB/s** | 组内 **28.8** · 跨 socket **22.2** · **四卡 25.6** |
-| `/workspace` | mfs 网络盘、**有 `df` 看不见的配额** | **本地 XFS 300 G**，权限位生效、无隐形配额 |
-| `/` | 不是瓶颈 | 🔴 **只有 16 G overlay** ⇒ 缓存必须重定向，见 `08 §2.0` |
-
-⇒ **跨 socket 只掉 22%，换算到 DDP 梯度同步是 1.2 ms/步（占一步 0.004%），不用换机器。**
-🔴 **但 `6.4 GB/s` 是 README §6 的全局常量，E02/E07/E11/E12 都拿它当分母 ⇒ 所有 before 数字作废，
-必须在这台重测。**最可能被推翻的是 E02「FSDP 慢 6 倍」（带宽 ×4 后可能只剩 ~2×）。
-
-### 管线已端到端跑通（data gen → SFT → RL）
+**管线端到端通**：
 
 ```
-data gen  v11→v12 重建，data/splits/v12 四文件与 git **SHA-256 逐字节一致**（254/477/819）
+data gen  v11→v12，data/splits/v12 四文件与 git SHA-256 逐字节一致（254/477/819）
 data build SFT 397+80 / RL 655+164
-SFT       val_loss 0.7400 → 0.1110，峰值 11.3 GB
+SFT       val_loss 0.7400 → 0.1110，显存峰值 11.3 GB
 merge     7.6 G 合并模型
 RL        三种模式全通：colocate 1卡 67.2 s/步 · colocate 3卡 29.2 · one_step_off 22.9
           · fully_async 8 步跨 2 个同步周期
 测试      365 passed, **0 skipped**（含 45 条 runtime，PG 已起）
 ```
 
-### ★ 三个 bug（都会静默毁掉训练，都已修）
+**机器**：4×RTX 5090 / sm_120，2 socket EPYC 9V74（**2+2**：GPU0/1@node0、GPU2/3@node1），
+PCIe Gen5 x16，P2P 全关。卡间 all-reduce busbw：组内 28.8 / 跨 socket 22.2 / 四卡 25.6 GB/s。
+`/workspace` 是 300 G 本地 XFS 持久卷；`/` 只有 16 G overlay ⇒ **缓存必须重定向**，
+每个 shell 先 `set -a; . /workspace/.env; set +a`（见 `08 §2.0`）。
 
-**① flash-attn 轮子的反向是坏的 —— 最贵的一个。**
-社区那个 `cu128torch2.9cxx11abiFALSE` 轮子**前向三项数值全过、反向全错**：
-`flash_attn_func` 反向 dq/dk/dv 全 nan；**`flash_attn_varlen_func` 反向有限但恒为 0**
-（verl 的 rmpad 正好走这条）。后果：每步 `grad_norm=nan` ⇒ verl 打
-`WARN: grad_norm is not finite` 并 `optimizer.zero_grad()` **跳过更新** ⇒ **RL 完全空转**。
-⚠️ **返回 0 那条比 nan 更毒**：没有 nan、没有报错、指标好看，训练"跑完"什么都没学到。
-⇒ 教训：**「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
-⇒ 修法：改用**官方 `cu13torch2.9` 轮子** + PyPI 的 `nvidia-cuda-runtime<=13.2`
-（补 `libcudart.so.13`；驱动 595 的 max_cuda 13.2 支持）。反向与 fp32 参考对到 4–5 位有效数字，
-真实 RL 里 grad_norm **0.0147/0.0224**（M7 整跑是 0.011–0.06，同区间）。**不必本地编译。**
-⇒ 判据脚本 **`scripts/check_flash_attn_backward.py`**，换轮子/换机器后必跑。
+### ★ 三个会静默毁掉训练的缺陷（都已修，判据已就位）
 
-★ **这不影响 M7 的结论**：`outputs/2026-08-13/17-02-03/.hydra/overrides.yaml` 显示
-M7 用的是 **sdpa**，且位移 0.0093% ≈ 100 步 × lr 1e-6 ⇒ 优化器每步都真执行了。
-**M7 的病还是 lr 太小，下一跑改 `lr 1e-5` 的计划不变。**
+**① flash-attn 的判据必须包含反向。**
+一个前向数值三项全过的轮子，**反向可以是全错的**：`flash_attn_func` 反向 dq/dk/dv 全 nan；
+`flash_attn_varlen_func` 反向有限但**恒为 0**（verl 的 rmpad 正好走这条）。
+后果：每步 `grad_norm=nan` ⇒ verl 打 `WARN: grad_norm is not finite` 并
+`optimizer.zero_grad()` **跳过更新** ⇒ **RL 完全空转**。
+⚠️ **恒 0 比 nan 更毒**：没有 nan、没有报错、指标好看，训练"跑完"什么都没学到。
+⇒ **教训：「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
+⇒ 现用官方 `cu13torch2.9` 轮子 + PyPI `nvidia-cuda-runtime<=13.2`（补 `libcudart.so.13`），
+反向与 fp32 参考对到 4–5 位有效数字，真实 RL 里 grad_norm 0.0147/0.0224。
+⇒ **换轮子/换机器后先跑 `scripts/check_flash_attn_backward.py`。**
 
-**② 分卡模式下 3 个 trainer rank 全挤在 GPU0。**
-根因是**我们自己的 `worker_process_setup_hook`**：它在 Ray 设 `CUDA_VISIBLE_DEVICES`
-**之前**跑，import `verl.utils.fsdp_utils` 把 CUDA 设备枚举固化了 ⇒ 之后设 CVD 只改可见数量、
-不改映射。colocate 正常（它不挂这个钩子）—— 这个 A/B 才定的位。
-⇒ 修法 `verl_patches._defer_until_imported`：钩子里不再 import 任何碰 CUDA 的东西，
-用 meta_path finder 延迟到 verl 自己 import 时才打补丁。
-⇒ **新纪律：进程启动钩子里只许做纯 Python 的事。**
+**② 进程启动钩子里只许做纯 Python 的事。**
+`worker_process_setup_hook` 在 Ray 设 `CUDA_VISIBLE_DEVICES` **之前**跑，
+若它 import 了会碰 CUDA 的东西（如 `verl.utils.fsdp_utils`），**设备枚举会被固化** ⇒
+之后设 CVD 只改可见数量、不改映射 ⇒ 分卡模式下 3 个 trainer rank **全挤在 GPU0**，
+第一次权重同步 OOM。修法 `verl_patches._defer_until_imported`：用 meta_path finder
+延迟到 verl 自己 import 时才打补丁。
 
-**③ `--weight-sync-bucket-mb` 在 colocate 下被静默忽略。**
-override 只写在分卡分支里，注释还断言「分卡模式独有的开销」——**那句是错的**，
-colocate 一样走 NCCL checkpoint engine ⇒ 吃 verl 默认 2048 MB，第一次同步就 OOM。已改成所有模式生效。
-⚠️ **默认值仍是 2048**，短跑请显式传 `--weight-sync-bucket-mb 512`。
+**③ `--weight-sync-bucket-mb` 对所有模式生效**（colocate 也走 NCCL checkpoint engine）。
+⚠️ **默认值仍是 2048，短跑请显式传 `--weight-sync-bucket-mb 512`。**
 
 ### 还欠着的
 
-- **`fully_async` 下动态分池仍没接上**（§2.3 的老账，infra 线 **B6**；纪律是「先量出漂移 B4 再补」）
-- `dynamic_bsz` 在这台机器 + 新 FA2 下的符号**没重测**（旧机器 FA2 下是 ÷1.37，默认 False）
-- `uv.lock` 仍在 .gitignore ⇒ 每台机器解析结果可能不同（这次就是它让 Ray 版本变了）
+- **`fully_async` 下动态分池没接上**（§2.3；infra 线 **B6**，纪律是「先量出漂移 B4 再补」）
+- `dynamic_bsz` 在当前机器 + FA2 下的符号**未测**（代码默认 False）
+- `uv.lock` 在 .gitignore ⇒ 每台机器解析结果可能不同
 
 ## 1 · 当前状态
 
@@ -102,7 +86,7 @@ colocate 一样走 NCCL checkpoint engine ⇒ 吃 verl 默认 2048 MB，第一�
 | M0–M5（地基 / 数据成熟度 / 沙盒 / RAG v0 / L5 归因 / L6 扩量 / 负面数据） | ✅ 全部完成，**prompt / 工具 / 环境已冻结** |
 | **M6 · SFT 冷启动** | ⚠️ **条件毕业**（§3：两条判据实测互斥）。**选 v11-e1** |
 | **M7 · RL 正式训练** | ✅ **跑完并验收**（150 步 / 3h09m / 零错误）。⚠️ **结论是「没测出差异」**，见 §2.1 |
-| 搬到 4×5090 | ✅ 环境、数据、SFT、评测全部在新机器上重建并验证 |
+| 环境 | ✅ 环境、数据、SFT、评测、RL 三模式全部实跑验证（§0.1） |
 | 异步 RL · `one_step_off` | ✅ 跑通并调优（稳态 49.5 s/步；FA2+打包后 **32.6 s/步**） |
 | 异步 RL · `fully_async` | ✅ **2026-08-14 打通**（翻了四堵墙，见 §2.2），稳态 ~76 s/步 |
 | 动态分池 | ✅ `one_step_off` 下生效；⚠️ `fully_async` 下**没接上**（可修，见 §2.3） |
@@ -118,7 +102,7 @@ colocate 一样走 NCCL checkpoint engine ⇒ 吃 verl 默认 2048 MB，第一�
 数据 v11   1370 条 · 17 模板 · 90 格子 · 28 工具 · 32 cap · 5 种行为
 三桶       EVAL 198 / SFT 434 / RL 738（train 590 + val 148），内容级零重叠实测
 测试       250 全过（0 skipped）
-SFT        v11 e1/e2 已在新机器重训 + 重评，**结论与旧机器一致 ⇒ 选 e1**
+SFT        v11 e1/e2 已重训 + 重评 ⇒ **选 e1**
 M7 产物    checkpoints/grpo/m7_v11e1/global_step_25  ← param_version 命名 = **global step 100**
            models/Qwen3-4B-rl-m7-s100/（已合并）  wandb run `m7_v11e1` / u6205j1n
 ```
@@ -211,7 +195,7 @@ python -m syncopate.train.entropy    --adapter <ckpt> --limit 24
 ```
 
 ⚠️ **对照基线是 `_audit/v11_sft_e1_m2.json`**（新机器、vLLM 引擎跑的 e1）。
-别拿旧机器的审计配对 —— 引擎决定采样内核。
+配对比较必须用同一推理引擎跑出来的审计 —— 引擎决定采样内核。
 
 ⚠️ **`compare` 会自己打印最小可检出差异，不要绕过它读均值。配对 MDE = 0.013**
 （不配对是 0.048 —— **别引用错，差近四倍**）。
@@ -358,7 +342,6 @@ M9.1–M9.6 全部完成（8+1 张表 / 三层幂等 / API+越权 / Tool Runtime
 采样多样性       58%      40%   ≥70%   ❌
 平均 reward    0.803    0.872
 ```
-（上表为 **新机器实测**；旧机器分别是 44%/64%、57%/47%、0.818/0.851 —— **逐格同向，重建可信**）
 
 ★ **修好正确性 = 压低多样性。** v11 修了 `defer` 保底和 GEO 之后，零梯度反而上升 —— **是被自己的修复推上去的**。
 
@@ -396,37 +379,34 @@ e2 的 reward 更高，但**高在"饱和"上** —— 105 个格子组内方差
 
 ---
 
-## 5 · ★★★ 4 卡解锁了什么，以及最反直觉的那个结论
+## 5 · 多卡的边界：为什么只能 DDP
 
-**第二研究目标终于能真跑了**：verl 的两条异步路径都要求 rollout 和 training 在不同 GPU
+**分卡是异步的硬前提**：verl 的两条异步路径都要求 rollout 和 training 在不同 GPU
 （`one_step_off_policy/ray_trainer.py:89` 的 `assert not self.hybrid_engine`）。
 
-**异步的收益第一次量到**（one_step_off，稳态）：
+**异步的收益**（one_step_off，稳态）：
 
 ```
 step 1 的 gen   89.6 s      ← 现场生成
 step 2 的 gen    4.1 s      ← 上一步训练时就已经生成好了
 ```
 
-⇒ **异步把瓶颈从 rollout 搬到了训练侧**（现在 `update_actor` 占 61%）。
+⇒ **异步把瓶颈从 rollout 搬到了训练侧**（`update_actor` 占大头）。
 
-### 🔴 最反直觉的：**多给卡会变慢，而且慢 6 倍**
+### 训练侧并行：`--fsdp-size 1`（DDP）是必选项
 
-```
-trainer 3 卡 FULL_SHARD（verl 默认）  step1  1182 s
-trainer 1 卡 不切分                   step1   198 s
-```
+**5090 没有 PCIe P2P**（NVIDIA 从 4090 起在驱动里关掉，**所有 4×5090 机器都这样**），
+卡间一律经主机内存中转（NCCL 走 `SHM/direct/direct`）。而 FSDP FULL_SHARD
+每层前向反向都要 all-gather 全部权重 —— **通信量比计算量还大**；
+LoRA 的 DDP 每步只同步 **260 MB**（当前机器约 10 ms）。
 
-根因：**5090 没有 PCIe P2P**（NVIDIA 从 4090 起在驱动里关掉，**所有 4×5090 机器都这样**），
-卡间只能经主机内存中转，实测 **6.4 GB/s**。而 FSDP FULL_SHARD 每层前向反向都要
-all-gather 8 GB 权重 —— **通信量比计算量还大**。LoRA 的 DDP 只同步 260 MB（40 ms）。
+⇒ 实测三卡 DDP：colocate 29.2 s/步、one_step_off 22.9 s/步（单卡 colocate 67.2 s）。
+⚠️ **FULL_SHARD 与 ZeRO-2 两档在当前机器上尚无稳态数据**，队列 **A6** 负责补。
 
-⇒ 换成 DDP 后 **3.00× 完美线性扩展**，稳态 **49.5 s/步**。
+⇒ **「并行」不该发生在模型内部，该发生在模型外部**（rollout 副本 / 时间上的异步 /
+实验级并行）——**这三种通信量都极小。**
 
-⇒ **在这台机器上：FSDP / TP / 序列并行全部出局。**「并行」不该发生在模型内部，
-该发生在模型外部（rollout 副本 / 时间上的异步 / 实验级并行）——**这三种通信量都极小。**
-
-★ **顺带**：PP 其实对慢网络友好（只传层边界的激活值，约 26 MB），但 verl 的
+★ **顺带**：PP 对慢网络友好（只传层边界的激活值，约 26 MB），但 verl 的
 megatron/torchtitan 后端一个都没装，目前用不了。
 
 ---

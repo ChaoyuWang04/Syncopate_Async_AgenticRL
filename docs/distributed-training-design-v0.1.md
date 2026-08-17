@@ -1,5 +1,12 @@
 # 4×5090 分布式训练实验设计 v0.1
 
+
+> ⚠️ **本文件是设计记录，内含的实测数字属于当时的测量条件。**
+> **当前有效的机器画像、带宽口径与焦点，一律以 `docs/infra_exp/00-INFRA-HANDOFF.md`
+> 和 `docs/syncopate/08-machine-and-environment.md` 为准**；焦点是怎么定下来的见
+> [`docs/focus-migration-2026-08.md`](focus-migration-2026-08.md)。
+> 本文件不随硬件更新逐条改写 —— 设计过程本身是资产。
+
 > 2026-08-13。**搬到 4×RTX 5090 服务器之后的施工蓝图。**
 >
 > 三份文档的分工（别混）：
@@ -120,7 +127,7 @@ torch.distributed.DistBackendError: ncclUnhandledCudaError  (NCCL 2.27.5)
 | 配置 | 1 MB | 8 MB | 64 MB | 256 MB |
 |---|---|---|---|---|
 | `NCCL_SHM_DISABLE=1`（退回 socket） | 1.11 GB/s | 1.89 | 2.05 | 2.09 GB/s |
-| **`NCCL_CUMEM_ENABLE=0`**（保留 SHM，走老式 IPC） | **5.20 GB/s** | 5.60 | 5.56 | **6.44 GB/s** |
+| **`NCCL_CUMEM_ENABLE=0`**（保留 SHM，走老式 IPC） | ✅ 选它 | — | — | 当前口径见 `infra_exp/README.md` §6 |
 
 ⇒ `launch_rl.py` 多卡时设的是 **`NCCL_CUMEM_ENABLE=0`**，快 3 倍。
 

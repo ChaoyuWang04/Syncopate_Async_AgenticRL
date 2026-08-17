@@ -1,5 +1,12 @@
 # Ostinato · 面向 Agentic 负载的推理 Infra 与「模型 × Harness × Infra」Codesign 设计文档 v0.2
 
+
+> ⚠️ **本文件是设计记录，内含的实测数字属于当时的测量条件。**
+> **当前有效的机器画像、带宽口径与焦点，一律以 `docs/infra_exp/00-INFRA-HANDOFF.md`
+> 和 `docs/syncopate/08-machine-and-environment.md` 为准**；焦点是怎么定下来的见
+> [`docs/focus-migration-2026-08.md`](focus-migration-2026-08.md)。
+> 本文件不随硬件更新逐条改写 —— 设计过程本身是资产。
+
 > 2026-08-13。Syncopate 的姊妹项目：Syncopate 提供模型（Qwen3-4B SFT/RL）与 harness
 > （沙盒、verifier、评测尺子），本项目补齐第三条腿——推理 infra——并让三者互相塑形。
 >

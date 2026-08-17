@@ -7,108 +7,58 @@
 
 ## 1 · 硬件画像（实测）
 
-> 🔴 **2026-08-17 换了一台机器**（仍是 4×5090）。下面是**当前这台**；旧机器的画像留在末尾对照。
-
 ```
-🆕 当前机器（2026-08-17）
 4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 595.58.03  CUDA 12.8  torch 2.9.0+cu128
 CPU   2× EPYC 9V74（80 核/路，320 线程，2 NUMA）   RAM 503 GB
 拓扑  🔴 **2+2 跨 socket**：GPU0/1@node0、GPU2/3@node1，组内 NODE、跨组 SYS（走 UPI）
 PCIe  **Gen5 x16**（32 GT/s；空闲时报 Gen1 属正常）
 盘    /workspace = 本地 XFS 300G（**持久卷**，workspace_is_volume=true，权限位生效）
       / 只有 **16G overlay** ⇒ 见 §2.0，缓存必须重定向
-
-〔旧机器，2026-08-13〕
-驱动 570.195.03 · CPU 2× EPYC 7543（120 核）· RAM 944 GB
-拓扑 GPU0–3 两两 PHB、**全部 NUMA 0，四卡完全对称**
-盘   /workspace 是网络盘（mfs），有 df 看不见的卷配额
 ```
 
-🔴🔴 **`/workspace` 有卷配额，而 `df` 看不到它 —— 2026-08-14 因此丢了一个 ckpt。**
+🔴 **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起就被驱动关掉了
+PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了。**
+⇒ 卡间通信一律经主机内存中转（NCCL 实测走 `SHM/direct/direct`）。
+
+**卡间 all-reduce bus bandwidth**（`scripts/probe_allreduce_bw.py`，
+`NCCL_CUMEM_ENABLE=0` / 256MB，与 `infra_exp/README.md` §6 同口径）：
 
 ```
-df -h /workspace     →  733 T 可用     ← 这是底层网络文件系统，不是给你的额度
-真实额度              →  当时 100 G（已扩到 200 G）
+组内 (0,1)/(2,3)  28.8 GB/s      跨 socket (0,2)/(1,3)  22.2      四卡（DDP 走这条）25.6
+⇒ 跨 socket 掉 22%；NUMA 绑定救不回来（22.23→22.34，噪声内）＝ UPI 跳的物理代价
+⇒ 换算负载：DDP 梯度 260MB ≈ 10.2 ms/步，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
 ```
 
-**超限是静默的**：`cp` 产出 0 字节文件不报错（`cat` 才会喊 `Disk quota exceeded`）；
-M7 收尾那个 27 GB 的 ckpt 被写到一半掐断 —— 三个 rank 分片大小各不相同、
-zip 中央目录缺失、`torch.load` 报 `failed finding central directory`，
-**而训练日志里一个字都没有**，进程还是 exit 0。
+⬜ 还没测：主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，会污染所有对照实验，队列 A7）。
 
-⇒ **判断空间只能用写入探针**（真写几百 MB 再删），别信 `df`：
+## 1.1 · PostgreSQL 的落盘
+
+`/workspace` 是 XFS，`chmod 700` 生效 ⇒ **PGDATA 直接放持久卷**：
+
+```
+PGDATA=/workspace/pgdata/16/syncopate      # 已写进 /workspace/.env
+PG 二进制/库   /workspace/tools/postgres/root
+deb 离线包     /workspace/tools/postgres/debs   ← 断网也能重装
+schema/迁移    仓库 syncopate/runtime/schema.sql（真相来源）
+```
 
 ```bash
-python - <<'PY'
-import os; p="/workspace/.quota_probe"; CH=os.urandom(1<<20); n=0
-try:
-    with open(p,"wb") as f:
-        for _ in range(5000): f.write(CH); n+=1
-    print(f"写入 {n} MiB 未触上限")
-except OSError as e: print(f"写到 {n} MiB 失败 → {e}")
-finally:
-    os.path.exists(p) and os.remove(p)
-PY
-```
-
-⇒ **容量账**：fully_async 一个 ckpt **27 GB**（3 个 rank 的全量 state_dict，
-其中 97% 是和基座逐字节相同的冻结权重）。200 G 也只放得下 7 个。
-跑完用 `scripts/prune_rl_ckpts.py` 瘦身（只留 LoRA，约 250 MB）。
-
-🔴🔴 **〔旧机器〕`/workspace` 不支持权限位 —— M9 的 PostgreSQL 因此放不进去**
-
-> ⚠️ **2026-08-17 起这一整段只对旧机器成立。** 这台是本地 XFS，`chmod 700` 实测生效 ⇒
-> `PGDATA=/workspace/pgdata/16/syncopate`（已写进 `/workspace/.env`），**数据库不再是
-> 「重启即丢的派生产物」**。下面保留原文是因为「推翻的预期不删」这条约定。
-
-
-```
-chmod 700 /workspace/xxx   →  仍是 777    （mfs 是 FUSE，不认权限位，实测）
-capsh --print              →  !cap_sys_admin   ⇒ 不能 mount
-                              ⇒ 「在 /workspace 上放个 ext4 镜像再 loop 挂载」这条路也堵死
-PostgreSQL                 →  PGDATA 必须 0700 或 0750，否则**拒绝启动**（硬编码检查）
-```
-
-⇒ **PGDATA 在物理上放不进 `/workspace`。** 处理办法是把数据库降级成**派生产物**：
-
-| 东西 | 放哪 | 重启后 |
-|---|---|---|
-| PG 二进制/库 | `/workspace/tools/postgres/root` | ✅ 在 |
-| deb 离线包（5 个，19 M） | `/workspace/tools/postgres/debs` | ✅ 在，断网也能重装 |
-| **schema / 迁移** | **仓库** `syncopate/runtime/schema.sql` | ✅ 在（真相来源） |
-| PGDATA | 本地盘 `/var/lib/postgresql/16/syncopate` | ❌ 丢（可重建） |
-
-```bash
-bash scripts/pg_bootstrap.sh          # 幂等：initdb → 起服务 → 建库 → 应用 schema
+bash scripts/pg_bootstrap.sh          # 幂等：建用户 → initdb → 起服务 → 建库 → 应用 schema
 bash scripts/pg_bootstrap.sh --reset  # 推倒重来
 ```
-
-⚠️ 真要长期保存业务数据，得换**支持权限位的卷**或托管 PG —— 那是部署问题，不是开发期问题。
 
 ⚠️ 二进制丢了（容器换了镜像）时的重装，不需要联网：
 ```bash
 mkdir -p /workspace/tools/postgres/root
 for d in /workspace/tools/postgres/debs/*.deb; do dpkg -x "$d" /workspace/tools/postgres/root/; done
 ```
+⚠️ `dpkg -x` **不跑 maintainer 脚本** ⇒ 不会建 `postgres` 用户、`libpq.so.5` 也不进
+ldconfig 路径。`pg_bootstrap.sh` 已经把这两件都处理了（`LD_LIBRARY_PATH` 也在 `/workspace/.env`）。
 
-🔴 **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起就被驱动关掉了
-PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了**。
-⇒ 卡间通信一律经主机内存中转。
-
-**🆕 当前机器实测**（`scripts/probe_allreduce_bw.py`，口径同 README §6：
-all-reduce busbw / `NCCL_CUMEM_ENABLE=0` / 256MB）：
-
-```
-组内 (0,1)/(2,3)  28.8 GB/s      跨 socket (0,2)/(1,3)  22.2      四卡（DDP 走这条）25.6
-⇒ 跨 socket 只掉 22%；NUMA 绑定救不回来（22.23→22.34，噪声内）＝ UPI 跳的物理代价
-⇒ 换算负载：DDP 梯度 260MB 从旧机 40.4 ms → 10.2 ms，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
-⇒ 传输通道实测 SHM/direct/direct（P2P 仍全 0）
-```
-
-〔旧机器〕2 卡同 NUMA **6.44 GB/s** —— 🔴 **这个数是 README §6 的全局常量、
-E02/E07/E11/E12 都拿它当分母，现在作废了，必须在这台重测。**
-
-⬜ 还没测：主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，会污染所有对照实验，队列 A7）。
+⚠️ **容量账**：fully_async 一个 ckpt **27 GB**（3 个 rank 的全量 state_dict，
+其中 97% 是和基座逐字节相同的冻结权重）。跑完用 `scripts/prune_rl_ckpts.py` 瘦身（只留 LoRA，约 250 MB）。
+⚠️⚠️ **`--save-freq 999` 挡不住收尾那次保存** —— 计时/探针类短跑跑完就删
+`checkpoints/grpo/<exp>/global_step_*`（`dispatched.jsonl` 和 `rollout_dumps` 要留）。
 
 ---
 
@@ -125,15 +75,14 @@ bash scripts/pg_bootstrap.sh                       # ★ 不起 PG 的话 45 条
 python -m pytest -q                                # 应为 365 passed, 0 skipped
 ```
 
-⚠️ **2026-08-17 换机器时发现，上面这个序列以前是错的** —— 照旧版做完是
-「27 failed / 45 skipped」，四个缺口全都**只在干净机器上暴露**：
+⚠️ **四个最容易漏的**（漏了的表现都不像缺步骤，很容易误判成别的问题）：
 
-| 缺口 | 症状 | 已修 |
-|---|---|---|
-| `--extra runtime` 不存在（M9 依赖从没进依赖表） | `asyncpg`/`fastapi` 缺失，4 个测试模块**收集阶段**就 ImportError | pyproject 加 `runtime` extra |
-| `ingest_external.py` 不在本节（它在 §3） | `data/external/ingested.json` 是 gitignore 的派生产物，缺了 27 红，签名像"数据过期"极易误判 | 提到本节 |
-| `pg_bootstrap.sh` 不在本节 | 45 条 runtime 测试静默 skip —— 而它们自己的 docstring 写着**「不要把跳过当通过」** | 提到本节 |
-| `install_flash_attn_shim.py` | 垫片**已退役**（满足 import 不满足契约），真轮子现在由 `[tool.uv.sources]` 装 | 从序列里删掉 |
+| 步骤 | 漏了会怎样 |
+|---|---|
+| `--extra runtime` | `asyncpg`/`fastapi` 缺失 ⇒ tests/runtime 4 个模块**收集阶段**就 ImportError |
+| `ingest_external.py` | `data/external/ingested.json` 是 gitignore 的派生产物 ⇒ **27 个测试红**，签名像"数据过期" |
+| `pg_bootstrap.sh` | 45 条 runtime 测试静默 **skip** —— 它们的 docstring 自己写着**「不要把跳过当通过」** |
+| `set -a; . /workspace/.env` | 缓存全落 16 G overlay，Ray 一溢写就爆 |
 
 ### 2.0 ★★ 持久化重定向（`/workspace/.env`）
 
@@ -153,9 +102,8 @@ LD_LIBRARY_PATH       PG 的 libpq（`dpkg -x` 不进 ldconfig 路径）
 ⇒ 全部写在 `/workspace/.env` 里，**每个 shell 先 `set -a; . /workspace/.env; set +a`**。
 实测：整个环境重建 + 跑通管线，overlay 用量从 48 M 没涨过。
 
-🟢 **PGDATA 的限制在这台机器上解除了**：这台 `/workspace` 是 **XFS**（不是旧机器的 mfs），
-实测 `chmod 700` 生效 ⇒ `PGDATA=/workspace/pgdata/16/syncopate`，
-**数据库不再是"重启即丢的派生产物"**。下面 §1 里那段 mfs 的论证是**旧机器的**，别照搬。
+🟢 `PGDATA=/workspace/pgdata/16/syncopate` 也在这里 —— `/workspace` 是 XFS、权限位生效，
+PostgreSQL 的 0700 要求满足得了，**数据库不是"重启即丢的派生产物"**（见 §1.1）。
 
 ### 2.1 依赖的三个坑（都已修进 pyproject / uv.toml）
 
@@ -175,7 +123,7 @@ LD_LIBRARY_PATH       PG 的 libpq（`dpkg -x` 不进 ldconfig 路径）
 ### 2.2 ★★★ flash-attn：判据必须包含**反向**
 
 verl 0.8 在 CUDA 路径上**无条件** `from flash_attn.bert_padding import ...`，
-所以这个包必须在。~~垫片~~**已退役**（满足 import 不满足契约）。
+所以这个包必须在。⚠️ **纯 Python 的 shim 不行** —— 它满足 import 但不满足契约。
 
 **2026-08-17 踩到更深的一层，务必读完再换轮子：**
 
@@ -219,8 +167,15 @@ python scripts/check_flash_attn_backward.py     # ★ 换轮子/换机器后必�
 
 ### 2.4 git 推送凭据
 
-旧机器靠 VSCode 的 GitHub 登录，换机器就没了。**新服务器上建议一劳永逸配 SSH key 或
-装 gh CLI。**
+⚠️ **凭据不进容器镜像，容器一重建就没。** 因此 SSH key 放在持久卷上：
+
+```
+/workspace/tools/ssh/id_ed25519      私钥（~/.ssh/id_ed25519 是软链）
+/workspace/tools/ssh/config          指定 IdentityFile，~/.ssh/config 是软链
+```
+
+⇒ 公钥加到 GitHub 后，remote 用 `git@github.com:...` 即可，不再需要 token。
+⚠️ git 的 `user.name` / `user.email` 也会丢，`git config` 在仓库级设一次。
 
 ---
 
@@ -319,8 +274,8 @@ adapter 的入口，而且 verl 用 LoRA 时 reference = 关掉 adapter = **基�
 
 | 参数 | 值 | 依据 |
 |---|---|---|
-| `--fsdp-size` | **1**（DDP，不切分） | 3 卡 FULL_SHARD 1182 s/步 vs 1 卡不切分 198 s ⇒ **慢 6 倍**。改 DDP 后 **3.00× 完美扩展** |
-| `--dynamic-bsz` | **False** | 实测慢 **2.2×**（垫片下打包让注意力退化成 O(总长²)）。装真 flash-attn 后要重测 |
+| `--fsdp-size` | **1**（DDP，不切分） | LoRA 下每步只同步 260 MB（≈10 ms）；分片要每层 all-gather 全部权重。⚠️ FULL_SHARD/ZeRO-2 稳态对照由队列 A6 补 |
+| `--dynamic-bsz` | **False** | ⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测**。sdpa 下打包会让注意力退化成 O(总长²) |
 | `--trainer-gpus / --rollout-gpus` | 3 / 1 | gen 只占 12%，rollout 不是瓶颈 |
 | `--rollout-gpu-util` | 0.75 | 0.85 会让第一次权重同步 OOM（bucket 也在 rollout 卡上） |
 | `--attention-backend` | TRITON_ATTN | vLLM 自带 FA2 的 sm_120 PTX 比驱动新，编不了 |
@@ -337,7 +292,7 @@ step 49.5 / 50.7 s   ← 重复性很好
   gen              4.1 s    8%   ← 异步把它藏掉了（step1 是 89.6 s）
 ```
 
-⚠️ **`update_weights` 13.3 s 是未解之谜**：LoRA 只有 132 MB，按 6.4 GB/s 该是毫秒级。
+⚠️ **`update_weights` 13.3 s 是未解之谜**：LoRA 只有 132 MB，按卡间带宽该是毫秒级。
 时间不在传输上。它占 27% 且随训练卡数上升，是异步方案的上限所在。
 
 ⚠️ **rollout 卡的显存是反直觉点**：KV 池 110,496 token 听着大，实测**峰值只用 16.7%、
@@ -417,7 +372,7 @@ RAY_object_store_memory    --object-store-gb 控制
        进程看不见对端设备，SHM 传输要用的 CUDA IPC 建不起来。
        `NCCL_P2P_DISABLE` 只关 P2P 传输，管不到 SHM 里的 IPC。
 
-选哪个 按带宽定：SHM_DISABLE 2.09 GB/s  vs  CUMEM_ENABLE=0 **6.44 GB/s** ⇒ 选后者
+选哪个 按带宽定：SHM_DISABLE 明显更慢 vs CUMEM_ENABLE=0 ⇒ 选后者（当前口径见 infra_exp/README §6）
 ```
 
 ---
