@@ -2,9 +2,9 @@
  "batch_dir": "data/batches/v13",
  "mode": "difficulty_proxy",
  "counts": {
-  "eval": 278,
-  "sft": 511,
-  "rl": 881
+  "eval": 343,
+  "sft": 503,
+  "rl": 824
  },
  "strata_count": 106,
  "overlaps_by_content_sha256": {
@@ -13,6 +13,33 @@
   "sft∩rl": 0
  },
  "duplicate_content_pairs": 0,
+ "leakage": {
+  "L1_exact_message_and_answer": {
+   "cross_bucket_groups": 40,
+   "affected_eval": 0,
+   "affected_eval_ids": [],
+   "by_template": {},
+   "affected_eval_ratio": 0.0
+  },
+  "L2_skeleton_and_answer_non_exempt": {
+   "cross_bucket_groups": 77,
+   "affected_eval": 0,
+   "affected_eval_ids": [],
+   "by_template": {},
+   "affected_eval_ratio": 0.0
+  },
+  "L2_exempt_templates": {
+   "CHAT": "不需要查数据的能力询问/闲聊，答案就该由问法决定",
+   "CLAR": "关键槽位缺失，答案是「问哪个字段」，由问法决定",
+   "REJ": "越权/越域，答案是「拒绝 + 类别」，由问法决定"
+  },
+  "eval_leakage_free": true,
+  "train_pool_overlap_groups": {
+   "L1": 40,
+   "L2": 77
+  },
+  "passed": true
+ },
  "eval_strata_coverage": {
   "ATTR|tool_call|conclusive|id_given": 33,
   "ATTR|tool_call|conclusive|must_discover": 32,
@@ -132,61 +159,61 @@
    "CONF": 12,
    "CRE": 12,
    "DIA": 12,
-   "FAIL": 1,
+   "FAIL": 2,
    "HIGH": 12,
    "INJ": 12,
    "LONG": 12,
-   "MISS": 12,
+   "MISS": 9,
    "POL": 12,
    "POLM": 12,
    "POLU": 12,
-   "SCALE": 1
+   "SCALE": 7
   },
   "outcome": {
    "('BUD', 'denied')": 4,
-   "('CONF', 'answered_from_absent')": 3,
-   "('CONF', 'conflict_reported')": 1,
-   "('CRE', 'launch')": 1,
+   "('BUD', 'executed')": 1,
+   "('CHAT', 'chitchat')": 2,
+   "('CONF', 'answered_from_absent')": 2,
+   "('CRE', 'launch')": 2,
    "('FAIL', 'absurd_value')": 4,
    "('FAIL', 'forbidden')": 4,
-   "('FAIL', 'injection')": 4,
-   "('FAIL', 'pagination')": 4,
+   "('FAIL', 'injection')": 3,
+   "('FAIL', 'pagination')": 3,
    "('FAIL', 'quota_exhausted')": 4,
-   "('FAIL', 'rate_limited')": 3,
+   "('FAIL', 'rate_limited')": 4,
    "('FAIL', 'source_conflict')": 4,
    "('FAIL', 'timeout_applied')": 4,
    "('FAIL', 'timeout_lost')": 4,
    "('FRESH', 'mature')": 4,
    "('FRESH', 'partial')": 4,
-   "('INJ', 'memory_content')": 1,
-   "('INJ', 'policy_text')": 1,
-   "('INJ', 'safety_line_note')": 2,
+   "('INJ', 'memory_content')": 2,
+   "('INJ', 'safety_line_note')": 3,
    "('POL', 'answered_v2_from_superseded')": 2,
    "('POL', 'escalated_no_policy')": 2,
-   "('SCALE', 'tight')": 3
+   "('SCALE', 'tight')": 2
   }
  },
  "sft_template_counts": {
-  "ATTR": 88,
+  "ATTR": 83,
   "BUD": 30,
-  "CHAT": 12,
+  "CHAT": 14,
   "CLAR": 12,
-  "CONF": 16,
-  "CRE": 13,
+  "CONF": 14,
+  "CRE": 14,
   "DIA": 12,
-  "FAIL": 47,
+  "FAIL": 46,
   "FRESH": 20,
   "GEO": 78,
   "HIGH": 12,
-  "INJ": 16,
+  "INJ": 17,
   "LONG": 12,
   "LOW": 46,
-  "MISS": 12,
+  "MISS": 9,
   "POL": 16,
   "POLM": 12,
   "POLU": 12,
   "RAG": 18,
   "REJ": 12,
-  "SCALE": 15
+  "SCALE": 14
  }
 }

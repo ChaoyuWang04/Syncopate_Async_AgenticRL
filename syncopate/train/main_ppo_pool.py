@@ -227,12 +227,16 @@ def main() -> None:
 
     if mode == "fully_async":
         # ⛔ 原因已更正（2026-08-14，见模块 docstring）：
-        # 不是「fully_async 不调 create_rl_sampler」——它调（rollouter.py:464），
-        # 而是它跑在**另一个 Ray worker 进程**里，driver 侧的 patch 够不着。
-        # 修法是把 sampler patch 装进 verl_patches.setup_worker()（M7 跑完再动）。
-        # 在那之前照实说不生效——别让人以为「代码在仓库里」就等于「这一轮生效了」。
-        print("[pool] ⚠️ fully_async 的 sampler 在 Ray worker 进程里，"
-              "driver 侧 patch 够不着 ⇒ 动态分池本轮不生效（可修，见 main_ppo_pool docstring）",
+        # ✅ 2026-08-17 已修：sampler patch 装进了 `verl_patches.setup_worker()`，
+        #    在 rollouter 那个 Ray worker 进程里生效。
+        #
+        # ⚠️⚠️ **这行原来写的是「⇒ 动态分池本轮不生效」，那是个断言，而且修好之后它就错了** ——
+        #    真正生效的判据是 rollouter 进程打出来的
+        #    `[pool] 动态分池启用：N 条 case`（带 `(FullyAsyncRollouter pid=…)` 前缀）。
+        #    ⇒ 判据行**只许写观测，不许写断言**：一行断言"为什么不行"的日志，
+        #      能把"其实已经行了"整个盖住，而且它长得像个合格判据（05-handoff §6 变种②）。
+        print("[pool] fully_async：sampler 在 rollouter 的 Ray worker 进程里装 —— "
+              "**判据是那个进程打出的 `[pool] 动态分池启用`，不是这一行**",
               flush=True)
 
     # ⚠️⚠️ 两个实验性入口**必须当 `__main__` 跑，不能 import 了再调**（2026-08-13 实测）

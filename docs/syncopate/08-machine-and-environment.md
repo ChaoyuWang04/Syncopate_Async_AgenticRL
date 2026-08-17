@@ -254,6 +254,92 @@ lm_head+CE —— 本项目监督占比只有 3.8–4.9%）。
 ⚠️ **别改 `--batch-size`**：实测 bs=1 反而最快，而且改了要同步改 `--grad-accum`。
 ⚠️ v11 最长序列 5806 token < 6144，不会截断。**换数据版本要重新量。**
 
+### 4.1.1 ★ SFT 要不要多卡？—— 调查结论：能，但现在不做
+
+**现状**：`syncopate/train/sft.py` 是**手写的单进程单卡循环** ——
+没有 `torch.distributed` / DDP / accelerate，也不走 HF `Trainer` 或 verl。
+2 个 epoch **19 分钟**，显存峰值 **12.3 / 32 GB**。
+
+#### 该用什么并行
+
+```
+可训练参数 66.1M / 4088.5M (1.62%)   LoRA
+显存峰值   12.3 GB / 32 GB           单卡绰绰有余
+```
+
+⇒ **只该用数据并行（DDP）**，不需要任何模型内并行。而且本机 **PCIe P2P 全关**，
+FSDP/TP 的通信要经主机内存中转 —— RL 侧已经验过是净亏。
+LoRA 梯度只有 66M 参数 ≈ 260 MB，一步 all-reduce 约 10 ms，可以忽略。
+
+#### ★★ 不要自己写 DDP —— verl 已经有 SFT trainer，而且三样都齐
+
+```
+.venv/…/verl/trainer/sft_trainer.py       单机（torchrun）
+.venv/…/verl/trainer/sft_trainer_ray.py   Ray 版
+```
+
+| 我们要的 | verl 有没有 |
+|---|---|
+| 数据并行 | ✅ `engine.fsdp_size`（**设 1 = DDP**，-1 才是全量分片） |
+| 序列并行 | ✅ `ulysses_sequence_parallel_size`（我们最长 6372 token，用得上） |
+| LoRA | ✅ `model.lora_rank` / `lora_alpha` / `target_modules` |
+| 动态 batch | ✅ `use_dynamic_bsz` + `max_token_len_per_gpu`（按 token 配平） |
+| **插自己的数据集** | ✅ **`data.custom_cls: {path, name}`** ← 关键 |
+
+#### ★★★ 一个重要的旁证：verl 自己承认了我们当初绕开它的那个问题
+
+`sft_replay.py` 记着不用 `MultiTurnSFTDataset` 的理由：Qwen3 的 chat template
+**只给最后一个 assistant 轮加空 `<think>`**，所以「整段渲染」和「增量拼接」
+天生逐 token 不相等。
+
+而 verl 自己在 `config/sft_trainer_engine.yaml` 的注释里写着同一件事：
+
+> `MultiTurnSFTDataset` apply_chat_template to each turn separately and concat
+> `input_ids` … **which may not equal to** apply_chat_template to whole messages
+> at once. For example, **Qwen Thinking series models add `<think></think>` tags
+> to last turn** … Set to True to **ignore** input_ids mismatch…
+
+⇒ 它的"解法"是加个 `ignore_input_ids_mismatch` 开关去**忽略**不一致；
+我们的解法是**只保留一条代码路径**（SFT 数据由 `run_rollout` 回放 gold 产出，
+和 RL 序列同构是构造保证的）。**我们那个判断是对的，现在有上游背书。**
+
+#### 真要做的时候怎么接
+
+**数据构造这条路径一个字不改**，只把训练循环换成 verl 的：
+
+```yaml
+data.custom_cls.path: syncopate/train/verl_sft_dataset.py   # 30 行，读我们预分词的 parquet
+data.custom_cls.name: SyncopatePretokenizedSFT
+engine.fsdp_size: 1          # DDP，不分片
+model.lora_rank: 32
+```
+
+#### 为什么现在不做（三条）
+
+1. **收益 19 分钟**，而接线要验的不少：collator 字段契约、LoRA adapter 保存格式要和
+   `merge_adapter` / `weight_shift` 对得上。
+2. **★ loss 归一化口径会变。** 我们现在是 **每条 case 等权**（bs=1，每个 micro-batch
+   一条序列，取该序列的 token 均值）；verl 的 `use_dynamic_bsz` 是**按 token 配平**
+   ⇒ 长序列权重更高。监督 token 变异系数 0.37，差别不至于翻天，
+   **但足以让 ckpt 选型的数（决策位熵 / 有梯度格子）和现有的不可比** —— 而那是选 e1 的依据。
+3. **引入新的依赖路径**：现在 SFT 完全不依赖 verl。而我们刚在 RL 侧被 verl 咬过三次
+   （`save_model_to_cpu` 断言、日志级别硬编码成 WARN、`create_rl_sampler` 写死）。
+
+#### ★ 触发条件写死，别靠感觉决定
+
+```
+SFT 数据 > 2000 条（现在 419）     单卡一遍超过 1 小时，并行才有意义
+或 序列 > 8000 token              单卡显存开始紧（现在 12.3/32 GB）
+或 要做全参微调而非 LoRA          那时单卡真装不下，必须 FSDP
+```
+
+⚠️ 到那时如果自己写 DDP，记住两条：**`grad_accum` 要同步除以卡数**
+（否则有效 batch 翻 4 倍、步数砍 4 倍，位移直接掉进"白训"区间）；
+**别改 loss 的归一化口径**（`DistributedSampler(drop_last=True)` 保证各卡条数相同时，
+DDP 的 rank 平均恰好保持"每条 case 等权"）。
+
+---
+
 ### 4.2 RL（★ 2026-08-13 调优后，默认值已是最优的那套）
 
 ```bash
