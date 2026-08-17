@@ -128,6 +128,10 @@ E18 §11 结尾和记忆里都钉了这条限定。
 7. 🆕 **`nsys` 装了但不在 PATH**：`/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys`。
    ⚠️ 它**只能包住启动**，不能对已经在跑的 Ray 作业 attach ⇒ A5 必须提前规划进某一跑。
    （`py-spy` 在 `.venv/bin/`，那个**可以** attach，用于 Python 栈采样。）
+8. 🆕🔴 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
+   下产生 **72 GB**（最终 `.nsys-rep` 只有 386 MB —— **差两个数量级**）。
+   ⇒ 采样前先看 `df`；夜间无人值守时挂上 `scripts/disk_guard.sh`（低于 15 G 就杀 nsys 保队列）。
+   ⚠️ 导出的 `.sqlite` 也有 **8.8 GB**，分析完就删。
 
 ---
 
