@@ -192,9 +192,11 @@ def main() -> int:
 
     res = analyze(args.db)
     print(f"# {res['db']}   采样窗口 {res['window_seconds']} s")
-    print("\n  ★ 每张卡的 kernel 级占空比（这段窗口里真在跑 kernel 的比例）")
+    print("\n  ⚠️ 按 deviceId 聚合（**会把多张卡叠成一张**：Ray 给每个 worker 只设一张卡，")
+    print("     每个进程眼里自己那张就是 0 ⇒ 下面这个百分比可能 >100%，只作合计用，别当占空比读）")
     for dev, v in res["devices"].items():
-        print(f"    GPU{dev}   {v['kernel_seconds']:>8.2f} s   忙 {v['busy_share'] * 100:>5.1f}%")
+        print(f"    dev{dev}（合计）  {v['kernel_seconds']:>8.2f} s   {v['busy_share'] * 100:>6.1f}%"
+              f"   ← 想看单卡占空比请看下面**按进程**那张表")
 
     print("\n  ★ 按进程 × 卡（trainer 与 rollout 就是靠这个分开的）")
     for name, v in res["processes"].items():
