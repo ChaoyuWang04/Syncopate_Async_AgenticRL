@@ -360,3 +360,27 @@ TP=2  trainer2 + rollout2     7.68–7.70 s   27.3–28.9 s
 ★ **这次的停放理由是实测的，不是推算的**（原理由「带宽上 TP 大概率净负」是推算）。
 ⚠️ **成立范围**：只答了 **rollout 侧、4B、小 batch**。trainer 侧 TP 仍缺 megatron 后端未验；
 装不下单卡的模型是另一个命题。
+
+### A8 · 集合通信带宽的分算子口径（E00）✅ ★★ 头号发现
+
+```
+组               all_reduce      all_gather     reduce_scatter    broadcast
+3卡(trainer)     18.3/24.4       ★3.2/2.1        21.0/14.0        37.8/37.8
+4卡              17.3/25.9        37.9/28.4       30.6/22.9        27.7/27.7
+2卡组内           28.2/28.2        51.0/25.5       50.8/25.4        51.0/51.0
+2卡跨socket      22.3/22.3        50.2/25.1       39.5/19.7        46.4/46.4
+                                            （每格 = algbw / busbw，GB/s，256 MB）
+```
+
+★★ **`all_gather` 在 3 卡上塌了**：2卡 51.0 → 4卡 37.9 → **3卡 3.2 GB/s**，差 **12×**；
+而同样 3 卡上 all_reduce / reduce_scatter / broadcast 全部正常。
+⇒ NCCL 在**非 2 的幂次 rank 数**上的算法退化（无 P2P、绕主机内存时尤其明显）。
+**两个独立探针复现**（本探针 + `probe_collective_granularity.py` 的 5 档粒度全是 3.2）。
+
+⇒ **纪律：「卡间带宽」不是一个数，必须按「算子 × 卡数」给。** 用 all-reduce 的数去推算
+all_gather 的代价会错 8–12 倍 —— 2026-08-17 就是这么把 A6 的预测做错的。
+
+⇒ **对 A6 结论的修正**：ZeRO-3 的 6.01× 是在 **3 卡 trainer** 上量的，而 3 卡正好是
+all_gather 最坏的点 ⇒ **「分片是净亏损」的成立范围只到 3 卡**，4 卡待测（**A11**）。
+DDP 不受影响 —— 它走 all_reduce。
+原始数据 `logs/e00_collective_bw.json` · `logs/e02_granularity.json`
