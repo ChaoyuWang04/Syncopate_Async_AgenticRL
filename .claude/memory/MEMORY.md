@@ -5,10 +5,10 @@
 - [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、只能 DDP；2+2 跨 socket、Gen5、四卡 25.6 GB/s；A6 决定「模型内并行净亏损」还剩多少力气
 - [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
-- [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第六形态 = 字段全程有效但没有消费者（M9 的 C 档审批从没被接上）
+- [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错（一天撞三次）
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★第三条：判据太宽会**为错误的理由通过**（xfail 会把它一起吞掉）
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
-- [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — M7 只动了 0.0093%；下一跑改 lr
+- [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — ★M7-b：lr **被夹在两堵墙之间**（3e-5 ESS 塌 / 1e-5 推不动）
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证

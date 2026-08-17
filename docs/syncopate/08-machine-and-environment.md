@@ -254,6 +254,36 @@ lm_head+CE —— 本项目监督占比只有 3.8–4.9%）。
 ⚠️ **别改 `--batch-size`**：实测 bs=1 反而最快，而且改了要同步改 `--grad-accum`。
 ⚠️ v11 最长序列 5806 token < 6144，不会截断。**换数据版本要重新量。**
 
+### 4.0.1 🔴 nsys 不要包住 RL 长跑（2026-08-17 用一次报废的跑换来的）
+
+infra 想搭车做 A5/E01 的一步拆解，我把整跑包进了
+`nsys profile --delay 900 --duration 180`。**两件事同时出错**：
+
+```
+① 中间文件 30 分钟涨到 74 GB，且以 426 MB/分 继续涨
+   （--duration 180 没有限制住 —— 它 trace 的是 Ray 拉起的一整片子进程）
+   算总账：剩余 85 步还要吃 72 GB + checkpoint 108 GB = 180 GB > 剩余 134 GB
+   ⇒ **必然撑爆，正是 M7 丢最终 ckpt 的那个形状**
+
+② `nsys stop --session=…` **会把目标进程一起杀掉**
+   （日志：`The target application terminated`）——
+   我本以为它只停采集。RL 死在第 25 步，checkpoint 一个没存下，
+   而那份 74 GB 的 trace 产出是**一个 0 字节的 .nsys-rep**。
+```
+
+⇒ **纪律**：
+- **nsys 只包短跑**（≤10 步的专门 profile 跑），**绝不包正式训练**。
+- 想在长跑里截窗口，用 `torch.profiler`（`--profile-steps`，SFT 侧已经有）——
+  它按步数抓、写在我们自己的目录、跑完自动收工。
+- ⚠️ **磁盘守卫要和停止条件一起挂**：`logs/rl_guard.log` 那个守卫现在同时看
+  ESS / 熵 / **剩余空间 < 40 GB 就停机**。
+
+★ 顺带一条已确认的观察：nsys 的中间文件落在 `$TMPDIR/nvidia`，
+而 `/workspace/.env` 把 `TMPDIR` 指到了 `/workspace/tmp` ——
+**幸亏指对了**，否则 74 GB 会写进只有 16 G 的 overlay，几分钟就整机挂掉。
+
+---
+
 ### 4.1.1 ★ SFT 要不要多卡？—— 调查结论：能，但现在不做
 
 **现状**：`syncopate/train/sft.py` 是**手写的单进程单卡循环** ——

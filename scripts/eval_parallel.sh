@@ -26,7 +26,11 @@ OUT="${2:?}"
 N="${3:-4}"
 BATCH="${BATCH:-data/batches/v13}"
 SPLIT="${SPLIT:-data/splits/v13}"
-MODEL="${MODEL:-models/Qwen3-4B}"
+# ⚠️⚠️ **没有默认值** —— 2026-08-17 踩过：RL 的 LoRA 是在**SFT 合并模型**之上训的，
+# 而这里默认成裸基座 `models/Qwen3-4B` ⇒ 等于把 SFT 学到的东西全丢掉再评。
+# 症状极具迷惑性：不是报错，是**分数全线暴跌**（CLAR 0.844→0.000、REJ 0.812→0.094），
+# 看着像"RL 把模型训坏了"。⇒ 基座必须显式给，给错了宁可报错。
+MODEL="${MODEL:?必须显式指定基座：RL adapter 要贴在 SFT 合并模型上，不是裸基座}"
 PY="${PY:-.venv/bin/python}"
 
 # 先确认没有别的评测在占卡 —— 抢卡会让新起的这批直接 OOM

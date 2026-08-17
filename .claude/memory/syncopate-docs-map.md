@@ -15,6 +15,12 @@ docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令�
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/16-m7b-rl-run.md          ★ M7-b（2026-08-17）：lr 被夹在两堵墙之间 ——
+                                          3e-5 时 ESS 跌破 0.3 停机、1e-5 时位移只有 0.0487%
+                                          ⇒ 下一跑 colocate+3e-5 对照（异步的代价）
+docs/syncopate/15-leakage-gates.md        ★ 三桶泄露门禁 L1/L2（每次重切必跑）
+docs/syncopate/14-sft-health-metrics.md   ★ 训练健康度与红线；面板由脚本程序化建
+                                          scripts/make_wandb_panels.py
 docs/syncopate/13-diversity-gates.md      ★ 数据多样性门禁（2026-08-17 新建）：
                                           D1–D11 · **大版本重建前必跑**
                                           `python scripts/check_diversity.py --batch <批次>`

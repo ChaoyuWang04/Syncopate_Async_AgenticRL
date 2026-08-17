@@ -150,6 +150,28 @@ M9 符合性审计（`docs/syncopate/11-runtime-acceptance.md`）：`automation_
 现在不满足所以标 xfail；**修好那天会变成 XPASS = 失败**，逼下一个人回来翻标记。
 ⇒ **让缺口自己会喊**，这是 [[observed-needs-an-owner]] 在代码里的落法。
 
+---
+
+## ★★ 2026-08-17 第七形态：**一个默认值/判据看起来正常，实际指向另一件事**（且不报错）
+
+同一天撞了三次，形状完全一样：
+
+```
+① 评测的基座默认成裸模型   RL 的 LoRA 是在 **SFT 合并模型**上训的，
+                          eval 脚本 MODEL 默认 models/Qwen3-4B ⇒ 把 SFT 全丢了再评
+                          症状：不报错，**分数全线暴跌**（CLAR 0.844→0.000）
+                          看着像"RL 把模型训坏了" —— 差点写进结论
+② `until [ -f 输出文件 ]`   那文件**上一版就存在** ⇒ 循环立刻通过
+                          ⇒ 第二批评测当场起来抢同样四张卡、全部 OOM
+③ 守卫匹配错进程名         `launch_rl` 会 exec 成 `main_ppo_pool`
+                          ⇒ `pgrep -f train.launch_rl` 找不到 ⇒ 守卫立刻退出、形同虚设
+```
+
+⇒ **判据：凡是"默认值"和"存在性检查"，问一句「它指的是不是我以为的那个东西」。**
+   前六种形态是"机制没接上"，这一种是**接上了、但接到了另一根线上**。
+
+★ 配套：给错宁可报错。`eval_parallel.sh` 的基座改成 `${MODEL:?...}` 必填。
+
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
 [[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]] [[observed-needs-an-owner]]
 [[sandbox-is-subset-of-runtime]]
