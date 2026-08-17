@@ -173,3 +173,39 @@ def test_save_load_roundtrip(tmp_path):
     back = Pool.load(tmp_path / "pool.json")
     assert back.states["A"].seen == pool.states["A"].seen
     assert abs(back.states["A"].ema_std - pool.states["A"].ema_std) < 1e-9
+
+
+def test_ingest_ignores_dispatch_and_abort_events(tmp_path):
+    """★★ B4 之后必须守住的一条：**只吃 complete，不吃 dispatch/abort**。
+
+    仪器改成三类事件之后，`dispatch` / `abort` 行同样带 `case_id` 但**没有 reward**。
+    如果照收，`float(row.get("reward") or 0.0)` 会把「还不知道」当成「确实是 0 分」，
+    EMA 方差被稀释、采样权重被污染，**而且全程不报错**。
+
+    ⇒ 这就是 TRACK-B §0.6 从 AReaL 源码抄回来的那条硬约束的本地版：
+       **「reward 还不知道」和「reward 确实是 0」是两种完全不同的状态。**
+    """
+    log = tmp_path / "dispatched.jsonl"
+    log.write_text(
+        '{"event": "dispatch", "case_id": "A", "rollout_id": "r1"}\n'
+        '{"event": "complete", "case_id": "A", "rollout_id": "r1", "reward": 0.8, "num_steps": 6}\n'
+        '{"event": "dispatch", "case_id": "A", "rollout_id": "r2"}\n'
+        '{"event": "abort", "case_id": "A", "rollout_id": "r2", "reason": "cancelled"}\n',
+        encoding="utf-8",
+    )
+    pool = Pool(["A"])
+    pool.ingest(log, step=1)
+    # 只有那条 0.8 被吃进去：mean=0.8、方差=0（组里只有一个样本）
+    assert pool.states["A"].seen == 1
+    assert abs(pool.states["A"].ema_reward - 0.8) < 1e-9
+    # ⚠️ 判据的关键：若 abort/dispatch 被当成 0 分收下，均值会掉到 0.2 左右
+    assert pool.states["A"].ema_reward > 0.5
+
+
+def test_ingest_still_reads_the_old_format(tmp_path):
+    """旧的 dispatched.jsonl 没有 `event` 键 —— 那时每行都是完成行，必须照收。"""
+    log = tmp_path / "dispatched.jsonl"
+    log.write_text('{"case_id": "A", "reward": 0.5, "num_steps": 3}\n', encoding="utf-8")
+    pool = Pool(["A"])
+    pool.ingest(log, step=1)
+    assert pool.states["A"].seen == 1

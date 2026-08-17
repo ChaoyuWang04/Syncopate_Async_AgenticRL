@@ -154,6 +154,21 @@ class Pool:
                 cid = row.get("case_id")
                 if cid not in self.states:
                     continue
+                # ★★★ 2026-08-17（B4 改了仪器之后必须配套）：只吃 **complete** 事件。
+                #
+                # `dispatched.jsonl` 现在写三类事件（dispatch / complete / abort），
+                # 后两类**没有 reward 字段**。而下面那行 `float(row.get("reward") or 0.0)`
+                # 会把「还不知道」当成「确实是 0 分」收下 ⇒ 每条轨迹被记两次、
+                # 其中一次是假的 0 分，EMA 方差和采样权重全被污染，**而且不报错**。
+                #
+                # ⇒ 这正是 TRACK-B §0.6 从 AReaL 源码里抄回来的那条硬约束：
+                #    **「reward 还不知道」和「reward 确实是 0」是两种完全不同的状态。**
+                #    我们当时写的是「若将来做在线闭环要防这个」——结果三小时后自己就撞上了。
+                # ⚠️ 没有 `event` 键的是**旧格式**（全是完成行），照收，保持向后兼容。
+                event = row.get("event")
+                if event is not None and event != "complete":
+                    self._ingested_lines = index + 1   # 跳过的行也算消费过，免得每步重扫
+                    continue
                 rewards, steps = groups.setdefault(cid, ([], []))
                 rewards.append(float(row.get("reward") or 0.0))
                 steps.append(float(row.get("num_steps") or 0.0))

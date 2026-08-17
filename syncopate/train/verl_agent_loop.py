@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -54,12 +55,13 @@ LATENCY_SCALE = float(os.environ.get("SYNCOPATE_LATENCY_SCALE", "1.0"))
 # verl 用第一条样本的 keys 去 stack 整个 batch，key 集合不齐会在 collate 时炸。
 CAP_NAMES: tuple[str, ...] = tuple(build_domain().caps.names())
 
-# ★ 下发侧的记账：每条 rollout **跑完就追加一行**，不管它最后有没有进训练。
+# ★ 下发侧的记账。⚠️ 2026-08-17 之前这里只记「跑完了」，那是**装错了位置**（见下面 B4 那段）。
 #
 # 这是「分布漂移」那把尺子的另一半：
 #   训练分布  ← trainer.rollout_data_dir 的每步 dump（**实际进入训练**的）
-#   下发分布  ← 这个文件（**跑完过**的）
-#   两者的差 = 漂移
+#   下发分布  ← 这个文件的 `event=dispatch` 行（**发出去过**的）
+#   完成分布  ← 这个文件的 `event=complete` 行（**跑完过**的）
+#   发出−完成 = 漂移的上界；完成−训练到 = 下游丢弃
 #
 # sync 下有 barrier，两者恒等，天然是对照组；async 下短任务先回、长任务被
 # partial_rollout 切断，训练分布会系统性偏向短任务——而长链正是 agentic 的核心。
@@ -90,18 +92,78 @@ def _log_version_fields_once(fields: dict[str, Any]) -> None:
         print(f"[agent-loop] 策略版本字段 ✓ min={lo} max={hi}", flush=True)
 
 
-async def record_dispatch(bundle: CaseBundle, output: RolloutOutput, reward: float) -> None:
+# ★★★ 2026-08-17（队列 B4 / E08-c）：仪器从「跑完了」移到「发出去了」。
+#
+# 原来只在 `run_rollout` 返回之后记一行 ⇒ 我们量的是「**完成** → 训练」这一段，
+# 而漂移发生在「**发出** → 完成」那一段：**被中途杀掉的长轨迹一条都看不见**。
+# E08 的「逐桶零差」（7200=7200）因此是**什么都没发生**的零差，不是「发生了被修好」。
+# ⇒ 现在每条 rollout 写三类事件，缺口自己会显形：
+#
+#     dispatch  交给 agent loop 的那一刻（长任务在这里就已经存在了）
+#     complete  正常跑完
+#     abort     被取消/抛异常（partial_rollout 的 abort→续写走的就是这条）
+#
+#   发出 − 完成 − 中止 = 还在飞；**发出 − 完成 = 漂移的上界**。
+#
+# ⚠️ 「记完成」和「记下发」不是详略之别，是**量的东西不同** —— 这是 E08 §6 的教训：
+#    仪器装错位置时，读数是干净的零，看起来像结论。
+_LAST_SEEN_PARAM_VERSION: dict[str, Any] = {}
+
+
+_dispatch_logged = False
+
+
+async def _record_event(event: str, payload: dict[str, Any]) -> None:
+    global _dispatch_logged
     if not DISPATCH_LOG:
         return
-    line = json.dumps({
+    if not _dispatch_logged:
+        # ★ 判据行（本项目纪律：靠环境变量生效的机制，启动时必须打一行，
+        #   没有那行就是没生效 —— 而且这里是 **worker 进程**，driver 打的不算）
+        _dispatch_logged = True
+        print(f"[agent-loop] 下发记账 ✓ 三类事件（dispatch/complete/abort）→ {DISPATCH_LOG}",
+              flush=True)
+    line = json.dumps({"event": event, "ts": time.time(), **payload}, ensure_ascii=False)
+    async with _dispatch_lock:      # 多条 rollout 并发，追加要串行化
+        await asyncio.to_thread(_append, line)
+
+
+async def record_dispatch_start(bundle: CaseBundle, rollout_id: str) -> None:
+    """case 交给 agent loop 的那一刻记一行。**这里还不知道它会不会跑完。**"""
+    await _record_event("dispatch", {
         "case_id": bundle.case_id,
+        "rollout_id": rollout_id,
+        # ⚠️ 尽力而为：进程里最近一次生成回报的版本，不是这条轨迹自己的。
+        #    真值要等 complete 那行的 min/max_global_steps。字段名带 _approx 提醒别混用。
+        "param_version_approx": _LAST_SEEN_PARAM_VERSION.get("max_global_steps"),
+    })
+
+
+async def record_dispatch(
+    bundle: CaseBundle, output: RolloutOutput, reward: float,
+    rollout_id: str = "", version_fields: dict[str, Any] | None = None,
+) -> None:
+    """正常跑完时记一行（原来的那行，补上 rollout_id 与真实策略版本）。"""
+    vf = version_fields or {}
+    await _record_event("complete", {
+        "case_id": bundle.case_id,
+        "rollout_id": rollout_id,
         "num_steps": output.metrics["num_steps"],
         "wall_seconds": output.metrics["wall_seconds"],
         "truncated": int(output.metrics["truncated"]),
         "reward": reward,
-    }, ensure_ascii=False)
-    async with _dispatch_lock:      # 多条 rollout 并发跑完，追加要串行化
-        await asyncio.to_thread(_append, line)
+        "min_global_steps": vf.get("min_global_steps"),
+        "max_global_steps": vf.get("max_global_steps"),
+    })
+
+
+async def record_dispatch_abort(bundle: CaseBundle, rollout_id: str, reason: str) -> None:
+    """被取消 / 抛异常时记一行。★ 这一类正是原来看不见的那些。"""
+    await _record_event("abort", {
+        "case_id": bundle.case_id,
+        "rollout_id": rollout_id,
+        "reason": reason,
+    })
 
 
 def _append(line: str) -> None:
@@ -255,6 +317,9 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
                 _log_version_fields_once(version_fields)
             elif extra.get("max_global_steps") is not None:
                 version_fields["max_global_steps"] = extra["max_global_steps"]
+            # 进程级的「最近见过的版本」——给 dispatch 那行做尽力而为的标注（见 B4 注释）
+            if extra.get("max_global_steps") is not None:
+                _LAST_SEEN_PARAM_VERSION["max_global_steps"] = extra["max_global_steps"]
             # ★ log_probs 必须带出来，否则 rollout_corr/* 那套 TIS 诊断全是空的
             #   —— 而它正是 docs/syncopate/00-research-question 的观测基础。
             #   需要 actor_rollout_ref.rollout.calculate_log_probs=True 才有值。
@@ -280,24 +345,40 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             max_response_length=int(self.config.data.max_response_length),
         )
 
-        output = await run_rollout(
-            bundle, registry=domain.registry, tokenizer=self.tokenizer, generate=generate,
-            config=config, sampling_params=sampling_params,
-            # ⚠️ 必须每条 rollout 一个唯一 id。GRPO 会把同一个 case 复制 n 份，
-            # 它们的 extra_info **完全相同**——之前用固定的 "r0"，
-            # 结果 4 条 rollout 写到同一个 artifact 路径互相覆盖，只剩最后一条，
-            # 而且不会报错。namespace_id 也靠它保证各自的写动作不串台。
-            rollout_id=uuid4().hex[:8],
-            run_id=os.environ.get("SYNCOPATE_RUN_ID", "verl"),
-        )
+        # ⚠️ 必须每条 rollout 一个唯一 id。GRPO 会把同一个 case 复制 n 份，
+        # 它们的 extra_info **完全相同**——之前用固定的 "r0"，
+        # 结果 4 条 rollout 写到同一个 artifact 路径互相覆盖，只剩最后一条，
+        # 而且不会报错。namespace_id 也靠它保证各自的写动作不串台。
+        # ★ 2026-08-17：提到 run_rollout 之前生成 —— dispatch / complete / abort
+        #   三类事件要靠它配对，才能算出「发出去了但没回来」的那一批。
+        rollout_id = uuid4().hex[:8]
+
+        # ★★ B4：**在这里**记「发出去了」，而不是等它跑完（见上面 record_dispatch_* 的注释）
+        await record_dispatch_start(bundle, rollout_id)
+        try:
+            output = await run_rollout(
+                bundle, registry=domain.registry, tokenizer=self.tokenizer, generate=generate,
+                config=config, sampling_params=sampling_params,
+                rollout_id=rollout_id,
+                run_id=os.environ.get("SYNCOPATE_RUN_ID", "verl"),
+            )
+        except asyncio.CancelledError:
+            # partial_rollout 的 abort→续写、或 rollouter 排空在飞请求，都走这里。
+            # ⚠️ 记完必须**原样抛出去**：吞掉 CancelledError 会把取消语义弄坏。
+            await record_dispatch_abort(bundle, rollout_id, "cancelled")
+            raise
+        except Exception as exc:                                   # noqa: BLE001
+            await record_dispatch_abort(bundle, rollout_id, type(exc).__name__)
+            raise
 
         artifact_root = extra_info.get("artifact_root")
         result = await score_and_persist(
             bundle, output, domain, Path(artifact_root) if artifact_root else None
         )
-        # ★ 记在这里而不是记在返回之后：这条 rollout 到此就算「跑完了」，
-        # 至于它会不会被 trainer 采纳，是下游的事——而两者的差正是我们要量的东西。
-        await record_dispatch(bundle, output, result.reward)
+        # ★ 这条 rollout 到此算「跑完了」；它会不会被 trainer 采纳是下游的事
+        # —— 而 dispatch / complete / 训练到 三者两两的差，正是我们要量的东西。
+        await record_dispatch(bundle, output, result.reward,
+                              rollout_id=rollout_id, version_fields=version_fields)
 
         return AgentLoopOutput(
             prompt_ids=output.prompt_ids,

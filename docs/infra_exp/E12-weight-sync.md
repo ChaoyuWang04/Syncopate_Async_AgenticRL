@@ -303,7 +303,11 @@ rollout 卡（31.37 GB）
 
 ## 4.6 🐟 2026-08-17 补：主线 v13-e1 跑里白捡的观测 —— **稳态 55.8 s 不是普适常数**
 
-> 来源：主线正在跑的 `logs/rl_v13e1.log`（fully_async 3+1，v13 数据），**零成本旁观，未占用 GPU**。
+> 来源：主线 2026-08-17 16:20 那一跑（fully_async 3+1，v13 数据），**零成本旁观，未占用 GPU**。
+> ⚠️⚠️ **口径污染，必须写在最前面**：那一跑被 `nsys profile --delay 900 --duration 180` 包着，
+> 而且主线在 16:52 把它**弃掉重跑了**（`checkpoints/grpo/m7b_v13e1_nsys_aborted`）。
+> 采样窗口（16:35:46–16:38:46）晚于本节用到的 6 条 timing 行，profiler 开销**应该**很小 ——
+> 但「应该」不是判据。⇒ **同样的数要在 16:52 起的干净跑上复测**，复测前本节只作方向性证据。
 > 尺子：`scripts/parse_fully_async_timing.py`（新建，已把「timing 行覆盖 4 个 global step」固化进工具）
 > 数据：`logs/e12d_v13e1_timing.json`
 
