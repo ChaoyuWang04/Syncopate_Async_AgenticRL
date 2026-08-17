@@ -78,5 +78,46 @@ dead_grid 说得出（这个模板在 EVAL 上是活的），difficulty_proxy �
 要**饱和**的（行为，学不会就是学不会）不能设上限；只要**在场**的（模板/结局）
 必须设，否则把 RL 的口粮全吃光。
 
+---
+
+## ★★★ 2026-08-17 第五形态：**修坑的机制自己变成了更深的坑，而且静默**
+
+分卡模式（one_step_off / fully_async）下 **3 个 trainer rank 全挤在物理 GPU0**，
+第一次权重同步 OOM。colocate 完全正常。
+
+根因是**我们自己加的 `worker_process_setup_hook`** —— 它当初正是为了修第①种形态
+（「补丁打在 driver、断言在 worker」的作用域问题）才加的：
+
+    Ray worker 进程刚起来 → 跑我们的钩子 → 钩子 import verl.utils.fsdp_utils
+                          → **CUDA 设备枚举被固化**
+    Ray 之后才给这个 actor 设 CUDA_VISIBLE_DEVICES
+                          → 可见数量变了、**设备→物理卡的映射不变**
+                          → 每个 worker 的 cuda:0 都指向物理 GPU0
+
+最小复现（两行就能证伪，我却先绕了三圈）：
+
+    设 CVD=2 再 import torch                        → 0xa1 ✅（物理 GPU2）
+    先 setup_worker() 再设 CVD=2                     → 0x21 🔴（物理 GPU0）
+
+⇒ **新纪律：进程启动钩子里只许做纯 Python 的事。任何可能碰 CUDA 的 import
+都要延迟到设备确定之后**（修法：`_defer_until_imported`，用 meta_path finder
+在 verl 自己 import 那一刻才打补丁；判据行照打，测试 3 条仍绿）。
+
+### 这一轮里三个「判据本身不可信」的教训
+
+1. **`/proc/<pid>/environ` 是 exec 时快照**，Ray 在运行时改的 `os.environ` 不反映进去。
+   我据此断定「Ray 没设 CVD」——**错的**，Ray 设了（探针在进程内打出 CVD=0/2/3）。
+   ⇒ 进程内的环境要在**进程内、运行时**打，别从外面读。
+2. **`torch.cuda.is_initialized()` 是 False 不代表 CUDA 没被摸过** ——
+   驱动层的枚举已经定了，PyTorch 的上下文还没建。这个判据漏掉了真正的损害。
+3. **A/B 才定的位**：colocate 正常 × 分卡异常 ⇒ 差别只有那个钩子。
+   在此之前我试过 `RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1`，
+   它让 trainer 分对了卡（所以"看起来像修好了"），但把 rollout 侧撞出
+   `NCCL Duplicate GPU` —— **绕过症状的修法会把你带离根因。**
+
+★ 同一轮还抓到一条真·没接上：**`--weight-sync-bucket-mb` 在 colocate 下被静默忽略**
+（override 只写在分卡分支里，注释还断言「分卡模式独有的开销」——那句话是错的，
+colocate 一样走 NCCL checkpoint engine）⇒ 吃 verl 默认 2048 MB，第一次同步就 OOM。
+
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
-[[blank-thresholds-are-not-passes]]
+[[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]]

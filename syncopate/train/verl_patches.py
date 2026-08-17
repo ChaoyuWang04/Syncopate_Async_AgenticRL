@@ -325,9 +325,134 @@ def setup_worker() -> None:
 
     **判据行打出来了 ≠ 补丁在需要它的那个进程里生效。** 判据要和作用域一起看。
     """
-    _patch_fsdp_cpu_copy_for_ddp()
+    # ★★★ 2026-08-17：这里**绝不能直接 import verl**（见 _defer_until_imported 的说明）。
+    _defer_until_imported("verl.utils.fsdp_utils", _patch_fsdp_cpu_copy_for_ddp)
+    if os.environ.get("SYNCOPATE_DEVICE_PROBE") == "1":
+        _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
+    if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
+        _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
+
+
+def _patch_grad_probe() -> None:
+    """临时探针：`optimizer_step` 之前，逐参数报告谁的梯度是 nan/inf。
+
+    背景：2026-08-17 发现 `actor/grad_norm=nan`，而 verl 在非有限时**直接
+    `optimizer.zero_grad()` 跳过更新** ⇒ 模型一步都没更新过（WARN 行每步都打）。
+    `fsdp2_clip_grad_norm_` 已经正确过滤了 `p.grad is None` ⇒ 是梯度本身坏了。
+    """
+    from verl.workers.engine.fsdp.transformer_impl import FSDPEngine
+
+    orig = FSDPEngine.optimizer_step
+
+    def probed(self):
+        import torch
+        tot = bad = nog = 0
+        names_bad, first = [], None
+        for n, p in self.module.named_parameters():
+            if not p.requires_grad:
+                continue
+            tot += 1
+            if p.grad is None:
+                nog += 1
+                continue
+            if not torch.isfinite(p.grad).all():
+                bad += 1
+                if len(names_bad) < 6:
+                    names_bad.append(n)
+            elif first is None:
+                first = (n, float(p.grad.norm()))
+        print(f"[grad-probe] 可训练={tot} 无梯度={nog} 非有限={bad} "
+              f"首个正常参数={first} 坏的前几个={names_bad}", flush=True)
+        return orig(self)
+
+    FSDPEngine.optimizer_step = probed
+    print("[verl-patch] grad-probe 已挂上", flush=True)
     if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
         _patch_sync_step_timing()
+
+
+def _defer_until_imported(module_name: str, patch: "callable") -> None:
+    """在 `module_name` **被别人 import 完的那一刻**执行 `patch`，我们自己不 import 它。
+
+    ★★★ 为什么必须这样 —— 2026-08-17 花了一整轮定位出来的：
+
+    `worker_process_setup_hook` 在 Ray worker 进程**刚起来时**跑，而 Ray 是在
+    **之后**才给这个 actor 设 `CUDA_VISIBLE_DEVICES` 的。如果钩子在那之前
+    `import verl.utils.fsdp_utils`，这条 import 链会把 **CUDA 的设备枚举固化下来**；
+    等 Ray 再设 CVD，**可见数量变了、设备→物理卡的映射却不变** ⇒ 每个 worker 的
+    `cuda:0` 都指向物理 GPU0。
+
+    表现：分卡模式下 3 个 trainer rank **全挤在 GPU0**，第一次权重同步 OOM；
+    而 colocate 完全正常（它不挂这个钩子）—— 对照实验见交接文档。
+    最小复现：
+
+        python -c "import os,torch; os.environ['CUDA_VISIBLE_DEVICES']='2';
+                   print(hex(torch.cuda.get_device_properties(0).pci_bus_id))"   → 0xa1 ✅
+        同上但先 `from syncopate.train.verl_patches import setup_worker; setup_worker()`  → 0x21 🔴
+
+    ⚠️ 这个钩子当初正是为了修「补丁打在 driver、断言在 worker」的**作用域**问题才加的
+    （见 setup_worker 的 docstring）—— 修一个坑挖出一个更深的，而且这个是**静默**的：
+    训练照常起来，只是三张卡变一张。⇒ 新纪律：**进程启动钩子里只许做纯 Python 的事，
+    任何可能碰 CUDA 的 import 都要延迟到设备确定之后。**
+    """
+    import importlib.abc
+    import importlib.util
+    import sys
+
+    if module_name in sys.modules:      # 已经被导过：直接打，此时设备已定
+        patch()
+        return
+
+    class _Finder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname != module_name:
+                return None
+            sys.meta_path.remove(self)          # 先摘掉，避免 find_spec 递归
+            spec = importlib.util.find_spec(fullname)
+            if spec is None or spec.loader is None:
+                return None
+            inner = spec.loader.exec_module
+
+            def exec_module(mod):
+                inner(mod)
+                patch()                          # ★ 模块装载完才打补丁
+
+            spec.loader.exec_module = exec_module
+            return spec
+
+    sys.meta_path.insert(0, _Finder())
+
+
+def _patch_device_probe() -> None:
+    """临时探针：在 **worker 进程内、运行时** 打出每个 rank 落到哪张物理卡。
+
+    ⚠️ 为什么不能读 `/proc/<pid>/environ`：那是 **exec 时**的环境快照，
+    Ray 是在 actor 跑起来之后改 `os.environ` 的，改动不会反映进去 ——
+    照着它判「CVD 没设」会得到错误结论（2026-08-17 我就这么错过一次）。
+    """
+    from verl.single_controller.base.worker import Worker
+
+    orig = Worker._setup_env_cuda_visible_devices
+
+    def probed(self, *a, **kw):
+        r = orig(self, *a, **kw)
+        try:
+            import torch
+
+            from verl.utils.ray_utils import ray_noset_visible_devices
+            cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "<未设置>")
+            dev = torch.cuda.current_device()
+            bus = torch.cuda.get_device_properties(dev).pci_bus_id
+            print(f"[device-probe] pid={os.getpid()} rank={os.environ.get('RANK')} "
+                  f"local_rank={os.environ.get('LOCAL_RANK')} CVD={cvd} "
+                  f"current_device={dev} 物理总线=0x{bus:02x} "
+                  f"noset={ray_noset_visible_devices()}", flush=True)
+        except Exception as e:  # 探针绝不能弄挂训练
+            print(f"[device-probe] 失败: {e}", flush=True)
+        return r
+
+    Worker._setup_env_cuda_visible_devices = probed
+    print("[verl-patch] device-probe 已挂上", flush=True)
 
 
 def apply(mode: str) -> None:

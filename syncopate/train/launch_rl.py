@@ -325,6 +325,13 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
     # （`one_step_off_ppo_trainer` / `fully_async_ppo_trainer`）、不同的 worker 栈
     # （`separation.engine_workers.DetachActorWorker`，不是 colocate 那套 FSDP worker）、
     # 不同的入口 main。⇒ 由 `main_ppo_pool` 按 SYNCOPATE_RL_MODE 分发。
+    # ★ 权重同步 bucket：**所有模式**都要（colocate 也走 NCCL checkpoint engine，
+    #   见上面那段更正）。放在分支之前，避免再次只接一半。
+    overrides += [
+        f"actor_rollout_ref.rollout.checkpoint_engine.update_weights_bucket_megabytes"
+        f"={args.weight_sync_bucket_mb}",
+    ]
+
     if args.mode != "colocate":
         overrides += [
             # ⚠️ 上游 bug：`one_step_off_ppo_trainer.yaml` 的 searchpath 写的是
@@ -349,7 +356,13 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             # 顶层 `rollout` 节是异步配置独有的（不是 actor_rollout_ref.rollout）
             f"rollout.n_gpus_per_node={args.rollout_gpus}",
             "rollout.nnodes=1",
-            # ---- ★★ 权重同步的缓冲区（分卡模式独有的一笔显存开销）----
+            # ---- ★★ 权重同步的缓冲区 ----
+            # ⚠️⚠️ 2026-08-17 更正：这一条**以前只写在这个分卡分支里**，注释还写着
+            # 「分卡模式独有的一笔显存开销」——**那句话是错的**。实测 colocate 同样走
+            # NCCL checkpoint engine、同样在 `nccl_checkpoint_engine.py` 里分配 bucket，
+            # 于是 `--weight-sync-bucket-mb` 在 colocate 下被**静默忽略**、吃 verl 的
+            # 默认 2048 MB，第一次权重同步直接 OOM。⇒ 已挪到下面对所有模式生效。
+            # （又一次「机制在但没接上」：参数在、help 在、就是这条路径没接。）
             #
             # 分卡之后 trainer 每隔几步要把权重推给 rollout 卡，走 NCCL checkpoint engine。
             # 它会在 **rollout 那张卡上**分配一个 bucket 大小的暂存区
@@ -362,8 +375,6 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             #     CheckpointEngineWorker 自己 2.58 GB + bucket 2.00 GB = 4.58 GB
             #     31.37 − 26.66 = 4.71 GB 可用 ⇒ 差 0.13 GB，贴着墙 ⇒ 挂
             # ⇒ 默认降到 0.75（vLLM 23.5 GB，留 7.8 GB），并把 bucket 做成显式参数。
-            f"actor_rollout_ref.rollout.checkpoint_engine.update_weights_bucket_megabytes"
-            f"={args.weight_sync_bucket_mb}",
 
             # ---- ★★★ staleness 修正：**必须显式设成 decoupled** ----
             #
@@ -642,6 +653,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--remove-padding", default="True", choices=["True", "False"],
                         help="抠掉 pad token 再算（5120→~4200）。2026-08-13 晚起本机已装真"
                              "flash-attn 2.8.3（预编译轮子，sm_120 kernel 验证过），垫片已退役")
+    # ★★★ 2026-08-17 的一整轮弯路，结论写在这里（详见 pyproject 的 [tool.uv.sources] 注释）：
+    #
+    # 社区那个 `cu128torch2.9cxx11abiFALSE` 轮子**前向三项全过、反向全错**
+    #   flash_attn_func 反向        dq/dk/dv 全 nan
+    #   flash_attn_varlen_func 反向 有限但**恒为 0**   ← verl 的 rmpad 走这条，★静默失败
+    # 后果：每步 grad_norm=nan ⇒ verl 打 WARN 并 `optimizer.zero_grad()` **跳过更新**
+    #       ⇒ RL 完全空转（实测每步都跳，模型一次没动过）。
+    # ⇒ 教训：「import 成功 ≠ 契约满足」的下一层是 **「前向对 ≠ 反向对」**。
+    #
+    # 现在换成**官方 cu13torch2.9 轮子 + PyPI 的 CUDA 13 运行时**，反向与 fp32 参考
+    # 对到 4–5 位有效数字，真实 RL 里 grad_norm 0.0147/0.0224（M7 整跑是 0.011–0.06，同区间）。
+    # 实测 update_actor 16.78 s vs sdpa 26.01 s ⇒ **1.55×**，所以默认仍是 FA2。
+    #
+    # ⚠️ 换轮子/换机器后**先跑 `scripts/check_flash_attn_backward.py`**，它专门拦
+    #    「反向恒为 0」这种没有 nan、没有报错、训练照常跑完的静默失败。
+    #    判据不过就显式传 `--attn-implementation sdpa`（正确但慢 ~1.55×）。
     parser.add_argument("--attn-implementation", default="flash_attention_2",
                         choices=["flash_attention_2", "sdpa"],
                         help="训练侧 attention 实现。默认 flash_attention_2（真轮子已装）。"

@@ -1,5 +1,18 @@
 # Infra 线交接（独立于主线训练）
 
+> 🔴🔴 **2026-08-17 换机器了 —— §1 那三个招牌数字全部作废，必须在新机器重测。**
+> 新机仍是 4×5090、P2P 仍全关，但 **2+2 跨 socket + PCIe Gen5** ⇒ **卡间带宽 6.44 → 25.6 GB/s（四卡）**。
+> ⇒ 首当其冲要复查 **E02「FSDP 慢 6 倍」**（因果就是 6.4 GB/s，带宽 ×4 后可能只剩 ~2×）＝ 队列 **A6**；
+> **A7（E00 四卡曲线）今天已做掉一半**，数据在 `logs/e00_allreduce_*.json`、尺子 `scripts/probe_allreduce_bw.py`。
+> ⚠️ 旧机器已不存在 ⇒ **换机器救不回基线**，只能重测。细节见 `../syncopate/05-handoff.md` §0.1。
+>
+> 🆕 **同日修好三个会静默毁掉训练的 bug**（详见 05-handoff §0.1）：
+> ① flash-attn 轮子**反向**坏（前向全过、反向 nan 或**恒为 0**）⇒ RL 完全空转；
+>    已换官方 cu13 轮子 + CUDA13 运行时，判据 `scripts/check_flash_attn_backward.py`
+> ② 分卡模式 3 个 trainer rank **全挤 GPU0**（根因是我们自己的 `worker_process_setup_hook`
+>    在 Ray 设 CVD 之前 import verl，把 CUDA 设备枚举固化了）
+> ③ `--weight-sync-bucket-mb` 在 colocate 下**被静默忽略**（⚠️ 默认值仍是 2048，短跑要显式传）
+>
 > 更新于 **2026-08-16**。给下一个上下文窗口。
 > **分工**：主线训练（数据/SFT/RL/RAG/Runtime 里程碑）看 `../syncopate/05-handoff.md`；
 > **本文档只管 infra 线**——多卡并行、异步 RL、通信、kernel、框架/模型选型。
@@ -43,8 +56,8 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简�
 |---|---|---|
 | 框架 | **verl 不换** | E07 §1 |
 | 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）。首步 FULL_SHARD×3 1182 s vs 单卡 198 s = **5.97×** | E02 |
-| attention | `flash_attention_2` 默认（真轮子 2.8.3，`/workspace/wheels/`） | E02 §2 |
-| dynamic_bsz | **默认 True**（FA2 下 ÷1.37；符号由 attention 决定） | README §6 |
+| attention | `flash_attention_2` 默认 —— 🆕 **必须是官方 cu13torch2.9 轮子**（社区 cu128 那个**反向**是坏的，RL 会静默空转）。换轮子先跑 `scripts/check_flash_attn_backward.py` | 05-handoff §0.1 |
+| dynamic_bsz | ⚠️ 代码里**默认 False**（这行以前写「默认 True」，与代码不符）。符号由 attention 决定，新机器**未重测** | README §6 |
 | **MoE 模型** | 🆕 ~~GLM-4.7-Flash~~ → **`Qwen3-30B-A3B-Instruct-2507`**（已下载 57 GB）。GLM 的 `Glm4MoeLiteForCausalLM` **当前栈不支持**，要 transformers 5.0rc | **E07 §4.5.1** |
 | **MoE 的 LoRA** | 🆕 **绝不能用 `all-linear`**（98.7% 的 Linear 在专家里 ⇒ 参数 26×、张量 74×、每步同步 3.39 GB）。用「注意力+router」30.1 M | **E07 §4.5.3** |
 | E11 稀疏 logprob | 🔻 **降级，不写 kernel**（端到端仅 4.3%，切片就有 4.0%） | E11 §6-③ |

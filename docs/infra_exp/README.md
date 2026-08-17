@@ -238,18 +238,35 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 
 > 这些数来自 E00，**是所有实验的分母**。改动时在 E00 里改，这里同步。
 
+🔴🔴 **2026-08-17 换机器了 —— 下面标「旧机」的数全部只对旧机器成立。**
+新机仍是 4×5090 且 P2P 仍全关，但 **2+2 跨 socket**（EPYC 9V74 ×2；GPU0/1@node0、
+GPU2/3@node1）且 **PCIe Gen5**（旧机 max Gen4）⇒ **带宽变成 4 倍**。
+**所有以 6.4 GB/s 为分母的推论都要重算**（首当其冲是 E02「FSDP 慢 6 倍」）。
+旧机已不存在 ⇒ 换机器救不回基线，只能在这台重测。
+
 ```
-卡间 all-reduce bus bandwidth（2 卡，NCCL_CUMEM_ENABLE=0）
-    1 MB 5.20 GB/s · 8 MB 5.60 · 64 MB 5.56 · 256 MB 6.44 GB/s
-    ⇒ ★ 6.4 GB/s 是这台机器卡间通信的天花板（无 NVLink、无 P2P、经主机中转）
-    ⇒ 对照：H100 NVLink ≈ 900 GB/s，我们是它的 1/140
+🆕 卡间 all-reduce bus bandwidth（NCCL_CUMEM_ENABLE=0，尺子 scripts/probe_allreduce_bw.py）
+    组内(0,1)/(2,3)   1MB 18.1 · 8MB 26.6 · 64MB 28.0 · 256MB **28.8** GB/s
+    跨 socket(0,2)/(1,3)                                256MB **22.2** GB/s   ← 只掉 22%
+    四卡 0-3（= DDP 实际走的）                           256MB **25.6** GB/s
+    ⇒ NUMA 绑定无效（22.23→22.34，噪声内）⇒ 跨 socket 是 UPI 跳的物理代价，没有旋钮
+    ⇒ 换算负载：DDP 梯度 260MB 旧机 40.4ms → 新机 10.2ms；跨 socket 净代价 1.2ms/步
+       ÷ 一步 32–91s = **0.004%** ⇒ 跨 socket 对本项目实质无影响
+    ⇒ 传输通道实测 SHM/direct/direct（P2P 仍全 0），torch 2.9/NCCL 2.27.5 与
+       torch 2.11/2.28.9 量出来一致 ⇒ 对 NCCL 版本不敏感
+    原始数据 logs/e00_allreduce_{default,default_bind,trainstack}.json
+
+〔旧机〕2 卡同 NUMA  1MB 5.20 · 8MB 5.60 · 64MB 5.56 · 256MB 6.44 GB/s
+    ⇒ 对照：H100 NVLink ≈ 900 GB/s，旧机是它的 1/140，新机约 1/35
 
 单卡 RL 每步（sync colocate, Qwen3-4B+LoRA r32, v11）   91–99 秒
 rollout 长尾（同批最慢/平均）                          1.37–2.75×
 actor 峰值 reserved（remove_padding+fused_kernels 后）  13.92 GB / 上限 ~18.8 GB
 prefix cache 命中率（单副本, gpu_util 0.40）            96.7–97.5%
 DDP vs FSDP（4B LoRA）: FULL_SHARD×3 = 1182 s/步, 单卡 198 s, DDP 3.00× 线性
-flash-attn: 真轮子 2.8.3 已装（2026-08-13 晚), sm_120 verified, /workspace/wheels/
+flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.2`（补 libcudart.so.13）
+    ⚠️ 之前那个社区 cu128 轮子**前向对、反向全错**（nan 或恒为 0）⇒ RL 空转，2026-08-17 换掉
+    判据 `scripts/check_flash_attn_backward.py`（含反向）· update_actor 16.78 s vs sdpa 26.01 ⇒ 1.55×
 ★ 监督密度（agent 负载的结构性特征，两个阶段同量级）
     SFT  3.8–4.9%（5402 token 中仅 204 进 loss）
     RL   **4.17%**（E11，1755 条真实轨迹：prompt 88.3% / 工具返回 7.6% / 助手 4.2%）

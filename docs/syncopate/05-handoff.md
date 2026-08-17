@@ -1,5 +1,7 @@
 # Syncopate 交接文档
 
+> 🔴🔴 **2026-08-17 换机器了 —— 先读 §0.1，很多旧数字已作废。**
+>
 > 更新于 **2026-08-16**（这一天只做一件：**一次独立验收审计**，见 §2.9 —— 结论是
 > 「造的东西一直跑在验收前面」，并当场补齐 M7 的三个空门槛 + 一把缺失的尺子 +
 > 修好 M8 验收路径上两处断点）
@@ -27,6 +29,71 @@
 3. 归因延迟是第一性约束（D7 才知对错，D1 数据极易被误当结论）
 
 ---
+
+## 0.1 · ★★★ 2026-08-17：换了机器 + 修好三个会静默毁掉训练的 bug
+
+**机器换了**（仍是 4×5090，但换了一台）。git 之外的东西全没了，环境已完整重建。
+
+| | 旧机器 | 🆕 这台 |
+|---|---|---|
+| 拓扑 | 四卡对称、**单 NUMA** | **2 socket EPYC 9V74，2+2**（GPU0/1@node0、GPU2/3@node1，跨组走 UPI） |
+| PCIe | max Gen4 | **Gen5 x16** |
+| all-reduce busbw @256MB | **6.44 GB/s** | 组内 **28.8** · 跨 socket **22.2** · **四卡 25.6** |
+| `/workspace` | mfs 网络盘、**有 `df` 看不见的配额** | **本地 XFS 300 G**，权限位生效、无隐形配额 |
+| `/` | 不是瓶颈 | 🔴 **只有 16 G overlay** ⇒ 缓存必须重定向，见 `08 §2.0` |
+
+⇒ **跨 socket 只掉 22%，换算到 DDP 梯度同步是 1.2 ms/步（占一步 0.004%），不用换机器。**
+🔴 **但 `6.4 GB/s` 是 README §6 的全局常量，E02/E07/E11/E12 都拿它当分母 ⇒ 所有 before 数字作废，
+必须在这台重测。**最可能被推翻的是 E02「FSDP 慢 6 倍」（带宽 ×4 后可能只剩 ~2×）。
+
+### 管线已端到端跑通（data gen → SFT → RL）
+
+```
+data gen  v11→v12 重建，data/splits/v12 四文件与 git **SHA-256 逐字节一致**（254/477/819）
+data build SFT 397+80 / RL 655+164
+SFT       val_loss 0.7400 → 0.1110，峰值 11.3 GB
+merge     7.6 G 合并模型
+RL        三种模式全通：colocate 1卡 67.2 s/步 · colocate 3卡 29.2 · one_step_off 22.9
+          · fully_async 8 步跨 2 个同步周期
+测试      365 passed, **0 skipped**（含 45 条 runtime，PG 已起）
+```
+
+### ★ 三个 bug（都会静默毁掉训练，都已修）
+
+**① flash-attn 轮子的反向是坏的 —— 最贵的一个。**
+社区那个 `cu128torch2.9cxx11abiFALSE` 轮子**前向三项数值全过、反向全错**：
+`flash_attn_func` 反向 dq/dk/dv 全 nan；**`flash_attn_varlen_func` 反向有限但恒为 0**
+（verl 的 rmpad 正好走这条）。后果：每步 `grad_norm=nan` ⇒ verl 打
+`WARN: grad_norm is not finite` 并 `optimizer.zero_grad()` **跳过更新** ⇒ **RL 完全空转**。
+⚠️ **返回 0 那条比 nan 更毒**：没有 nan、没有报错、指标好看，训练"跑完"什么都没学到。
+⇒ 教训：**「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
+⇒ 修法：改用**官方 `cu13torch2.9` 轮子** + PyPI 的 `nvidia-cuda-runtime<=13.2`
+（补 `libcudart.so.13`；驱动 595 的 max_cuda 13.2 支持）。反向与 fp32 参考对到 4–5 位有效数字，
+真实 RL 里 grad_norm **0.0147/0.0224**（M7 整跑是 0.011–0.06，同区间）。**不必本地编译。**
+⇒ 判据脚本 **`scripts/check_flash_attn_backward.py`**，换轮子/换机器后必跑。
+
+★ **这不影响 M7 的结论**：`outputs/2026-08-13/17-02-03/.hydra/overrides.yaml` 显示
+M7 用的是 **sdpa**，且位移 0.0093% ≈ 100 步 × lr 1e-6 ⇒ 优化器每步都真执行了。
+**M7 的病还是 lr 太小，下一跑改 `lr 1e-5` 的计划不变。**
+
+**② 分卡模式下 3 个 trainer rank 全挤在 GPU0。**
+根因是**我们自己的 `worker_process_setup_hook`**：它在 Ray 设 `CUDA_VISIBLE_DEVICES`
+**之前**跑，import `verl.utils.fsdp_utils` 把 CUDA 设备枚举固化了 ⇒ 之后设 CVD 只改可见数量、
+不改映射。colocate 正常（它不挂这个钩子）—— 这个 A/B 才定的位。
+⇒ 修法 `verl_patches._defer_until_imported`：钩子里不再 import 任何碰 CUDA 的东西，
+用 meta_path finder 延迟到 verl 自己 import 时才打补丁。
+⇒ **新纪律：进程启动钩子里只许做纯 Python 的事。**
+
+**③ `--weight-sync-bucket-mb` 在 colocate 下被静默忽略。**
+override 只写在分卡分支里，注释还断言「分卡模式独有的开销」——**那句是错的**，
+colocate 一样走 NCCL checkpoint engine ⇒ 吃 verl 默认 2048 MB，第一次同步就 OOM。已改成所有模式生效。
+⚠️ **默认值仍是 2048**，短跑请显式传 `--weight-sync-bucket-mb 512`。
+
+### 还欠着的
+
+- **`fully_async` 下动态分池仍没接上**（§2.3 的老账，infra 线 **B6**；纪律是「先量出漂移 B4 再补」）
+- `dynamic_bsz` 在这台机器 + 新 FA2 下的符号**没重测**（旧机器 FA2 下是 ÷1.37，默认 False）
+- `uv.lock` 仍在 .gitignore ⇒ 每台机器解析结果可能不同（这次就是它让 Ray 版本变了）
 
 ## 1 · 当前状态
 

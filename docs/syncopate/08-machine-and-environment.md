@@ -7,12 +7,21 @@
 
 ## 1 · 硬件画像（实测）
 
+> 🔴 **2026-08-17 换了一台机器**（仍是 4×5090）。下面是**当前这台**；旧机器的画像留在末尾对照。
+
 ```
-4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 570.195.03  CUDA 12.8  torch 2.9.0+cu128
-CPU   2× EPYC 7543（120 核 / 2 NUMA）      RAM 944 GB
-拓扑  GPU0–3 两两 PHB、全部 NUMA 0 —— **四卡完全对称**
-盘    /workspace 是网络盘（mfs）；/ 只有 30G overlay
-      ⇒ HF_HOME、.venv、models、checkpoints 全部必须放 /workspace
+🆕 当前机器（2026-08-17）
+4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 595.58.03  CUDA 12.8  torch 2.9.0+cu128
+CPU   2× EPYC 9V74（80 核/路，320 线程，2 NUMA）   RAM 503 GB
+拓扑  🔴 **2+2 跨 socket**：GPU0/1@node0、GPU2/3@node1，组内 NODE、跨组 SYS（走 UPI）
+PCIe  **Gen5 x16**（32 GT/s；空闲时报 Gen1 属正常）
+盘    /workspace = 本地 XFS 300G（**持久卷**，workspace_is_volume=true，权限位生效）
+      / 只有 **16G overlay** ⇒ 见 §2.0，缓存必须重定向
+
+〔旧机器，2026-08-13〕
+驱动 570.195.03 · CPU 2× EPYC 7543（120 核）· RAM 944 GB
+拓扑 GPU0–3 两两 PHB、**全部 NUMA 0，四卡完全对称**
+盘   /workspace 是网络盘（mfs），有 df 看不见的卷配额
 ```
 
 🔴🔴 **`/workspace` 有卷配额，而 `df` 看不到它 —— 2026-08-14 因此丢了一个 ckpt。**
@@ -46,7 +55,12 @@ PY
 其中 97% 是和基座逐字节相同的冻结权重）。200 G 也只放得下 7 个。
 跑完用 `scripts/prune_rl_ckpts.py` 瘦身（只留 LoRA，约 250 MB）。
 
-🔴🔴 **`/workspace` 不支持权限位 —— M9 的 PostgreSQL 因此放不进去**
+🔴🔴 **〔旧机器〕`/workspace` 不支持权限位 —— M9 的 PostgreSQL 因此放不进去**
+
+> ⚠️ **2026-08-17 起这一整段只对旧机器成立。** 这台是本地 XFS，`chmod 700` 实测生效 ⇒
+> `PGDATA=/workspace/pgdata/16/syncopate`（已写进 `/workspace/.env`），**数据库不再是
+> 「重启即丢的派生产物」**。下面保留原文是因为「推翻的预期不删」这条约定。
+
 
 ```
 chmod 700 /workspace/xxx   →  仍是 777    （mfs 是 FUSE，不认权限位，实测）
@@ -81,24 +95,67 @@ for d in /workspace/tools/postgres/debs/*.deb; do dpkg -x "$d" /workspace/tools/
 PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这台坏了**。
 ⇒ 卡间通信一律经主机内存中转。
 
-**实测带宽上限：2 卡 all-reduce bus bandwidth ≈ 6.4 GB/s**（256MB 消息）。
-对照 NVLink 的 300–450 GB/s ⇒ **差约 50 倍**。这个数是所有并行策略选择的定量依据。
+**🆕 当前机器实测**（`scripts/probe_allreduce_bw.py`，口径同 README §6：
+all-reduce busbw / `NCCL_CUMEM_ENABLE=0` / 256MB）：
 
-⬜ 还没测：NCCL 完整带宽曲线、主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，
-会污染所有对照实验）。⚠️ PCIe 空闲时报 Gen1 x16（max Gen4），需在负载下复测。
+```
+组内 (0,1)/(2,3)  28.8 GB/s      跨 socket (0,2)/(1,3)  22.2      四卡（DDP 走这条）25.6
+⇒ 跨 socket 只掉 22%；NUMA 绑定救不回来（22.23→22.34，噪声内）＝ UPI 跳的物理代价
+⇒ 换算负载：DDP 梯度 260MB 从旧机 40.4 ms → 10.2 ms，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+⇒ 传输通道实测 SHM/direct/direct（P2P 仍全 0）
+```
+
+〔旧机器〕2 卡同 NUMA **6.44 GB/s** —— 🔴 **这个数是 README §6 的全局常量、
+E02/E07/E11/E12 都拿它当分母，现在作废了，必须在这台重测。**
+
+⬜ 还没测：主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，会污染所有对照实验，队列 A7）。
 
 ---
 
 ## 2 · 从零搭环境（新机器按顺序做）
 
 ```bash
-uv sync --extra train --extra dev          # ← 见 2.1 的三个坑
-python scripts/install_flash_attn_shim.py  # ← 漏了 RL 一启动就 ImportError
+set -a; . /workspace/.env; set +a                  # ★ 先加载持久化重定向，见 2.0
+uv sync --extra train --extra dev --extra runtime  # ← 三个 extra 都要，见 2.1
 hf download Qwen/Qwen3-4B   --local-dir models/Qwen3-4B     # 7.6G
 hf download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B   # 1.4G，31 个测试要它
+python scripts/ingest_external.py                  # ★ 派生数据，不跑的话 27 个测试红
+bash scripts/pg_bootstrap.sh                       # ★ 不起 PG 的话 45 条 runtime 测试 skip
 # reference/ 870M 只能手动 scp —— 版权所有（深圳途明智启科技），永不进 git
-python -m pytest -q                        # 应为 246 passed, 0 skipped
+python -m pytest -q                                # 应为 365 passed, 0 skipped
 ```
+
+⚠️ **2026-08-17 换机器时发现，上面这个序列以前是错的** —— 照旧版做完是
+「27 failed / 45 skipped」，四个缺口全都**只在干净机器上暴露**：
+
+| 缺口 | 症状 | 已修 |
+|---|---|---|
+| `--extra runtime` 不存在（M9 依赖从没进依赖表） | `asyncpg`/`fastapi` 缺失，4 个测试模块**收集阶段**就 ImportError | pyproject 加 `runtime` extra |
+| `ingest_external.py` 不在本节（它在 §3） | `data/external/ingested.json` 是 gitignore 的派生产物，缺了 27 红，签名像"数据过期"极易误判 | 提到本节 |
+| `pg_bootstrap.sh` 不在本节 | 45 条 runtime 测试静默 skip —— 而它们自己的 docstring 写着**「不要把跳过当通过」** | 提到本节 |
+| `install_flash_attn_shim.py` | 垫片**已退役**（满足 import 不满足契约），真轮子现在由 `[tool.uv.sources]` 装 | 从序列里删掉 |
+
+### 2.0 ★★ 持久化重定向（`/workspace/.env`）
+
+这台机器 `/` 是 **16 GB 的 overlay**（`/root` `/tmp` `/var` `/home` 都在上面，recycle 即丢），
+`/workspace` 才是 **300 GB 持久卷**（`vast-capabilities` 的 `workspace_is_volume=true`）。
+镜像的 `bootstrap.sh` 只管了 uv/npm/HF 的缓存，**训练栈这几个默认全落在 overlay 上**：
+
+```
+RAY_TMPDIR            ★ Ray 对象溢写，verl 四卡能吃掉几十 GB，16 G 直接爆
+TRITON_CACHE_DIR      Triton JIT
+TORCH_EXTENSIONS_DIR  融合 kernel 编译
+VLLM_CACHE_ROOT / CUDA_CACHE_PATH / XDG_CACHE_HOME / TMPDIR / PIP_CACHE_DIR
+PGDATA                见下
+LD_LIBRARY_PATH       PG 的 libpq（`dpkg -x` 不进 ldconfig 路径）
+```
+
+⇒ 全部写在 `/workspace/.env` 里，**每个 shell 先 `set -a; . /workspace/.env; set +a`**。
+实测：整个环境重建 + 跑通管线，overlay 用量从 48 M 没涨过。
+
+🟢 **PGDATA 的限制在这台机器上解除了**：这台 `/workspace` 是 **XFS**（不是旧机器的 mfs），
+实测 `chmod 700` 生效 ⇒ `PGDATA=/workspace/pgdata/16/syncopate`，
+**数据库不再是"重启即丢的派生产物"**。下面 §1 里那段 mfs 的论证是**旧机器的**，别照搬。
 
 ### 2.1 依赖的三个坑（都已修进 pyproject / uv.toml）
 
@@ -115,14 +172,42 @@ python -m pytest -q                        # 应为 246 passed, 0 skipped
 ⚠️ **`uv.lock` 在 .gitignore 里** ⇒ 每台机器解析结果可能不同。想要真正可复现，
 该考虑把它放进版本管理。
 
-### 2.2 flash_attn 垫片
+### 2.2 ★★★ flash-attn：判据必须包含**反向**
 
 verl 0.8 在 CUDA 路径上**无条件** `from flash_attn.bert_padding import ...`，
-不管 `use_remove_padding` 开不开。垫片是纯 PyTorch 的四个 gather/scatter 函数，秒装；
-在 sm_120 上编译真 flash-attn 要一两小时。
+所以这个包必须在。~~垫片~~**已退役**（满足 import 不满足契约）。
 
-⚠️ **「垫片就够用」要限定范围：对正确性够用，对 `use_dynamic_bsz` 的序列打包不够用**
-（见 §4.2）。**装真 flash-attn 是目前最值得做的一项 infra 投资。**
+**2026-08-17 踩到更深的一层，务必读完再换轮子：**
+
+社区那个 `cu128torch2.9cxx11abiFALSE` 轮子（版本号完全匹配、我验过前向三项全过）——
+**反向是坏的**：
+
+```
+flash_attn_func 反向         dq/dk/dv 全 nan
+flash_attn_varlen_func 反向  有限但**恒为 0**（参考值 136/178/1450）  ← verl rmpad 走这条
+```
+
+后果：RL 每步 `grad_norm=nan` ⇒ verl 打 `WARN: grad_norm is not finite` 并
+`optimizer.zero_grad()` **跳过更新** ⇒ **训练完全空转，模型一次没动过**。
+⚠️ **返回 0 那条比 nan 更毒**：没有 nan、没有报错，训练"正常跑完"什么都没学到。
+
+⇒ **教训：「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
+
+**现在用的（可直接照抄）**：官方 `cu13torch2.9` 轮子 —— 它 `cxx11abiTRUE`（和 torch 一致）、
+含 sm_120 cubin，唯一缺 `libcudart.so.13`，由 PyPI 的 `nvidia-cuda-runtime<=13.2` 补上
+（驱动 595 的 `driver_max_cuda=13.2` 支持 CUDA 13；torch 自己仍是 cu128，**两个运行时共存**）。
+两者都已写进 `pyproject.toml`，`uv sync` 会自动装；`LD_LIBRARY_PATH` 在 `/workspace/.env`。
+
+```bash
+python scripts/check_flash_attn_backward.py     # ★ 换轮子/换机器后必跑，退出码 0 才算可用
+```
+
+实测：反向与 fp32 参考对到 4–5 位有效数字；真实 RL 里 `grad_norm` 0.0147/0.0224
+（M7 整跑是 0.011–0.06，同区间）；`update_actor` **16.78 s vs sdpa 26.01 s ⇒ 1.55×**。
+⇒ 判据不过就显式传 `--attn-implementation sdpa`（正确但慢约 1.55×）。
+
+⚠️ 官方 `cu12torch2.8` 那个别用：`ImportError: undefined symbol _ZNK3c106SymInt6sym_neERKS0_`
+（torch 2.8 编的接不上 torch 2.9，而 torch 2.9 由 vllm 0.12.0 钉死）。
 
 ### 2.3 Claude 的项目记忆已经进仓库了
 
@@ -157,6 +242,25 @@ python -m syncopate data build --pool rl  --batch data/batches/v11 \
 ```
 
 产出：**1370 条 · 17 模板 · EVAL 198 / SFT 434 / RL 738（train 590 + val 148）**
+
+**🆕 v12（当前版本）的链条 —— 必须先建 v11，因为 `--freeze-from` 指向它**：
+
+```bash
+python -m syncopate cases generate --spec configs/buckets/v11.yaml --out data/batches/v11
+python scripts/set_tool_menus.py --batch data/batches/v11 --sft-audit _audit/v8_sft_epoch1.json
+python -m syncopate cases generate --spec configs/buckets/v12.yaml --out data/batches/v12
+python scripts/set_tool_menus.py --batch data/batches/v12 --sft-audit _audit/v8_sft_epoch1.json \
+       --freeze-from data/batches/v11                      # ★ 少了它会动 1030 条存量 case
+python -m syncopate data split --batch data/batches/v12 --out data/splits/v12   # 不传 --dead-from ⇒ difficulty_proxy
+python -m syncopate data build --pool sft --batch data/batches/v12 --out data/sft/v12 \
+       --split-dir data/splits/v12 --val-every 6 --model models/Qwen3-4B
+python -m syncopate data build --pool rl  --batch data/batches/v12 --out data/rl/v12 \
+       --split-dir data/splits/v12 --model models/Qwen3-4B
+```
+
+产出：**1550 条 · 19 模板 · EVAL 254 / SFT 477 / RL 819（train 655 + val 164）**
+✅ **2026-08-17 在一台干净机器上实测逐字节可复现**：重建出来的 `data/splits/v12`
+四个文件与 git 里的 **SHA-256 完全一致**。
 
 ✅ **2026-08-13 实测逐字节可复现**：重跑出来的三桶切分和 git 里的 SHA-256 完全一致。
 

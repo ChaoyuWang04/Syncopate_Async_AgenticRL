@@ -30,8 +30,15 @@ dependencies = [
 # 里写着 `assert parse_version(tensordict.__version__) >= parse_version("0.10")`
 # （`protocol.py:1108 to_tensordict`）。**声明的下界比代码实际要的低**，上游不一致。
 # 走分卡异步路径时必踩（colocate 不走 to_tensordict，所以以前从没暴露）。
-train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<2.3", "tensordict==0.10.0"]
+train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<2.3", "tensordict==0.10.0", "flash-attn", "nvidia-cuda-runtime<=13.2"]
 dev = ["pytest>=8.0"]
+# ⚠️ 2026-08-17 换机器时发现：M9 runtime 的依赖**一条都没进过依赖表** ——
+# 旧机器上是手动装的，于是在一台干净机器上 `uv sync --extra train --extra dev`
+# 之后，tests/runtime 的 4 个模块**收集阶段就 ImportError**（asyncpg / fastapi），
+# 305 条测试一条都跑不了。这和上面 openpyxl 那条是**同一个形状**：
+# 手动装出来的环境让「一条命令重建」变成假的，而且只有换机器才暴露。
+# uvicorn 不被测试 import，但 09-runtime-handoff.md §0 的起服务命令要它。
+runtime = ["asyncpg>=0.29", "fastapi>=0.110", "httpx>=0.27", "uvicorn>=0.30"]
 
 [tool.uv]
 # ★ 上面那条注释只写了结论（numpy 整条栈正常），没写「怎么装得进去」。
@@ -43,6 +50,33 @@ dev = ["pytest>=8.0"]
 # （或至少对 override-dependencies 不成立）：2026-08-13 实测，写这里能装出来，
 # 挪到 uv.toml 反而 unsatisfiable。⇒ 别照警告去"修"它。
 override-dependencies = ["numpy>=2.2,<2.3"]
+
+# ★★ flash-attn 必须**进依赖表并指向具体轮子**，不能装完就算 —— 2026-08-17 实测：
+# 手动 `uv pip install` 上去之后，下一次 `uv sync` 会把它当外来包**静默卸载**
+# （日志里只有一行 `- flash-attn`），而 verl 0.8 在 CUDA 路径上是**无条件**
+# `from flash_attn.bert_padding import ...` ⇒ 下一次 RL 一启动就 ImportError。
+#
+# 为什么不能直接 `pip install flash-attn`：PyPI 上只有 sdist，会现编 sm_120，要一两小时。
+#
+# ★★★ 2026-08-17 走完的一整轮弯路（别再走一遍）：
+#   官方 cp312/x86_64 在 v2.8.3.post1 只有两种，**cu12 全部停在 torch2.8**：
+#     ① cu12torch2.8 —— ImportError: undefined symbol _ZNK3c106SymInt6sym_neERKS0_
+#                        （torch2.8 编的接不上 torch2.9，而 torch2.9 由 vllm 0.12.0 钉死）
+#     ② cu13torch2.9 —— 缺 libcudart.so.13   ← **就是下面用的这个，缺的库补上就行**
+#   中间试过社区的 kingbri1 `cu128torch2.9cxx11abiFALSE`：**前向三项全过、反向全错**
+#   （flash_attn_func 反向 dq/dk/dv 全 nan；varlen 反向有限但**恒为 0**）。
+#   后果：RL 每步 grad_norm=nan ⇒ verl `optimizer.zero_grad()` 跳过更新 ⇒ 训练完全空转。
+#   ⇒ **教训：「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
+#     判据脚本 `scripts/check_flash_attn_backward.py`，换轮子/换机器后必跑。
+#
+# ⇒ 现在用**官方 cu13torch2.9**（cxx11abiTRUE，和 torch 一致；含 sm_120 cubin），
+#   缺的 libcudart.so.13 由 `nvidia-cuda-runtime<=13.2` 提供（PyPI，装在 venv 内）。
+#   驱动 595 的 driver_max_cuda=13.2 ⇒ CUDA 13 运行时可用；torch 自己仍是 cu128，
+#   **两个 CUDA 运行时共存**，实测反向与 fp32 参考对到 4–5 位有效数字。
+#   ⚠️ 需要 `LD_LIBRARY_PATH` 指到 `nvidia/cu13/lib`，已写进 `/workspace/.env`。
+# 离线备份：/workspace/wheels/（换机器带不走，网络不通时从那里装）。
+[tool.uv.sources]
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3+cu13torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }
 
 [build-system]
 requires = ["hatchling"]
