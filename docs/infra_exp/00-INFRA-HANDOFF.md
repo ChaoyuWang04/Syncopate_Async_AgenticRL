@@ -66,6 +66,9 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 | dynamic_bsz | 代码默认 **False**。⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测** | README §6 |
 | **MoE 模型** | 🆕 ~~GLM-4.7-Flash~~ → **`Qwen3-30B-A3B-Instruct-2507`**（已下载 57 GB）。GLM 的 `Glm4MoeLiteForCausalLM` **当前栈不支持**，要 transformers 5.0rc | **E07 §4.5.1** |
 | **MoE 的 LoRA** | 🆕 **绝不能用 `all-linear`**（98.7% 的 Linear 在专家里 ⇒ 参数 26×、张量 74×、每步同步 3.39 GB）。用「注意力+router」30.1 M | **E07 §4.5.3** |
+| 🆕 **NCCL 协议** | **按并行策略分设**：DDP（走 all_reduce）用默认；分片（走 all_gather）开 `NCCL_PROTO=LL128`。**不能全局开** —— LL128 让 all_reduce −30%/broadcast −41%。已写进 `launch_rl`（`fsdp_size>1` 自动带 + 判据行） | **E18 §9–10** |
+| 🆕 **满载降频** | **不需要在多卡对照里扣这一项**：4 卡满载单卡算力仅 −2.0%（整机 2325 W） | E00 / README §7 |
+| 🆕 **`dynamic_bsz`** | 代码默认 **False**。当前 FA2 下实测仅 +4~5%（旧记录的 ÷1.37 不成立）。⚠️ 本次在 512 长度下测，正式跑是 1536，**值得复测** | README §7 附 |
 | E11 稀疏 logprob | 🔻 **降级，不写 kernel**（端到端仅 4.3%，切片就有 4.0%） | E11 §6-③ |
 
 ## 3 · 已落地的改动（2026-08-14，都在 `syncopate/train/`）
@@ -136,10 +139,21 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
         造成严重碎片（权重 13.32 GB，却 17.43 GB reserved 未分配 ⇒ OOM）。
         本次靠 `expandable_segments:True` 解，**但它在真训练路径上用不了**
         （与 vLLM colocate 内存池冲突）⇒ 必须换办法：分层加载 / CPU 侧先量化 / 预量化存盘
-🟠 A13🆕 「为什么偏偏是 3 rank」最后一层    ~2 h   E18   §9.5：已排除缓冲区尺寸与环构造；
-        剩下的假设是「all_gather 按 rank 数等分缓冲区，3 非 2 幂次 ⇒ 分块边界与 SHM 暂存区
-        对齐不匹配」。要坐实需读 NCCL 源码的 chunk 划分逻辑，或用 ncu 看访存模式。
-        ⚠️ 在它之前，E18 的结论只到「协议选型失误」，不到「因为对齐」。
+✅ A13 「为什么偏偏是 3 rank」            E18   **已完成，刨到底了**：根因是 **16 字节
+        向量化访存的对齐悬崖** —— 每 rank 分块字节数不被 16 整除 ⇒ NCCL 的 Simple kernel
+        **整段**放弃向量化（不是只处理尾巴），all_gather 掉 12×。
+        ⚠️ 这**推翻了 A12 的「成本模型选错协议」** —— 实测四算子在 3/4 卡全部选 RING+SIMPLE，
+        选择根本没变。⇒ 正解是**把分片补齐到 16 字节**，不是换协议。详见 E18 §10。
+🔴 A14🆕 真实 ZeRO-3 的分片对齐占比        ~10 min  E18   ★ **明天第一件**：机制已证实，
+        但**还没证明 verl 的 ZeRO-3 就是撞在这上面**。跑一次 `--fsdp-size 3 --steps 1` 带
+        `NCCL_DEBUG_SUBSYS=TUNING`，抓所有 `AllGather: N Bytes`，统计 `%16!=0` 的
+        **按字节加权占比**（不是按次数 —— 小张量再多也解释不了 6.02×）。
+        ⇒ 占比高 ⇒ 因果链闭合，且值得给 NCCL/FSDP 提 upstream issue；
+          占比低 ⇒ 6.02× 另有原因，这条链还差一环。
+🟠 A15🆕 16 字节对齐的上游归属             ~1 h    E18   A14 为真时做。三层各自的责任已在
+        E18 §11 分析：**NCCL kernel「整段退化」最该修**（改成对齐主体向量化+标量尾巴，
+        纯收益无取舍）；FSDP2 的 `_get_dim0_padded_size` 只补到「能被 world_size 整除」、
+        不管字节对齐，是帮凶。⇒ 决定给哪个仓库提 issue。
 🟠 B13🆕 ZeRO-3 惩罚的字节账核对            ~30 min  E02   把「100 GB/步 ÷ 3.2 GB/s ≈ 31 s」
         与实测 40 s 的 9 s 缺口坐实（A8 完成后做，顺带回答 ZeRO-2 的 3.42× 是否同源）
 ```

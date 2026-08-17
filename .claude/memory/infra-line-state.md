@@ -16,24 +16,27 @@ infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，�
 `TRACK-B-framework-async.md`（通用 RL 框架的假设在 agentic 负载上逐条失效）。
 每个实验必须能答「服务哪条兑现物 / 需求由哪个测量指出」，答不上就显式停放（E04/E05/E06 已停）。
 
-## ★ 2026-08-14 的头号结论（三个数互相印证）
+## ★★ 2026-08-17 的状态（第 1 批全部跑完 + 四条追加）
 
 ```
-① 用 4 张卡只换来 1.59× 加速   colocate 1卡 117.8 s/步 vs fully_async 3+1 74.1 s/步  [E08]
-② 整机占空比只有 31%           trainer 空闲 54–57%，rollout 空闲 82.5% @ 47.7 W      [E08]
-③ 权重同步 59.8 s 里 99.94%    不是传输（0.8 s）也不是编排（0.038 s），
-   在「处理 132 MB 的 LoRA」上，只剩 send_weights 未排除                              [E12]
+✅ A7  满载降频          4 卡满载单卡算力仅 −2.0% ⇒ 「会污染所有对照」被证伪
+✅ A6  E02 三档稳态      DDP 7.97s / ZeRO-2 3.42× / ZeRO-3 6.02×（3 卡）
+✅ A1  MoE go/no-go      GO：4bit 15.6GB、LoRA 30.1M、前反向通过、梯度全有限
+⛔ E04 rollout TP=2      实测净负 20% ⇒ 再次停放（理由从推算升级成实测）
+✅ A8  分算子带宽        all_gather 在 3 卡塌 12×（2卡51 / 4卡37.9 / 3卡3.2）
+✅ A11 ZeRO-3 @4卡       1.54×（vs 3 卡 6.02×）
+✅ A12 NCCL 旋钮         LL128 可治：47.94→14.40 s（3.33×）
+✅ A13 刨到根            ★ **16 字节对齐悬崖** —— 见 [[collective-alignment-cliff]] 与 E18
 ```
-⇒ **动任何算子之前先搞清这 69% 的闲置。** 对照：Track A 全套自写 kernel 端到端仅 **4.3%**。
 
-**Track B 已够撑一个项目；Track A 偏薄**（只有 SFT 稀疏投影一道兑现的菜）⇒ 重心要压到 A。
+⇒ **RL 三模式实测（v12 数据，Qwen3-4B+LoRA）**：
+`fully_async 3+1 **14.3–17.6 s/步**（最快）· one_step_off 22.9 · colocate 3卡 29.2 · 单卡 67.2`
+⚠️ **fully_async 的 timing 行覆盖 4 个 global step，绝对秒数要 ÷4** —— 我因此报错过一次。
+⚠️ 三模式**尚未同尺子对照**（步数/配置不完全同源）⇒ 队列 B3。
 
-## 已落地的改动
-
-- **E13**：`verl_patches.ddp_save_to_cpu` 加 `if param.requires_grad`
-  （8.309 GB 里只有 3.18% 可训练，冻结基座跨版本逐字节相同）。
-  `old_log_prob/ref` 比值 **1.941 → 1.069**，省 ≈8.5 s/步。3 条测试守着。
-- `launch_rl` 新增 `--layered-summon`、`--target-modules`（都从写死改成显式参数）。
+⇒ **明天第一件：A14**（~10 min）—— 验证 verl 的 ZeRO-3 是否真的产生 16 字节错位分片，
+**按字节加权**统计。它决定「6.02× 由对齐造成」这条因果链闭不闭合、
+以及要不要给 NCCL/FSDP 提 upstream issue（A15）。
 
 ## 已定决策（别重新讨论）
 

@@ -1,6 +1,7 @@
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么；★含「章节验收怎么做」的五步（M8 立、M9 照做）
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提
+- [集合通信的 16 字节对齐悬崖](collective-alignment-cliff.md) — 分块不被 16 整除，all_gather 掉 12×；「3 卡受诅咒」的真相
 - [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、只能 DDP；2+2 跨 socket、Gen5、四卡 25.6 GB/s；A6 决定「模型内并行净亏损」还剩多少力气
 - [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
