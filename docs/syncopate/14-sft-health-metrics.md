@@ -1,5 +1,10 @@
 # Syncopate · 14 — 训练健康度：看哪些指标、红线在哪
 
+> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
+> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
+> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
+> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
+
 > 写于 **2026-08-17**，v13 第一次 SFT 之前。
 > **面板已经程序化建好了，不用手拖**：`python scripts/make_wandb_panels.py`
 > W&B 项目 `spaemtuerl-northwestern-university/syncopate`。
@@ -84,14 +89,47 @@ python -m syncopate.train.compare    <基线审计> <新审计>
 
 ## 2 · RL 要盯的（面板第二个 view）
 
-**停止条件优先级高于分数曲线** —— 这四条任一触发就停，不看 reward 好不好看：
+**停止条件优先级高于分数曲线。** ⚠️ **2026-08-18 整族重写** —— 权威版本在
+`06-rl-run-protocol.md §2`，这里只放"面板上看哪几条线"。
+
+★★★ **为什么重写**：此前四条判据问的都是「模型学得怎么样」，
+而两个基石级 bug（**梯度没跨 rank 同步** · **权重从没推给 rollout engine**）
+**静默跑完了两轮训练，一条都没响** —— 缺的是「**训练系统还活着吗**」那一族。
+
+### A 族 · 系统还活着吗（🆕）
+
+| 判据 | 🔴 触发 | W&B 键名 |
+|---|---|---|
+| **权重同步真的发生了** | 同步后 `kl` **不回落到首步那个数量级** | `rollout_corr/kl` vs `syncopate/kl_floor` |
+| **梯度真的跨 rank 归约了** | 第 1 步各 rank 的 `lora_B` 梯度不同 | `SYNCOPATE_DDP_PROBE=1`，看日志 |
+| **绝对有效条数** | `N × ESS/N` **< 24 条** | `syncopate/effective_seqs`（`rl_report` 补报） |
+| **训练/评测契约一致** | 五元组不等 | 静态判据：`check_pipeline_invariants --only budget` |
+
+### B 族 · 估计量还有效吗
+
+| 判据 | 处置 | W&B 键名 |
+|---|---|---|
+| ESS/N < 0.3 | 🟡 **不停机**，换 `--rollout-is token` | `rollout_corr/rollout_is_eff_sample_size` ⚠️ 键名不叫 ess |
+| `fraction_low + fraction_high` > 40% | 🔴 停机（IS 退化成常数缩放） | `rollout_corr/rollout_is_ratio_fraction_{low,high}` |
+
+⚠️ verl 报的 ESS 是 **clamp(0, 2.0) 之后**算的（`rollout_corr_helper.py:751`）
+⇒ 被截断的比例越高它越乐观。**所以 B 族两条要一起看。**
+
+### C 族 · 模型学得怎么样（原有，不动）
 
 | 判据 | 🔴 立即停 | W&B 键名 |
 |---|---|---|
-| ESS/N | **< 0.3** | `rollout_corr/rollout_is_eff_sample_size` ⚠️ **键名不叫 ess** |
 | 决策位熵 | **< 0.05** | 控制台看不到，按步段聚合 `rollout_dumps/*.jsonl` |
+| grad_norm | **跳两个数量级**（nan/inf 立刻停） | `actor/grad_norm` |
 | reward 涨但 cap 不降 | **连续 3 步** | 需要 `rl_report` 补报 |
-| grad_norm | **跳两个数量级** | `actor/grad_norm` |
+
+### 谁在跑这些判据
+
+```
+scripts/rl_guard.sh              运行时（A1/A4 + B + C）★ 此前它不在仓库里，跑完就没
+scripts/check_pipeline_invariants 静态（A3 + 产物/文档）
+SYNCOPATE_DDP_PROBE=1            首步一次（A2）
+```
 
 ⚠️⚠️ **verl 不会把我们的指标上报 W&B**（它的 `compute_data_metrics` 只认两个字段）
 ⇒ **`rl_report` 的补报是 cap 分解的唯一来源，跑完必须执行**：

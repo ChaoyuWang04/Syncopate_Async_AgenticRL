@@ -77,15 +77,29 @@ RL_SECTIONS = [
             # ★★★ M7 那次唯一真正解释了「什么都没测出」的数：位移只有 0.0093%。
             #     位移不动 = lr 太小；飙升 = lr 太大、熵会塌。**先看这条再看 reward。**
             line("‖ΔW‖/‖W‖ 位移（rl_report 补报）", ["syncopate/weight_shift"]),
-            line("ESS/N（跌破 0.3 立即停）",
+            # ★★ 2026-08-18：ESS **不再是停机线**，降级成"该换聚合口径"的信号
+            #   （上游原话是 "consider switching to geometric aggregation"，
+            #     我们此前写成了"立即停"；见 06 §2.B）。
+            line("ESS/N（<0.3 ⇒ 换 --rollout-is token，**不停机**）",
                  ["rollout_corr/rollout_is_eff_sample_size"]),
+            # ★★★ 真正的停机线是**绝对有效条数**，不是比例：
+            #   0.3 隐含了大 batch 的假设（上游 ~1024 条 ⇒ 有效 307；我们 48 条 ⇒ 有效 14）。
+            #   ⚠️ W&B 不算派生列，这条由 `rl_report` 补报（= ESS/N × 每次更新的序列数）。
+            line("★ 绝对有效条数 N×ESS/N（<24 停机）", ["syncopate/effective_seqs"]),
+            # ★★ A1：权重同步真的发生了吗 —— 每次同步后 kl 必须回落到首步那个数量级。
+            #   2026-08-18 那条 bug（权重从没推给 rollout engine）就是从这里漏过去的：
+            #   它跑完了两轮训练，**没有任何指标报警**。
+            line("★ kl vs 首步地板（不回落 = 权重同步没生效）",
+                 ["rollout_corr/kl", "syncopate/kl_floor"]),
+            # ★ 被截到上下界的比例：IS 修正退化成常数缩放的正面症状（研究问题 H3）
+            line("★ 被截断比例 low+high（>40% 停机）",
+                 ["rollout_corr/rollout_is_ratio_fraction_low",
+                  "rollout_corr/rollout_is_ratio_fraction_high"]),
             line("grad_norm（跳两个数量级立即停）", ["actor/grad_norm"]),
             # ⚠️ 长度上涨可能是学会推理，也可能是刷长度然后被 max_len 砍掉 ——
             #   后者的 reward 是假的。**必须和截断率一起看**，单看均值分不出来。
             line("response_length + 截断率（单看长度分不出是推理还是刷长度）",
                  ["response_length/mean", "syncopate/truncated"]),
-            line("IS ratio 超界比例（最早的信号）",
-                 ["rollout_corr/rollout_is_ratio_fraction_high"]),
         ],
         is_open=True,
     ),

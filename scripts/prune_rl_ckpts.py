@@ -55,7 +55,7 @@ def prune_one(step_dir: Path, dry_run: bool) -> tuple[int, int]:
         return 0, 0
     assert_ranks_identical(actor)          # ★ 三份不同就别压成一份 —— 删掉就回不来了
     full = shards[0]
-    before = full.stat().st_size
+    before = sum(x.stat().st_size for x in shards)   # ★ 全部分片，不是单个（旧版低报 3 倍）
     if dry_run:
         return before, before // 34        # 实测 97.1% 可回收，粗估
     state = torch.load(full, weights_only=False, map_location="cpu")
@@ -65,7 +65,12 @@ def prune_one(step_dir: Path, dry_run: bool) -> tuple[int, int]:
         return 0, 0
     torch.save(lora, actor / LORA_ONLY)
     after = (actor / LORA_ONLY).stat().st_size
-    full.unlink()
+    # ★★ 2026-08-18 修：旧版是 `full.unlink()` —— **只删了读的那一个分片**，
+    #    另外两个 8.46 GB 原地留着，而报告打的是「8.46 GB → 255 MB」。
+    #    实测残留：m7b_v13e1 的 step_20 剩 1 个、step_25 剩 2 个 = **25.4 GB 白占**。
+    #    ⇒ 这是「报告的数和磁盘上的事实不是一回事」——瘦身脚本自己就该是这条的判据。
+    for sh in shards:
+        sh.unlink()
     return before, after
 
 

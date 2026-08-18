@@ -63,6 +63,51 @@ def paired_stats(a: dict, b: dict, ids: list[str], key: str = "reward") -> dict[
     }
 
 
+# 每题的 reward 是 N 次采样的均值，`reward_std` 是那 N 次的标准差。
+# 审计固定跑 8 次（eval_local 的 --n），改了这里也要改。
+SAMPLES_PER_CASE = 8
+
+
+def significant_counts(a: dict, b: dict, ids: list[str], k: float = 2.0,
+                       samples: int = SAMPLES_PER_CASE) -> dict[str, Any]:
+    """逐题分成「显著变好 / 没动 / 显著变差」，门槛**按每题自己的采样噪声**定。
+
+    ★★★ 为什么必须有这三个数（2026-08-17 M7-b 用一次误读换来的）
+
+    M7-b 的配对差值 +0.020 恰好等于 MDE，结论是「没测出差异」——
+    而这句话被读成了「**模型基本没变**」，于是下一步去调 lr / 加步数。
+    **逐题拆开完全不是那回事**：显著变好 85 / 显著变差 70 / 没动 188。
+    **均值是相抵之后的残差**，它会把真实的行为迁移完全盖住
+    （见 .claude/memory/blank-thresholds-are-not-passes.md ★★★ 第六条）。
+
+    ★★ 为什么门槛不能是固定值（如 ±0.05）
+
+    实测 `reward_std` 从 P10 的 **0.000** 到 P90 的 **0.315** —— 差两个数量级。
+    固定门槛对低方差题**太松**（把采样抖动当成变化），对高方差题**太严**（把真变化当噪声）。
+    ⇒ 用每题自己的差值标准误：`SE = √((std_a² + std_b²) / N)`，门槛取 `k·SE`（默认 2σ）。
+    这和「门槛写成相对基线 + 配对 MDE，不写绝对数」是同一条纪律，只是下放到每一题。
+
+    ⚠️ 成立范围：`reward_std` 量的是**同一次审计内 N 次采样**的抖动，
+       不含"换了个模型"带来的系统性差异 —— 这正是我们要的分母。
+    ⚠️ 它**不能替代** `mean_diff` 与 MDE：那两个回答"整体动了没有"，
+       这三个数回答"**同一类题内部有没有对冲**"。两把尺子少一把都会漏。
+    """
+    better, worse, flat = [], [], []
+    for c in ids:
+        d = b[c]["reward"] - a[c]["reward"]
+        se = math.sqrt((a[c].get("reward_std", 0.0) ** 2
+                        + b[c].get("reward_std", 0.0) ** 2) / samples)
+        thr = k * se
+        (better if d > thr else worse if d < -thr else flat).append((c, d))
+    worse_by_tpl = collections.Counter(c.split("_")[0] for c, _ in worse)
+    return {
+        "better": len(better), "worse": len(worse), "flat": len(flat),
+        "worse_by_template": worse_by_tpl,
+        "worst_cases": sorted(worse, key=lambda kv: kv[1])[:5],
+        "best_cases": sorted(better, key=lambda kv: -kv[1])[:5],
+    }
+
+
 def verdict(stats: dict[str, float]) -> str:
     if abs(stats["mean_diff"]) < stats["mde"]:
         return f"没测出差异（|{stats['mean_diff']:+.3f}| < MDE {stats['mde']:.3f}）—— 不等于没有差异"
@@ -106,8 +151,21 @@ def main(argv: list[str] | None = None) -> int:
           f"{statistics.mean(b[c]['reward'] for c in ids):.3f}")
     print(f"  配对差值        {s['mean_diff']:+.3f}   （标准差 {s['sd_diff']:.3f}，标准误 {s['se']:.3f}）")
     print(f"  最小可检出差异   {s['mde']:.3f}")
-    print(f"  逐题            赢 {s['wins']} / 平 {s['ties']} / 输 {s['losses']}")
     print(f"  结论           {verdict(s)}")
+
+    # ★★ 均值旁边必须放三个计数 —— 均值是相抵之后的残差
+    sig = significant_counts(a, b, ids)
+    print(f"\n★ 逐题（门槛 = 每题自己的 2·采样标准误，不是固定值）")
+    print(f"  显著变好 {sig['better']:>4}   没动 {sig['flat']:>4}   显著变差 {sig['worse']:>4}")
+    print(f"  ⚠️ 「显著变差」非零就**不能说没变化** —— 去看变差的是哪一类题")
+    print(f"  （旧口径：任何非零都算  赢 {s['wins']} / 平 {s['ties']} / 输 {s['losses']}"
+          f" —— 这个数被采样噪声主导，只留作对照）")
+    if sig["worse"]:
+        top = "  ".join(f"{t}×{n}" for t, n in sig["worse_by_template"].most_common(6))
+        print(f"  变差集中在      {top}")
+        print("  变差最多的题    " + "  ".join(f"{c}({d:+.2f})" for c, d in sig["worst_cases"]))
+    if sig["better"]:
+        print("  变好最多的题    " + "  ".join(f"{c}({d:+.2f})" for c, d in sig["best_cases"]))
 
     # 非配对口径也报一次，让「配对到底值多少」是看得见的
     across = statistics.stdev([a[c]["reward"] for c in ids])
