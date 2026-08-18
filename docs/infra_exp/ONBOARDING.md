@@ -3,7 +3,7 @@
 > **每次收尾时更新这份文件**（怎么更新见文末 §7）。新窗口开场只说一句
 > 「读 `docs/infra_exp/ONBOARDING.md`」就够了。
 >
-> 最后更新：**2026-08-17**
+> 最后更新：**2026-08-18**
 
 ---
 
@@ -46,68 +46,52 @@ set -a; . /workspace/.env; set +a
 
 ---
 
-## 3 · 最近一轮做完了什么（2026-08-17 夜）
+## 3 · 最近一轮做完了什么（2026-08-18）
 
-**白天**：第 1 批四项 + 四条追加全部完成，刨到根 —— **3 卡 ZeRO-3 慢 6.02× 的根因是
-「每 rank 分块字节数不被 16 整除 ⇒ NCCL 的 Simple kernel 整段放弃向量化 ⇒ 掉 12×」**
-（完整叙事在 [`E18`](E18-rank3-allgather-collapse.md)）。
-
-**夜里**（主线让出卡之后跑的第 1.6 批，队列在 `scripts/run_batch2_gpu.sh`）：
+★★★ **头等大事：抓到并修好了一个静默的正确性 bug** —— [`E21`](E21-ddp-not-syncing.md)
 
 ```
-✅ A14  真实 ZeRO-3 的 all_gather **335.5 GB 里 99.9% 的字节**错位（每 rank 只差 4 个字节）
-        ⇒ E18 闭环。同尺子对 Simple 96.08 vs LL128 29.76 = 3.23×（此前 3.33×，比值复现）
-⛔ B2   **推翻了我自己的归因**：只改 bucket，512→9.04s / 2048→9.73s，**差 7.7% 不是 6.6×**
-        ⇒ 「param_sync 现在只有 9 秒」是观测（成立）、「因为 bucket」是归因（证伪）
-        ⇒ 新问题 **B15**：那 6 倍（55.8→9.0）到底是谁干的
-✅ B3   **三模式同尺子**（这句兑现物此前是假的）：colocate3 55.28 / one_step_off 36.43 /
-        fully_async 33.25 s 每步 ⇒ 1.52× / 1.66×，落在 P-B1 的 1.37–2.75× 内
-        ★ one_step_off 把生成藏得**更彻底**却仍慢 10% ⇒ **杠杆是同步频率，不是藏生成**
-✅ E01  白捡主线的 nsys：trainer gemm 58%/elementwise 24%/attn 12%；**GEMM 全是 cutlass_80**
-        （Ampere 代）；E13 的修复在 kernel 层被证实（每步 CPU 快照 8.31 GB → 0.26 GB）
-✅ E03  NCCL 旋钮层结案：只有两个旋钮真有用，其余全部无效（那张「无效」表最有用）
-✅ B4写码 下发记账三类事件 + 首次验证 576/576/0；顺带堵住 Pool.ingest 的静默污染
+现象   三个 trainer rank **各训各的 LoRA，梯度从没同步过** ⇒ 每次更新只用 1/3 的数据
+判据   lora_B 是零初始化的 ⇒ step1 三个 rank 权重都是 0.000000（起点相同）
+       而梯度范数不同（2.209e-05 / 2.565e-05）⇒ 只可能是没 all-reduce
+根因   fsdp_size=1 ⇒ 网格 (3,1) ⇒ HYBRID_SHARD
+       ⇒ PyTorch 见分片维=1 自动降级成 NO_SHARD，**却把归约留在那个大小为 1 的组上**
+       ⇒ 空操作。**只打了一行 UserWarning，训练照常跑完、所有指标正常。**
+修复   拦住退化网格的 FSDP 构造，改用 NO_SHARD + 默认进程组（默认开启）
+复验   三个 rank 的梯度**逐位相同**（最小复现 + 真实训练双验证）
+上游   两份草稿已成文 → docs/upstream/（PyTorch 那条 + verl 那条）
 ```
 
-⇒ **占空比的两个数**（干净跑复核）：权重同步占步 **7.2%**（不再是 18.8%）、
-三次前向 **83.1%**（不是 72%）⇒ **B12/E17 升、B1 降**。
+⚠️⚠️ **⇒ 此前所有位移 / ESS 的绝对值都在坏基线上**，重测队列见 `00-INFRA-HANDOFF §5`。
 
-## 4 · ★ 第一件事：**先确认卡是空的**，再按第 1.6 批的队列跑
+**同一轮的另外三条**：
 
-⛔⛔ **训练是最高优先级，严禁抢卡**（用户 2026-08-17 明令）。主线 RL **和 eval 及其后续管线**
-全部跑完之前，一个 🔴 实验都不许起。判据是**产物落地 + 进程退出 + 显存归还**，
-不是日志里那句「完成」（`scripts/wait_for_gpu.sh` 开头记着这个坑）。
+```
+E20  RL 学不动的两个独立原因：① 序列级 IS 在 694 token 上指数崩塌
+     （chi2_seq 64.19 vs chi2_token 0.065，**差 989×**）② 一个 epoch 只更新 109 次
+     ⇒ token 级 IS 实测把 ESS 从 0.449 修到 **1.000**、grad_norm 趋势反转，**零吞吐代价**
+E19  FP8 在 sm_120 上是真的（真实形状 1.70–2.22×）；**ref 可以换、rollout 先别换**
+     （FP8 的误差是 vLLM↔FSDP 数值地板的 316 倍，会直接喂大 E20 那个问题）
+E01  一步的时间去哪了：三次前向占 kernel 时间 83.2%（与墙钟 83.1% 几乎相等）
+     ⚠️ 但卡只忙 74.6–78.2%，**有 22–25% 的空档** —— 我曾说过头说成"卡是满的"
+```
+
+## 4 · ★ 第一件事：**先做管线排查，再谈重测**
+
+E21 的教训是「**四处信号一处都没接住**」（那行 warning 每跑打两次，就在我们自己的日志里）。
+所以下一步**不是**急着重跑实验，而是：
 
 ```bash
-scripts/gpu_gate.sh          # 🆕 三条判据一起查：显存 / 训练进程 / 主线产物
+# ① 先看 handoff §5.1 的「排查清单」—— 还有哪些"从没验证过的前提"
+# ② 每条写成**断言或探针**，不要用"读代码确认"
+#    （E21 证明读代码会漏：我们读对了三句，错在第四句）
+# ③ 再按 handoff §5 的重测队列 R1→R7 重跑
 ```
 
-卡空之后，**按 `00-INFRA-HANDOFF §5 第 1.6 批` 的 8 项按序跑**（队首就是 A14）：
+⚠️ **判据（重测时省一半力气用的）**：
+**同一批里两臂都受同样影响的 A/B，比值仍可信；绝对值一律作废。**
 
-```bash
-bash scripts/run_batch2_gpu.sh          # 🆕 串行跑完，每项自带预测与判据
-```
-
-**队首 A14**（~20 分钟）是上一轮唯一没闭合的环 —— **机制已证实，但还没证明 verl 的
-ZeRO-3 真的撞在上面**：抓所有 `AllGather: N Bytes`，统计 `%16 != 0` 的**按字节加权**占比。
-
-⚠️ **必须按字节加权，不能按调用次数** —— 小张量再多也解释不了 6.02×。
-⚠️🆕 **`--fsdp-size 3` 会让 `launch_rl` 自动加 `NCCL_PROTO=LL128`** ⇒ 那一跑**不再是**
-47.94 s 那条基线。要复现基线必须显式压回 Simple（`run_batch2_gpu.sh` 里两跑都做了）。
-
-```
-占比高 ⇒ 因果链闭合，接着 A15（决定给 NCCL 还是 FSDP 提 upstream issue）
-占比低 ⇒ 6.02× 另有原因，这条链还差一环
-```
-
-⛔ **A14 出结果之前，不要把「6.02× 由对齐造成」写成定论。**
-E18 §11 结尾和记忆里都钉了这条限定。
-
-★ 本批的大头是 **B12 / E17 · 训练侧三次前向**（🆕 v13 实测占步 **84.9%**，比原记录的 72% 还大），
-门槛 **A5**（nsys 拆解）—— ⚠️ **nsys 只能包住启动、不能事后 attach**，所以它必须挂在**我们自己**
-的某一跑上，错过就再等一轮。
-
----
+⛔ **在排查完成之前，不要把任何数字写进默认配置。**
 
 ## 5 · ⚠️ 五条会让你踩坑的
 
@@ -128,7 +112,16 @@ E18 §11 结尾和记忆里都钉了这条限定。
 7. 🆕 **`nsys` 装了但不在 PATH**：`/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys`。
    ⚠️ 它**只能包住启动**，不能对已经在跑的 Ray 作业 attach ⇒ A5 必须提前规划进某一跑。
    （`py-spy` 在 `.venv/bin/`，那个**可以** attach，用于 Python 栈采样。）
-8. 🆕🔴 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
+8. 🆕🔴🔴 **框架打出的 `UserWarning` 要当判据读，别只盯自己打的判据行。**
+   E21 那个静默 bug 的告警**每跑打两次、一直在我们自己的日志里**，两个月没人看。
+   ⇒ 训练起来后 `grep -c "UserWarning" <log>`，**新出现的必须有人看过**。
+9. 🆕🔴 **「读码得出的事实」和「据此做的推断」要在注释里分开写。**
+   E21 那段注释里三句事实 + 一句推断，排版完全一样 ⇒ 没人会去质疑第四句，而错的正是它。
+   ⇒ 推断句标 `[推断，未验证]`。
+10. 🆕 **写工具时把"我假设 X 成立"写成断言** —— 成本几乎为零。
+   E21 就是被 `rl_ckpt_to_adapter.py` 里一句随手写的断言抓到的，
+   **而四处显式信号都没抓住它**。
+11. 🆕🔴 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
    下产生 **72 GB**（最终 `.nsys-rep` 只有 386 MB —— **差两个数量级**）。
    ⇒ 采样前先看 `df`；夜间无人值守时挂上 `scripts/disk_guard.sh`（低于 15 G 就杀 nsys 保队列）。
    ⚠️ 导出的 `.sqlite` 也有 **8.8 GB**，分析完就删。
@@ -159,7 +152,12 @@ scripts/check_flash_attn_backward.py   ★ flash-attn **反向**数值判据
 scripts/check_data_gates.py            数据门槛
 scripts/parse_fully_async_timing.py 🆕 timing 行 → 每 global step 的口径（自动求覆盖步数）
 scripts/analyze_drift.py            🆕 发出/完成/训练到 三段的漂移（⚠️ 跑完再读）
-scripts/analyze_nsys_step.py        🆕 nsys sqlite → 按**进程**（不是 deviceId！）拆算子构成
+scripts/analyze_nsys_step.py        🆕 nsys sqlite → 按**进程**拆算子构成 + NVTX 阶段归属 + 空泡分布
+scripts/rl_ckpt_drift.py            🆕 位移 ‖ΔW_eff‖/‖W_base‖（⚠️ 只读 rank_0）
+scripts/rl_ckpt_to_adapter.py       🆕 RL ckpt → PEFT adapter（★ 评测链路的缺口；E21 就是它抓到的）
+scripts/repro_fsdp_hybrid_nosync.py 🆕 ★ E21 的最小复现，`REPRO_APPLY_FIX=1` 兼作修复验证
+scripts/probe_sm120_fp8.py / probe_fp8_real_shapes.py / probe_fp8_logprob_error.py  🆕 FP8 三件套
+scripts/probe_moe_4bit_load.py      🆕 4bit MoE 加载路径（碎片）
 scripts/gpu_gate.sh                 🆕 ★ 抢卡门禁：显存 + 训练进程 + 主线产物 三条一起查
 scripts/run_batch2_gpu.sh           🆕 第 1.6 批 8 项串行跑（每项自带预测与判据）
 scripts/wait_for_gpu.sh                等显存释放（教训：日志说完了 ≠ 资源还回来了）
