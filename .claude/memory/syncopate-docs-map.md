@@ -23,7 +23,8 @@ docs/syncopate/19-2026-08-18-postmortem.md ★ 一天六个问题 + 它们的共
 docs/infra_exp/MAINLINE-HANDOFF-2026-08-18.md 主线交给 infra 的问题清单
 docs/syncopate/18-pipeline-assumption-probes.md 管线前提探针审计（E21 之后的同族排查）
 docs/syncopate/17-rl-learning-blocked.md ESS/lr 方案（⚠️ §2 的观测已被 E22 解释）
-docs/syncopate/16-m7b-rl-run.md          ★ M7-b（2026-08-17）：lr 被夹在两堵墙之间 ——
+docs/archive/16-m7b-rl-run.md ⛔结论作废（归档；当前状态看 05/20/21）
+~~docs/syncopate/16~~          ★ M7-b（2026-08-17）：lr 被夹在两堵墙之间 ——
                                           3e-5 时 ESS 跌破 0.3 停机、1e-5 时位移只有 0.0487%
                                           ⇒ 下一跑 colocate+3e-5 对照（异步的代价）
 docs/syncopate/15-leakage-gates.md        ★ 三桶泄露门禁 L1/L2（每次重切必跑）
@@ -59,7 +60,8 @@ docs/infra_exp/E12-weight-sync.md         ★ 权重同步查因（方法论样�
 docs/infra_exp/E13-proximal-anchor-snapshot.md  一行 `if requires_grad` 的全过程（含三次自我更正）
 docs/infra_exp/E11-sparse-logprob.md      稀疏 logprob：做了调研后主动降级不写 kernel
 docs/infra_exp/E02-data-parallel.md       DDP vs FSDP（"慢 6 倍"的口径边界）
-docs/llm-rl-framework.md                  RL 框架全景调查（Chaoyu 写的，选型背景）
+docs/archive/                             📦 归档：历史记录，**不是当前状态**（含 01/03/04/16 与
+                                          llm-rl-framework；为什么归档见 archive/README.md）
 ```
 
 **约定（2026-08-13 Chaoyu 明确要求）**：

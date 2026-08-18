@@ -201,6 +201,62 @@ def _truncation_reason_always_set(log):
     return ok
 
 
+# ── 组 docfacts：操作文档里不许留未标注的陈旧断言 ─────────────────────────
+
+# (标签, 正则, 现在为什么是错的)。⚠️ 只扫**操作文档**（照着做的），
+# 不扫 archive / 设计文档 / E 报告 —— 那些是记录，「推翻的预期不删」是明文约定。
+STALE_ASSERTIONS = [
+    # 只查 `EVAL 278` —— 它**任何版本都不对**。`EVAL 254`(v12) / `EVAL 198`(v11)
+    # 是那两版的真实数字、按版本标注了，不是陈旧。第一版把它们也扫进来 ⇒ 又一次「判据太宽会错杀」。
+    ("三桶数字", r"EVAL 278", "任何版本都不对；v13 实测 EVAL 343"),
+    ("两堵墙", r"lr 被夹在两堵墙", "那堵墙是 E22 的 bug，不是异步的代价"),
+    ("分池没接上", r"动态分池在 fully_async 下没接上|fully_async 下动态分池没接上", "2026-08-17 已接上"),
+    ("本机无产物", r"本机上没有任何训练产物", "已重训，产物在"),
+    ("旧长度默认", r"--max-prompt-length 3584", "已统一成 5120/2048"),
+]
+# 上下文里有这些词 ⇒ 是在描述历史，不是在规定现在。
+# ⚠️ 这一条本身就是「判据太宽会错杀」的补丁：第一版没有它，
+#    把「此前是 X，已改成 Y」也判成了陈旧断言（见 memory blank-thresholds ⑦）。
+# ⚠️ 这张表每漏一个词就误伤一次 —— 2026-08-18 补过三轮。
+#    ★ 更稳的做法是要求**显式标记**（⛔）而不是猜词，但那要改所有描述点；
+#      折中：词表 + ⛔，且**误伤时优先补词表，不要放宽正则**。
+_HIST = __import__("re").compile(
+    r"此前|原(写法|猜想|版|值|来|文)|旧(版|值|口径|的|文档)|改成|已改|已接上|作废|⛔"
+    r"|推翻|教训|留作|留在这里|过期|重写|修复前|核心叙事|不是当前|定格|快照|历史")
+
+OPERATIONAL_DOCS = ["docs/syncopate", "docs/infra_exp/00-INFRA-HANDOFF.md",
+                    "docs/infra_exp/ONBOARDING.md"]
+
+
+@check("docfacts", "★ 操作文档里不许留**未标注**的陈旧断言")
+def _no_unmarked_stale_assertions(log):
+    """🔴 Chaoyu 2026-08-18：**docs 里的当前文档必须所有事实都正确、0 干扰信息 ——
+    没做就是没做，等待做就是等待做。**
+
+    ⚠️ 但这和本项目另一条约定冲突：「设计文档里**推翻的预期不删**」。
+    ⇒ 解法不是二选一，是**分开放**：
+        操作文档（照着做的）→ 必须 0 错误，本判据扫它
+        历史记录（回头看的）→ `docs/archive/` 与设计文档 / E 报告，标清楚是快照
+    """
+    import re as _re
+    ok = True
+    targets = []
+    for t in OPERATIONAL_DOCS:
+        p = ROOT / t
+        targets += sorted(p.rglob("*.md")) if p.is_dir() else ([p] if p.exists() else [])
+    for doc in targets:
+        lines = doc.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            for tag, pat, why in STALE_ASSERTIONS:
+                if _re.search(pat, line) and not _HIST.search("\n".join(lines[max(0, i - 3):i + 3])):
+                    log(f"  🔴 {doc.relative_to(ROOT)}:{i + 1} [{tag}] {why}")
+                    log(f"     {line.strip()[:78]}")
+                    ok = False
+    if ok:
+        log(f"  ✅ 扫了 {len(targets)} 份操作文档，没有未标注的陈旧断言")
+    return ok
+
+
 # ── 组 quarantine：作废的数字不许在没有警示的情况下出现 ───────────────────
 
 QUARANTINE_DOC = "docs/syncopate/21-invalidated-numbers.md"

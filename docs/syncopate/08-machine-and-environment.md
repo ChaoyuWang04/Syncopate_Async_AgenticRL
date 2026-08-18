@@ -198,7 +198,7 @@ python -m syncopate data build --pool rl  --batch data/batches/v11 \
 
 产出：**1370 条 · 17 模板 · EVAL 198 / SFT 434 / RL 738（train 590 + val 148）**
 
-**🆕 v12（当前版本）的链条 —— 必须先建 v11，因为 `--freeze-from` 指向它**：
+**v12 的链条 —— 必须先建 v11，因为 `--freeze-from` 指向它**：
 
 ```bash
 python -m syncopate cases generate --spec configs/buckets/v11.yaml --out data/batches/v11
@@ -214,6 +214,24 @@ python -m syncopate data build --pool rl  --batch data/batches/v12 --out data/rl
 ```
 
 产出：**1550 条 · 19 模板 · EVAL 254 / SFT 477 / RL 819（train 655 + val 164）**
+
+**🆕 v13（当前版本）—— 同样要先建 v12（`--freeze-from` 指向它）**：
+
+```bash
+python -m syncopate cases generate --spec configs/buckets/v13.yaml --out data/batches/v13
+python scripts/set_tool_menus.py --batch data/batches/v13 --sft-audit _audit/v8_sft_epoch1.json \
+       --freeze-from data/batches/v12
+python -m syncopate data split --batch data/batches/v13 --out data/splits/v13
+python -m syncopate data build --pool sft --batch data/batches/v13 --out data/sft/v13 \
+       --split-dir data/splits/v13 --val-every 6 --model models/Qwen3-4B
+python -m syncopate data build --pool rl  --batch data/batches/v13 --out data/rl/v13 \
+       --split-dir data/splits/v13 --model models/Qwen3-4B
+python scripts/check_data_gates.py --batch data/batches/v13     # ★ 大版本重建前必跑
+```
+
+产出：**1670 条 · 21 模板 · 106 格 · 30 工具 · 35 cap**
+⚠️ **三桶大小一律以 `data/splits/v13/*_cases.json` 为准**（实测 EVAL **343**）——
+文档里出现过 278 那个数，是错的。
 ✅ **2026-08-17 在一台干净机器上实测逐字节可复现**：重建出来的 `data/splits/v12`
 四个文件与 git 里的 **SHA-256 完全一致**。
 
@@ -450,7 +468,10 @@ trainer 攒够 `ppo_mini_batch_size × require_batches` 就训一步。
 ★ 那个策略版本字段**正好就是异步研究要量的东西**：`max-min` = 轨迹横跨几个版本。
 实测 `stale_trajectory_processed 576/7200 = 8.0%`、`partial_ratio 0.0`。
 
-⚠️ **动态分池在 fully_async 下没接上，但不是模式限制**：
+✅ **动态分池在 fully_async 下已接上（2026-08-17）** ——
+判据行由 `FullyAsyncRollouter` 那个进程打出：`[pool] 动态分池启用：659 条 case`。
+修法：把 `install_sampler_patch()` 也装进 `verl_patches.setup_worker()`。
+⛔ 下面这段是**修之前**的诊断，留作记录：
 `fully_async_rollouter.py:464` **确实调**了 `create_rl_sampler`（import 还写在函数体内，
 最适合 monkeypatch）；没生效是因为 rollouter 跑在**另一个 worker 进程**里，
 而 `setup_worker()` 目前只装 fsdp 那个补丁。⇒ 把 sampler patch 也装进去即可。

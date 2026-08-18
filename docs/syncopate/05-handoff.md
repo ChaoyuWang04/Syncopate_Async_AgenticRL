@@ -20,7 +20,7 @@
 > **★ 数据门禁 → `13-diversity-gates.md`（D1–D11 多样性）+ `15-leakage-gates.md`（L1–L2 泄露）**
 > **大版本重建前必跑**：`python scripts/check_data_gates.py --batch <批次> --split-dir <切分>`
 > **训练健康度与红线 → `14-sft-health-metrics.md`**（面板已程序化建好，不用手拖）
-> **★ M7-b 这一跑 → `16-m7b-rl-run.md`**（lr 被夹在两堵墙之间）
+> ⛔ M7-b 那一跑 → `../archive/16-m7b-rl-run.md`（**结论全部作废**，见 `21`；过程仍有价值）
 > **★★ RL 学不动的联合方案 → `17-rl-learning-blocked.md`**（2026-08-18，主线×infra 共用；
 >   ESS 到底量什么 · 0.3 那条线为什么画错了对象 · **位移是输入不是产出** · 主线要修的六处。
 >   infra 侧诊断在 `../infra_exp/E20-rl-not-learning.md`）
@@ -93,26 +93,31 @@ PCIe Gen5 x16，P2P 全关。卡间 all-reduce busbw：组内 28.8 / 跨 socket 
 **③ `--weight-sync-bucket-mb` 对所有模式生效**（colocate 也走 NCCL checkpoint engine）。
 ⚠️ **默认值仍是 2048，短跑请显式传 `--weight-sync-bucket-mb 512`。**
 
-### 🔴 本机上没有任何训练产物
-
-换机器把 `checkpoints/` 和 `models/` 里的产物全留在了旧机器上，
-**只有 `_audit/*.json` 活下来了**（它们在 git 里）：
+### 本机的训练产物（2026-08-18 核对）
 
 ```
-checkpoints/sft      空
-checkpoints/grpo     空       ← M7 的 global_step_25 不在了
-models/              只剩三个基座（Qwen3-4B / 0.6B / 30B-A3B），没有 merge 后的 SFT 模型
-outputs/2026-08-17/  21 个 run 全是 v12_smoke，起点全是 base Qwen3-4B
+checkpoints/sft/v13      ✅ epoch1 / epoch2 的 adapter（各 252 MB）
+models/                  ✅ Qwen3-4B（基座）· Qwen3-4B-sft-v13-e1（RL 起点）· 0.6B · 30B-A3B
+                         ⚠️ Qwen3-4B-rl-v13-s110/ **只剩 lora_adapter**（主权重是 SFT 的
+                            逐位副本，已删；见 18 §3）—— **不能当 RL 起点**，launch_rl 会报错
+checkpoints/grpo/        只剩 dispatched.jsonl / rollout_dumps / rank_fingerprint.json
+                         （27 GB 的权重已清理，证据提成了 KB 级指纹，见 19 §6）
+磁盘                     205 G 可用
 ```
 
-⇒ **凡是要 adapter 或起点模型的事，都得先重训一遍 SFT。** 这条直接决定 §2.8 的次序，
-也让老基线 `_audit/v11_sft_e1_m2.json` **不能再当下一跑的对照**（§2.4）。
+⚠️ **`_audit/v13_rl_s110.json` 整份脏**（B1/B3/B6/B7 四条一起作用）
+⇒ **不要拿它当任何比较的一端**，包括"历史参照"（`21 §2.1`）。
 
-### 还欠着的
+### 还欠着的（2026-08-18 核对）
 
-- **`fully_async` 下动态分池没接上**（§2.3；infra 线 **B6**，纪律是「先量出漂移 B4 再补」）
-- `dynamic_bsz` 在当前机器 + FA2 下的符号**未测**（代码默认 False）
+- 🔴 **`fully_async` 的精度问题 infra 仍在调研** ⇒ **现在不要起训练**
+- 🔴 **G-1 重基线评测没做** —— 没有合法基线，重跑出来不能配对比较（`18 §11.2`）
+- ⬜ M8 验收 0% · M9.7 压测未做 + `11 §4` 还欠 4 项
 - `uv.lock` 在 .gitignore ⇒ 每台机器解析结果可能不同
+
+> ⛔ 这两条 2026-08-17 还欠着、现在**已解决**，留在这里免得有人照旧文档重做：
+> `fully_async 下动态分池没接上` → **2026-08-17 已接上**（判据行来自 rollouter 进程）；
+> `dynamic_bsz 符号未测` → **B20 已测：无收益（−0.9%），结案不开**。
 
 ## 1 · 当前状态（2026-08-18 更新）
 
@@ -185,7 +190,10 @@ outputs/2026-08-17/  21 个 run 全是 v12_smoke，起点全是 base Qwen3-4B
 lr 免费；`grad_norm` 整跑 0.011–0.06 稳得发闷，稳定性有余量。不稳就退 5e-6。
 停止条件今天已全部实跑验证（见 §2.4）。
 
-### 2.1b ★★★ M7-b（2026-08-17）：lr 被夹在两堵墙之间
+### 2.1b ⛔ 已作废 · M7-b（2026-08-17）：「lr 被夹在两堵墙之间」
+
+> ⛔ **这个叙事是错的**：那堵“异步的 ESS 墙”是 E22（权重从没推给 rollout engine），不是异步的代价。
+> 整段保留是因为「推翻的预期不删」。见 `21` / `19`。
 
 M7 第一跑的结论是「没测出差异」，根因是位移只有 0.0093%。这一跑只改 lr。
 
@@ -750,7 +758,7 @@ M8 新增的 POL / CONF 两个模板，**SFT 桶里各 0 条**。
 >
 > 两个基石级 bug：**三个 trainer rank 的梯度没有同步**（E21）·
 > **trainer 的权重从没推给 rollout engine**（E22）。
-> ⇒ 「lr 被夹在两堵墙之间」「ESS 崩塌」「异步的代价」这一整套叙事，**量的是这两个 bug**。
+> ⇒ ⛔ **旧叙事**「lr 被夹在两堵墙之间」「ESS 崩塌」「异步的代价」—— **量的是这两个 bug**，已作废。
 > ⇒ 两条都**已修**（infra 侧），但 **`fully_async` 的精度问题他们还在调研**，
 >   所以**现在不要起训练**。
 >
