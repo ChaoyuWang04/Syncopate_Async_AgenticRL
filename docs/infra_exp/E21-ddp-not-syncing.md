@@ -102,6 +102,76 @@ step 1 时三个 rank 的 lora_B 权重**都是 0.000000**（零初始化，起�
 
 ---
 
+## 4.5 ★★★ 最小复现 + 根因 + 修法（2026-08-18，脱离 verl）
+
+尺子：`scripts/repro_fsdp_hybrid_nosync.py`（3 卡、纯 PyTorch、**不依赖 verl**）。
+配置照抄 verl（`workers/engine/fsdp/utils.py:40`）：`fsdp_size=1, world_size=3`
+⇒ `mesh_shape=(3, 1)`，维名 `["ddp", "fsdp"]` ⇒ 二维网格 ⇒ `HYBRID_SHARD`。
+每个 rank **喂不同的数据**（正是 DDP 的场景），反向之后收集各 rank 的梯度范数。
+
+| 变体 | 三个 rank 的梯度范数 | 判定 |
+|---|---|---|
+| **A · `mesh(3,1)` HYBRID + 部分可训（我们的配置）** | `[0.0376, 0.0673, 0.1294]` | 🔴 **没同步** |
+| **B · 同 A，但全部参数可训** | `[0.0457, 0.0913, 0.1370]` | 🔴 **没同步** |
+| **E · `NO_SHARD` + 不传 device_mesh（候选修法）** | `[0.27395082, 0.27395082, 0.27395082]` | ✅ **同步** |
+| **D · 纯 DDP（对照组）** | `[0.27395082, 0.27395082, 0.27395082]` | ✅ 同步 |
+
+⇒ **三条结论：**
+
+1. ✅ **在 verl 之外复现了** ⇒ 这是 **PyTorch FSDP 的行为**，不是 verl 的接线错误。
+2. ✅ **和 LoRA / "只有部分参数可训" 无关**（B 也一样坏）⇒ 触发条件更普遍。
+3. ★ **E 与 D 打出逐位相同的数值**（0.27395082）⇒ **`FSDP(NO_SHARD)` + 默认进程组 = DDP**，
+   这就是修法。
+
+### 4.5.1 根因：**FSDP 自己把 HYBRID_SHARD 降级成了 NO_SHARD，然后在一个大小为 1 的组里做归约**
+
+复现时 PyTorch 自己打了这行警告（`_init_utils.py:430`）：
+
+```
+UserWarning: FSDP is switching to use `NO_SHARD` instead of ShardingStrategy.HYBRID_SHARD
+             since the world size is 1
+```
+
+把它和 verl 的网格构造放在一起，链条就完整了：
+
+```
+verl:  fsdp_size=1, world_size=3
+       ⇒ mesh_shape = (world_size // fsdp_size, fsdp_size) = **(3, 1)**   ["ddp", "fsdp"]
+       ⇒ 二维网格 ⇒ get_sharding_strategy 返回 **HYBRID_SHARD**
+PyTorch: HYBRID_SHARD 看到**分片维大小 = 1** ⇒ 降级成 NO_SHARD（并打了上面那行警告）
+       ⇒ 而降级后的梯度归约走的是**那个大小为 1 的组** ⇒ **空操作** ⇒ 三个副本各训各的
+```
+
+★ **两层各自"合理"，缝里掉了东西**（本项目第 N 次遇到这个形状）：
+- **verl**：想表达"不分片"，于是把 `fsdp_size` 设成 1 —— 意图没错
+- **PyTorch**：分片维只有 1 个 rank，退化成 NO_SHARD —— 也没错
+- 🔴 **但退化之后，"复制维的 3 个 rank 该不该同步梯度"这件事没人管** ——
+  **而且只打了一行 UserWarning，训练照常跑完，指标全都正常。**
+
+⇒ 这是**静默失效**的教科书样本：不报错、不崩、曲线好看，只是**每个副本各学各的**。
+
+### 4.5.2 修法（已验证）
+
+```python
+# 当 fsdp_size == 1（本意就是"不分片"）时：
+#   ❌ 不要构造 (world_size, 1) 的二维网格 + HYBRID_SHARD
+#   ✅ 用 NO_SHARD + **默认进程组**（不传 device_mesh）
+FSDP(module, sharding_strategy=ShardingStrategy.NO_SHARD, use_orig_params=True, ...)
+```
+⇒ 实测与纯 DDP **逐位相同**。
+
+### 4.5.3 这能不能提上游
+
+**两边都可以提，而且我倾向都提**：
+- **PyTorch**：`HYBRID_SHARD` 在分片维为 1 时降级成 `NO_SHARD`，**却把梯度归约留在了大小为 1 的组里**
+  ⇒ 建议要么在整个 mesh 上归约、要么直接**报错**而不是 UserWarning。
+  **静默地不同步梯度，是最坏的一类失败。**
+- **verl**：`create_device_mesh(world_size, fsdp_size=1)` 会造出退化的 `(N, 1)` 网格
+  ⇒ 建议 `fsdp_size == 1` 时走 `NO_SHARD` + 默认进程组。
+
+⚠️ 提之前要做的：① 确认 torch 主干是否已改（本文基于 **2.9.0+cu128**）
+② 把复现脚本精简成不依赖本仓库的单文件。**流程照抄 `docs/upstream/` 那份 16 字节对齐的清单。**
+
 ## 5 · 下一步（按"先定根因、再修、最后重测"）
 
 | # | 动作 | 说明 |
