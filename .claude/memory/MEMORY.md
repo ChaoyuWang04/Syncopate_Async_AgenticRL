@@ -12,3 +12,4 @@
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
+- [静默降级：三个 rank 没同步梯度](silent-degradation-fsdp-nosync.md) — 上游只给一行 UserWarning；四处信号我们一处都没接住，最后靠一句随手写的断言抓到
