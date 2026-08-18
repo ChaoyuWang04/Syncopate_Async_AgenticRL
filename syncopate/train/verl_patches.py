@@ -362,6 +362,8 @@ def setup_worker() -> None:
     #    ⇒ 判据行**必须能独立触发**，不能挂在别的开关的成功路径上。
     if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
         _defer_until_imported("verl.checkpoint_engine.base", _patch_sync_step_timing)
+    if os.environ.get("SYNCOPATE_FSDP_ALIGN") == "1":
+        _defer_until_imported("torch.distributed.fsdp._flat_param", _patch_fsdp_shard_alignment)
 
 
 # ★★★ NVTX 阶段标注（E01 / A5 的门槛，2026-08-17 加）
@@ -453,6 +455,47 @@ def _patch_nvtx_timers_or_rebind() -> None:
             from verl.utils.profiler import performance as perf
             _rebind_everywhere({o: getattr(perf, o.__name__, None) for o in _NVTX_ORIGINALS
                                 if getattr(perf, o.__name__, None) is not None})
+
+
+# ★★★ A17（2026-08-18）：把 FSDP1 的分片补齐到 **16 字节**，验证「改这一行就好了」。
+#
+# 背景见 `docs/upstream/pytorch-fsdp-16b-alignment.md`：
+#   FSDP1 的 `FlatParamHandle._get_unpadded_shard` 只把 flat parameter 切成
+#   **每 rank 元素数相等**的块，**不管块的字节数是不是 16 的倍数**；
+#   而 NCCL 的 Simple kernel 在非 16 倍数时**整段**退化成标量搬运 ⇒ all_gather 掉 12×。
+#   实测 Qwen3-4B 的一层：每 rank 67,287,212 B（%16=12），**补 4 个字节就回到 13.4 GB/s**。
+#
+# 本补丁做的事：在切分**之前**把 flat parameter 补到 `world_size × (16/itemsize)` 的倍数，
+# 于是每个 rank 的块天然是 16 字节的倍数。
+#
+# ⚠️⚠️ 这是**实验性补丁**，只在 `SYNCOPATE_FSDP_ALIGN=1` 时装：
+#   ① 多出来的是尾部零填充，FSDP 本来就有「尾部 padding 不属于任何参数」的语义
+#      （`numel_to_pad` 就是干这个的）⇒ 语义上安全；
+#   ② 但它**改变了 flat parameter 的尺寸**，而尺寸在别处也被算过
+#      ⇒ **必须用「grad_norm / loss 与未打补丁的跑对得上」当判据**，不能只看变快了。
+def _patch_fsdp_shard_alignment() -> None:
+    import torch.nn.functional as F
+    from torch.distributed.fsdp import _flat_param as fp
+
+    H = fp.FlatParamHandle
+    if getattr(H, "_syncopate_aligned", False):
+        return
+    orig = H._get_unpadded_shard.__func__ if hasattr(H._get_unpadded_shard, "__func__") \
+        else H._get_unpadded_shard
+
+    def aligned(tensor, rank, world_size):
+        # 每 rank 要多少个元素才凑满 16 字节（bf16/fp16 → 8，fp32 → 4）
+        per16 = max(1, 16 // tensor.element_size())
+        align = world_size * per16
+        n = tensor.numel()
+        if n % align:
+            tensor = F.pad(tensor.reshape(-1), [0, align - (n % align)])
+        return orig(tensor, rank, world_size)
+
+    H._get_unpadded_shard = staticmethod(aligned)
+    H._syncopate_aligned = True
+    print("[verl-patch] FSDP 分片按 16 字节对齐已启用（SYNCOPATE_FSDP_ALIGN=1）"
+          " —— 判据是 grad_norm/loss 要和未打补丁的一致", flush=True)
 
 
 def _patch_pool_sampler() -> None:

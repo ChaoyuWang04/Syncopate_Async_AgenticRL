@@ -192,3 +192,33 @@ def test_nvtx_wrapper_keeps_timing_semantics(monkeypatch):
     except ValueError:
         pass
     assert pushed == ["syncopate/ref", "<pop>"]
+
+
+def test_fsdp_align_patch_makes_every_shard_16b_aligned(monkeypatch):
+    """A17 · 对齐补丁的两条判据：**每个分片 16 字节对齐** + **数据不丢**。
+
+    ★ 为什么第二条同样重要：这个补丁改的是 flat parameter 的尺寸。
+    只验"变快了"是不够的 —— 尺寸算错会静默地把参数切错位，而训练照样跑。
+    """
+    import torch
+    from torch.distributed.fsdp import _flat_param as fp
+
+    from syncopate.train import verl_patches as vp
+
+    monkeypatch.setattr(fp.FlatParamHandle, "_syncopate_aligned", False, raising=False)
+    vp._patch_fsdp_shard_alignment()
+
+    for numel, dtype, world in [(100, torch.bfloat16, 3), (1000003, torch.bfloat16, 3),
+                                (12345, torch.float32, 3), (33643606 * 3, torch.bfloat16, 3)]:
+        t = torch.arange(numel, dtype=torch.float32).to(dtype)
+        shards = []
+        for r in range(world):
+            chunk, pad = fp.FlatParamHandle._get_unpadded_shard(t, r, world)
+            nbytes = (chunk.numel() + pad) * t.element_size()
+            # ★ 判据①：补齐之后每 rank 的字节数是 16 的倍数
+            assert nbytes % 16 == 0, f"numel={numel} dtype={dtype} rank={r} 字节={nbytes}"
+            shards.append(chunk)
+        # ★ 判据②：把分片首尾相接，前 numel 个元素必须和原张量逐个相等（尾部是零填充）
+        joined = torch.cat([s.reshape(-1) for s in shards])
+        assert joined.numel() >= numel
+        assert torch.equal(joined[:numel].float(), t.float())
