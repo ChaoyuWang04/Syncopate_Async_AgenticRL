@@ -351,6 +351,8 @@ def setup_worker() -> None:
             _defer_until_imported(_m, _patch_nvtx_timers_or_rebind)
     if os.environ.get("SYNCOPATE_DEVICE_PROBE") == "1":
         _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
+    if os.environ.get("SYNCOPATE_DDP_PROBE") == "1":
+        _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_ddp_sync_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
     # ⛔⛔ 2026-08-18 修：这两行原来**嵌在 `_patch_grad_probe()` 的函数体末尾** ——
@@ -496,6 +498,57 @@ def _patch_fsdp_shard_alignment() -> None:
     H._syncopate_aligned = True
     print("[verl-patch] FSDP 分片按 16 字节对齐已启用（SYNCOPATE_FSDP_ALIGN=1）"
           " —— 判据是 grad_norm/loss 要和未打补丁的一致", flush=True)
+
+
+# ★★★ DDP 同步探针（2026-08-18）：三个 trainer rank 到底有没有在同步梯度。
+#
+# 起因：写 ckpt→adapter 转换器时，"三个 rank 的 LoRA 应该相同"这条断言当场炸了。
+# 静态证据（读存下来的 ckpt）：
+#   基座权重跨 rank **完全相同**（相对差 0.0）⇒ 是复制不是分片，排除"读错分片"
+#   lora_A 范数几乎一样但相对差 **1.415**（≈√2）⇒ 各自随机初始化、从没广播
+#   lora_B（**零初始化**）范数各不相同、相对差 1.3 ⇒ **更新历史不同**
+#   Adam 的 exp_avg_sq 相对差 **99%**            ⇒ **梯度历史不同**
+# ⇒ 静态证据指向「三个 rank 各训各的」，但那是**保存下来的状态**，
+#   有可能只是保存路径各存各的、训练本身是同步的。**必须在运行时直接看。**
+#
+# 本探针在**每次 optimizer step 之前**打印本 rank 的：
+#   ① 某个 lora_A / lora_B 的权重范数   ② 它们的**梯度**范数
+# 三个 rank 打出不同的梯度范数 ⇒ **梯度没有 all-reduce**，实锤。
+def _patch_ddp_sync_probe() -> None:
+    from verl.workers.engine.fsdp.transformer_impl import FSDPEngine
+
+    if getattr(FSDPEngine, "_syncopate_ddp_probe", False):
+        return
+    orig = FSDPEngine.optimizer_step
+    state = {"n": 0}
+
+    def probed(self):
+        import torch
+        import torch.distributed as dist
+
+        state["n"] += 1
+        if state["n"] <= 4:                      # 只打前 4 次，不刷屏
+            rank = dist.get_rank() if dist.is_initialized() else -1
+            picks = []
+            for name, prm in self.module.named_parameters():
+                if not prm.requires_grad:
+                    continue
+                if ("lora_A" in name or "lora_B" in name) and "layers.0." in name:
+                    g = prm.grad
+                    picks.append((name.split("layers.")[-1][:28],
+                                  prm.detach().float().norm().item(),
+                                  float("nan") if g is None else g.detach().float().norm().item()))
+                if len(picks) >= 2:
+                    break
+            for nm, wn, gn in picks:
+                print(f"[ddp-probe] step={state['n']} rank={rank} {nm}  "
+                      f"权重范数={wn:.6f}  **梯度范数={gn:.6e}**", flush=True)
+        return orig(self)
+
+    FSDPEngine.optimizer_step = probed
+    FSDPEngine._syncopate_ddp_probe = True
+    print("[verl-patch] DDP 同步探针已挂上（SYNCOPATE_DDP_PROBE=1）—— "
+          "判据：三个 rank 的**梯度范数**若不同 ⇒ 梯度没有 all-reduce", flush=True)
 
 
 def _patch_pool_sampler() -> None:
