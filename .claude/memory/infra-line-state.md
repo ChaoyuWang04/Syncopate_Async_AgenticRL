@@ -192,4 +192,4 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ⇒ **队列下一件：R1（E20 全套在修好的异步基线上重测）**，直接跑 fully_async。
 ⚠️ 但**读任务分之前要等主线 ⑥ 的重基线评测**（配对比较的合法基线，4 卡 15 分钟）。
 ⇒ 故事全文：`docs/infra_exp/STORY-async-lora-weight-sync.md`
-⇒ 管线验证状态总表：`00-INFRA-HANDOFF §5.0.2`
+⇒ 管线验证状态总表：`00-INFRA-HANDOFF §5.6`
