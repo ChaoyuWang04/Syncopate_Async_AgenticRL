@@ -1,0 +1,194 @@
+# 上游 issue 草稿 · FSDP 分片不做 16 字节对齐 ⇒ NCCL all_gather 掉 12×
+
+> 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
+> 归属：这是一条**独立的线**（不属于 Track A/B 的兑现物，但由 E18 的调查产出）
+> 完整实验记录：[`../infra_exp/E18-rank3-allgather-collapse.md`](../infra_exp/E18-rank3-allgather-collapse.md)
+
+---
+
+## 0 · 一句话
+
+**PyTorch FSDP 在切分参数时只保证「每个 rank 的元素数相等」，不保证「每个 rank 的字节数是 16 的倍数」；
+而 NCCL 的 Simple 协议 kernel 在分块字节数不是 16 的倍数时，会把整段搬运退化成标量路径 ——
+实测 `all_gather` 从 13.4 GB/s 掉到 1.1 GB/s（12.2×），而只要每 rank 多补 4 个字节就全部恢复。**
+
+---
+
+## 1 · 为什么这个 bug 到现在才被撞见（成立范围要老实写）
+
+★ **这是一个 edge case，而且是「工业界很少踩到」的那一类**：
+
+| 条件 | 主流集群 | 我们 |
+|---|---|---|
+| rank 数 | 8 / 16 / 64（**2 的幂次**） | **3**（3 训练 + 1 生成，最自然的切法） |
+| 卡间互联 | NVLink / NVSwitch | **无 P2P**（GeForce 从 4090 起驱动关掉），走 SHM 经主机内存 |
+| 协议 | 大消息也常走 LL128 / NVLS | 走 **Simple**（就是有 16 字节向量化的那条） |
+
+⇒ **触发条件是「非 2 的幂次 rank 数」**：常见张量尺寸是 2 的幂次，
+**÷4 天然保持 16 字节对齐，÷3 几乎必然破坏它**。
+⇒ 消费级多卡（4×5090 这类）做训练的人本来就少，
+其中用 3 卡分片的更少 —— 所以它一直没被系统性报告过。
+
+⚠️ **但「少见」不等于「不该修」**：
+
+> 分块不整齐时**只有零头需要特殊处理**，而现在的行为是**整段（几十 MB）一起降级为标量搬运**。
+> 差 4 个字节，付 12 倍的代价 —— 这个**惩罚的形状本身是不合理的**，
+> 和「多一行多一列导致 tile 不整齐、性能差几个百分点」是完全不同量级的事。
+
+---
+
+## 2 · 环境指纹（可复现的前提）
+
+```
+GPU        4 × NVIDIA GeForce RTX 5090（sm_120, 32 GB）
+           ⚠️ can_device_access_peer 4×4 全 0 —— PCIe P2P 全关（GeForce 的常态）
+           ⇒ NCCL 走 SHM/direct/direct，经主机内存中转
+CPU/拓扑   2 socket EPYC 9V74；GPU0/1 挂 node0、GPU2/3 挂 node1；PCIe Gen5 x16
+驱动/CUDA  595.58.03 / CUDA 12.8
+torch      2.9.0+cu128
+NCCL       2.27.5（torch 自带）
+关键环境   NCCL_CUMEM_ENABLE=0（Ray 给每 worker 只设一张卡时必需，否则 SHM 传输起不来）
+框架       verl 0.8.0，FSDP1（`strategy: fsdp`）+ LoRA r32，Qwen3-4B，bf16
+```
+
+---
+
+## 3 · 最小复现（不需要训练框架，3 张卡 + PyTorch 即可）
+
+```python
+# scripts/probe_alignment_cliff.py（本仓库内，已参数化）
+# 固定每 rank 分块 ≈ 24 MB，只改末尾几个字节，其余一切不变
+CLIFF_BASE=25165824 CLIFF_OFFS=0,4,8,12,16,32,64,128 python scripts/probe_alignment_cliff.py
+```
+
+核心循环就是标准的 `dist.all_gather_into_tensor`：
+
+```python
+s  = torch.ones(per_rank_elems, dtype=torch.float32, device=rank)
+g  = torch.zeros(per_rank_elems * world_size, dtype=torch.float32, device=rank)
+for _ in range(15):
+    dist.all_gather_into_tensor(g, s)
+```
+
+**实测（3 卡，NCCL 默认协议）**：
+
+| 每 rank 字节 | `% 16` | `% 128` | **all_gather** | reduce_scatter |
+|---|---|---|---|---|
+| 25,165,824 | **0** | 0 | **13.2 GB/s** | 32.9 GB/s |
+| 25,165,828 | 4 | 4 | **1.1 GB/s** | 20.8 GB/s |
+| 25,165,832 | 8 | 8 | 1.5 GB/s | 25.9 GB/s |
+| 25,165,836 | 12 | 12 | 1.1 GB/s | 20.8 GB/s |
+| 25,165,840 | **0** | 16 | **13.2 GB/s** | 32.9 GB/s |
+| 25,165,888 | **0** | 64 | **13.3 GB/s** | 32.9 GB/s |
+| 25,165,948 | 12 | 124 | 1.1 GB/s | 20.8 GB/s |
+
+⇒ **悬崖精确落在 `% 16 == 0` 上；`% 128` 完全不相干**（16/32/48/…/112 全都快）。
+⇒ `all_gather` 掉 **12×**；`reduce_scatter` 只掉 1.3–1.6×（它带规约计算，访存不是唯一瓶颈）。
+
+---
+
+## 4 · 这不是合成场景：真实 FSDP 训练里 99.9% 的字节都踩在上面
+
+在 verl 0.8.0 + FSDP1 + Qwen3-4B(bf16) + 3 卡 ZeRO-3 的**真实训练**上，
+用 `NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING` 抓 NCCL 自己打印的每一次分块字节数，
+**按字节加权**统计：
+
+| 算子 | 调用数 | 总字节 | **`%16 != 0` 的字节占比** | 协议 |
+|---|---|---|---|---|
+| **AllGather** | 71,677 | 335.5 GB | **★ 99.9%** | RING + SIMPLE |
+| ReduceScatter | 16,128 | 2.82 GB | 100.0% | RING + SIMPLE |
+| Broadcast | 542 | 8.31 GB | **0.0%** | RING + SIMPLE |
+
+★ **Broadcast 那一行是天然对照组**：同一次跑、同一条链路、同一个协议，
+**0% 错位** —— 因为它**不按 rank 数切分**。
+⇒ 错位不是机器属性，是「**除以非 2 幂次的 rank 数**」的产物。
+
+体量最大的那一档，来源一眼可见：
+
+```
+每 rank 分块 67,287,212 B × 2376 次      67,287,212 % 16 = 12   🔴
+  × 3 = 201,861,636 B ← 一层 transformer 的 flat parameter
+  = 100,930,818 个 bf16 元素；每 rank 33,643,606 个，而 33,643,606 % 8 = 6
+  ⇒ **每 rank 只要再补 2 个元素（4 个字节）就回到 16 字节对齐**
+```
+
+**在这个真实尺寸上验证补齐**（同一个探针，`CLIFF_BASE=67287212`）：
+
+| 每 rank 字节 | `%16` | **all_gather** | reduce_scatter |
+|---|---|---|---|
+| **67,287,212**（FSDP 实际产生的） | 12 | **1.1 GB/s** | 20.9 GB/s |
+| **67,287,216（+4 字节）** | **0** | **★ 13.4 GB/s** | **32.7 GB/s** |
+
+⇒ **12.2×，代价是每 rank 4 个字节。**
+
+**端到端影响**（3 卡 colocate，ZeRO-3，只改 NCCL 协议作为旁证）：
+
+```
+DDP（不分片）                        update_actor  7.97 s   1.00×
+ZeRO-3 默认（走 Simple，踩悬崖）      update_actor 47.94 s   6.02×
+ZeRO-3 + NCCL_PROTO=LL128（绕开）     update_actor 14.40 s   1.81×   ← 3.33× 提速
+```
+（LL128 之所以能绕开，是因为它按自己的 128 字节格式打包，不走那条 16 字节向量化路径；
+代价是 `all_reduce` −30%、`broadcast` −41%，所以它是应急手段不是解法。）
+
+---
+
+## 5 · 责任在哪一层
+
+| 层 | 它做了什么 | 对不对 | 问题 |
+|---|---|---|---|
+| **① NCCL 的 Simple kernel** | 分块字节数非 16 倍数 ⇒ 走标量路径 | 正确性没错 | 🔴 **整段退化，而不是「对齐主体向量化 + 标量尾巴」**。24 MB 只多 4 个字节，前面 25,165,824 字节也跟着走标量 |
+| **② NCCL 的成本模型** | 按带宽/拓扑/消息大小选算法与协议 | 逻辑没错 | 🟠 **输入里没有「对齐」这一维** ⇒ 它看不见自己 kernel 的 12× 悬崖，**结构上不可能选对** |
+| **③ PyTorch FSDP** | 把分片补到「每 rank 元素数相等」 | 它要解决的是「分得均匀」，做到了 | 🟠 **只保证整除，不保证字节对齐** ⇒ 造出下游会掉悬崖的尺寸 |
+
+★ **最该修的是 ①**（纯收益、零取舍、不需要跨层协商，修好之后 ③ 也不用改）。
+★ **最容易先落地的是 ③**（改动极小、可立即验证、对所有后端都安全）。
+⇒ **建议：两个都提，先提 PyTorch，NCCL 那条引用它作为下游实证。**
+
+---
+
+## 6 · 建议的修法（PyTorch 侧）
+
+**FSDP1** —— `torch/distributed/fsdp/_flat_param.py`，`FlatParamHandle._get_shard` / `_get_unpadded_shard`：
+现在只把 flat parameter 补到 `world_size` 的倍数。建议改成补到
+**`world_size × (16 // itemsize)`** 的倍数：
+
+```python
+# 目前：每 rank numel = ceil(numel / world_size)，只保证相等
+# 建议：让每 rank 的 numel 是 (16 // itemsize) 的倍数
+elems_per_16B = max(1, 16 // tensor.element_size())      # bf16/fp16 → 8，fp32 → 4
+align        = world_size * elems_per_16B
+padded_numel = math.ceil(numel / align) * align
+```
+
+**FSDP2** —— `torch/distributed/fsdp/_fully_shard/_fsdp_common.py::_get_dim0_padded_size`
+同样只补到 `dim0_factor`（= world_size）的倍数，问题同形。
+
+**代价**：每个 flat parameter 最多多 `world_size × elems_per_16B - 1` 个元素
+—— 本例中一层多 **12 个字节**（约 6e-8 的显存开销）。
+**收益**：该层的 `all_gather` 最多快 **12×**。
+
+---
+
+## 7 · ⚠️ 还没做的一步（提交前要写清楚，或者补做）
+
+**目前的证据链是三段**：
+1. 机制：合成尺寸上，`%16` 是唯一的开关（§3）
+2. 现场：真实 FSDP 训练里 99.9% 的字节踩在上面（§4）
+3. 修复：**在真实那个尺寸上**补 4 字节，恢复 12.2×（§4）
+
+**缺的是第 4 段**：在 FSDP 真实路径上打这个 padding 补丁，跑一次端到端，
+给出「3 卡 ZeRO-3 的 `update_actor` 从 47.94 s 降到 X」。
+⇒ 本仓库排成 **A17**。**不做也能提**（前三段已经互相独立且都可复现），
+但补上之后 issue 会强很多 —— 从「这里有个悬崖」变成「**改这一行，端到端快 N 倍**」。
+
+---
+
+## 8 · 提交清单（真要提的时候照做）
+
+- [ ] 决定仓库：`pytorch/pytorch`（FSDP padding）+ `NVIDIA/nccl`（kernel 整段退化）
+- [ ] 把 `scripts/probe_alignment_cliff.py` 精简成**不依赖本仓库**的单文件复现脚本
+- [ ] 复述 §2 环境指纹（尤其 **no-P2P + 3 rank** 这两个触发条件）
+- [ ] 附 §3 的悬崖表 + §4 的 Broadcast 对照组（**这两张表是说服力的核心**）
+- [ ] 若已完成 A17，补 §7 的端到端数字
+- [ ] ⚠️ 提交前再核一遍 torch 主干是否已改（本文基于 2.9.0）
