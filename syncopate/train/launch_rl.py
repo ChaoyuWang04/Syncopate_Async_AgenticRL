@@ -615,6 +615,25 @@ def _resolve_topology(args: argparse.Namespace) -> None:
         args.rollout_gpus = 0          # colocate 没有独立的 rollout 池
         return
 
+    # ---- ⛔ 启动即校验：mini-batch 必须能被 trainer 卡数整除 ----
+    #   2026-08-18 实测：`--ppo-mini-batch-size 2 --rollout-n 8 --trainer-gpus 3`
+    #   ⇒ 每个 mini-batch 16 条序列分给 3 个 rank ⇒ verl 在**跑起来两分钟后**才炸
+    #      `AssertionError: 16 % 3 != 0`（队列 T6/T8 各白跑一次）。
+    #   ★ 判据要放在**最早能判的地方** —— 这是纯算术，启动时就能判。
+    if args.mode != "colocate" and args.lora_rank >= 0:
+        _seqs = args.ppo_mini_batch_size * args.rollout_n
+        if args.trainer_gpus and _seqs % args.trainer_gpus != 0:
+            # ⚠️ 候选范围**不要依赖另一个参数** —— 第一版用了 train_batch_size，
+            #    而它在这条路径上可能还没被解析成想要的值 ⇒ 建议列表打成空的，
+            #    "报错了但没告诉你怎么改"比不报错好不了多少。
+            _ok = [m for m in range(1, 17) if (m * args.rollout_n) % args.trainer_gpus == 0]
+            raise SystemExit(
+                f"★ 配置非法：--ppo-mini-batch-size {args.ppo_mini_batch_size} × "
+                f"--rollout-n {args.rollout_n} = {_seqs} 条序列，"
+                f"**不能被 trainer 卡数 {args.trainer_gpus} 整除**。\n"
+                f"  verl 会在跑起来之后才报 `{_seqs} % {args.trainer_gpus} != 0`，白烧一次启动。\n"
+                f"  ⇒ 本机可用的 --ppo-mini-batch-size：{_ok or '（无，请调 --rollout-n 或 --trainer-gpus）'}")
+
     # ---- ⛔ 启动即校验：`--lora-merge` 与 E22 修法①（推 adapter）互斥 ----
     #   两者都开会把 399 个基座张量当 adapter 喂给 add_lora。
     #   ★ 守卫要放在**启动时**，不能放在第一次权重同步里 —— 那要等 10 分钟才炸
