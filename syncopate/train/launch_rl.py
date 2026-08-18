@@ -512,6 +512,20 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
                 f"trainer.total_epochs={max(1, -(-rollout_steps // 590) + 1)}",
             ]
 
+    # ---- ★ 兜底：把「靠 verl 默认值才成立」的前提**显式钉死** ----
+    # 纪律（2026-08-18）：**默认值必须是对的那个**，而"对"不能依赖第三方的默认值不变。
+    overrides += [
+        # ① Ulysses SP 必须为 1 —— E21 修复后 FSDP 按**默认进程组**（world）除，
+        #    而 verl 按 dp_size = world // sp 乘，**只有 sp=1 时两者才抵消**（0-A / E21 §4.7.5）。
+        "actor_rollout_ref.actor.ulysses_sequence_parallel_size=1",
+        "actor_rollout_ref.ref.ulysses_sequence_parallel_size=1",
+        # ② 采样不截尾 —— rollout 报的是 `processed_logprobs`（截尾后），而 trainer 侧的
+        #    截尾器在 verl 里**是注释掉的**（torch_functional.py:672）⇒ 一开截尾两边就不是
+        #    同一个分布族，每 token 系统性偏 Z、序列级 Z^694（E23 §2）。
+        "actor_rollout_ref.rollout.top_p=1.0",
+        "actor_rollout_ref.rollout.top_k=-1",
+    ]
+
     # ---- ★ 改动 2：LoRA ----
     if args.lora_rank > 0 and args.lora_merge:
         # ⚠️ `lora.merge` 这个键**已经在默认配置里**（默认 False）⇒ 直接覆盖，不能加 `+`
@@ -601,6 +615,21 @@ def _resolve_topology(args: argparse.Namespace) -> None:
         args.rollout_gpus = 0          # colocate 没有独立的 rollout 池
         return
 
+    # ---- ⛔ 启动即校验：`--lora-merge` 与 E22 修法①（推 adapter）互斥 ----
+    #   两者都开会把 399 个基座张量当 adapter 喂给 add_lora。
+    #   ★ 守卫要放在**启动时**，不能放在第一次权重同步里 —— 那要等 10 分钟才炸
+    #     （2026-08-18 实测：放在 update_weights 里，vLLM 还没起来就先因别的原因失败了，
+    #      守卫根本没机会触发）。**判据要在最早能判的地方判。**
+    if args.lora_merge and args.lora_rank > 0 and args.mode != "colocate" \
+            and os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC", "1") == "1":
+        raise SystemExit(
+            "★ `--lora-merge` 与 E22 修法①（默认开启的 adapter 推送）互斥。\n"
+            "  修法①每次推 adapter 张量；而 merge=True 会让引擎吐出合并后的全量权重，\n"
+            "  rollout 侧仍会按 adapter 装载 ⇒ 把整份基座当 adapter。\n"
+            "  ⇒ 二选一：**去掉 `--lora-merge`（推荐）** —— R0-b 实测 bf16 合并会毁掉\n"
+            "           adapter 一半的作用（logprob 偏移中位 1.717e-02 = adapter 自身作用的 50%）；\n"
+            "           或设 SYNCOPATE_LORA_ADAPTER_SYNC=0 退回合并模式（不推荐）。")
+
     # ---- 分卡模式 ----
     if total and total < 2:
         raise SystemExit(
@@ -666,7 +695,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout-gpus", type=int, default=1,
                         help="rollout 池的卡数（只在分卡模式下有意义）。"
                              "⚠️ agentic 负载的 rollout 很重，最优配比大概率不是 2+2，本身就是个实验")
-    parser.add_argument("--weight-sync-bucket-mb", type=int, default=2048,
+    parser.add_argument("--weight-sync-bucket-mb", type=int, default=512,
+                        # ⛔ 2026-08-18：默认从 verl 的 2048 改成 512。
+                        #    2048 **已知会 OOM**（所有模式，不只分卡）：CheckpointEngine 会在
+                        #    目标卡上分配一个 bucket 大小的暂存区（nccl_checkpoint_engine.py:142）。
+                        #    ⇒ 「默认值必须是对的那个」——不能让人靠记忆去传一个救命参数。
                         help="分卡模式：权重从 trainer 推给 rollout 时的暂存区大小（MB）。"
                              "★ 它占的是 **rollout 卡**的显存，必须和 --rollout-gpu-util "
                              "一起算账，否则第一次权重同步才 OOM（见代码里的账本）")
@@ -804,7 +837,13 @@ def main(argv: list[str] | None = None) -> int:
                              "跑完用 scripts/prune_rl_ckpts.py 瘦身（只留 LoRA 权重）。")
 
     parser.add_argument("--rollout-correction", action="store_true", default=True)
-    parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"])
+    parser.add_argument("--rollout-is", default="token", choices=["token", "sequence"],
+                        help="重要性采样的聚合口径。⛔ 2026-08-18 默认从 sequence 改成 **token**："
+                             "序列级 IS 在长序列上是**指数**脆弱的（每 token 的小偏差乘上 694 个 token）"
+                             "—— 这是数学性质，不依赖任何被 E21/E22 作废的实测数字。"
+                             "E20 实测过 chi2_seq 64.19 vs chi2_token 0.065（差 989×），"
+                             "**那个数字要在 R1 重测，但符号不会变**。"
+                             "而 verl 文档自己也写着 ESS<0.3 时应当换聚合口径（见 E23 §3.3）。")
     parser.add_argument("--rollout-is-threshold", type=float, default=2.0)
 
     parser.add_argument("--latency-scale", type=float, default=0.01,

@@ -370,7 +370,10 @@ def setup_worker() -> None:
     # 0-B：独立开关，**不挂在别的开关的成功路径上**（上面那段注释记的就是这个教训）
     # ★ E22 修法①：先做成开关（验证过再谈默认值）。它同时改 trainer 与 rollout 两侧，
     #   两个模块都要等到被 import 之后再打。
-    if os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC") == "1":
+    # ★ E22 修法①：**默认开启**（2026-08-18）—— 这是正确性修复，不是可选优化。
+    #   不开 = disaggregated 下每次只推冻结基座、rollout 的策略永远停在起点，而且**不报错**。
+    #   设 =0 可关掉做对照（比如复现坏基线）。
+    if os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC", "1") == "1":
         for _m in ("verl.checkpoint_engine.base", "verl.workers.engine_workers"):
             _defer_until_imported(_m, _patch_lora_adapter_sync)
     if os.environ.get("SYNCOPATE_SYNC_PAYLOAD") == "1":
@@ -748,6 +751,16 @@ def _patch_lora_adapter_sync() -> None:
             if effective_mode == "naive":
                 return await orig_update(self, global_steps=global_steps, mode=mode)
 
+            # ⛔ 互斥守卫：`lora.merge=True` 会让 get_per_tensor_param 走"合并后全量"分支
+            #    （返回 399 个基座张量、peft_config=None），而 rollout 侧仍会按 adapter 装载
+            #    ⇒ 把整份基座当 adapter 喂给 add_lora。**宁可启动就报错，也不要静默跑歪。**
+            if getattr(self.actor.engine, "model_config", None) is not None and \
+                    self.actor.engine.model_config.lora.get("merge", False):
+                raise ValueError(
+                    "★ `model.lora.merge=True` 与 E22 修法①（推 adapter）互斥：\n"
+                    "  修法①每次推的是 adapter 张量，而 merge=True 会让引擎吐出合并后的全量权重。\n"
+                    "  ⇒ 二选一：去掉 `--lora-merge`（**推荐**，R0-b 实测 bf16 合并毁掉 adapter 一半作用），\n"
+                    "         或设 SYNCOPATE_LORA_ADAPTER_SYNC=0 退回合并模式。")
             base_done = getattr(self, "_syncopate_base_sync_done", False)
             per_tensor_param, peft_config = self.actor.engine.get_per_tensor_param(
                 base_sync_done=base_done)
