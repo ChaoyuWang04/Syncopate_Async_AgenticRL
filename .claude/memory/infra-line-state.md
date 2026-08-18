@@ -170,3 +170,26 @@ E22  disaggregated（fully_async / one_step_off）下 **LoRA 从没被推给 rol
 **算了多少、搬了多少字节 → 不受影响；算得对不对、学到没有 → 全部作废。**
 ⇒ **上游草稿三份**（PyTorch 一条 + verl 两条），都等 Chaoyu 点头。
 ⇒ 相关记忆：[[silent-degradation-weight-sync]]
+
+## ⭐ 2026-08-18 收尾：异步 RL 第一次真正跑通
+
+```
+E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
+    —— 两端能力本来都在，断的只是中间没有传参那一栏
+    验证：list_loras()=[123] · 载荷 8,414→252 MiB · kl 回地板 · param_sync 6.25→0.974 s（6.4×）
+    数值：两侧 scaling 都是 2.0 · log_ppl_diff 落在同版本地板 ~3.4e-4
+⛔ --lora-merge 已否决（bf16 合并毁掉 adapter 一半作用），启动即报错拦住
+🔻 FSDP1 留着不换（上游确认不修；FSDP2 另有张量形态问题）⇒ 退化网格补丁是**长期方案**
+```
+
+**三个默认值已改对**（"兜底必须是对的那个"）：
+`--weight-sync-bucket-mb` 2048→**512** · `--rollout-is` sequence→**token** ·
+`SYNCOPATE_LORA_ADAPTER_SYNC` **默认开**；并显式钉死 `ulysses_sp=1` / `top_p=1.0` / `top_k=-1`。
+
+**一步的构成被改写**：`param_sync` 占 0.8%、**三次前向占 88.9%**
+⇒ 吞吐线的靶子毫无争议是 E17/B12，B1（权重同步）可彻底停放。
+
+⇒ **队列下一件：R1（E20 全套在修好的异步基线上重测）**，直接跑 fully_async。
+⚠️ 但**读任务分之前要等主线 ⑥ 的重基线评测**（配对比较的合法基线，4 卡 15 分钟）。
+⇒ 故事全文：`docs/infra_exp/STORY-async-lora-weight-sync.md`
+⇒ 管线验证状态总表：`00-INFRA-HANDOFF §5.0.2`

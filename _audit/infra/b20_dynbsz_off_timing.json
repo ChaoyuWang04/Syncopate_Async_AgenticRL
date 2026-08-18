@@ -1,0 +1,147 @@
+{
+  "summary": {
+    "n_rows_used": 3,
+    "step_span": 4,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 3,
+        "median_per_timing_row": 12.477,
+        "median_per_global_step": 3.119,
+        "share_of_step": 0.0956
+      },
+      "reward": {
+        "n": 3,
+        "median_per_timing_row": 0.0,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 3,
+        "median_per_timing_row": 21.377,
+        "median_per_global_step": 5.344,
+        "share_of_step": 0.1637
+      },
+      "ref": {
+        "n": 3,
+        "median_per_timing_row": 18.447,
+        "median_per_global_step": 4.612,
+        "share_of_step": 0.1413
+      },
+      "adv": {
+        "n": 3,
+        "median_per_timing_row": 0.028,
+        "median_per_global_step": 0.007,
+        "share_of_step": 0.0002
+      },
+      "update_actor": {
+        "n": 3,
+        "median_per_timing_row": 68.356,
+        "median_per_global_step": 17.089,
+        "share_of_step": 0.5235
+      },
+      "dump_rollout_generations": {
+        "n": 3,
+        "median_per_timing_row": 0.374,
+        "median_per_global_step": 0.093,
+        "share_of_step": 0.0029
+      },
+      "step": {
+        "n": 3,
+        "median_per_timing_row": 130.577,
+        "median_per_global_step": 32.644,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 2,
+        "median_per_timing_row": 9.944,
+        "median_per_global_step": 2.486,
+        "share_of_step": 0.0762
+      }
+    },
+    "triple_forward_share": 0.8285,
+    "param_sync_seconds": [
+      14.4752,
+      10.4166,
+      9.4724,
+      9.3406
+    ],
+    "param_sync_steady_median": 9.472
+  },
+  "raw": {
+    "log": "logs/b20_dynbsz_off.log",
+    "rows": [
+      {
+        "global_step": 3.0,
+        "timings": {
+          "start_profile": 1.8870458006858826e-05,
+          "gen": 25.51040451414883,
+          "reward": 9.289570152759552e-05,
+          "old_log_prob": 16.900225589051843,
+          "ref": 13.453784441575408,
+          "adv": 0.02272750996053219,
+          "update_actor": 50.93181579001248,
+          "dump_rollout_generations": 0.2757562156766653,
+          "step": 107.09828890115023,
+          "stop_profile": 2.0969659090042114e-05
+        }
+      },
+      {
+        "global_step": 7.0,
+        "timings": {
+          "start_profile": 3.064796328544617e-05,
+          "gen": 11.79393807426095,
+          "reward": 0.00017262622714042664,
+          "old_log_prob": 21.638174451887608,
+          "ref": 19.075965834781528,
+          "adv": 0.02837543934583664,
+          "update_actor": 68.99178808368742,
+          "param_sync": 10.416567087173462,
+          "dump_rollout_generations": 0.3739857394248247,
+          "step": 132.3311541378498,
+          "stop_profile": 2.22083181142807e-05
+        }
+      },
+      {
+        "global_step": 11.0,
+        "timings": {
+          "start_profile": 2.492964267730713e-05,
+          "gen": 12.477317465469241,
+          "reward": 0.00013037770986557007,
+          "old_log_prob": 21.376516738906503,
+          "ref": 18.446791848167777,
+          "adv": 0.030402105301618576,
+          "update_actor": 68.35550978034735,
+          "param_sync": 9.472368312999606,
+          "dump_rollout_generations": 0.40521333552896976,
+          "step": 130.57674533315003,
+          "stop_profile": 2.6889145374298096e-05
+        }
+      }
+    ],
+    "step_span": 4,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      4.0,
+      4.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 14.4752,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.4166,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.4724,
+        "param_version": 2
+      },
+      {
+        "seconds": 9.3406,
+        "param_version": 3
+      }
+    ]
+  }
+}

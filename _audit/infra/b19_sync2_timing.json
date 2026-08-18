@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "n_rows_used": 4,
+    "step_span": 2,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 4,
+        "median_per_timing_row": 10.639,
+        "median_per_global_step": 5.319,
+        "share_of_step": 0.1416
+      },
+      "reward": {
+        "n": 4,
+        "median_per_timing_row": 0.0,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 4,
+        "median_per_timing_row": 10.914,
+        "median_per_global_step": 5.457,
+        "share_of_step": 0.1453
+      },
+      "ref": {
+        "n": 4,
+        "median_per_timing_row": 9.214,
+        "median_per_global_step": 4.607,
+        "share_of_step": 0.1227
+      },
+      "adv": {
+        "n": 4,
+        "median_per_timing_row": 0.014,
+        "median_per_global_step": 0.007,
+        "share_of_step": 0.0002
+      },
+      "update_actor": {
+        "n": 4,
+        "median_per_timing_row": 34.33,
+        "median_per_global_step": 17.165,
+        "share_of_step": 0.457
+      },
+      "dump_rollout_generations": {
+        "n": 4,
+        "median_per_timing_row": 0.184,
+        "median_per_global_step": 0.092,
+        "share_of_step": 0.0024
+      },
+      "step": {
+        "n": 4,
+        "median_per_timing_row": 75.113,
+        "median_per_global_step": 37.556,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 3,
+        "median_per_timing_row": 10.466,
+        "median_per_global_step": 5.233,
+        "share_of_step": 0.1393
+      }
+    },
+    "triple_forward_share": 0.725,
+    "param_sync_seconds": [
+      13.3087,
+      10.4661,
+      9.1361,
+      11.4818,
+      9.3797
+    ],
+    "param_sync_steady_median": 9.923
+  },
+  "raw": {
+    "log": "logs/b19_sync2.log",
+    "rows": [
+      {
+        "global_step": 1.0,
+        "timings": {
+          "start_profile": 1.5230849385261536e-05,
+          "gen": 20.685705112293363,
+          "reward": 4.5318156480789185e-05,
+          "old_log_prob": 5.785175524652004,
+          "ref": 4.257058648392558,
+          "adv": 0.008210500702261925,
+          "update_actor": 16.847395695745945,
+          "dump_rollout_generations": 0.10007278807461262,
+          "step": 47.68500533886254,
+          "stop_profile": 9.139999747276306e-06
+        }
+      },
+      {
+        "global_step": 3.0,
+        "timings": {
+          "start_profile": 1.5439465641975403e-05,
+          "gen": 9.03540756367147,
+          "reward": 6.866827607154846e-05,
+          "old_log_prob": 10.956134850159287,
+          "ref": 9.389090711250901,
+          "adv": 0.013714361935853958,
+          "update_actor": 35.645381677895784,
+          "param_sync": 10.466129640117288,
+          "dump_rollout_generations": 0.18586676008999348,
+          "step": 75.70278387889266,
+          "stop_profile": 1.084059476852417e-05
+        }
+      },
+      {
+        "global_step": 5.0,
+        "timings": {
+          "start_profile": 1.0397285223007202e-05,
+          "gen": 9.46081593632698,
+          "reward": 7.778778672218323e-05,
+          "old_log_prob": 11.372573293745518,
+          "ref": 9.543760744854808,
+          "adv": 0.015109829604625702,
+          "update_actor": 34.7951223179698,
+          "param_sync": 9.136093093082309,
+          "dump_rollout_generations": 0.18967309407889843,
+          "step": 74.52305225282907,
+          "stop_profile": 1.0460615158081055e-05
+        }
+      },
+      {
+        "global_step": 7.0,
+        "timings": {
+          "start_profile": 1.0129064321517944e-05,
+          "gen": 11.816603453829885,
+          "reward": 7.145851850509644e-05,
+          "old_log_prob": 10.87138594314456,
+          "ref": 9.039361098781228,
+          "adv": 0.014166770502924919,
+          "update_actor": 33.86456447467208,
+          "param_sync": 11.481815526261926,
+          "dump_rollout_generations": 0.1811788883060217,
+          "step": 77.27803748100996,
+          "stop_profile": 9.281560778617859e-06
+        }
+      }
+    ],
+    "step_span": 2,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      2.0,
+      2.0,
+      2.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 13.3087,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.4661,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.1361,
+        "param_version": 2
+      },
+      {
+        "seconds": 11.4818,
+        "param_version": 3
+      },
+      {
+        "seconds": 9.3797,
+        "param_version": 4
+      }
+    ]
+  }
+}

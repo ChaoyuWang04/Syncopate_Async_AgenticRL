@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "n_rows_used": 4,
+    "step_span": 16,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 4,
+        "median_per_timing_row": 0.646,
+        "median_per_global_step": 0.04,
+        "share_of_step": 0.0014
+      },
+      "reward": {
+        "n": 4,
+        "median_per_timing_row": 0.001,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 4,
+        "median_per_timing_row": 86.49,
+        "median_per_global_step": 5.406,
+        "share_of_step": 0.1939
+      },
+      "ref": {
+        "n": 4,
+        "median_per_timing_row": 74.797,
+        "median_per_global_step": 4.675,
+        "share_of_step": 0.1677
+      },
+      "adv": {
+        "n": 4,
+        "median_per_timing_row": 0.12,
+        "median_per_global_step": 0.007,
+        "share_of_step": 0.0003
+      },
+      "update_actor": {
+        "n": 4,
+        "median_per_timing_row": 273.424,
+        "median_per_global_step": 17.089,
+        "share_of_step": 0.613
+      },
+      "dump_rollout_generations": {
+        "n": 4,
+        "median_per_timing_row": 1.475,
+        "median_per_global_step": 0.092,
+        "share_of_step": 0.0033
+      },
+      "step": {
+        "n": 4,
+        "median_per_timing_row": 446.05,
+        "median_per_global_step": 27.878,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 3,
+        "median_per_timing_row": 9.543,
+        "median_per_global_step": 0.596,
+        "share_of_step": 0.0214
+      }
+    },
+    "triple_forward_share": 0.9746,
+    "param_sync_seconds": [
+      15.1709,
+      10.5808,
+      9.5435,
+      8.6712,
+      8.3351
+    ],
+    "param_sync_steady_median": 9.107
+  },
+  "raw": {
+    "log": "logs/b19_sync16.log",
+    "rows": [
+      {
+        "global_step": 15.0,
+        "timings": {
+          "start_profile": 0.00011153891682624817,
+          "gen": 26.68330110795796,
+          "reward": 0.000558735802769661,
+          "old_log_prob": 82.58849325589836,
+          "ref": 68.79569179192185,
+          "adv": 0.11838672496378422,
+          "update_actor": 255.7182383146137,
+          "dump_rollout_generations": 1.4354237224906683,
+          "step": 435.3568287137896,
+          "stop_profile": 0.00011751428246498108
+        }
+      },
+      {
+        "global_step": 31.0,
+        "timings": {
+          "start_profile": 9.606406092643738e-05,
+          "gen": 0.6663911622017622,
+          "reward": 0.0005584061145782471,
+          "old_log_prob": 87.9853332825005,
+          "ref": 75.32655062712729,
+          "adv": 0.12287977337837219,
+          "update_actor": 276.73182379454374,
+          "param_sync": 10.580819260329008,
+          "dump_rollout_generations": 1.5058743730187416,
+          "step": 452.9465190824121,
+          "stop_profile": 9.701214730739594e-05
+        }
+      },
+      {
+        "global_step": 47.0,
+        "timings": {
+          "start_profile": 9.060651063919067e-05,
+          "gen": 0.6257335096597672,
+          "reward": 0.0005106013268232346,
+          "old_log_prob": 86.0257584862411,
+          "ref": 74.55383511446416,
+          "adv": 0.11769372969865799,
+          "update_actor": 273.17203661613166,
+          "param_sync": 9.543456176295877,
+          "dump_rollout_generations": 1.4463396780192852,
+          "step": 445.5095842126757,
+          "stop_profile": 9.30633395910263e-05
+        }
+      },
+      {
+        "global_step": 63.0,
+        "timings": {
+          "start_profile": 9.373202919960022e-05,
+          "gen": 0.5979201551526785,
+          "reward": 0.0005408115684986115,
+          "old_log_prob": 86.95414031110704,
+          "ref": 75.04096681810915,
+          "adv": 0.12063410691916943,
+          "update_actor": 273.6759181525558,
+          "param_sync": 8.671187046915293,
+          "dump_rollout_generations": 1.504168327897787,
+          "step": 446.5908162146807,
+          "stop_profile": 9.280629456043243e-05
+        }
+      }
+    ],
+    "step_span": 16,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      16.0,
+      16.0,
+      16.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 15.1709,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.5808,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.5435,
+        "param_version": 2
+      },
+      {
+        "seconds": 8.6712,
+        "param_version": 3
+      },
+      {
+        "seconds": 8.3351,
+        "param_version": 4
+      }
+    ]
+  }
+}

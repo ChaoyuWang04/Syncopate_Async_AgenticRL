@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "n_rows_used": 4,
+    "step_span": 4,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 4,
+        "median_per_timing_row": 12.151,
+        "median_per_global_step": 3.038,
+        "share_of_step": 0.0937
+      },
+      "reward": {
+        "n": 4,
+        "median_per_timing_row": 0.0,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 4,
+        "median_per_timing_row": 21.54,
+        "median_per_global_step": 5.385,
+        "share_of_step": 0.166
+      },
+      "ref": {
+        "n": 4,
+        "median_per_timing_row": 18.371,
+        "median_per_global_step": 4.593,
+        "share_of_step": 0.1416
+      },
+      "adv": {
+        "n": 4,
+        "median_per_timing_row": 0.029,
+        "median_per_global_step": 0.007,
+        "share_of_step": 0.0002
+      },
+      "update_actor": {
+        "n": 4,
+        "median_per_timing_row": 68.058,
+        "median_per_global_step": 17.014,
+        "share_of_step": 0.5246
+      },
+      "dump_rollout_generations": {
+        "n": 4,
+        "median_per_timing_row": 0.365,
+        "median_per_global_step": 0.091,
+        "share_of_step": 0.0028
+      },
+      "step": {
+        "n": 4,
+        "median_per_timing_row": 129.737,
+        "median_per_global_step": 32.434,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 3,
+        "median_per_timing_row": 9.466,
+        "median_per_global_step": 2.367,
+        "share_of_step": 0.073
+      }
+    },
+    "triple_forward_share": 0.8322,
+    "param_sync_seconds": [
+      13.0874,
+      10.8769,
+      9.4664,
+      8.7855,
+      8.4786
+    ],
+    "param_sync_steady_median": 9.126
+  },
+  "raw": {
+    "log": "logs/b19_sync4.log",
+    "rows": [
+      {
+        "global_step": 3.0,
+        "timings": {
+          "start_profile": 2.1029263734817505e-05,
+          "gen": 26.823815243318677,
+          "reward": 0.00011129863560199738,
+          "old_log_prob": 17.101027209311724,
+          "ref": 13.835800003260374,
+          "adv": 0.022389020770788193,
+          "update_actor": 52.58503862284124,
+          "dump_rollout_generations": 0.27277456037700176,
+          "step": 110.6445720307529,
+          "stop_profile": 2.1850690245628357e-05
+        }
+      },
+      {
+        "global_step": 7.0,
+        "timings": {
+          "start_profile": 2.132914960384369e-05,
+          "gen": 11.790653737261891,
+          "reward": 0.00012284889817237854,
+          "old_log_prob": 22.03689144551754,
+          "ref": 18.32118278555572,
+          "adv": 0.02853219583630562,
+          "update_actor": 67.85398742742836,
+          "param_sync": 10.87687605433166,
+          "dump_rollout_generations": 0.35844482854008675,
+          "step": 131.28062625974417,
+          "stop_profile": 2.214871346950531e-05
+        }
+      },
+      {
+        "global_step": 11.0,
+        "timings": {
+          "start_profile": 2.5859102606773376e-05,
+          "gen": 12.511822540313005,
+          "reward": 0.0001356080174446106,
+          "old_log_prob": 21.488548520952463,
+          "ref": 18.60415105894208,
+          "adv": 0.039121972396969795,
+          "update_actor": 70.10690276324749,
+          "param_sync": 9.466423582285643,
+          "dump_rollout_generations": 0.37234112806618214,
+          "step": 132.6023685336113,
+          "stop_profile": 2.4998560547828674e-05
+        }
+      },
+      {
+        "global_step": 15.0,
+        "timings": {
+          "start_profile": 2.2329390048980713e-05,
+          "gen": 10.706845374777913,
+          "reward": 0.00012822821736335754,
+          "old_log_prob": 21.591527685523033,
+          "ref": 18.42139206826687,
+          "adv": 0.029615027830004692,
+          "update_actor": 68.26157707720995,
+          "param_sync": 8.785549387335777,
+          "dump_rollout_generations": 0.38309263810515404,
+          "step": 128.19337782636285,
+          "stop_profile": 2.034008502960205e-05
+        }
+      }
+    ],
+    "step_span": 4,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      4.0,
+      4.0,
+      4.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 13.0874,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.8769,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.4664,
+        "param_version": 2
+      },
+      {
+        "seconds": 8.7855,
+        "param_version": 3
+      },
+      {
+        "seconds": 8.4786,
+        "param_version": 4
+      }
+    ]
+  }
+}

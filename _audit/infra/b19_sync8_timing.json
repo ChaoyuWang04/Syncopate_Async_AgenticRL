@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "n_rows_used": 4,
+    "step_span": 8,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 4,
+        "median_per_timing_row": 6.208,
+        "median_per_global_step": 0.776,
+        "share_of_step": 0.0264
+      },
+      "reward": {
+        "n": 4,
+        "median_per_timing_row": 0.0,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 4,
+        "median_per_timing_row": 43.501,
+        "median_per_global_step": 5.438,
+        "share_of_step": 0.1852
+      },
+      "ref": {
+        "n": 4,
+        "median_per_timing_row": 37.509,
+        "median_per_global_step": 4.689,
+        "share_of_step": 0.1597
+      },
+      "adv": {
+        "n": 4,
+        "median_per_timing_row": 0.061,
+        "median_per_global_step": 0.008,
+        "share_of_step": 0.0003
+      },
+      "update_actor": {
+        "n": 4,
+        "median_per_timing_row": 137.515,
+        "median_per_global_step": 17.189,
+        "share_of_step": 0.5854
+      },
+      "dump_rollout_generations": {
+        "n": 4,
+        "median_per_timing_row": 0.782,
+        "median_per_global_step": 0.098,
+        "share_of_step": 0.0033
+      },
+      "step": {
+        "n": 4,
+        "median_per_timing_row": 234.925,
+        "median_per_global_step": 29.366,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 3,
+        "median_per_timing_row": 9.492,
+        "median_per_global_step": 1.187,
+        "share_of_step": 0.0404
+      }
+    },
+    "triple_forward_share": 0.9302,
+    "param_sync_seconds": [
+      13.4704,
+      10.7392,
+      9.4924,
+      9.3944,
+      8.584
+    ],
+    "param_sync_steady_median": 9.443
+  },
+  "raw": {
+    "log": "logs/b19_sync8.log",
+    "rows": [
+      {
+        "global_step": 7.0,
+        "timings": {
+          "start_profile": 4.1699036955833435e-05,
+          "gen": 27.073410784825683,
+          "reward": 0.0002055000513792038,
+          "old_log_prob": 39.379953099414706,
+          "ref": 32.73662390373647,
+          "adv": 0.054790398105978966,
+          "update_actor": 120.07376844249666,
+          "dump_rollout_generations": 0.5963269528001547,
+          "step": 219.9222942572087,
+          "stop_profile": 3.668852150440216e-05
+        }
+      },
+      {
+        "global_step": 15.0,
+        "timings": {
+          "start_profile": 4.8296526074409485e-05,
+          "gen": 5.671657118946314,
+          "reward": 0.0002667326480150223,
+          "old_log_prob": 43.45848054625094,
+          "ref": 37.54335334524512,
+          "adv": 0.06366011872887611,
+          "update_actor": 136.93406496942043,
+          "param_sync": 10.739195058122277,
+          "dump_rollout_generations": 0.8035630416125059,
+          "step": 235.23222690448165,
+          "stop_profile": 5.9351325035095215e-05
+        }
+      },
+      {
+        "global_step": 23.0,
+        "timings": {
+          "start_profile": 5.18113374710083e-05,
+          "gen": 3.9557120762765408,
+          "reward": 0.0002518538385629654,
+          "old_log_prob": 43.54446983151138,
+          "ref": 37.47406233847141,
+          "adv": 0.06250789389014244,
+          "update_actor": 139.28607866726816,
+          "param_sync": 9.49244261905551,
+          "dump_rollout_generations": 0.78705820068717,
+          "step": 234.61861889623106,
+          "stop_profile": 4.8240646719932556e-05
+        }
+      },
+      {
+        "global_step": 31.0,
+        "timings": {
+          "start_profile": 4.93023544549942e-05,
+          "gen": 6.745221268385649,
+          "reward": 0.0002940446138381958,
+          "old_log_prob": 43.54675289429724,
+          "ref": 38.197051245719194,
+          "adv": 0.05997120402753353,
+          "update_actor": 138.0954718478024,
+          "param_sync": 9.394433207809925,
+          "dump_rollout_generations": 0.7777377907186747,
+          "step": 236.83227283135056,
+          "stop_profile": 4.9190595746040344e-05
+        }
+      }
+    ],
+    "step_span": 8,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      8.0,
+      8.0,
+      8.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 13.4704,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.7392,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.4924,
+        "param_version": 2
+      },
+      {
+        "seconds": 9.3944,
+        "param_version": 3
+      },
+      {
+        "seconds": 8.584,
+        "param_version": 4
+      }
+    ]
+  }
+}

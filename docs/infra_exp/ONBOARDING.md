@@ -62,9 +62,18 @@ set -a; . /workspace/.env; set +a
        ⇒ base_sync_done=False ⇒ collect_lora_params **显式跳过所有 lora_ 张量**
        （colocate 那条路调两次，先基座后 adapter，**是对的**）
 后果   **rollout 永远用起点策略 π₀ 采样** ⇒ 我们从来没跑过一次正确的异步 RL
-止血   --lora-merge（model.lora.merge=True），实测推出去的权重开始随训练变化
-⚠️     但它是 **bf16 合并**，RL 那一级增量保真残差 0.87 ⇒ **止血够不够待验（R0-b）**
+止血   --lora-merge（bf16 合并）⇒ ⛔ **已被 R0-b 否掉**：合并造成的 logprob 偏移中位
+       1.717e-02 = **adapter 自身作用的 50%**，是引擎地板的 50×
+修法   ✅ **我们自己把 verl 缺的那段管子接上了**（默认开启，SYNCOPATE_LORA_ADAPTER_SYNC）
+       trainer 侧首次送基座、之后送 adapter；rollout 侧带上"这是 adapter"的标记
+验证   list_loras() []→**[123]** · 载荷 8,414→**252 MiB** · kl 回到地板 ·
+       **param_sync 6.25→0.974 s（6.4×）** · 60 步 0 错误
+数值   V1 两侧 peft_config scaling **都是 2.0** · V3 log_ppl_diff 落在同版本地板 ~3.4e-4
+       ⇒ **「推了 adapter」和「推对了」两条都验了**
 ```
+
+⇒ ⭐ **异步 RL 第一次真正跑通。** 整条链（现象→误判→根因→修法→结果）见
+[`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)。
 
 **② [`E21`](E21-ddp-not-syncing.md) —— 三个 trainer rank 的梯度从没同步过**
 
@@ -76,7 +85,11 @@ set -a; . /workspace/.env; set +a
 0-A    ✅ 又验了「合得对不对」：3 卡 = 1 卡，比值 **1.000000**（是求平均，口径正确）
        白捡：verl 那套「按全局 token 数归一 × dp_size」在**变长序列**下确实在保护我们
        （最常见的"本地平均"写法在不等量数据上错 26%，方向都不对）
-上游   **三份**草稿已成文 → docs/upstream/（PyTorch 一条 + verl 两条），等 Chaoyu 点头
+上游   **三份**草稿已成文 → docs/upstream/（PyTorch 一条 + verl 两条）。**提交由另一位负责。**
+🔻     PyTorch 那条**已知结局**：有人报过、也真的提到了 GitHub，但 **FSDP1 已进入最低限度维护**，
+       不会被处理。换 FSDP2 不会遇到，但 FSDP2 另有**张量形态不一致**的问题
+       ⇒ **Chaoyu 决定：管线刚跑通，先不换后端。**
+       ⇒ **所以我们的退化网格补丁是长期方案，SYNCOPATE_FSDP_DDP_FIX 必须一直默认开。**
 ```
 
 ⚠️⚠️ **⇒ 作废清单与重跑队列见 `00-INFRA-HANDOFF §5`。一句话判据**：

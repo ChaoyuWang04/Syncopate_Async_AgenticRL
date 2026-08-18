@@ -1,0 +1,147 @@
+{
+  "summary": {
+    "n_rows_used": 3,
+    "step_span": 4,
+    "step_span_uniform": true,
+    "per_key": {
+      "gen": {
+        "n": 3,
+        "median_per_timing_row": 11.559,
+        "median_per_global_step": 2.89,
+        "share_of_step": 0.089
+      },
+      "reward": {
+        "n": 3,
+        "median_per_timing_row": 0.0,
+        "median_per_global_step": 0.0,
+        "share_of_step": 0.0
+      },
+      "old_log_prob": {
+        "n": 3,
+        "median_per_timing_row": 21.423,
+        "median_per_global_step": 5.356,
+        "share_of_step": 0.165
+      },
+      "ref": {
+        "n": 3,
+        "median_per_timing_row": 18.442,
+        "median_per_global_step": 4.61,
+        "share_of_step": 0.142
+      },
+      "adv": {
+        "n": 3,
+        "median_per_timing_row": 0.026,
+        "median_per_global_step": 0.007,
+        "share_of_step": 0.0002
+      },
+      "update_actor": {
+        "n": 3,
+        "median_per_timing_row": 68.546,
+        "median_per_global_step": 17.137,
+        "share_of_step": 0.5278
+      },
+      "dump_rollout_generations": {
+        "n": 3,
+        "median_per_timing_row": 0.37,
+        "median_per_global_step": 0.092,
+        "share_of_step": 0.0028
+      },
+      "step": {
+        "n": 3,
+        "median_per_timing_row": 129.872,
+        "median_per_global_step": 32.468,
+        "share_of_step": 1.0
+      },
+      "param_sync": {
+        "n": 2,
+        "median_per_timing_row": 10.035,
+        "median_per_global_step": 2.509,
+        "share_of_step": 0.0773
+      }
+    },
+    "triple_forward_share": 0.8348,
+    "param_sync_seconds": [
+      13.3639,
+      10.5916,
+      9.4794,
+      9.0576
+    ],
+    "param_sync_steady_median": 9.479
+  },
+  "raw": {
+    "log": "logs/b11_trainer012_rollout3.log",
+    "rows": [
+      {
+        "global_step": 3.0,
+        "timings": {
+          "start_profile": 2.2077932953834534e-05,
+          "gen": 25.479413287714124,
+          "reward": 0.000130457803606987,
+          "old_log_prob": 16.81896521523595,
+          "ref": 13.483376670628786,
+          "adv": 0.022235017269849777,
+          "update_actor": 51.100235091522336,
+          "dump_rollout_generations": 0.279212748631835,
+          "step": 107.18679339811206,
+          "stop_profile": 2.017989754676819e-05
+        }
+      },
+      {
+        "global_step": 7.0,
+        "timings": {
+          "start_profile": 2.9927119612693787e-05,
+          "gen": 11.558693593367934,
+          "reward": 0.00012596510350704193,
+          "old_log_prob": 22.024186927825212,
+          "ref": 19.004257552325726,
+          "adv": 0.026185162365436554,
+          "update_actor": 68.54623248428106,
+          "param_sync": 10.591563111171126,
+          "dump_rollout_generations": 0.36962544545531273,
+          "step": 132.1334298439324,
+          "stop_profile": 3.434903919696808e-05
+        }
+      },
+      {
+        "global_step": 11.0,
+        "timings": {
+          "start_profile": 2.0779669284820557e-05,
+          "gen": 11.146757315844297,
+          "reward": 0.00016297027468681335,
+          "old_log_prob": 21.423226112499833,
+          "ref": 18.441825043410063,
+          "adv": 0.02832883596420288,
+          "update_actor": 68.96276576258242,
+          "param_sync": 9.479359410703182,
+          "dump_rollout_generations": 0.3775016702711582,
+          "step": 129.8716805074364,
+          "stop_profile": 2.174079418182373e-05
+        }
+      }
+    ],
+    "step_span": 4,
+    "step_span_uniform": true,
+    "step_span_diffs": [
+      4.0,
+      4.0
+    ],
+    "param_sync_events": [
+      {
+        "seconds": 13.3639,
+        "param_version": 0
+      },
+      {
+        "seconds": 10.5916,
+        "param_version": 1
+      },
+      {
+        "seconds": 9.4794,
+        "param_version": 2
+      },
+      {
+        "seconds": 9.0576,
+        "param_version": 3
+      }
+    ]
+  }
+}

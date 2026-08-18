@@ -1,0 +1,172 @@
+{
+  "Broadcast": {
+    "calls": 542,
+    "total_bytes": 8309177472,
+    "misaligned_share_by_bytes": 0.0,
+    "misaligned_share_by_calls": 0.0,
+    "algo_proto_chosen": [
+      "RING+LL128"
+    ],
+    "top_sizes_by_volume": [
+      {
+        "bytes": 201861632,
+        "calls": 36,
+        "mod16": 0,
+        "volume": 7267018752
+      },
+      {
+        "bytes": 777912448,
+        "calls": 1,
+        "mod16": 0,
+        "volume": 777912448
+      },
+      {
+        "bytes": 1245184,
+        "calls": 108,
+        "mod16": 0,
+        "volume": 134479872
+      },
+      {
+        "bytes": 327680,
+        "calls": 252,
+        "mod16": 0,
+        "volume": 82575360
+      },
+      {
+        "bytes": 524288,
+        "calls": 72,
+        "mod16": 0,
+        "volume": 37748736
+      },
+      {
+        "bytes": 131072,
+        "calls": 72,
+        "mod16": 0,
+        "volume": 9437184
+      },
+      {
+        "bytes": 5120,
+        "calls": 1,
+        "mod16": 0,
+        "volume": 5120
+      }
+    ]
+  },
+  "AllGather": {
+    "calls": 71677,
+    "total_bytes": 335537883118,
+    "misaligned_share_by_bytes": 0.9992,
+    "misaligned_share_by_calls": 0.9789,
+    "algo_proto_chosen": [
+      "RING+LL128"
+    ],
+    "top_sizes_by_volume": [
+      {
+        "bytes": 67287212,
+        "calls": 4752,
+        "mod16": 12,
+        "volume": 319748831424
+      },
+      {
+        "bytes": 259305814,
+        "calls": 37,
+        "mod16": 6,
+        "volume": 9594315118
+      },
+      {
+        "bytes": 207532,
+        "calls": 13824,
+        "mod16": 12,
+        "volume": 2868922368
+      },
+      {
+        "bytes": 54614,
+        "calls": 31104,
+        "mod16": 6,
+        "volume": 1698713856
+      },
+      {
+        "bytes": 87382,
+        "calls": 9216,
+        "mod16": 6,
+        "volume": 805312512
+      },
+      {
+        "bytes": 21846,
+        "calls": 9216,
+        "mod16": 6,
+        "volume": 201332736
+      },
+      {
+        "bytes": 415064,
+        "calls": 432,
+        "mod16": 8,
+        "volume": 179307648
+      },
+      {
+        "bytes": 109228,
+        "calls": 1008,
+        "mod16": 12,
+        "volume": 110101824
+      }
+    ]
+  },
+  "AllReduce": {
+    "calls": 14,
+    "total_bytes": 80,
+    "misaligned_share_by_bytes": 1.0,
+    "misaligned_share_by_calls": 1.0,
+    "algo_proto_chosen": [
+      "TREE+LL128"
+    ],
+    "top_sizes_by_volume": [
+      {
+        "bytes": 8,
+        "calls": 6,
+        "mod16": 8,
+        "volume": 48
+      },
+      {
+        "bytes": 4,
+        "calls": 8,
+        "mod16": 4,
+        "volume": 32
+      }
+    ]
+  },
+  "ReduceScatter": {
+    "calls": 16128,
+    "total_bytes": 2818598400,
+    "misaligned_share_by_bytes": 1.0,
+    "misaligned_share_by_calls": 1.0,
+    "algo_proto_chosen": [
+      "RING+LL128"
+    ],
+    "top_sizes_by_volume": [
+      {
+        "bytes": 415064,
+        "calls": 3456,
+        "mod16": 8,
+        "volume": 1434461184
+      },
+      {
+        "bytes": 109228,
+        "calls": 8064,
+        "mod16": 12,
+        "volume": 880814592
+      },
+      {
+        "bytes": 174764,
+        "calls": 2304,
+        "mod16": 12,
+        "volume": 402656256
+      },
+      {
+        "bytes": 43692,
+        "calls": 2304,
+        "mod16": 12,
+        "volume": 100666368
+      }
+    ]
+  }
+}
