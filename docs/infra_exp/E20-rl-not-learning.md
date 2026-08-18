@@ -339,6 +339,77 @@ rollout_rs_threshold  界设在哪 —— **这个很敏感**：
    判据要多加一条：**被剔掉的序列是不是系统性更长**（可以直接从 rollout dump 里量）
 ```
 
+## 3.11 ★★ 为什么这条线是「长程能力」的**前提**，而不是一个孤立的调参问题
+
+> 起因：Chaoyu 2026-08-18 提的一段思考 —— 「异步除了吞吐，对训练长程能力是不是必需的？
+> 但真的会把 10 小时的任务原样扔进训练吗？10 小时之后那条轨迹早就过期了。」
+> **查证之后：这段判断基本成立，而且它把 E20 从"修一个估计量"抬成了"长程能力的前提"。**
+
+### 3.11.1 查到的三条外部事实
+
+**① 长尾确实是异步的正当理由**（不只是"想快一点"）
+
+> "GPU idling, where resources for short trajectories remain underutilized while waiting for
+> long ones to finish, which severely degrades training efficiency and **necessitates an
+> asynchronous training framework**." —— [Efficient RL for Long-Horizon Tool-Use Agentic Tasks](https://arxiv.org/html/2608.10357)
+
+**② 而"不把超长任务原样跑完"是有名字的做法：partial rollout（Kimi k1.5）**
+
+> 设一个**固定的输出 token 预算**给每条轨迹；超出预算的部分**存进 replay buffer，
+> 下一轮接着跑**。⇒ 长轨迹是**被切成段、跨多轮完成**的，不是一口气跑到底。
+> —— [Kimi k1.5](https://arxiv.org/pdf/2501.12599)
+
+**③ 伪等待/模拟环境是主流，不是我们的偷懒**
+
+> "The engineering overhead of maintaining real-world APIs has led **LLM-based environment
+> simulation to become the dominant paradigm** in agentic RL tool-use domains."
+> ⚠️ 但它有记录在案的代价：幻觉、不一致、状态管理不足。
+> —— [ToolVerse](https://arxiv.org/html/2607.15660)
+
+⇒ 我们的 `latency_scale=0.01`（480 秒的工具等待压成 4.8 秒）**正是这条路**，
+而且我们的沙盒是**规则式**的、不是 LLM 模拟的 ⇒ 避开了幻觉那一类问题，
+代价是另一类（"沙盒 ⊂ runtime"，已记在记忆里）。
+
+### 3.11.2 ★★★ 而这直接接上 E20：**partial rollout 一旦生效，序列级 IS 必然崩**
+
+把②和 E20 §2 放在一起：
+
+```
+partial rollout 的定义就是   「一条轨迹的前半段用版本 k 的权重生成，后半段用版本 k+n」
+⇒ 这条轨迹**天然横跨多个策略版本**
+⇒ 它的逐 token 对数概率差 Δlogp 只会**比普通陈旧轨迹更大**
+⇒ 而序列级 IS 是 exp(L · Δlogp̄) ——  **L 更长、Δlogp̄ 更大，指数项双重放大**
+```
+
+⇒ **结论：想训长程能力（= 想让 partial rollout 真正生效），就必须先把 IS 的口径换掉。**
+**这两件事不是并列的两个待办，是前置关系。**
+
+⚠️ **我们现在还没到那一步**（实测，B16 那跑）：
+```
+partial/total_partial_num = 0    partial_ratio = 0    max_partial_span = 0
+⇒ `partial_rollout=True` 设了，但**一次都没触发**（E08 §8-② 早就记过）
+   原因：轨迹中位十几秒 ≪ 同步周期，还没有轨迹长到需要被切
+```
+⇒ 所以现在的 ESS 崩塌**还只是"陈旧度"造成的**；等 partial rollout 真的开始工作，
+**同样的机制会更狠**。⇒ **现在修，比等到那时候修便宜得多。**
+
+### 3.11.3 一个必须分清的区别：**"长"是长在 token 上还是长在墙钟上**
+
+```
+长在 token 上（上下文/步数）   —— 文献里的 "long-horizon" 基本都是这个意思
+                                 我们：响应从 505 涨到 694 token，**正在变长**
+长在墙钟上（真实等待）         —— 我们**主动用 latency_scale 把它换掉了**
+                                 实测轨迹中位 17.8 秒，不是 10 小时
+```
+
+⇒ **我们目前的"长程"是前者，不是后者。** 这也意味着：
+「10 小时的任务怎么训」在我们这里**暂时不是真问题**，
+而「轨迹越来越长导致序列级 IS 崩塌」**已经是真问题了**。
+
+⇒ ★ **要报告的新指标**：`max_global_steps − min_global_steps`
+（这条轨迹横跨了几个策略版本）—— 字段一直在（我们当初为了让 fully_async 不崩才补上的），
+**但从没被当成指标看过**。它才是"长程 × 陈旧度"的直接度量。排成 **E20-j**。
+
 ## 4 · 候选解法（按**对训练正确性的影响**排，不按实现难度）
 
 | # | 做法 | 为什么可能对 | 代价 / 风险 | 判据 |
