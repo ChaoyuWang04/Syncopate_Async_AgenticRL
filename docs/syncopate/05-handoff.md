@@ -16,6 +16,11 @@
 > **大版本重建前必跑**：`python scripts/check_data_gates.py --batch <批次> --split-dir <切分>`
 > **训练健康度与红线 → `14-sft-health-metrics.md`**（面板已程序化建好，不用手拖）
 > **★ M7-b 这一跑 → `16-m7b-rl-run.md`**（lr 被夹在两堵墙之间）
+> **★★ RL 学不动的联合方案 → `17-rl-learning-blocked.md`**（2026-08-18，主线×infra 共用；
+>   ESS 到底量什么 · 0.3 那条线为什么画错了对象 · **位移是输入不是产出** · 主线要修的六处。
+>   infra 侧诊断在 `../infra_exp/E20-rl-not-learning.md`）
+> **★★ 管线前提探针审计 → `18-pipeline-assumption-probes.md`**（2026-08-18，E21 之后的同族排查；
+>   🔴「合并后的 RL 模型」其实没合并 · 那份 adapter 只是 rank_0 · 已跑 8 条探针 + 9 条待跑）
 > 多卡实验设计 → `../distributed-training-design-v0.1.md`
 > **焦点是怎么定下来的 → `../focus-migration-2026-08.md`**（唯一记录迁移历史的地方）
 

@@ -56,6 +56,14 @@ NARRATIVE-AND-RESUME.md      🆕 对外怎么讲：完成态的故事线 + 简�
 all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
   ⇒ 跨 socket 掉 22%，NUMA 绑定无效（UPI 跳的物理代价）
   ⇒ 换算 DDP 梯度 260MB ≈ 10.2 ms/步，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+
+⛔⛔ **2026-08-18 更正（见 `docs/infra_exp/E21-ddp-not-syncing.md`）**：
+上面这段里的「DDP 每步同步 260 MB 梯度」**是算出来的（66M 参数 × 4 字节），从没量过**；
+而 E21 已证实 **`fsdp_size=1` 下梯度根本没有跨 rank 同步** ⇒ **这段流量此前并不存在**。
+⇒ 由它推出的一切（跨 socket 净代价、与分片的量级对比）**在修复之前都不成立**。
+修复已于 2026-08-18 落地并复验，**但由它推出的数字要重测之后才能引用**。
+★ 教训：**算出来的数字不是测出来的数字** —— 见 E21 §5.5-③。
+
 尺子 scripts/probe_allreduce_bw.py · 数据 logs/e00_allreduce_*.json
 ```
 
