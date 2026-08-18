@@ -351,6 +351,9 @@ def setup_worker() -> None:
             _defer_until_imported(_m, _patch_nvtx_timers_or_rebind)
     if os.environ.get("SYNCOPATE_DEVICE_PROBE") == "1":
         _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
+    # ★ E21：默认**开启**（这是正确性修复，不是可选优化）。设 =0 可关掉做对照。
+    if os.environ.get("SYNCOPATE_FSDP_DDP_FIX", "1") == "1":
+        _defer_until_imported("torch.distributed.fsdp", _patch_fsdp_degenerate_mesh)
     if os.environ.get("SYNCOPATE_DDP_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_ddp_sync_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
@@ -549,6 +552,53 @@ def _patch_ddp_sync_probe() -> None:
     FSDPEngine._syncopate_ddp_probe = True
     print("[verl-patch] DDP 同步探针已挂上（SYNCOPATE_DDP_PROBE=1）—— "
           "判据：三个 rank 的**梯度范数**若不同 ⇒ 梯度没有 all-reduce", flush=True)
+
+
+# ★★★ E21 修复（2026-08-18）：`fsdp_size=1` 下梯度不同步。
+#
+# 根因链（完整证据见 docs/infra_exp/E21-ddp-not-syncing.md 与 docs/upstream/）：
+#   verl:    fsdp_size=1, world_size=3 ⇒ mesh (3,1) ["ddp","fsdp"] ⇒ 二维 ⇒ HYBRID_SHARD
+#   PyTorch: 见分片维只有 1 个 rank ⇒ 降级成 NO_SHARD（只打一行 UserWarning）
+#            ⇒ 而梯度归约走的是**那个大小为 1 的组** ⇒ 空操作
+#   ⇒ 三个 rank 各训各的 LoRA，训练照常跑完、所有指标正常。**静默失效。**
+#
+# 修法（脱离 verl 的最小复现已验证，见 scripts/repro_fsdp_hybrid_nosync.py）：
+#   退化网格下改用 `NO_SHARD` + **默认进程组**（不传 device_mesh）
+#   ⇒ 实测与纯 DDP 打出**逐位相同**的梯度。
+#
+# ⚠️ 为什么拦 FSDP 的构造而不是改 verl 的 `create_device_mesh`：
+#   `self.device_mesh` 在 verl 里还被别处用（fsdp2 路径、state_dict 加载）
+#   ⇒ 把它整个置空风险大。这里**只在"HYBRID_SHARD + 分片维为 1"这一种情况下**改写两个入参，
+#   其余一律原样放行 —— 改动面最小。
+def _patch_fsdp_degenerate_mesh() -> None:
+    import torch.distributed.fsdp as tfsdp
+    from torch.distributed.fsdp import ShardingStrategy
+
+    cls = tfsdp.FullyShardedDataParallel
+    if getattr(cls, "_syncopate_degenerate_fix", False):
+        return
+    orig_init = cls.__init__
+    hybrid = {ShardingStrategy.HYBRID_SHARD, getattr(ShardingStrategy, "_HYBRID_SHARD_ZERO2", None)}
+
+    def patched(self, module=None, *args, **kwargs):
+        mesh = kwargs.get("device_mesh")
+        strat = kwargs.get("sharding_strategy")
+        if mesh is not None and strat in hybrid:
+            shard_dim = None
+            try:
+                shard_dim = mesh.size(mesh.ndim - 1)       # 最后一维是 "fsdp"（分片维）
+            except Exception:                               # noqa: BLE001
+                pass
+            if shard_dim == 1:
+                kwargs["sharding_strategy"] = ShardingStrategy.NO_SHARD
+                kwargs["device_mesh"] = None
+                print(f"[verl-patch] ★ E21 修复生效：检测到退化网格（{strat}，分片维=1）"
+                      f" ⇒ 改用 NO_SHARD + 默认进程组，梯度才会真正 all-reduce", flush=True)
+        return orig_init(self, module, *args, **kwargs)
+
+    cls.__init__ = patched
+    cls._syncopate_degenerate_fix = True
+    print("[verl-patch] E21 退化网格修复已装（SYNCOPATE_FSDP_DDP_FIX=1）", flush=True)
 
 
 def _patch_pool_sampler() -> None:

@@ -74,6 +74,12 @@ def run_variant(rank: int, world: int, tag: str, model: nn.Module) -> tuple[str,
 
 
 def worker(rank: int, world: int) -> None:
+    # ★ REPRO_APPLY_FIX=1 时在**子进程内**装上 E21 的修复补丁，
+    #   于是同一个脚本既是复现、又是验证（spawn 的子进程不会继承父进程打的补丁）
+    if os.environ.get("REPRO_APPLY_FIX") == "1":
+        import sys; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from syncopate.train.verl_patches import _patch_fsdp_degenerate_mesh
+        _patch_fsdp_degenerate_mesh()
     os.environ["MASTER_ADDR"] = "127.0.0.1"; os.environ["MASTER_PORT"] = "30021"
     torch.cuda.set_device(rank)
     dist.init_process_group("nccl", rank=rank, world_size=world)
