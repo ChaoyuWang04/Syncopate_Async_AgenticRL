@@ -6,6 +6,14 @@
 
 ---
 
+> 🆕🆕 **2026-08-18 检索到的情报 —— 论点要按它改写：**
+> [verl#2048 「[Async VLLM] LoRA support?」](https://github.com/verl-project/verl/issues/2048) 明写
+> 「LoRA 只支持同步的 `vLLMRollout`，async worker 会**抛出错误**」，**issue 关成 `not planned`**。
+> ⇒ 因此本文的论点**不是**「你们有个 bug」，而是：
+> **「一个已知不支持的组合，失败方式从『明确报错』退化成了『静默推一份冻结基座』。」**
+> 静默损失的是使用者两个月的实验；报错只损失一次启动。
+> 同族：[verl#3654](https://github.com/verl-project/verl/issues/3654) · [verl#3882](https://github.com/volcengine/verl/issues/3882)
+
 ## 0 · 一句话
 
 **在 disaggregated 训练（`fully_async` / `one_step_off`，即 `checkpoint_engine.backend != "naive"`）
@@ -202,9 +210,21 @@ if effective_mode != "naive":
     self.base_sync_done = True
     return
 ```
-⚠️ 需要 `CheckpointEngine.send_weights` 能带上 `peft_config` 并让 rollout 侧按 adapter 装载
-—— 这一步在 naive 路径上已经实现（`rollout.update_weights(..., peft_config=..., base_sync_done=...)`），
-disaggregated 路径缺的是把它接上。
+✅ **🆕 可行性已查实：两端的能力都在，缺的只是中间传参。**
+
+```
+trainer 侧   get_per_tensor_param(base_sync_done=True) ⇒ 直接吐 LoRA 张量 + peft_config   ✅ 有
+🔴 断点      CheckpointEngineWorker.update_weights(global_steps)   ← 签名里没有 peft_config
+             （base.py:323，只 receive_weights() 后原样交给 server_adapter）
+rollout 侧   vllm_rollout.update_weights(..., **kwargs) ⇒ update_weights_from_ipc(peft_config=…)
+             ⇒ _update_weights ⇒ **TensorLoRARequest(lora_tensors=weights) + add_lora**    ✅ 有
+             （vllm_rollout/utils.py:262 —— **能直接从张量装 LoRA，不需要文件路径**，
+               colocate 每次同步都在用它）
+```
+
+⇒ **所以这不是一个架构性的缺口，是一段没接上的管子。**
+⇒ 附带收益也很大：载荷会从 **8,414 MiB 掉到 ~132 MiB（64×）** ——
+目前每次同步都在搬一份**完全不变的 8.4 GB 冻结基座**。
 
 **② 如果这条路径设计上就要求 `lora.merge=True`，那就应该硬失败**
 

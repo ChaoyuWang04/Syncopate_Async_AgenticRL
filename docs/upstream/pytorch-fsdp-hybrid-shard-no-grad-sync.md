@@ -6,6 +6,13 @@
 
 ---
 
+> 🆕🆕 **2026-08-18 检索到的关键情报 —— 这份文档的优先级因此提上来：**
+> [PyTorch 论坛 #220486](https://discuss.pytorch.org/t/potential-bug-with-hybrid-shard-and-n-1-device-mesh-falling-back-to-no-shard/220486)
+> 已有人报告**完全相同**的现象（`(n,1)` mesh 回退 `NO_SHARD` ⇒ 梯度不跨复制维归约 ⇒ 一步后参数发散），
+> 维护者 **H-Huang 回复「looks like a bug」，请对方到 GitHub 提 issue 并附可复现脚本 —— 而那个 issue 一直没被提。**
+> ⇒ **我们手上正好就是他们要的那个脚本**（纯 PyTorch · 3 卡 · 带 DDP 对照组 · 兼作修复验证）。
+> 同族：[pytorch#90050](https://github.com/pytorch/pytorch/issues/90050) · [pytorch#152710](https://github.com/pytorch/pytorch/issues/152710)
+
 ## 0 · 一句话
 
 **当 `HYBRID_SHARD` 的分片维大小为 1 时，FSDP 会自动降级成 `NO_SHARD`（只打一行 `UserWarning`），

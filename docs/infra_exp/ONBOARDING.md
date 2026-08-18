@@ -148,7 +148,11 @@ SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377708 \
    「与磁盘起点相同」这句结论 —— 一次是判据根本没绑上（`‖W‖=None`），
    一次是结论**硬编码在文案里、压根没做比较**。
    ⇒ **判据必须真的比；比不了就说比不了，不许打结论。**
-14. 🆕 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
+14. 🆕🔴🔴 **撞到"框架行为不符合预期"时，先花五分钟搜上游 issue / 论坛。**
+   今天两个基石级 bug **都能搜到**：E21 有人在 PyTorch 论坛报过（维护者说 looks like a bug、
+   要复现脚本，至今没人提）；E22 的限制在 `verl#2048` 里明写着（"LoRA 只支持同步 rollout"，
+   关成 not planned）。⇒ **成本几乎为零，这次能省下的是两个月。**
+15. 🆕 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
    下产生 **72 GB**（最终 `.nsys-rep` 只有 386 MB —— **差两个数量级**）。
    ⇒ 采样前先看 `df`；夜间无人值守时挂上 `scripts/disk_guard.sh`（低于 15 G 就杀 nsys 保队列）。
    ⚠️ 导出的 `.sqlite` 也有 **8.8 GB**，分析完就删。

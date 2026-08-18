@@ -16,7 +16,7 @@
 | **判据** | 推出去的 `q_proj.base_layer.weight` `‖W‖=75.377708`，与**磁盘上起点模型逐位相同**；4 次独立短跑、每跑 2 次同步、全部一致 |
 | **后果** | **rollout 永远用起点策略采样** ⇒ 整个 RL 回路是断开的：策略梯度算的是"当前策略"，数据来自"起点策略"，而这个偏离**随训练单调增大** |
 | **根因** | `engine_workers.py:698` 在 disaggregated 分支上**只调一次** `get_per_tensor_param()` 且不传参 ⇒ `base_sync_done=False` ⇒ `collect_lora_params` **显式跳过所有 `lora_` 张量**。colocate 那条路**调两次**，是对的 |
-| **止血** | `model.lora.merge=True`（`launch_rl --lora-merge`）⇒ 实测推出去的权重开始随训练变化。⚠️ **但它是 bf16 合并，有数值损失，见 §6** |
+| **止血** | ⛔ `model.lora.merge=True` **已被 R0-b 否掉**（bf16 合并毁掉 adapter 一半的作用，§6.1）⇒ 正确性实验改走 **colocate**（§6.2）；异步线可自己补 adapter 推送（**§6.3：两端能力都在，缺中间传参，估 30–60 行**） |
 | **不受影响** | **colocate 全部正确**；所有吞吐 / 通信 / kernel 类测量不受影响 |
 
 ⇒ ⛔ **我们从来没有跑过一次正确的异步 RL。** 所有 fully_async 的**学习类**结论作废。
@@ -172,6 +172,31 @@ E22    LoRA 没推过去     ⇒ **数据全部来自起点策略 π₀，且偏
 ⚠️ **公道话**：`merge=False` 在 colocate 下是**正确且更优**的（推 132 MB adapter 而不是 8.4 GB 全量）。
 所以这个默认值本身不能说"写错了"——**错在同一个默认值在另一条路径上是灾难，而框架不检查。**
 
+### 5.1.1 🆕 上游情报（2026-08-18 检索）：**verl 知道这条路不支持 LoRA，而且当年是会报错的**
+
+[verl#2048 「[Async VLLM] LoRA support?」](https://github.com/verl-project/verl/issues/2048)：
+
+> LoRA 目前**只支持同步的 `vLLMRollout`**；async worker 的 `inference_engine` 没有
+> `llm_engine` 属性，**因此会抛出错误**。
+
+**该 issue 被关成 `not planned`。**
+
+⇒ ★ **这把我们的论点整个改写了**，而且改硬了：
+
+```
+不是「你们有一个 bug」
+而是「你们**知道**异步这条路不支持 LoRA，早期版本会**明确报错**；
+      而在现在的 CheckpointEngine 架构里，它**不报错了** —— 改成静默推一份冻结基座」
+⇒ **失败模式从"响的"退化成了"哑的"。**
+```
+
+**静默地把一个已知不支持的组合跑下去，比直接报错坏得多** —— 报错只损失一次启动，
+静默损失的是两个月的实验和一整条结论线。
+
+同族的脆弱迹象（都指向 async+LoRA 这条路一直没人走顺）：
+[verl#3654](https://github.com/verl-project/verl/issues/3654)（async rollout + LoRA 加载时崩）·
+[verl#3882](https://github.com/volcengine/verl/issues/3882)（LoRA 占位路径 `FileNotFoundError`）。
+
 ### 5.2 我们的份
 
 **① 我们量过这条路径的"耗时"，但从没量过它的"内容"。**
@@ -186,6 +211,11 @@ E21 之后我们自己列的「🔴 权重同步的内容」，主线也提成 I
 
 **③ 一个可以更早发现的旁证被忽略了**：`--enable_lora` 的 vLLM 起着，
 而我们从没问过"它的 adapter 槽位里有东西吗"。
+
+**④ 🆕 这个限制是**公开的**，我们从没搜过。**
+`verl#2048` 明写「LoRA 只支持同步 rollout」，**两个月前就能搜到**。
+⇒ **纪律补一条：撞到"框架行为不符合预期"时，先花五分钟搜上游 issue/论坛。**
+成本几乎为零 —— 而这次它能省下的是两个月。（E21 那条同样：PyTorch 论坛上有人报过。）
 
 ---
 
@@ -248,6 +278,52 @@ bf16 合并造成的偏移              中位 **1.717e-02**   ← **正好是 a
 根本不做 bf16 合并。**这也让上游 issue 的论点更硬：`merge=True` 不只是慢，它在数值上是有损的。**
 
 ---
+
+## 6.3 ★★ 那 LoRA + 训推分离到底做不做得了？—— **做得到，缺的只是中间那段传参**
+
+这是最要紧的一问，答案不是"不行"，也不是"现在就行"：
+
+```
+两端的能力**都已经在了**，断的是中间：
+
+trainer 侧   get_per_tensor_param(base_sync_done=True)  ⇒ 直接吐 LoRA 张量 + peft_config   ✅ 有
+transport    send_weights 是流式 (name, tensor)，LoRA 只有 ~132 MB                          ✅ 能过
+🔴 断点      CheckpointEngineWorker.update_weights(global_steps)  ← **签名里没有 peft_config**
+             （base.py:323）它只会 receive_weights() 然后原样交给 server_adapter
+rollout 侧   vllm_rollout.update_weights(..., **kwargs) ⇒ update_weights_from_ipc(peft_config=…)
+             ⇒ _update_weights ⇒ **TensorLoRARequest(lora_tensors=weights) + add_lora**     ✅ 有
+             （`vllm_rollout/utils.py:262`，**能直接从张量装 LoRA，不需要文件路径**）
+```
+
+⇒ ★ **vLLM 那侧根本不缺能力** —— `--enable_lora` 起着、`PunicaWrapperGPU` 建好了槽位、
+从张量装 adapter 的代码就在那儿，**colocate 每次同步都在用它**。
+⇒ **缺的只是让 `peft_config` / `base_sync_done` 沿 CheckpointEngine 这条管子传下去，
+并且让 trainer 侧首次推基座、之后推 adapter。**
+
+### 6.3.1 自己补这条路的成本与风险（供决策）
+
+| | |
+|---|---|
+| **改动面** | 三处：trainer 侧调用参数 · `CheckpointEngineManager/Worker` 的传参 · 首次/后续的 `base_sync_done` 状态 |
+| **量级** | 估 **30–60 行**（在 `verl_patches` 里，不改 site-packages） |
+| **主要风险** | ① `peft_config` 要跨 Ray actor 序列化（colocate 是同进程，没验过跨进程）② `@register` 装饰器包着的 worker 方法改签名要小心（E12 §262 踩过：包装丢了装饰器导致组级方法直接消失） |
+| **验证** | 现成的：`SYNCOPATE_SYNC_PAYLOAD=1` 应当看到 **含 `lora_` 的张量数 > 0、载荷从 8.4 GB 掉到 ~132 MB**；再加 `kl` 每次同步回落到地板 |
+| **附带收益** | 载荷 8,414 MiB → ~132 MiB（**64×**）⇒ 权重同步的时间构成整个重来（E12 要重写的那部分正好一起做了） |
+
+### 6.3.2 ⇒ 三条路，按可用时间排
+
+```
+① 现在就能跑正确实验     **colocate**（推 adapter、不合并）—— 吞吐差约 1.9×，但**是对的**
+② 一天左右的工作         **自己补 adapter 推送**（上面这条）⇒ 异步线的正确性实验解锁
+③ 长期                   **上游修**（我们的 issue 建议的方案①）
+```
+
+⛔ **`--lora-merge` 不在这三条里** —— R0-b 已证明它注入的失配与被研究对象同量级（§6.1）。
+
+★ **为什么建议做 ②**：异步 RL 是本项目 infra 线的**第二目标本身**，Track B 的整条叙事
+（"agentic RL 训练系统的框架级改造"）都建立在"能正确地跑异步"上。
+**只有 colocate 能跑正确实验 = 这条线的兑现物做不出来。**
+⚠️ 但**先拿一份 colocate 的干净基线**（R0-c），否则补完了也没有正确的东西可以对照。
 
 ## 7 · 已落地
 

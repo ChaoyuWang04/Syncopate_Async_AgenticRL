@@ -188,7 +188,7 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 | **R0-a** | ✅ **已做**（`r0a_clean`，24 步）：三条判据同时过 —— 载荷层 `‖W‖` 逐次变化且 ≠ 起点 · `kl` 呈**锯齿**并回落到地板（0.00027/0.00034）· 三 rank 梯度逐位相同 | E21+E22 | ✅ 修复在真实训练里连续成立 |
 | **R0-b** | ✅ **已做，结果 🔴**：bf16 合并造成的 logprob 偏移**中位 1.717e-02 = adapter 自身作用的 50%**，是引擎地板的 **50×**（`scripts/probe_merge_logprob_fidelity.py`） | E22 §6.1 | 🔴 **`--lora-merge` 不能当正式方案** |
 | **R0-c** | 🆕 **正确性线的重跑改走 `colocate`**（它推 adapter、不做 bf16 合并 ⇒ 目前唯一能正确交付策略的模式）。**免费验证**：colocate 下陈旧度恒为 0 ⇒ `kl` 应当每步贴地板 | E22 §6.2 | 🔴 **待跑，是 R1 的新前提** |
-| **R0-d** | ⬜ **异步线**要等上游修法①（adapter 单独推）。⚠️ 自己实现不是小改动：`CheckpointEngineWorker.update_weights` 那侧**没有 adapter 装载入口** | E22 §6.2 | ⬜ 待定 |
+| **R0-d** | 🆕 **异步线：自己补 adapter 推送这条路 —— 已查实可行**。vLLM 那侧的能力全在（`TensorLoRARequest`+`add_lora`，能直接从张量装 LoRA，colocate 每次同步都在用），断点只有一处：`CheckpointEngineWorker.update_weights` 签名里没有 `peft_config`。估 **30–60 行**（在 `verl_patches` 里）。附带把载荷从 8,414 MiB 降到 ~132 MiB（**64×**） | E22 §6.3 | 🟠 **建议做**，但排在 R0-c 之后（先要有正确的对照） |
 | **R1** | **E20 全套**（序列级 vs token 级 IS、ESS、`chi2`、`log_ppl_diff`、`grad_norm`） | **E21+E22** | 🔴 **全部作废**。⚠️ 比 E21 时的判断更严：`log_ppl_diff` / ESS 量的是「当前策略 vs π₀」，**连比值都不能用** |
 | **R2** | **B10 · 陈旧度阈值** / **B19 · `sync_every` 的精度侧** | **E22** | 🔴 **彻底作废**：陈旧度这个旋钮**当时没接到任何东西**（B10 的"6× 陈旧轨迹、ESS 不动"就是证据） |
 | **R3** | **B3 · 三模式同尺子**的**学习类**对比 | **E22** | 🔴 **作废**：colocate 是对的、fully_async 是坏的 ⇒ 跨模式的学习对比是"好的 vs 坏的"。**吞吐对比保留** |

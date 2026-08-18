@@ -168,6 +168,30 @@ FSDP(module, sharding_strategy=ShardingStrategy.NO_SHARD, use_orig_params=True, 
 ```
 ⇒ 实测与纯 DDP **逐位相同**。
 
+### 4.5.2.1 🆕 上游情报（2026-08-18 检索）：**已经有人报过，而且维护者点名要我们手上这个东西**
+
+[PyTorch 论坛 #220486](https://discuss.pytorch.org/t/potential-bug-with-hybrid-shard-and-n-1-device-mesh-falling-back-to-no-shard/220486)
+描述的现象与本文**完全一致**：`(n,1)` mesh 回退成 `NO_SHARD` 后 world size 被当成 1 ⇒
+**梯度不跨复制维归约，一步之后参数就发散**；报告者也做了同样的对照
+（纯 DDP / FSDP+`NO_SHARD` 都正常，只有 `HYBRID_SHARD` 发散）。
+
+```
+维护者 H-Huang 回复：「这看起来是个 bug」，请报告者到 GitHub 提 issue 并**附可复现脚本**
+⇒ 而那个 issue **一直没有被提**。
+```
+
+⇒ ★ **我们手上正好就是他们要的那个东西**：`scripts/repro_fsdp_hybrid_nosync.py`
+（纯 PyTorch · 3 卡 · 带 DDP 对照组 · `REPRO_APPLY_FIX=1` 还能兼作修复验证）。
+⇒ **这把上游那份文档从"可提可不提"变成了"该提"** —— 是一个维护者明确要过、且一直空着的位置。
+
+同族的已有 issue（都指向"size-1 组上的策略退化"这一类）：
+[pytorch#90050](https://github.com/pytorch/pytorch/issues/90050)（`ShardingStrategy` 在传入 size-1 进程组时被忽略）·
+[pytorch#152710](https://github.com/pytorch/pytorch/issues/152710)。
+
+⚠️ **这条同时是对我们自己的一记**：这个现象**两个月前就能搜到**。
+⇒ 纪律补一条：**撞到"框架行为不符合预期"时，先花五分钟搜上游 issue/论坛** ——
+成本几乎为零，而它这次能省下的是两个月。
+
 ### 4.5.3 这能不能提上游
 
 **两边都可以提，而且我倾向都提**：
