@@ -21,7 +21,11 @@
 #    结果第二批全部 OOM 挂掉。⇒ 本脚本跑完才写 `<out>.done` 标记，等就等那个。
 #    ★ 这是「判据看起来完整、其实量的不是那件事」的又一例。
 set -euo pipefail
-ADAPTER="${1:?用法: eval_parallel.sh <adapter> <out.json> [卡数]}"
+# ⚠️ 2026-08-18 修（infra）：原来是 `${1:?}`，而 `:?` 把**空字符串**也当成"没给"
+#    ⇒ 文档里那条评基座的命令 `eval_parallel.sh "" out.json` **直接报错跑不通**。
+#    改成 `${1?}`：**参数必须存在**（保住"别忘了想清楚 adapter"这个用意），
+#    但**允许显式给空** = 不贴 adapter，只评基座本身。
+ADAPTER="${1?用法: eval_parallel.sh <adapter> <out.json> [卡数]；不贴 adapter 就显式传空串 \"\"}"
 OUT="${2:?}"
 N="${3:-4}"
 BATCH="${BATCH:-data/batches/v13}"
