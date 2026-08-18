@@ -36,6 +36,63 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 
 
+
+def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_resid: float = 0.5) -> None:
+    """判据：合并后的权重 − 基座权重 ≈ adapter 的 ΔW_eff。
+
+    量两件事（**必须分开看**）：
+        保真残差 = ‖kept − Δ‖ / ‖Δ‖      ← 判据。方向对不对
+        幅度比   = ‖kept‖ / ‖Δ‖          ← 参考。只看它会得出错误的安心结论
+    """
+    import glob as _glob
+
+    import torch
+    from safetensors import safe_open
+
+    cfg = json.loads(Path(adapter_path, "adapter_config.json").read_text())
+    scale = cfg["lora_alpha"] / cfg["r"]
+    files = sorted(_glob.glob(str(Path(adapter_path) / "*.safetensors")))
+    if not files:
+        print("[合并] ⚠️ adapter 不是 safetensors，跳过合并校验")
+        return
+    sd = merged_model.state_dict()
+    with safe_open(files[0], framework="pt") as fh:
+        ka = next((k for k in sorted(fh.keys()) if k.endswith("lora_A.weight")), None)
+        if ka is None:
+            print("[合并] ⚠️ adapter 里没有 lora_A，跳过合并校验")
+            return
+        A = fh.get_tensor(ka).float()
+        B = fh.get_tensor(ka.replace("lora_A", "lora_B")).float()
+    delta = scale * (B @ A)
+    name = ka.replace("base_model.model.", "").replace(".lora_A.weight", ".weight")
+    if name not in sd:
+        print(f"[合并] ⚠️ 权重里找不到 {name}，跳过合并校验")
+        return
+    merged_w = sd[name].float().cpu()
+    base_w = None
+    for f in sorted(Path(base_path).glob("*.safetensors")):
+        with safe_open(f, framework="pt") as fh:
+            if name in fh.keys():
+                base_w = fh.get_tensor(name).float()
+                break
+    if base_w is None:
+        print(f"[合并] ⚠️ 基座里找不到 {name}，跳过合并校验")
+        return
+    kept = merged_w - base_w
+    if kept.norm().item() == 0.0:
+        raise SystemExit(f"🔴 合并后 {name} 与基座**逐位相同** ⇒ 增量根本没进权重。")
+    resid = ((kept - delta).norm() / delta.norm()).item()
+    mag = (kept.norm() / delta.norm()).item()
+    rel = (delta.norm() / base_w.norm()).item()
+    print(f"[合并] 校验 {name}: Δ 占基座 {rel * 100:.4f}% · 保真残差 {resid:.2f} · 幅度比 {mag:.2f}")
+    if resid > max_resid:
+        raise SystemExit(
+            f"🔴 保真残差 {resid:.2f} > {max_resid} ⇒ 增量太小，被 bf16 存储的舍入噪声淹没了。\n"
+            "   **不要合并这一级的增量**，保持 adapter 形态；\n"
+            "   （RL 一轮的增量典型是 0.05% 量级，残差 ~0.87 —— 见 docs/syncopate/18 §3.3）"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="把 LoRA 合并进基座")
     parser.add_argument("--base", default="models/Qwen3-4B")
@@ -57,6 +114,13 @@ def main(argv: list[str] | None = None) -> int:
     model = AutoModelForCausalLM.from_pretrained(base_path, dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, adapter_path)
     model = model.merge_and_unload()
+
+    # ★★ 2026-08-18：合并之后必须验一遍「增量真的落进权重了」。
+    # 实测过的坑：**损失来自存储精度，不是累加精度** —— 在 fp32 里相加再存 bf16 一样丢。
+    #   Δ 占基座 0.42%（SFT 一遍）⇒ 保真残差 0.36，可用
+    #   Δ 占基座 0.056%（RL 一轮）⇒ 保真残差 0.87，**合并等于毁掉它**
+    # ⇒ 这个断言不是防打字错，是防「小增量被 bf16 静默吃掉」。
+    _assert_merge_landed(base_path, adapter_path, model)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir, safe_serialization=True)

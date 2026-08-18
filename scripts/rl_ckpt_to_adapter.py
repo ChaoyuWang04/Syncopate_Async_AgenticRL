@@ -23,6 +23,8 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 import torch
+
+from syncopate.train.ckpt_guards import assert_ranks_identical
 from safetensors.torch import save_file
 
 def main() -> int:
@@ -40,14 +42,13 @@ def main() -> int:
     lora = {k.replace(".default.weight", ".weight"): v.contiguous()
             for k, v in sd.items() if "lora_" in k}
     assert lora, "这个 ckpt 里没有 lora_ 键 —— 是全参微调？"
-    # ⚠️ DDP 下每个 rank 是完整副本；分片下这个假设不成立
-    if ws > 1:
-        n0 = len(lora)
-        sd1 = torch.load(shards[1], map_location="cpu", weights_only=False)
-        same = all(torch.equal(sd[k], sd1[k]) for k in list(sd) if "lora_" in k)
-        assert same, ("★ rank_0 与 rank_1 的 LoRA 权重不同 ⇒ 这是**分片**存的，"
-                      "只读 rank_0 会漏权重。需要改成合并所有 rank。")
-        print(f"  ✅ 校验：{n0} 个 LoRA 张量在 rank_0 / rank_1 上逐位相同（DDP 副本）")
+    # ⚠️ DDP 下每个 rank 是完整副本；分片 / 梯度不同步时这个假设都不成立。
+    # ★★ 就是这一句在 2026-08-18 炸出了 E21（三个 rank 各训各的）。
+    #    它现在提成了共用函数 —— 因为当时另外两个读 ckpt 的脚本都没有这句话，
+    #    而"保护性逻辑只写在一条路径上"正是本项目记过的失效形状。
+    n_checked = assert_ranks_identical(a.actor_dir, sample=len(lora))
+    if n_checked:
+        print(f"  ✅ 校验：{n_checked} 个 LoRA 张量在 rank_0 / rank_1 上逐位相同（DDP 副本）")
 
     tm = sorted({k.split(".")[-4] for k in lora if k.endswith("lora_A.weight")})
     cfg = {"task_type": "CAUSAL_LM", "peft_type": "LORA", "auto_mapping": None,
