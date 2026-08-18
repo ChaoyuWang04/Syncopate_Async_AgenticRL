@@ -353,6 +353,15 @@ def setup_worker() -> None:
         _defer_until_imported("verl.single_controller.base.worker", _patch_device_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
+    # ⛔⛔ 2026-08-18 修：这两行原来**嵌在 `_patch_grad_probe()` 的函数体末尾** ——
+    #    也就是只有同时开 `SYNCOPATE_GRAD_PROBE=1` 才会装上分步计时。
+    #    后果：B15 那一跑设了 `SYNCOPATE_SYNC_TIMING=1`，**一行判据都没打**，
+    #    而日志里也没有任何东西说它没生效 ⇒ 白跑一次（8 分钟 GPU）。
+    #    ★ 又一次「机制在但没接上」，这次是**缩进层级**造成的：
+    #      代码在、环境变量在、判据行也在，只是那段代码活在另一个开关底下。
+    #    ⇒ 判据行**必须能独立触发**，不能挂在别的开关的成功路径上。
+    if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
+        _defer_until_imported("verl.checkpoint_engine.base", _patch_sync_step_timing)
 
 
 # ★★★ NVTX 阶段标注（E01 / A5 的门槛，2026-08-17 加）
@@ -488,8 +497,6 @@ def _patch_grad_probe() -> None:
 
     FSDPEngine.optimizer_step = probed
     print("[verl-patch] grad-probe 已挂上", flush=True)
-    if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
-        _patch_sync_step_timing()
 
 
 def _defer_until_imported(module_name: str, patch: "callable") -> None:

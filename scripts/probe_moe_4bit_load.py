@@ -86,8 +86,24 @@ def main() -> int:
 
     if args.stage == "online":
         print(f"# ① 在线 4bit 量化（复现 A1 的碎片）")
-        model = AutoModelForCausalLM.from_pretrained(
-            args.model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0})
+        # ⚠️ 2026-08-18：**OOM 本身就是要观测的结果**，不是异常。
+        #    第一版没接住，探针崩掉 ⇒ 后两个阶段一起没跑（白等）。
+        #    ⇒ 凡是「预期可能失败」的探针，失败路径要**记录并继续**，不能让它把整批带走。
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                args.model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0})
+        except torch.OutOfMemoryError as exc:                       # noqa: PERF203
+            out["oom"] = str(exc)[:400]
+            out["after_load"] = mem()
+            out["verdict"] = ("🔴 **P1 成立且更强**：不只是碎片，直接 OOM —— "
+                              f"已分配 {out['after_load']['allocated_gb']:.2f} GB / "
+                              f"碎片 {out['after_load']['fragment_gb']:.2f} GB")
+            print(f"  ⇒ {out['verdict']}")
+            if args.json:
+                args.json.parent.mkdir(parents=True, exist_ok=True)
+                args.json.write_text(json.dumps(out, indent=2, ensure_ascii=False))
+                print(f"  → {args.json}")
+            return 0
         out["after_load"] = report("在线量化后", t0)
         out["verdict"] = ("🔴 复现了碎片（>3 GB）" if out["after_load"]["fragment_gb"] > 3
                           else "⚠️ 没复现碎片 —— A1 的现象可能依赖别的条件，先别改 A2 的设计")
