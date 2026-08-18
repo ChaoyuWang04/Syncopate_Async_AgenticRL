@@ -29,3 +29,6 @@ reference/
 tmp/
 *.log
 .ipynb_checkpoints/
+
+# nsys profile：单个 300MB+，超 GitHub 100MB 硬限，push 会被 pre-receive 拒
+logs/nsys/
