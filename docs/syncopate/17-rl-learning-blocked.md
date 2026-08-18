@@ -1,5 +1,10 @@
 # Syncopate · 17 — RL 学不动：ESS / lr / 位移预算的联合方案
 
+> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
+> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
+> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
+> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
+
 > 建于 **2026-08-18**，**同时服务主线与 infra 线**。
 > infra 侧的诊断与实验编号沿用 [`../infra_exp/E20-rl-not-learning.md`](../infra_exp/E20-rl-not-learning.md)。
 > **本文不重复 E20 已有的证据**，只做四件事：

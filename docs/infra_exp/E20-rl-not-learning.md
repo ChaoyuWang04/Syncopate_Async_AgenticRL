@@ -1,5 +1,10 @@
 # E20 · RL 学不动：更新量、ESS 崩塌、与**序列级 IS**
 
+> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
+> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
+> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
+> **引用之前必须先读 [`21-invalidated-numbers.md`](../syncopate/21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
+
 > ⛔⛔⛔ **2026-08-18 作废通告（[`E22`](E22-lora-never-synced.md)）**：本报告的全部实测都跑在
 > `fully_async` 上，而实测证明**那条路径从没把 LoRA 推给 rollout** —— 生成数据的策略
 > 恒为起点 π₀。⇒ **ESS / `chi2` / `log_ppl_diff` / 陈旧度归因全部作废，连"同批比值"都不能用**

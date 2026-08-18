@@ -1,5 +1,10 @@
 # Syncopate · 18 — 管线前提探针审计（E21 之后的同族排查）
 
+> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
+> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
+> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
+> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
+
 > 建于 **2026-08-18**，起因是 [`../infra_exp/E21-ddp-not-syncing.md`](../infra_exp/E21-ddp-not-syncing.md)。
 >
 > **E21 教给我们的不是"FSDP 有个坑"，而是一个方法**：
@@ -112,15 +117,33 @@ _audit/v13_rl_s110.json → "models/Qwen3-4B-sft-v13-e1 + models/Qwen3-4B-rl-v13
 
 ⇒ **这是第七形态的教科书复刻**：*一个默认值/路径看起来正常，实际指向了另一件事，而且不报错*。
 
-### 3.3 修法（两件，都很小）
+### 3.3 ⛔ 我在初稿里写错了一条，实测更正
+
+> **原写法**：「必须在 **fp32** 下相加再转回 bf16，否则大部分元素会被舍回原值。」
+> **实测**：**损失来自存储精度，不是累加精度** —— 在 fp32 里相加再存 bf16，结果一样。
+> 探针 `check_pipeline_invariants.py --only merge`（`(W+Δ).to(bf16)`，即 fp32 累加 + bf16 存储）：
+>
+> ```
+> 层 layers.0.self_attn.k_proj      保真残差 = ‖存下来的增量 − Δ‖ / ‖Δ‖
+> SFT  Δ 占基座 0.4233%   →  残差 0.36   幅度比 1.04      可用
+> RL   Δ 占基座 0.0563%   →  残差 0.87   幅度比 0.68   🔴 方向被舍入噪声打乱
+> ```
+> ⚠️ **两个数必须分开看**：RL 那档幅度比 0.68「看着还行」，保真残差却是 0.87 ——
+> **幅度留住了，方向没了。只报幅度比会得出错误的安心结论。**
+>
+> **⇒ 真正的结论**：**RL 一轮的增量（0.05% 量级）根本不该合并进 bf16 权重。**
+> 幸好 verl 的 merger 本来就不合并 —— 那个"看起来像 bug"的行为**实际上救了我们**。
+
+### 3.4 已落地的修法
 
 ```
-① 补一个真正的合并入口：把 lora_adapter 用 peft merge_and_unload 折进主权重，
-   另存 models/<name>-merged/。⚠️ 注意 bf16：ΔW 的相对量级只有 5.5e-4，
-   而 bf16 的相对分辨率约 3.9e-3 ⇒ **必须在 fp32 下相加再转回 bf16**，否则大部分元素会被舍回原值。
-   ★ 这一条本身就要配一条断言：合并后 ‖W_merged − W_base‖ 必须 > 0。
-② launch_rl 起手加一条前提检查：若 --model 指向的目录里存在 lora_adapter/，
-   **直接报错**并提示「这不是合并后的模型」。给错宁可报错。
+✅ launch_rl 起手断言：--model 目录里有 lora_adapter/ ⇒ 直接 SystemExit
+   实弹验过：指向 s110 被拦下、指向正确的 SFT 模型放行
+✅ merge_adapter 合并后校验：‖merged−base‖ 必须 >0，且保真残差 ≤0.5，否则报错并提示
+   「不要合并这一级的增量，保持 adapter 形态」
+✅ scripts/check_pipeline_invariants.py：把上面这些做成可重复跑的检查（见 §11）
+⬜ 「下一轮 RL 怎么接着上一轮」仍未解决 —— 合并这条路被 bf16 堵死了，
+   而 verl 用 LoRA 时 reference = 关掉 adapter = 基座。**这是一个待设计的问题，不是一个 bug。**
 ```
 
 ---
@@ -244,3 +267,86 @@ A5  eval 审计写盘时：assert case 集合 == split 的 eval_cases          �
 | `17-rl-learning-blocked` §3 的位移算术 | 位移是 rank_0 一份的位移 ⇒ 「lr 占 10×、次数占 1.9×」的**排序**不变，**倍数要重算** |
 | `05-handoff §1` 的 v13 三桶数字 | 过期（343 不是 278），以 `data/splits/v13` 为准 |
 | 历史 ckpt 能否事后修复 | ❌ `global_step_5..25` 的 rank1/2 已删（§5），只有 `global_step_27` 完整 |
+
+
+---
+
+## 11 · 2026-08-18 续：E21 修复后的复查 + 又一条真发现
+
+### 11.1 ✅ 独立验证了 infra 的 DDP 修复（不是看日志，是读产物）
+
+infra 给的证据是**日志里的梯度范数逐位相同**。我用另一条独立路径复核 ——
+直接读两次跑存下来的 ckpt，比**全部** 504 个 LoRA 张量 + 优化器状态：
+
+| ckpt | rank0↔1 | rank0↔2 | rank1↔2 | 优化器状态 |
+|---|---|---|---|---|
+| `ddp_probe/global_step_2`（修复前） | 🔴 504/504 不同 | 🔴 504/504 | 🔴 504/504 | 🔴 40/40 不同 |
+| **`ddp_fixed/global_step_2`（修复后）** | ✅ **0/504** | ✅ **0/504** | ✅ **0/504** | ✅ **0/40** |
+
+⇒ **修复成立**，而且比日志证据更强三点：**覆盖三对而不是一对 · 覆盖全部张量而不是抽样 ·
+额外覆盖优化器状态**（Adam 的 `exp_avg_sq` 此前相对差 99%）。
+
+⚠️ **仍然没被验证的两件**（建议加进 E21 §5-4 的重测清单）：
+1. **归约的「口径」对不对** —— 逐位相同只证明了 all-reduce 发生了，**没证明它是按 48 条求平均**
+   （若变成求和，梯度会系统性大 3 倍）。⇒ 判据：**同一份固定数据，1 卡 vs 3 卡，比 `grad_norm`**。
+   ★ 这也顺带回答 infra 自己存疑的那条「修复后梯度大了 450×」。
+2. **ref 模型那一路** —— 补丁只在「HYBRID_SHARD + 分片维=1」时改写入参，
+   要确认 actor 和 ref **两处**都走到了；判据是启动日志里各打一行。
+
+### 11.2 🔴 新发现：**配对比较的两端不是同一个起点模型**
+
+```
+基线审计 v13_sft_e1    跑在  models/Qwen3-4B  +  checkpoints/sft/v13/epoch1     ← adapter 形态
+RL 的实际起点          是    models/Qwen3-4B-sft-v13-e1                          ← 合并形态
+RL 后审计 v13_rl_s110  跑在  models/Qwen3-4B-sft-v13-e1 + .../lora_adapter
+```
+
+而 §3.3 刚量出来：**合并进 bf16 会把 SFT 的增量打乱 36%**
+⇒ **`models/Qwen3-4B-sft-v13-e1` ≠ `裸基座 + SFT adapter`**，两者差着一个 36% 的扰动。
+
+⇒ `05-handoff §2.4` 明写配对比较的前提是「**同一起点模型** + 同一推理引擎」。
+**引擎对上了（都是 vllm），起点没对上。**
+⇒ M7-b 那个 `+0.020` 的配对差值里混进了「SFT 合并损失」这一项，**而它与 RL 无关**，
+方向未知（可能压掉了 RL 的效果，也可能制造了假效果）。
+
+**修法（一次评测，~15 分钟 4 卡，一举两得）**：
+
+```bash
+MODEL=models/Qwen3-4B-sft-v13-e1 bash scripts/eval_parallel.sh "" _audit/v13_sft_e1_merged.json
+#   ① 它就是 RL 真正起点的审计 ⇒ 配对比较的**合法基线**
+#   ② 与 _audit/v13_sft_e1.json 一比，直接量出「合并损失」在任务分上值多少
+```
+★ 判据：若两者差异 < 配对 MDE ⇒ 合并损失在尺子之下，老基线可继续用（但要写明）；
+若 ≥ MDE ⇒ **此前所有 SFT↔RL 的配对结论都要重出。**
+
+### 11.3 已落地的代码（全部实弹验过，425 passed / 1 xfailed）
+
+| 落点 | 内容 |
+|---|---|
+| 🆕 `syncopate/train/ckpt_guards.py` | `assert_ranks_identical()` —— **一份实现，三处共用** |
+| `scripts/rl_ckpt_to_adapter.py` | 原来那句手写断言（就是它炸出 E21）改调共用函数 |
+| `scripts/rl_ckpt_drift.py` | 🆕 加断言（此前**没有**，一直静默只读 rank_0） |
+| `scripts/prune_rl_ckpts.py` | 🆕 加断言 + `next(glob)` → `sorted(glob)[0]`（此前**非确定性**地留一份） |
+| `syncopate/train/launch_rl.py` | 🆕 `--model` 目录里有 `lora_adapter/` ⇒ 报错 |
+| `syncopate/train/merge_adapter.py` | 🆕 合并后校验保真残差，超阈值报错 |
+| 🆕 `scripts/check_pipeline_invariants.py` | 8 条检查，分 4 组（merge / rank / audit / rollout） |
+
+⚠️ **为什么提成共用函数而不是各写一份**：E21 那句断言当时**只写在一个脚本里**，
+另外两个读 ckpt 的路径都没有 —— 这正是本项目记过的
+「保护性逻辑只写在其中一条代码路径上」（`project-mechanism-not-wired` 第四形态）。
+
+### 11.4 分布式使用面的全量盘点（回答「哪些环节可能有 E21 同族问题」）
+
+```
+数据生成 / set_tool_menus / split / build   单进程，无集合通信          ⇒ 免疫
+SFT                                         **单进程单卡手写循环**       ⇒ 免疫（已 grep 确认无 torch.distributed）
+merge_adapter                               单进程                       ⇒ 免疫
+eval_parallel                               4 个**互相独立**的单卡进程，
+                                            按 case 交错分片、事后合并    ⇒ 无集合通信；完整性已验（§7 P5）
+RL rollout（vLLM）                          单卡、TP=1                    ⇒ 无集合通信
+🔴 RL trainer                               **3 rank，唯一有集合通信的地方** ⇒ E21 就在这里
+```
+
+⇒ **整条管线里只有一个地方会得 E21 这种病，就是 RL 的 trainer。**
+⇒ 但这不等于其它环节安全 —— 它们的风险是**另一种形状**（"多个副本/分片事后合并"），
+即 eval 的 4 片合并与 ckpt 的多 rank 合并。**两者都已加判据。**
