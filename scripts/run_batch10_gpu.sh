@@ -45,7 +45,10 @@ if g: print(f"    grad_norm    {g[0]:.5f} → {g[-1]:.5f}")
 if d: print(f"    log_ppl_diff {d[0]:.5f} → {d[-1]:.5f}   ← 陈旧度本身（会更大，这是预期的）")
 PYEOF
   .venv/bin/python scripts/parse_fully_async_timing.py "logs/${name}.log" 2>/dev/null | grep -E "^\s+step " | tee -a "$QUEUE_LOG"
-  rm -rf "checkpoints/grpo/$name"/global_step_* 2>/dev/null
+  # ⛔ 2026-08-18：**不再删 ckpt** —— 主线 17 §4.3 指出唯一能判定这条线的
+  #    是「同位移下的任务级配对 + 三个计数」，而我把 e20_tokenis 那臂的 ckpt 删了
+  #    ⇒ 唯一的判据用不了。**凡是要过任务尺子的跑，ckpt 必须留。**
+  du -sh "checkpoints/grpo/$name" 2>/dev/null | tee -a "$QUEUE_LOG"
 done
 log "════════ batch10 结束"
 echo "batch10 done $(date '+%F %T')" >> logs/BATCH_DONE

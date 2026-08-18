@@ -45,7 +45,10 @@ if L: print(f"    响应长度      {L[0]:.0f} → {L[-1]:.0f}")
 PYEOF
   local ck=$(ls -d checkpoints/grpo/$name/global_step_*/actor 2>/dev/null | tail -1)
   [ -n "$ck" ] && .venv/bin/python scripts/rl_ckpt_drift.py "$ck" 2>&1 | grep "★" | tee -a "$QUEUE_LOG"
-  rm -rf "checkpoints/grpo/$name"/global_step_* 2>/dev/null
+  # ⛔ 2026-08-18：**不再删 ckpt** —— 主线 17 §4.3 指出唯一能判定这条线的
+  #    是「同位移下的任务级配对 + 三个计数」，而我把 e20_tokenis 那臂的 ckpt 删了
+  #    ⇒ 唯一的判据用不了。**凡是要过任务尺子的跑，ckpt 必须留。**
+  du -sh "checkpoints/grpo/$name" 2>/dev/null | tee -a "$QUEUE_LOG"
 }
 
 e20run e20e_mini2      --ppo-mini-batch-size 2 --lr 3e-5
