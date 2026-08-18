@@ -766,8 +766,33 @@ def _patch_lora_adapter_sync() -> None:
                 base_sync_done=base_done)
             await self.checkpoint_engine.send_weights(per_tensor_param, global_steps=global_steps)
             self._syncopate_base_sync_done = True
+            # ★ V1 数值判据：把 trainer **真实**的 peft_config 打出来，供与 rollout 侧
+            #   **重建**的那份逐字段比。scaling = lora_alpha / r ——
+            #   这个数错了的话，一切表象都正常（张量数对、大小对、list_loras 非空），
+            #   **而策略被整体缩放**。这是本补丁唯一"重建"的环节，也是唯一可能错的地方。
+            # ⚠️ peft_config 的类型不保证（LoraConfig / dict / DictConfig 都可能）——
+            #    第一版探针只用 getattr 读，全打成 None ⇒ **判据自己失效了**。
+            #    ⇒ 改成三路都试，并且**把类型打出来**；读不到就明说读不到，不许打成"无"。
+            def _fld(o, k):
+                if isinstance(o, dict):
+                    return o.get(k)
+                v = getattr(o, k, None)
+                return v
+            pc = peft_config
+            desc = "None（引擎没给）"
+            if pc is not None:
+                r_, a_, tm = _fld(pc, "r"), _fld(pc, "lora_alpha"), _fld(pc, "target_modules")
+                scale = (a_ / r_) if (r_ and a_) else None
+                desc = (f"[{type(pc).__name__}] r={r_} alpha={a_} **scaling={scale}** "
+                        f"target={sorted(tm) if tm else tm}")
+            # ★ 同时打**两侧共同的源头** model_config —— rollout 侧就是拿它重建的，
+            #   两边同源才谈得上"重建是对的"。
+            mc = getattr(self.actor.engine, "model_config", None)
+            if mc is not None:
+                desc += (f" ｜ model_config: rank={getattr(mc, 'lora_rank', None)} "
+                         f"alpha={getattr(mc, 'lora_alpha', None)}")
             print(f"[adapter-sync] trainer 侧：{'adapter' if base_done else '基座（首次）'}"
-                  f" 已发出（peft_config {'有' if peft_config is not None else '无'}）", flush=True)
+                  f" 已发出 · peft_config(真实)= {desc}", flush=True)
             return
 
         trainer_update_weights.__dict__.update(orig_update.__dict__)   # ★ 保住 @register 的元数据
@@ -820,9 +845,19 @@ def _patch_lora_adapter_sync() -> None:
                     kwargs = {"peft_config": pc, "base_sync_done": True}
             await self.server_adapter.update_weights(weights, global_steps=global_steps, **kwargs)
             self._syncopate_base_sync_done = True
+            pc = kwargs.get("peft_config")
+            desc = f"未带（首次送基座）｜ model_config: rank={getattr(self.model_config,'lora_rank',None)} " \
+                   f"alpha={getattr(self.model_config,'lora_alpha',None)}"
+            if pc:
+                scale = pc["lora_alpha"] / pc["r"] if pc.get("r") else None
+                tm = pc.get("target_modules")
+                # ⚠️ 别对字符串做 sorted() —— "all-linear" 会被拆成字符列表，
+                #    看起来像"重建错了"，其实是**探针的显示 bug**（2026-08-18 自己撞的）。
+                tm_s = sorted(tm) if isinstance(tm, (list, tuple, set)) else repr(tm)
+                desc = (f"r={pc['r']} alpha={pc['lora_alpha']} **scaling={scale}** target={tm_s}")
             print(f"[adapter-sync] rollout 侧：按 "
                   f"{'**adapter**' if kwargs else '基座（首次）'} 装载"
-                  f"（base_done={base_done}）", flush=True)
+                  f"（base_done={base_done}）· peft_config(重建)= {desc}", flush=True)
 
         ce_update_weights.__dict__.update(orig_ce_update.__dict__)   # ★ 同上，@register 必须保住
         CEW.update_weights = ce_update_weights
