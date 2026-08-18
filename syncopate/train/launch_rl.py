@@ -342,6 +342,19 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         print(f"[rl] 分片模式（fsdp_size={args.fsdp_size}）⇒ 自动 NCCL_PROTO=LL128 "
               f"（3 rank 上 all_gather 会塌 12×，见 infra_exp/README §7.3）")
 
+    # ★★ worker 钩子：**所有模式**都要挂（2026-08-18 修）。
+    #
+    # 原来它只写在分卡分支里 ⇒ **colocate 下 `verl_patches.setup_worker` 从不执行**。
+    # 后果：2026-08-18 的 A17（对齐补丁，跑在 colocate 上）**两臂时间一模一样、
+    # 判据行 0 条** —— 补丁压根没进 worker 进程，实验白跑一轮。
+    # ★ 同一族的第五例（判据看起来在工作，量的却不是那件事）：
+    #   这次是「机制只在一半的模式下接上」，而实验恰好跑在没接上的那一半。
+    # ⚠️ colocate 下 worker 同样是独立的 Ray actor 进程，一样够不着 driver 的补丁。
+    overrides += [
+        "+ray_kwargs.ray_init.runtime_env.worker_process_setup_hook="
+        "syncopate.train.verl_patches.setup_worker",
+    ] if args.mode == "colocate" else []
+
     # ★ 权重同步 bucket：**所有模式**都要（colocate 也走 NCCL checkpoint engine，
     #   见上面那段更正）。放在分支之前，避免再次只接一半。
     overrides += [

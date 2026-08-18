@@ -1,0 +1,9 @@
+{
+  "tokens": 4096,
+  "logprob_abs_err_mean": 0.03165268152952194,
+  "logprob_abs_err_p99": 0.10687919706106186,
+  "logprob_rel_err_mean": 0.0025470945984125137,
+  "kl_k3_bias_introduced": 0.0008106154855340719,
+  "bias_vs_real_kl": 0.040530774276703596,
+  "verdict": "✅ 判据通过：引入的偏差 < 真实 KL 的 5%"
+}

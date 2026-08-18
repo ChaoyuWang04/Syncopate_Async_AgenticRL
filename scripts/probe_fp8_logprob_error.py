@@ -58,7 +58,10 @@ def main() -> int:
     sw = (W.abs().max() / fmax).clamp(min=1e-12)
     hf = (h / sh).to(torch.float8_e4m3fn)
     wf = (W / sw).to(torch.float8_e4m3fn)
-    logits_fp8 = torch._scaled_mm(hf, wf.t().contiguous().t().t().contiguous(),
+    # ⚠️ `_scaled_mm` 要求 A 行主序、B **列主序**（否则 cuBLASLt 直接报错）。
+    #    W 是 [vocab, hidden] 的行主序张量 ⇒ `W.t()` 就是 [hidden, vocab] 的**列主序视图**，
+    #    正好是要的形状与布局。（第一版写了一串 .t().contiguous().t().t()，是错的。）
+    logits_fp8 = torch._scaled_mm(hf, wf.t(),
                                   scale_a=sh.float(), scale_b=sw.float(),
                                   out_dtype=torch.bfloat16)
     lp_fp8 = logprobs(logits_fp8)
