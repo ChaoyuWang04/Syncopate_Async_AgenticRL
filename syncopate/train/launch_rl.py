@@ -75,6 +75,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _assert_model_is_merged(model_path: str) -> None:
+    """★ 2026-08-18（E21 同族排查，见 docs/syncopate/18 §3）：给错宁可报错。
+
+    verl 的 LoRA merger 产出的是「**未改的**基座 + 独立的 `lora_adapter/`」——
+    主权重里**不含**上一轮 RL 学到的东西。而本入口没有加载 adapter 的路径
+    ⇒ 拿这样一个目录当起点会**静默丢掉整轮 RL**（形状对、能加载、指标正常、零报错）。
+    """
+    from pathlib import Path as _P
+    if (_P(model_path) / "lora_adapter").exists():
+        raise SystemExit(
+            f"🔴 {model_path} 里有 lora_adapter/ ⇒ 它不是合并后的模型，主权重不含增量。\n"
+            "   拿它当 RL 起点会静默丢掉上一轮 RL —— 见 docs/syncopate/18 §3。\n"
+            "   ⚠️ 且 RL 那一级的增量合并进 bf16 保真残差 0.87（同文 §3.3），"
+            "先决定接续方案，别直接合并。"
+        )
+
+
 def build_overrides(args: argparse.Namespace) -> list[str]:
     model = str((ROOT / args.model).resolve())
     max_model_len = args.max_prompt_length + args.max_response_length
@@ -763,6 +780,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
+    _assert_model_is_merged(str((ROOT / args.model).resolve()))
     _resolve_topology(args)
 
     # ★ 走我们的薄壳而不是 verl 的入口：它只把训练集采样器换成动态分池，

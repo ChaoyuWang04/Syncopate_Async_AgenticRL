@@ -33,10 +33,14 @@ import argparse
 import sys
 from pathlib import Path
 
+from syncopate.train.ckpt_guards import assert_ranks_identical
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 LORA_ONLY = "model_lora_only.pt"
+
+
 
 
 def prune_one(step_dir: Path, dry_run: bool) -> tuple[int, int]:
@@ -44,9 +48,13 @@ def prune_one(step_dir: Path, dry_run: bool) -> tuple[int, int]:
     import torch
 
     actor = step_dir / "actor"
-    full = next(actor.glob("model_world_size_*_rank_*.pt"), None)
-    if full is None:
+    # ⚠️ 必须 sorted：`next(glob(...))` 取的是文件系统先给的那个，**留下的是哪个 rank 没有记录**。
+    #    在 E21 之前这无所谓（"反正都一样"），之后它意味着我们不知道保留的是谁。
+    shards = sorted(actor.glob("model_world_size_*_rank_*.pt"))
+    if not shards:
         return 0, 0
+    assert_ranks_identical(actor)          # ★ 三份不同就别压成一份 —— 删掉就回不来了
+    full = shards[0]
     before = full.stat().st_size
     if dry_run:
         return before, before // 34        # 实测 97.1% 可回收，粗估

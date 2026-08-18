@@ -23,9 +23,14 @@ import json, sys
 from pathlib import Path
 import torch
 
+from syncopate.train.ckpt_guards import assert_ranks_identical
+
+
+
 def drift(actor_dir: Path) -> dict:
     meta = json.loads((actor_dir / "lora_train_meta.json").read_text())
     scale = meta["lora_alpha"] / meta["r"]
+    assert_ranks_identical(actor_dir)
     sd = torch.load(actor_dir / "model_world_size_3_rank_0.pt", map_location="cpu", weights_only=False)
     per_layer, num, den = [], 0.0, 0.0
     for k in sd:
