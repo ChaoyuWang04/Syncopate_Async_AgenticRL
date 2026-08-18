@@ -100,6 +100,7 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 | 🆕🔴 **LoRA 权重同步** | **必须走 adapter 推送**（`SYNCOPATE_LORA_ADAPTER_SYNC`，**默认开**）。⛔ **禁止 `--lora-merge`**：bf16 合并毁掉 adapter **一半**的作用（启动即报错拦住） | **E22 §6.1/§6.4** |
 | 🆕🔴 **FSDP 后端** | **留在 FSDP1**（Chaoyu 2026-08-18）。上游已确认 FSDP1 最低限度维护、退化网格那条**不会修**；FSDP2 不会遇到但另有张量形态问题 ⇒ **`SYNCOPATE_FSDP_DDP_FIX` 必须一直默认开** | STORY §8.1 |
 | 🆕 **采样口径** | **训练侧不截尾**（`top_p=1.0 / top_k=-1`，已显式钉死），把**评测**对齐到训练 | **E23 §3** |
+| 🆕🔴 **配对比较的基线** | **一律用 `_audit/v13_sft_e1_merged.json`**（= RL 的真起点）。旧的 `v13_sft_e1.json`（裸基座+SFT adapter）比它**强 0.025**，用它当基线会**系统性低估 RL 的效果** | **E24** |
 | 🆕 **三个默认值已改对** | `--weight-sync-bucket-mb` 2048→**512**（2048 已知 OOM）· `--rollout-is` sequence→**token** · `ulysses_sp=1` 显式钉死 | launch_rl |
 
 ## 3 · 已落地的改动（2026-08-14，都在 `syncopate/train/`）
@@ -144,7 +145,7 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 | # | 任务 | 归谁 | 成本 | 判据 | 不做会怎样 |
 |---|---|---|---|---|---|
 | **1** | **R1 · E20 全套重测**：token 级 vs 序列级 IS，**直接在 `fully_async` 上跑**，两臂各 60 步，**ckpt 必须留** | infra | 4 卡 × 2×35 min | 三条常驻判据（见 §5.1.1）+ `chi2_token/seq`、ESS、`grad_norm` | 手上关于 IS 的**所有数字都还是坏基线上的** |
-| **2** | **⑥ 重基线评测**：`MODEL=models/Qwen3-4B-sft-v13-e1 bash scripts/eval_parallel.sh` | **主线** | 4 卡 × 15 min | 与 `_audit/v13_sft_e1.json` 一比，直接量出「SFT 合并损失」值多少任务分 | **R1 的任务分读不了** —— 配对比较的两端不是同一个起点模型 |
+| ~~2~~ | ✅ **已做（队列 T1，4 分钟）**：**合并损失 = −0.025，MDE 0.016，t=−3.1 ⇒ 显著**（三计数 27 好 / 263 没动 / **53 变差**）。⇒ **从今往后配对比较的基线一律用 `_audit/v13_sft_e1_merged.json`** | infra | — | 见 [`E24`](E24-merge-loss-on-task-score.md) | ✅ 结案 |
 | **3** | **B5 · 把任务级尺子串起来**：冻结 EVAL 配对 → 「显著变好 / 变差 / 没动」**三个计数**（不看均值） | infra | ~1 h 代码 + 4 卡 30 min | 两臂**位移几乎相同**时比三计数 | 「token 级 IS 到底有没有用」**永远答不了**（项目自定纪律，至今 0 次通过） |
 
 ⛔ **1 和 2 不能并行** —— 只有这一台机器、四张卡，两件都要 4 卡。
