@@ -98,7 +98,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **A** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
 | **E12** 🆕 | [权重同步的代价与根因](E12-weight-sync.md) | **fully_async 稳态 55.8 s；反解出固定开销 55.0 s、传输 0.8 s ⇒ 98.6% 不是传输**。根因是每次同步走完 8 步，只有第 5 步在传数据 | **B** | 🟡 读码+日志已完成，分步计时待做 | 🔴 | 🟢 已完成部分 / 🔴 分步计时 |
 | **E13** 🆕 | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | decoupled 每步把整模型在 GPU↔CPU 搬 3 趟；**902 张量/8.309 GB 里只有 3.18% 是可训练的 LoRA**，基座冻结根本不用存 ⇒ **4.34 → 0.083 s/步，省 5.7%** | **B** | 🟡 根因+收益已实测，改动未做 | 🔴 | 🟢 已完成部分 |
-| **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | Triton fp8/fp4 静默退化复现 / FP8 GEMM roofline / FP4 inline PTX（**原规划占 E13，因 E13 已被实验占用而顺延**） | **A** | ⬜ | ⚪ | 🔴 |
+| **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | 🆕 **第一枪打完：FP8 点亮了，1.90–2.08×**（8192³ 451 vs 237 TFLOPS）⇒ ⛔ **推翻了我们自己的悲观前提** —— 不是「点不亮」，是**我们的栈没去拿**（E01 实测热点全是 `cutlass_80` 的 bf16）。Triton 低精度路径 / FP4 inline PTX 待做 | **A** | 🟡 **第一枪完成** | 🔴 | 🔴 |
 | **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
 | **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
 | **E18** 🆕 | [3-rank all_gather 塌陷](E18-rank3-allgather-collapse.md) | 3 卡 ZeRO-3 慢 6.02× 的谜：**不是带宽、不是次数、不是拓扑，是 NCCL 在 3 rank 上给 `all_gather` 选了坏协议**（2卡51/4卡37.9/**3卡3.2** GB/s）。`NCCL_PROTO=LL128` 治好：47.94→14.40 s（**3.33×**） | **A** | ✅ **完成** | — | — |
