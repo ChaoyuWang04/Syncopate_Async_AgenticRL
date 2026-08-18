@@ -75,7 +75,16 @@ def collect() -> dict[str, list[tuple[str, int, str]]]:
                 "E21 之后三份不一样），再删",
             ))
 
-    # ④ 优化器状态：只有「续跑同一次训练」才用得上
+    # ④ SFT 选点产物：**用完就该删**，而"记得删"是手动步骤 ⇒ 这里显形
+    sel = sorted((ROOT / "checkpoints/sft").glob("*/sel_f*"))
+    if sel:
+        out["extract"].append((
+            "checkpoints/sft/*/sel_f*", sum(size(d) for d in sel),
+            f"{len(sel)} 个 SFT 选点临时产物 ⇒ "
+            "`python scripts/select_sft_ckpt.py <out> --keep <名字> --prune`",
+        ))
+
+    # ⑤ 优化器状态：只有「续跑同一次训练」才用得上
     opt = sorted((ROOT / "checkpoints/grpo").glob("*/global_step_*/actor/optim_*.pt"))
     if opt:
         out["decide"].append((
@@ -84,7 +93,7 @@ def collect() -> dict[str, list[tuple[str, int, str]]]:
             "断点续跑用。E21 修好后这些跑都要重来 ⇒ 除非要留 Adam 状态当证据，否则可删",
         ))
 
-    # ⑤ 主线用不到的大件（infra 线的资产，要它们的主人决定）
+    # ⑥ 主线用不到的大件（infra 线的资产，要它们的主人决定）
     for rel, why in [
         ("models/Qwen3-30B-A3B-nf4",
          "A9 的预量化产物。E07 §9 已证「预量化救不了碎片」，§9.0 又推翻了 A9 的整个前提"
@@ -101,7 +110,7 @@ def collect() -> dict[str, list[tuple[str, int, str]]]:
         pp = Path(rel) if rel.startswith("/") else ROOT / rel
         out["decide"].append((rel, size(pp), why))
 
-    # ⑥ 必须留的
+    # ⑦ 必须留的
     for rel, why in [
         ("models/Qwen3-4B", "基座"),
         ("models/Qwen3-0.6B", "31 个测试要它"),

@@ -243,6 +243,38 @@ def evaluate(model, dataset, device, pad_id: int, batch_size: int) -> dict[str, 
     return out
 
 
+
+def _save_selection_point(model, out_root: Path, frac: float, step: int) -> Path:
+    """存一个**临时选点产物**（bf16，约 126 MB）。
+
+    ★ 为什么用 bf16：实测 ΔW_eff 的保真残差 **0.0024**（抽 8 层，最大 0.0024）
+      ⇒ 存储损失可忽略，体积减半（fp32 252 MB → bf16 126 MB）。
+      ⚠️ **不要和「合并进基座」那条混了**（`18 §3.3`：残差 0.36/0.87）——
+        那条存的是 `W + Δ`，Δ 只占 W 的 0.4%，会掉进 bf16 的舍入格里；
+        这里存的是 A/B 本身，量级 O(1)。**两种情况必须分别量，不能类比。**
+
+    ⚠️ 目录用 `sel_` 前缀标成临时的 —— 它们是**选点用的**，不是要归档的。
+    """
+    import torch
+
+    d = out_root / f"sel_f{frac:g}"
+    d.mkdir(parents=True, exist_ok=True)
+    saved = {}
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            saved[name] = param.detach().clone()
+            param.data = param.data.to(torch.bfloat16)
+    try:
+        model.save_pretrained(d)
+    finally:
+        for name, param in model.named_parameters():
+            if name in saved:
+                param.data = saved[name]
+    mb = sum(f.stat().st_size for f in d.glob("*")) / 1048576
+    print(f"[选点] step={step} (f={frac:g}) -> {d}  {mb:.0f} MB")
+    return d
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate 最小 LoRA SFT")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
@@ -265,6 +297,17 @@ def main(argv: list[str] | None = None) -> int:
     # 训练脚本的默认值必须是「跑完就有记录」，要关得显式说。
     parser.add_argument("--wandb-project", default="syncopate")
     parser.add_argument("--no-wandb", action="store_true", help="显式关掉上报（调试/跑测试用）")
+    # ★★ 2026-08-18：epoch 粒度的选择集太粗。实测 v13：
+    #   e1 有梯度 222 / 饱和 96 / 决策位熵 0.158（91.7% 的位置已近乎确定）
+    #   e2 有梯度 154 / 饱和 155 / 熵 0.062
+    #   **一个 epoch 之内有梯度格子掉 31%** ⇒ 这条曲线在这一段非常陡，
+    #   而「step 0 → e1」这 105 步**一个采样点都没有**。
+    #   而 GRPO 的梯度完全来自组内方差 ⇒ **起点的熵直接决定了有多少东西可学**。
+    #   ⚠️ M6 那条「零梯度<30% 与 多样性≥70% 互斥」是在**4 个整 epoch 点**上得的，
+    #     曲线这么陡的地方用这么粗的采样判"互斥"，很可能只是没采到中间。
+    parser.add_argument("--save-fractions", default="",
+                        help="在训练总步数的这些比例处额外存点，如 0.125,0.25,0.375。"
+                             "★ 这些是**临时选点产物**，选完就删（跑完会打印清理命令）")
     parser.add_argument("--profile-steps", type=int, default=0,
                         help="H0 观测仪：抓 N 个 micro-step 的 torch.profiler 时间线后自动收工"
                              "（0=关）。纯观测不改训练语义，trace 拖进 ui.perfetto.dev 看")
@@ -416,6 +459,14 @@ def main(argv: list[str] | None = None) -> int:
                 den_sq += float(torch.linalg.matrix_norm(base)) ** 2
         return (num_sq ** 0.5) / max(den_sq ** 0.5, 1e-12)
 
+    # 选点：把比例换算成绝对步号。⚠️ 用 round 而不是 int —— 0.999*total 会被截成 total-1，
+    #      看起来"少存了一个点"，而那是最容易被读成 bug 的那种静默偏移。
+    sel_fracs = [float(x) for x in args.save_fractions.split(",") if x.strip()]
+    sel_steps = {max(1, round(f * total_steps)): f for f in sel_fracs}
+    if sel_steps:
+        print(f"[选点] 将在 step {sorted(sel_steps)} 额外存点"
+              f"（总步数 {total_steps}）—— **临时产物，选完就删**")
+
     global_step = 0
     skipped = 0                 # ★ 没有监督 token 被跳过的 micro-step 数
     sup_tokens = 0              # ★ 真正参与 loss 的 token 数（不是序列 token 数）
@@ -445,6 +496,9 @@ def main(argv: list[str] | None = None) -> int:
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
+                if global_step in sel_steps:
+                    _save_selection_point(model, ROOT / args.out, sel_steps[global_step],
+                                          global_step)
                 elapsed = max(1e-6, time.time() - started)
                 log({"train/loss": float(loss) * args.grad_accum,
                      # grad_norm 是最早能看出训练崩没崩的信号：突然飙高 = 有坏样本或 lr 过大
@@ -508,6 +562,13 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps({"args": vars(args), "history": history}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     print(f"[OK] adapter -> {out_dir}")
+    sel_dirs = sorted(out_dir.glob("sel_f*"))
+    if sel_dirs:
+        total_mb = sum(f.stat().st_size for d in sel_dirs for f in d.glob("*")) / 1048576
+        print(f"\n[选点] {len(sel_dirs)} 个临时产物，共 {total_mb:.0f} MB")
+        print(f"       选完之后删掉未选中的："
+              f"  python scripts/select_sft_ckpt.py {args.out} --keep <名字> --prune")
+        print("       ⚠️ 别手动删 —— 手动的步骤一定会被忘（本项目第一失效形状）")
     if run is not None:
         run.finish()
     return 0
