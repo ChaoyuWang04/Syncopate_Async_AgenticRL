@@ -268,3 +268,25 @@ def test_bundle_roundtrip(tmp_path, bundle):
     assert restored.case.metadata.signal_class == "graded"
     assert restored.verifier.required_side_effects[0].tool == "campaign.update_budget"
     assert restored.verifier.required_answer_fields[0].key == "old_budget"
+
+
+# ⛔ 2026-08-18 回归：解析器被模型的**畸形输出**打崩，进而拖垮一整跑
+#    （9 小时队列 T3 实测：3 分钟就死、3 处 RayTaskError、只剩 2 个 dump）
+#    根因：`"foo"` / `[...]` / `123` 都是**合法 JSON**，`json.loads` 不会报错，
+#          于是 `payload.get("name")` 在 str 上炸 AttributeError。
+#    ★ 判据观念：**解析器的畸形输入应当变成"被扣分的行为"，不是崩溃。**
+def test_parse_tool_calls_survives_non_object_payload():
+    from syncopate.core.parsing import parse_tool_calls
+
+    for bad in ['"just a string"', "[1, 2, 3]", "123", "true", "null"]:
+        text = f"<tool_call>{bad}</tool_call>"
+        assert parse_tool_calls(text) == [], f"畸形 payload {bad!r} 应当被丢弃而不是崩溃"
+
+    # 混在一起时，**好的那条仍要被解析出来**（不能因为有畸形就整块放弃）
+    mixed = (
+        '<tool_call>"garbage"</tool_call>'
+        '<tool_call>{"name": "get_policy", "arguments": {"region": "SEA"}}</tool_call>'
+    )
+    calls = parse_tool_calls(mixed)
+    assert len(calls) == 1 and calls[0]["name"] == "get_policy"
+    assert calls[0]["arguments"] == {"region": "SEA"}

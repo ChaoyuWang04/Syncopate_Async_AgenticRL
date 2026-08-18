@@ -105,6 +105,13 @@ def parse_tool_calls(text: str) -> list[dict[str, Any]]:
             payload = _loads_tolerant(block)
         except json.JSONDecodeError:
             continue
+        # ⛔ 2026-08-18：`_loads_tolerant` 可能返回**非对象**（模型吐出 `"foo"` / `[...]` / 数字都是合法 JSON）
+        #    ⇒ 原来直接 `payload.get("name")` ⇒ **AttributeError 把整个 rollout 打崩**，
+        #      进而拖垮一整跑（队列 T3 实测：3 分钟就死，3 处 RayTaskError）。
+        #    ★ 解析器不该被模型的畸形输出打崩 —— 畸形应当变成**被扣分的行为**，不是崩溃。
+        #    ⇒ 与本函数已有的风格一致：形状不对就丢弃这一条。
+        if not isinstance(payload, dict):
+            continue
         name = payload.get("name")
         if not isinstance(name, str) or not name:
             continue
