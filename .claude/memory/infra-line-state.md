@@ -127,3 +127,24 @@ Track A  ~30%   论证 80% / 兑现 25% / 硬手艺 0%    ← 三条腿断了两
 
 相关：[[machine-4x5090-constraints]] [[syncopate-docs-map]] [[feedback-measure-dont-infer]]
 [[project-mechanism-not-wired]] [[user-chaoyu-working-style]]
+
+## ★★★ 2026-08-18：抓到并修好一个静默的正确性 bug（E21）
+
+```
+E21  三个 trainer rank **梯度从没同步过**（fsdp_size=1 ⇒ 网格(3,1) ⇒ HYBRID_SHARD
+     ⇒ PyTorch 降级成 NO_SHARD 却把归约留在大小为 1 的组上 ⇒ 空操作）
+     ⇒ 每次更新只用 1/3 的数据。**已修并复验**（三 rank 梯度逐位相同）
+     ⇒ ⚠️ **此前所有位移/ESS 的绝对值都在坏基线上** —— 重测队列见 handoff §5
+E20  RL 学不动：① 序列级 IS 在 694 token 上指数崩塌（chi2_seq 64.19 vs chi2_token 0.065）
+     ② 一个 epoch 只更新 109 次。**token 级 IS 实测把 ESS 0.449→1.000，零吞吐代价**
+     ⚠️ 判据错过一次：**位移是输入不是产出**（AdamW 下 ≈ lr×次数）⇒ 只能用任务级三计数
+E19  FP8 在 sm_120 上是真的（真实形状 1.70–2.22×）。**ref 可换、rollout 先别换**
+     （FP8 误差是 vLLM↔FSDP 数值地板的 316 倍，会喂大 E20 那个问题）
+E01  三次前向占 kernel 时间 83.2%；但卡只忙 74.6–78.2%（我曾说过头成"卡是满的"）
+```
+
+⇒ **上游文档三份**（`docs/upstream/`）：16 字节对齐（PyTorch）、HYBRID_SHARD 静默不同步
+（PyTorch + verl）。**都等 Chaoyu 点头再提。**
+
+⇒ **排序原则已换**（Chaoyu 2026-08-18）：**影响正确性的 > 影响速度的**；
+第二看**端到端**收益，不看组件收益。清单唯一来源是 `00-INFRA-HANDOFF §5`。
