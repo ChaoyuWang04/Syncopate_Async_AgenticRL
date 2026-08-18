@@ -73,6 +73,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+from syncopate.train.rollout_budget import (  # noqa: E402
+    MAX_PROMPT_LENGTH as BUDGET_PROMPT,
+    MAX_RESPONSE_LENGTH as BUDGET_RESPONSE,
+)
 
 
 def _assert_model_is_merged(model_path: str) -> None:
@@ -202,11 +206,27 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         #        fsdp_size <= 0 或 >= world_size  ⇒ 一维 mesh，全部参数切分（FULL_SHARD）
         #        否则                             ⇒ (world_size//fsdp_size, fsdp_size)，
         #                                            维度 ["ddp", "fsdp"]
-        #    取 1 ⇒ fsdp 维长度为 1 = **不切分**，只在 ddp 维 all-reduce 梯度 = **DDP**。
+        #    取 1 ⇒ fsdp 维长度为 1 = **不切分**。                                    ← 事实
+        #
+        #    ⛔⛔ **2026-08-18 更正（E21）**：这里原本还有一句
+        #        「只在 ddp 维 all-reduce 梯度 = DDP」                              ← **推断，且是错的**
+        #    上面三句是读码读出来的事实，那第四句是推的，排版一模一样 ⇒ 没人质疑它。
+        #    实际行为：(N,1) 网格 ⇒ HYBRID_SHARD ⇒ PyTorch 见分片维=1 自动降级成 NO_SHARD，
+        #    **却把归约留在那个大小为 1 的组上** ⇒ 空操作 ⇒ 三个 rank 各训各的 LoRA，
+        #    只打一行 UserWarning，训练照常跑完、指标全正常。**静默失效两个月。**
+        #    ⇒ 已由 `verl_patches._patch_fsdp_degenerate_mesh` 拦住（默认开启）。
+        #    ★ 纪律：推断句一律标 `[推断，未验证]`，别和事实排在一起。
+        #
         #    ⚠️ 实测代价：trainer 3 卡跑 FULL_SHARD 每步 1182s，1 卡不切分 198s ——
         #    **多两张卡慢 6 倍**。因为 5090 没有 P2P，卡间只有 6.4 GB/s（经主机中转），
         #    而 FULL_SHARD 每层前向反向都要把 8GB 权重 all-gather 回来。
-        #    LoRA 下 DDP 只同步 66M 梯度（约 260MB ⇒ 40ms），三个数量级的差距。
+        #    ⛔ 原来这里写「LoRA 下 DDP 只同步 66M 梯度（约 260MB ⇒ 40ms），三个数量级的差距」——
+        #    那 260MB 是**算出来的**（66M×4B），从没量过；而 E21 之下这段流量**根本不存在**。
+        #    ⇒ 量级方向大概率仍成立，但**具体数字要实测一次 NCCL 流量之后才能引用**（重测队列 R3）。
+        #
+        #    ⚠️ **`ulysses_sequence_parallel_size` 必须保持 1**（verl 默认值，我们不设它）：
+        #    修复后 FSDP 按**默认进程组**（world 个 rank）除，而 verl 按 `dp_size = world // sp` 乘
+        #    ⇒ 只有 sp=1 时两者才抵消。开 SP 之前先重做 0-A。
         f"actor_rollout_ref.actor.fsdp_config.fsdp_size={args.fsdp_size}",
         f"actor_rollout_ref.ref.fsdp_config.fsdp_size={args.fsdp_size}",
 
@@ -493,6 +513,10 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             ]
 
     # ---- ★ 改动 2：LoRA ----
+    if args.lora_rank > 0 and args.lora_merge:
+        # ⚠️ `lora.merge` 这个键**已经在默认配置里**（默认 False）⇒ 直接覆盖，不能加 `+`
+        #    （加 `+` 会报 "An item is already at ..."，2026-08-18 撞过一次）
+        overrides += ["actor_rollout_ref.model.lora.merge=True"]
     if args.lora_rank > 0:
         overrides += [
             f"actor_rollout_ref.model.lora_rank={args.lora_rank}",
@@ -618,8 +642,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--val-batch-size", type=int, default=2)
     parser.add_argument("--ppo-mini-batch-size", type=int, default=2)
     parser.add_argument("--micro-batch-size", type=int, default=1)
-    parser.add_argument("--max-prompt-length", type=int, default=4096)
-    parser.add_argument("--max-response-length", type=int, default=2048)
+    # ★ 2026-08-18：默认值从 `rollout_budget` 取 —— **训练与评测共用一份**。
+    #   显式传别的值是允许的，但 check_pipeline_invariants 会把不一致标红。
+    parser.add_argument("--max-prompt-length", type=int, default=BUDGET_PROMPT)
+    parser.add_argument("--max-response-length", type=int, default=BUDGET_RESPONSE)
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--agent-workers", type=int, default=1)
     parser.add_argument("--rollout-gpu-util", type=float, default=None,
@@ -681,6 +707,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="LoRA 权重同步时逐层 summon（每层 summon+state_dict+empty_cache）。"
                              "★ 默认 True 只是**保持现状以便对照**——它是为分片 FSDP 设计的，"
                              "而本机 --fsdp-size 1 不分片，很可能是净亏损。见 E12 与代码处注释。")
+    parser.add_argument("--lora-merge", action="store_true",
+                        help="权重同步前先把 LoRA 合并进基座（`model.lora.merge=True`）。"
+                             "★★ 2026-08-18 实测（0-B）：**disaggregated 模式（fully_async / "
+                             "one_step_off）不开这个就是错的** —— `engine_workers.py:698` 只调一次 "
+                             "`get_per_tensor_param()`（`base_sync_done=False`），"
+                             "`collect_lora_params` 会**显式跳过所有 lora_ 张量** ⇒ "
+                             "每次同步推的是 8.4 GB **冻结基座**，adapter 一个字节都不推 ⇒ "
+                             "rollout 的策略永远停在起点，训练学到的东西从不参与生成。"
+                             "（colocate 那条路调两次、会推 adapter，**不受影响**。）"
+                             "判据：`SYNCOPATE_SYNC_PAYLOAD=1` 打的『盯住层 ‖W‖』必须**不等于**起点模型。")
     parser.add_argument("--nvtx", action="store_true",
                         help="给 verl 的每个计时段套一层 NVTX range（E01/A5 的门槛）。"
                              "★ verl 自己那个 `marked_timer` 的 docstring 说会打 marker，"

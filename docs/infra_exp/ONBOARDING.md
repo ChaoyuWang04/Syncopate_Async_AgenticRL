@@ -48,50 +48,66 @@ set -a; . /workspace/.env; set +a
 
 ## 3 · 最近一轮做完了什么（2026-08-18）
 
-★★★ **头等大事：抓到并修好了一个静默的正确性 bug** —— [`E21`](E21-ddp-not-syncing.md)
+★★★ **抓到并修好了两个静默的正确性 bug。它们叠在一起，让整条 RL 回路是断的。**
+
+**① [`E22`](E22-lora-never-synced.md) —— LoRA 从没被推给 rollout（影响面最大）**
 
 ```
-现象   三个 trainer rank **各训各的 LoRA，梯度从没同步过** ⇒ 每次更新只用 1/3 的数据
-判据   lora_B 是零初始化的 ⇒ step1 三个 rank 权重都是 0.000000（起点相同）
-       而梯度范数不同（2.209e-05 / 2.565e-05）⇒ 只可能是没 all-reduce
-根因   fsdp_size=1 ⇒ 网格 (3,1) ⇒ HYBRID_SHARD
-       ⇒ PyTorch 见分片维=1 自动降级成 NO_SHARD，**却把归约留在那个大小为 1 的组上**
-       ⇒ 空操作。**只打了一行 UserWarning，训练照常跑完、所有指标正常。**
-修复   拦住退化网格的 FSDP 构造，改用 NO_SHARD + 默认进程组（默认开启）
-复验   三个 rank 的梯度**逐位相同**（最小复现 + 真实训练双验证）
-上游   两份草稿已成文 → docs/upstream/（PyTorch 那条 + verl 那条）
+现象   fully_async / one_step_off 下，每次权重同步推给 vLLM 的都是**冻结基座**
+判据   推出去的 q_proj.base_layer.weight ‖W‖=75.377708
+       与**磁盘上起点模型逐位相同**（4 跑 × 2 次同步全一致）；含 lora_ 的张量 **0 个**
+根因   engine_workers.py:698 在 disaggregated 分支**只调一次** get_per_tensor_param() 且不传参
+       ⇒ base_sync_done=False ⇒ collect_lora_params **显式跳过所有 lora_ 张量**
+       （colocate 那条路调两次，先基座后 adapter，**是对的**）
+后果   **rollout 永远用起点策略 π₀ 采样** ⇒ 我们从来没跑过一次正确的异步 RL
+止血   --lora-merge（model.lora.merge=True），实测推出去的权重开始随训练变化
+⚠️     但它是 **bf16 合并**，RL 那一级增量保真残差 0.87 ⇒ **止血够不够待验（R0-b）**
 ```
 
-⚠️⚠️ **⇒ 此前所有位移 / ESS 的绝对值都在坏基线上**，重测队列见 `00-INFRA-HANDOFF §5`。
-
-**同一轮的另外三条**：
+**② [`E21`](E21-ddp-not-syncing.md) —— 三个 trainer rank 的梯度从没同步过**
 
 ```
-E20  RL 学不动的两个独立原因：① 序列级 IS 在 694 token 上指数崩塌
-     （chi2_seq 64.19 vs chi2_token 0.065，**差 989×**）② 一个 epoch 只更新 109 次
-     ⇒ token 级 IS 实测把 ESS 从 0.449 修到 **1.000**、grad_norm 趋势反转，**零吞吐代价**
-E19  FP8 在 sm_120 上是真的（真实形状 1.70–2.22×）；**ref 可以换、rollout 先别换**
-     （FP8 的误差是 vLLM↔FSDP 数值地板的 316 倍，会直接喂大 E20 那个问题）
-E01  一步的时间去哪了：三次前向占 kernel 时间 83.2%（与墙钟 83.1% 几乎相等）
-     ⚠️ 但卡只忙 74.6–78.2%，**有 22–25% 的空档** —— 我曾说过头说成"卡是满的"
+判据   lora_B 零初始化 ⇒ step1 三 rank 权重都是 0.000000，而梯度范数不同 ⇒ 没 all-reduce
+根因   fsdp_size=1 ⇒ 网格 (3,1) ⇒ HYBRID_SHARD ⇒ PyTorch 见分片维=1 降级成 NO_SHARD，
+       **却把归约留在那个大小为 1 的组上** ⇒ 空操作。只打一行 UserWarning
+修复   拦住退化网格的 FSDP 构造（默认开启）。三 rank 梯度**逐位相同**
+0-A    ✅ 又验了「合得对不对」：3 卡 = 1 卡，比值 **1.000000**（是求平均，口径正确）
+       白捡：verl 那套「按全局 token 数归一 × dp_size」在**变长序列**下确实在保护我们
+       （最常见的"本地平均"写法在不等量数据上错 26%，方向都不对）
+上游   **三份**草稿已成文 → docs/upstream/（PyTorch 一条 + verl 两条），等 Chaoyu 点头
 ```
 
-## 4 · ★ 第一件事：**先做管线排查，再谈重测**
+⚠️⚠️ **⇒ 作废清单与重跑队列见 `00-INFRA-HANDOFF §5`。一句话判据**：
+**算了多少、搬了多少字节 → 不受影响；算得对不对、学到没有 → 全部作废。**
 
-E21 的教训是「**四处信号一处都没接住**」（那行 warning 每跑打两次，就在我们自己的日志里）。
-所以下一步**不是**急着重跑实验，而是：
+**同一轮的另外两条**（结论本身仍成立，但绝对值受上面影响）：
+
+```
+E20  RL 学不动：① 序列级 IS 在 694 token 上指数崩塌（chi2_seq 64.19 vs chi2_token 0.065）
+     ② 一个 epoch 只更新 110 次。★ 这两条**数学结论**不受 E21/E22 影响，实测数字全部作废
+E19  FP8 在 sm_120 上是真的（1.70–2.22×）；ref 可换、rollout 先别换
+```
+
+## 4 · ★ 第一件事：**R0-a → R0-b，别直接开始重跑**
+
+E22 的止血（`--lora-merge`）**是在 bf16 里合并** —— 而主线实测过，RL 那一级的增量
+（占基座 0.056%）合并进 bf16 之后**保真残差 0.87：幅度留住了，方向被舍入噪声打乱**。
 
 ```bash
-# ① 先看 handoff §5.1 的「排查清单」—— 还有哪些"从没验证过的前提"
-# ② 每条写成**断言或探针**，不要用"读代码确认"
-#    （E21 证明读代码会漏：我们读对了三句，错在第四句）
-# ③ 再按 handoff §5 的重测队列 R1→R7 重跑
+# R0-a 止血验证跑：--lora-merge + E21 修复，一次能过尺子的短跑
+#      判据：SYNCOPATE_SYNC_PAYLOAD=1 打的盯住层 ‖W‖ 必须**逐次变化**且 ≠ 起点
+#      （起点参考：models/Qwen3-4B-sft-v13-e1 的 layers.0.q_proj，‖W‖=75.377708）
+SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377708 \
+  .venv/bin/python -m syncopate.train.launch_rl --lora-merge ... --mode fully_async
+
+# R0-b ★ 决定性的一条：vLLM 的 logprob vs trainer 的 logprob，同一批 prompt 逐 token 比
+#      不过关 ⇒ 止血无效，重跑出来的还是坏基线
 ```
 
+⛔ **R0-b 没过之前，不要用任何重跑结果去定 lr / mini_batch / 停机线。**
 ⚠️ **判据（重测时省一半力气用的）**：
 **同一批里两臂都受同样影响的 A/B，比值仍可信；绝对值一律作废。**
-
-⛔ **在排查完成之前，不要把任何数字写进默认配置。**
+⚠️ 但 E22 比 E21 更严：`ESS` / `log_ppl_diff` 量的是「当前策略 vs π₀」，**连比值都不能用**。
 
 ## 5 · ⚠️ 五条会让你踩坑的
 
@@ -121,7 +137,14 @@ E21 的教训是「**四处信号一处都没接住**」（那行 warning 每跑
 10. 🆕 **写工具时把"我假设 X 成立"写成断言** —— 成本几乎为零。
    E21 就是被 `rl_ckpt_to_adapter.py` 里一句随手写的断言抓到的，
    **而四处显式信号都没抓住它**。
-11. 🆕🔴 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
+11. 🆕🔴🔴 **LoRA + 异步模式必须传 `--lora-merge`**（E22）。不传的话每次权重同步推的是
+   **冻结基座**，rollout 的策略永远停在起点 —— 不报错、指标全正常。
+   ⇒ 判据：`SYNCOPATE_SYNC_PAYLOAD=1` + `SYNCOPATE_SYNC_REF=<起点 ‖W‖>`，盯住层必须**逐次变化**。
+12. 🆕🔴 **判据行的文案本身也是判据的一部分。** 写 0-B 探针时我**两次**打出
+   「与磁盘起点相同」这句结论 —— 一次是判据根本没绑上（`‖W‖=None`），
+   一次是结论**硬编码在文案里、压根没做比较**。
+   ⇒ **判据必须真的比；比不了就说比不了，不许打结论。**
+13. 🆕 **nsys 的中间文件会吃掉几十 GB**：180 秒采样在 `/workspace/tmp/nvidia/nsight_systems/`
    下产生 **72 GB**（最终 `.nsys-rep` 只有 386 MB —— **差两个数量级**）。
    ⇒ 采样前先看 `df`；夜间无人值守时挂上 `scripts/disk_guard.sh`（低于 15 G 就杀 nsys 保队列）。
    ⚠️ 导出的 `.sqlite` 也有 **8.8 GB**，分析完就删。
@@ -156,6 +179,9 @@ scripts/analyze_nsys_step.py        🆕 nsys sqlite → 按**进程**拆算子�
 scripts/rl_ckpt_drift.py            🆕 位移 ‖ΔW_eff‖/‖W_base‖（⚠️ 只读 rank_0）
 scripts/rl_ckpt_to_adapter.py       🆕 RL ckpt → PEFT adapter（★ 评测链路的缺口；E21 就是它抓到的）
 scripts/repro_fsdp_hybrid_nosync.py 🆕 ★ E21 的最小复现，`REPRO_APPLY_FIX=1` 兼作修复验证
+scripts/repro_ddp_reduce_convention.py 🆕 ★ 0-A：3 卡合起来的梯度 == 1 卡在全部数据上的梯度？
+scripts/probe_weight_sync_payload.py 🆕 ★ 0-B：权重同步**推的是什么**（离线复现发送侧分支）
+  ⇒ 配套运行时探针 `SYNCOPATE_SYNC_PAYLOAD=1`（在 verl_patches 里，判据带 SYNCOPATE_SYNC_REF）
 scripts/probe_sm120_fp8.py / probe_fp8_real_shapes.py / probe_fp8_logprob_error.py  🆕 FP8 三件套
 scripts/probe_moe_4bit_load.py      🆕 4bit MoE 加载路径（碎片）
 scripts/gpu_gate.sh                 🆕 ★ 抢卡门禁：显存 + 训练进程 + 主线产物 三条一起查

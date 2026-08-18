@@ -367,6 +367,10 @@ def setup_worker() -> None:
     #    ⇒ 判据行**必须能独立触发**，不能挂在别的开关的成功路径上。
     if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
         _defer_until_imported("verl.checkpoint_engine.base", _patch_sync_step_timing)
+    # 0-B：独立开关，**不挂在别的开关的成功路径上**（上面那段注释记的就是这个教训）
+    if os.environ.get("SYNCOPATE_SYNC_PAYLOAD") == "1":
+        _defer_until_imported("verl.checkpoint_engine.nccl_checkpoint_engine",
+                              _patch_sync_payload_probe)
     if os.environ.get("SYNCOPATE_FSDP_ALIGN") == "1":
         _defer_until_imported("torch.distributed.fsdp._flat_param", _patch_fsdp_shard_alignment)
 
@@ -571,6 +575,7 @@ def _patch_ddp_sync_probe() -> None:
 #   ⇒ 把它整个置空风险大。这里**只在"HYBRID_SHARD + 分片维为 1"这一种情况下**改写两个入参，
 #   其余一律原样放行 —— 改动面最小。
 def _patch_fsdp_degenerate_mesh() -> None:
+    import torch.distributed as dist
     import torch.distributed.fsdp as tfsdp
     from torch.distributed.fsdp import ShardingStrategy
 
@@ -590,16 +595,109 @@ def _patch_fsdp_degenerate_mesh() -> None:
             except Exception:                               # noqa: BLE001
                 pass
             if shard_dim == 1:
+                # ★ 0-A 引入的常驻断言（2026-08-18）：把 device_mesh 置空 ⇒ FSDP 改用**默认进程组**
+                #   来归约梯度。于是「FSDP 除以谁」这件事的来源，从 mesh 变成了默认进程组
+                #   —— 它必须覆盖**同一批 rank**，否则归约的分母就和 verl 乘的 dp_size 对不上。
+                #   （E21 的形状就是"两层各自合理、缝里掉东西"，所以这里把前提写成断言而不是注释。）
+                world = dist.get_world_size() if dist.is_initialized() else None
+                if world is not None and world != mesh.size():
+                    raise RuntimeError(
+                        f"★ E21 修复的前提不成立：默认进程组有 {world} 个 rank，"
+                        f"而被替换掉的 device_mesh 覆盖 {mesh.size()} 个 ⇒ 归约的分母会和 verl 的 "
+                        f"dp_size 对不上（梯度会系统性偏大/偏小）。停下来查，别让它静默跑过去。"
+                    )
                 kwargs["sharding_strategy"] = ShardingStrategy.NO_SHARD
                 kwargs["device_mesh"] = None
                 print(f"[verl-patch] ★ E21 修复生效：检测到退化网格（{strat}，分片维=1）"
-                      f" ⇒ 改用 NO_SHARD + 默认进程组，梯度才会真正 all-reduce", flush=True)
+                      f" ⇒ 改用 NO_SHARD + 默认进程组（world={world}），梯度才会真正 all-reduce",
+                      flush=True)
         return orig_init(self, module, *args, **kwargs)
 
     cls.__init__ = patched
     cls._syncopate_degenerate_fix = True
     print("[verl-patch] E21 退化网格修复已装（SYNCOPATE_FSDP_DDP_FIX=1）", flush=True)
 
+
+# ★★ 0-B 探针（`SYNCOPATE_SYNC_PAYLOAD=1`）：权重同步**推的到底是什么**。
+#
+# 起因（E21 之后的同族排查）：读发送侧代码发现 disaggregated（fully_async）那条路
+#   `engine_workers.py:698`  per_tensor_param, _ = self.actor.engine.get_per_tensor_param()
+# **不传任何参数** ⇒ `base_sync_done=False` ⇒ `collect_lora_params` 里那段会
+# **显式跳过所有含 `lora_` 的张量**（`fsdp_utils.py:705`）。
+# 而 colocate（naive）那条路**调了两次**：先基座、再 adapter。
+#   ⇒ [推断] fully_async 可能每次只推基座、从不推 LoRA。
+#   ⇒ 离线已验证该分支的行为（`scripts/probe_weight_sync_payload.py`：0 个 lora_ 张量），
+#      **但"分支这样"不等于"真实跑就这样"** —— 本探针就是把它变成实测。
+#
+# 判据行（"某集合应当完整"型，不设阈值）：每次同步打一行
+#   张量个数 / 总字节 / 其中含 lora_ 的个数
+#   ⇒ **含 lora_ 的必须 > 0**（或整体字节数 ≈ 基座 ⇒ 说明是 merge 后的全量）。
+#   ⇒ 若恒为 0 且字节 ≈ 基座大小 ⇒ **rollout 拿到的策略永远是起点**。
+def _patch_sync_payload_probe() -> None:
+    from verl.checkpoint_engine.nccl_checkpoint_engine import NCCLCheckpointEngine as E
+
+    if getattr(E, "_syncopate_payload_probe", False):
+        return
+    orig_send = E.send_weights
+
+    def _tee(weights, stats):
+        """流式穿过：只累计计数，**不把张量攒下来**（攒下来会改内存行为，探针就成了变量）。"""
+        for name, tensor in weights:
+            stats["n"] += 1
+            try:
+                stats["bytes"] += tensor.numel() * tensor.element_size()
+            except Exception:                       # noqa: BLE001  探针不许拖垮训练
+                pass
+            if "lora_" in str(name).lower():
+                stats["lora"] += 1
+            elif stats["first"] is None:
+                stats["first"] = str(name)
+            # ★ 追加判据（"两个东西应当相同"型）：盯住一个**被 LoRA 适配过**的层。
+            #   若推出去的值逐次不变、且等于磁盘上起点模型的那一份
+            #   ⇒ 推的是**冻结基座**，LoRA 的增量根本没上路。
+            stats["names"].append(str(name))
+            if str(name) == stats["watch"]:
+                stats["watch_norm"] = tensor.detach().float().norm().item()
+            yield name, tensor
+
+    async def probed(self, weights, *args, **kwargs):
+        stats = {"n": 0, "bytes": 0, "lora": 0, "first": None, "names": [],
+                 "watch": os.environ.get("SYNCOPATE_SYNC_WATCH",
+                                         "model.layers.0.self_attn.q_proj.weight"),
+                 "watch_norm": None}
+        try:
+            return await orig_send(self, _tee(weights, stats), *args, **kwargs)
+        finally:
+            verdict = "✅ 含 LoRA" if stats["lora"] else "🔴 **一个 lora_ 都没有**"
+            print(f"[sync-payload] 本次同步推出去：{stats['n']} 个张量 / "
+                  f"{stats['bytes'] / 2**20:,.1f} MiB / 其中 lora_ {stats['lora']} 个 ⇒ {verdict}"
+                  f"（首个非 lora 张量名：{stats['first']}）", flush=True)
+            # ⛔ 判据没绑上时**绝不能打结论** —— 空判据被读成通过，是本项目栽过的坑。
+            if stats["watch_norm"] is None:
+                hit = [n for n in stats["names"] if "q_proj" in n][:3]
+                print(f"[sync-payload] 🔴 判据无效：盯住的层 `{stats['watch']}` "
+                      f"在 {stats['n']} 个张量里**一个都没匹配上** ⇒ 这一行不能当通过读。"
+                      f" 实际名字里含 q_proj 的样例：{hit}", flush=True)
+            else:
+                # ⛔ 第二次犯同一个错：上一版这里**直接打了结论**（"与磁盘起点相同"），
+                #    而根本没做比较 —— merge=True 那跑打出 75.3974（明明不同）却照样说"相同"。
+                #    ⇒ 判据必须**真的比**，比不了就说比不了。
+                ref = os.environ.get("SYNCOPATE_SYNC_REF")
+                if ref:
+                    d = abs(stats["watch_norm"] - float(ref)) / max(abs(float(ref)), 1e-12)
+                    ok = d > 1e-6      # 与起点**不同**才说明增量上路了
+                    mark = ("✅ 与起点不同 ⇒ 增量已随权重推出去"
+                            if ok else "🔴 **与起点逐位相同** ⇒ 推的是冻结基座，增量没上路")
+                    print(f"[sync-payload] 盯住的层 {stats['watch']} ‖W‖={stats['watch_norm']:.6f}"
+                          f"　起点参考 {float(ref):.6f}　相对差 {d:.3e} ⇒ {mark}", flush=True)
+                else:
+                    print(f"[sync-payload] 盯住的层 {stats['watch']} ‖W‖={stats['watch_norm']:.6f}"
+                          f"（未给 SYNCOPATE_SYNC_REF ⇒ **只报数、不下判定**）", flush=True)
+
+    E.send_weights = probed
+    E._syncopate_payload_probe = True
+    print("[verl-patch] 0-B 权重同步载荷探针已装（SYNCOPATE_SYNC_PAYLOAD=1）—— "
+          "判据：每次同步打一行「张量数 / 字节 / lora_ 个数」", flush=True)
 
 def _patch_pool_sampler() -> None:
     """在 worker 进程里装动态分池的 sampler 补丁。判据行由 DynamicPoolSampler 自己打。"""
