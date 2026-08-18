@@ -376,6 +376,8 @@ def setup_worker() -> None:
     if os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC", "1") == "1":
         for _m in ("verl.checkpoint_engine.base", "verl.workers.engine_workers"):
             _defer_until_imported(_m, _patch_lora_adapter_sync)
+    if os.environ.get("SYNCOPATE_OPT_STEP_PROBE") == "1":
+        _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_opt_step_counter)
     if os.environ.get("SYNCOPATE_SYNC_PAYLOAD") == "1":
         _defer_until_imported("verl.checkpoint_engine.nccl_checkpoint_engine",
                               _patch_sync_payload_probe)
@@ -895,6 +897,35 @@ def _patch_vllm_lora_probe() -> None:
     S.set_global_steps = probed
     S._syncopate_lora_probe = True
     print("[verl-patch] vLLM adapter 探针已装 —— 判据：每次同步后 list_loras() 必须非空", flush=True)
+
+
+# ★ 优化器步数计数器（`SYNCOPATE_OPT_STEP_PROBE=1`）
+#
+# 起因（E20 §7.8）：**产物里没有任何东西能告诉你真实的优化器更新次数。**
+#   training/global_step  = fit step
+#   rollout_dumps 文件数  = dump 次数（只在 mini_batch==train_batch 时**碰巧**等于更新次数）
+#   metric 记录次数        = param_version
+#   ⇒ 三个都不是它。而 E20 原因②（"一个 epoch 只更新 110 次"）**整条结论都建立在这个数上**。
+# ⇒ 直接数 `optimizer_step` 被调了几次 —— 这是唯一不会因配置变化而变成另一件事的口径。
+def _patch_opt_step_counter() -> None:
+    from verl.workers.engine.fsdp.transformer_impl import FSDPEngine as E
+
+    if getattr(E, "_syncopate_opt_counter", False):
+        return
+    orig = E.optimizer_step
+
+    def counted(self, *a, **kw):
+        n = getattr(self, "_syncopate_opt_steps", 0) + 1
+        self._syncopate_opt_steps = n
+        r = orig(self, *a, **kw)
+        if n <= 5 or n % 20 == 0:      # 头几次 + 每 20 次，别刷屏
+            print(f"[opt-step] 本 rank 累计 optimizer_step 调用 = {n}", flush=True)
+        return r
+
+    E.optimizer_step = counted
+    E._syncopate_opt_counter = True
+    print("[verl-patch] 优化器步数计数器已装（SYNCOPATE_OPT_STEP_PROBE=1）—— "
+          "判据：**真实**更新次数，不是 fit step / dump 数 / param_version", flush=True)
 
 
 def _patch_pool_sampler() -> None:
