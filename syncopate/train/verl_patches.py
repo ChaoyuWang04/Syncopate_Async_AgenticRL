@@ -918,8 +918,10 @@ def _patch_opt_step_counter() -> None:
         n = getattr(self, "_syncopate_opt_steps", 0) + 1
         self._syncopate_opt_steps = n
         r = orig(self, *a, **kw)
-        if n <= 5 or n % 20 == 0:      # 头几次 + 每 20 次，别刷屏
-            print(f"[opt-step] 本 rank 累计 optimizer_step 调用 = {n}", flush=True)
+        # ⛔ 第一版只在 `n<=5 or n%20==0` 时打 ⇒ **最终值可能永远打不出来**
+        #    （A1 实测：24 个 fit step，最后打的是 20 —— 真实值到底是 20 还是 24 分不出来）
+        #    ★ 又一次「判据没打出我要的那个数」。⇒ **每次都打**，Ray 会折叠重复行，不会刷屏。
+        print(f"[opt-step] optimizer_step #{n}", flush=True)
         return r
 
     E.optimizer_step = counted
