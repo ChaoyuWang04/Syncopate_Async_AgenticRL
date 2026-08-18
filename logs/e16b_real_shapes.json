@@ -1,0 +1,68 @@
+{
+  "device": "NVIDIA GeForce RTX 5090",
+  "shapes": {
+    "lm_head      T=4096": {
+      "m": 4096,
+      "n": 151936,
+      "k": 2560,
+      "bf16_tflops": 245.3,
+      "arith_intensity": 1559.2,
+      "fp8_tflops": 470.0,
+      "speedup": 1.92
+    },
+    "lm_head      T=1024": {
+      "m": 1024,
+      "n": 151936,
+      "k": 2560,
+      "bf16_tflops": 243.1,
+      "arith_intensity": 727.9,
+      "fp8_tflops": 454.7,
+      "speedup": 1.87
+    },
+    "mlp_up       T=4096": {
+      "m": 4096,
+      "n": 9728,
+      "k": 2560,
+      "bf16_tflops": 212.6,
+      "arith_intensity": 1355.8,
+      "fp8_tflops": 405.1,
+      "speedup": 1.91
+    },
+    "mlp_down     T=4096": {
+      "m": 4096,
+      "n": 2560,
+      "k": 9728,
+      "bf16_tflops": 226.9,
+      "arith_intensity": 1355.8,
+      "fp8_tflops": 439.5,
+      "speedup": 1.94
+    },
+    "qkv_proj     T=4096": {
+      "m": 4096,
+      "n": 4096,
+      "k": 2560,
+      "bf16_tflops": 176.9,
+      "arith_intensity": 1137.8,
+      "fp8_tflops": 392.8,
+      "speedup": 2.22
+    },
+    "o_proj       T=4096": {
+      "m": 4096,
+      "n": 2560,
+      "k": 2560,
+      "bf16_tflops": 216.8,
+      "arith_intensity": 975.2,
+      "fp8_tflops": 368.0,
+      "speedup": 1.7
+    },
+    "方阵对照 4096³": {
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "bf16_tflops": 181.5,
+      "arith_intensity": 1365.3,
+      "fp8_tflops": 378.3,
+      "speedup": 2.08
+    }
+  }
+}
