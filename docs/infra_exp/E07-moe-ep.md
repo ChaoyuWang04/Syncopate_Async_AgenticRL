@@ -200,3 +200,42 @@ router 尤其要挂——它直接决定专家选择，正是 §5 里 R3（训�
 verl 0.8.0 / torch 2.9.0+cu128 / vllm 0.12.0 / flash_attn 2.8.3 真轮子（2026-08-13 晚装，/workspace/wheels/）
 megatron/torchtitan/TE/bnb 均未装（P4/P6 探针对象）
 ```
+
+---
+
+## 9 · ⛔ A9（2026-08-18）：**预量化存盘救不了碎片** —— 这条路是死的
+
+**背景**：A1 证明 4bit MoE 能跑，但**加载时 bnb 逐层量化造成严重碎片**
+（权重 13.32 GB，却有 **17.43 GB reserved-but-unallocated** ⇒ 直接 OOM）。
+当时靠 `expandable_segments:True` 解掉，**但它在真训练路径上用不了**
+（与 vLLM colocate 的内存池冲突，pytorch#147851，`launch_rl` 专门 pop 掉它）。
+
+**A9 的三阶段实验**（尺子 `scripts/probe_moe_4bit_load.py`，判据写死在探针里）：
+
+| 阶段 | 结果 |
+|---|---|
+| ① 在线 4bit 量化 | 🔴 **复现**：已分配 **13.32 GB** / 碎片 **17.43 GB** ⇒ OOM（与 A1 的数字**逐位相同**） |
+| ② 量化一次并存盘 | ✅ 成功（开了 `expandable_segments`，离线一次性动作），产出 `models/Qwen3-30B-A3B-nf4`（16 GB） |
+| ③ **从预量化的盘上加载** | 🔴 **也 OOM**：已分配 13.40 GB / 碎片 **17.46 GB** —— **和在线量化几乎一模一样** |
+
+> **原预测 P2**：预量化加载的碎片 < 1 GB ⇒ A2 的加载路径就用它。
+> **实测**：碎片 17.46 GB，**和在线量化没区别**。
+> **推翻后（P3 成立）**：**碎片不来自"量化这个过程"，来自 bnb 4bit 的权重布局本身** ——
+> Qwen3-30B-A3B 有 **18,432 个专家 Linear**，即上万个小张量，
+> 每个都要一块小显存 ⇒ 分配器被打得稀碎。**换个时间点量化，张量个数不变，碎片就不变。**
+> **教训**：**"提前算好存起来"只能省掉计算，省不掉数据结构本身带来的代价。**
+
+### 9.1 ⇒ A2 的加载路径还剩哪些选项
+
+```
+❌ 预量化存盘                     本节证伪
+❌ expandable_segments（同进程）   与 vLLM colocate 的内存池冲突
+🟡 **分进程**：fully_async 下 trainer 与 rollout **本来就是两个进程**
+   ⇒ trainer 侧开 expandable_segments、vLLM 那个进程不开 —— **冲突的前提是同进程**
+   ★ 这是目前最有希望的一条，而且改动只是"给 trainer 的 worker 加环境变量"
+🟡 换量化后端（张量更少/更大）     bnb 之外还有 AWQ/GPTQ/compressed-tensors，但要先确认 verl+LoRA 支持
+🟡 融合专家权重（一个大张量而不是 18432 个小的）  改动最大，但直击根因
+```
+
+⇒ **下一步（A9b）**：验「分进程开 expandable_segments」这条 —— 成本很低，
+判据是 **trainer 进程里 4bit 加载不 OOM，且 vLLM 那个进程照常起来**。
