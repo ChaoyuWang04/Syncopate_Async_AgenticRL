@@ -368,9 +368,16 @@ def setup_worker() -> None:
     if os.environ.get("SYNCOPATE_SYNC_TIMING") == "1":
         _defer_until_imported("verl.checkpoint_engine.base", _patch_sync_step_timing)
     # 0-B：独立开关，**不挂在别的开关的成功路径上**（上面那段注释记的就是这个教训）
+    # ★ E22 修法①：先做成开关（验证过再谈默认值）。它同时改 trainer 与 rollout 两侧，
+    #   两个模块都要等到被 import 之后再打。
+    if os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC") == "1":
+        for _m in ("verl.checkpoint_engine.base", "verl.workers.engine_workers"):
+            _defer_until_imported(_m, _patch_lora_adapter_sync)
     if os.environ.get("SYNCOPATE_SYNC_PAYLOAD") == "1":
         _defer_until_imported("verl.checkpoint_engine.nccl_checkpoint_engine",
                               _patch_sync_payload_probe)
+        _defer_until_imported("verl.workers.rollout.vllm_rollout.vllm_async_server",
+                              _patch_vllm_lora_probe)
     if os.environ.get("SYNCOPATE_FSDP_ALIGN") == "1":
         _defer_until_imported("torch.distributed.fsdp._flat_param", _patch_fsdp_shard_alignment)
 
@@ -698,6 +705,149 @@ def _patch_sync_payload_probe() -> None:
     E._syncopate_payload_probe = True
     print("[verl-patch] 0-B 权重同步载荷探针已装（SYNCOPATE_SYNC_PAYLOAD=1）—— "
           "判据：每次同步打一行「张量数 / 字节 / lora_ 个数」", flush=True)
+
+# ★★★ E22 修法① · 让 disaggregated（fully_async / one_step_off）真正把 **adapter** 推给 rollout
+#
+# 背景（完整证据见 docs/infra_exp/E22-lora-never-synced.md）：
+#   engine_workers.py:698 在 disaggregated 分支上**只调一次** `get_per_tensor_param()` 且不传参
+#   ⇒ `base_sync_done=False` ⇒ `collect_lora_params` **显式跳过所有 lora_ 张量**
+#   ⇒ 每次同步推 8.4 GB **冻结基座**，adapter 一个字节都没推 ⇒ rollout 的策略永远是 π₀。
+#   （colocate 那条路调两次：先基座、再 adapter，是对的。）
+#
+# 为什么能自己补：**两端的能力都在，断的只是中间那段传参**（E22 §6.3 查实）
+#   trainer 侧  get_per_tensor_param(base_sync_done=True) ⇒ 直接吐 LoRA 张量 + peft_config   ✅
+#   🔴 断点     CheckpointEngineWorker.update_weights 签名里没有 peft_config（base.py:323）
+#   rollout 侧  TensorLoRARequest(lora_tensors=…) + add_lora ⇒ 能直接从张量装 LoRA          ✅
+#               （vllm_rollout/utils.py:262，colocate 每次同步都在用它）
+#   而且 `lora_as_adapter` 在 merge=False 下**本来就是 True**（vllm_async_server.py:186）
+#   —— 生成时会查 `list_loras()`，只是那里一直是空的。
+#
+# ⚠️ 为什么不改 `lora.merge=True` 了事：R0-b 实测那条 bf16 合并会毁掉 adapter **一半**的作用
+#    （logprob 偏移中位 1.717e-02 = adapter 自身作用的 50%，是引擎地板的 50×）。
+#
+# 两侧各自维护「基座推过了没有」的计数 —— 它们由 `CheckpointEngineManager.update_weights`
+# **同一步里成对调用**（base.py:497-500），所以天然同步；判据行会把两侧的状态都打出来。
+def _patch_lora_adapter_sync() -> None:
+    import torch.distributed as dist   # noqa: F401  （保持与本模块其它补丁一致的导入风格）
+
+    # ⚠️ 两侧活在**不同的进程**里（trainer 是 WorkerDict，rollout 是 CheckpointEngineWorker），
+    #    模块的 import 时机也不同 ⇒ 各自 try/except、各自幂等，并且**两个模块任一被 import 都会来补一次**。
+    #    （不这样的话会重演"补丁只在一半的模式/进程里接上"那个形状 —— 本项目已记过五次。）
+    done_any = False
+
+    # ---- ① trainer 侧：首次推基座，之后推 adapter ----
+    try:
+        from verl.workers.engine_workers import ActorRolloutRefWorker as ARW
+    except Exception:                                     # noqa: BLE001  本进程没有 trainer 侧
+        ARW = None
+    if ARW is not None and not getattr(ARW, "_syncopate_adapter_sync", False):
+        orig_update = ARW.update_weights
+
+        async def trainer_update_weights(self, global_steps: int = None, mode: str = "auto"):
+            effective_mode = mode if mode != "auto" else self.config.rollout.checkpoint_engine.backend
+            if effective_mode == "naive":
+                return await orig_update(self, global_steps=global_steps, mode=mode)
+
+            base_done = getattr(self, "_syncopate_base_sync_done", False)
+            per_tensor_param, peft_config = self.actor.engine.get_per_tensor_param(
+                base_sync_done=base_done)
+            await self.checkpoint_engine.send_weights(per_tensor_param, global_steps=global_steps)
+            self._syncopate_base_sync_done = True
+            print(f"[adapter-sync] trainer 侧：{'adapter' if base_done else '基座（首次）'}"
+                  f" 已发出（peft_config {'有' if peft_config is not None else '无'}）", flush=True)
+            return
+
+        trainer_update_weights.__dict__.update(orig_update.__dict__)   # ★ 保住 @register 的元数据
+        ARW.update_weights = trainer_update_weights
+        ARW._syncopate_adapter_sync = True
+        done_any = True
+        print("[verl-patch] ★ E22 修法① · trainer 侧已装", flush=True)
+
+    # ---- ② rollout 侧：把 peft_config / base_sync_done 传下去 ----
+    try:
+        from verl.checkpoint_engine.base import CheckpointEngineWorker as CEW
+    except Exception:                                     # noqa: BLE001  本进程没有 rollout 侧
+        CEW = None
+    if CEW is not None and not getattr(CEW, "_syncopate_adapter_sync", False):
+        orig_ce_update = CEW.update_weights
+
+        def _peft_config_dict(model_config):
+            """在 rollout 侧就地重建 peft_config。
+
+            ★ 刻意**不跨进程传** PEFT 对象：`model_config` 两侧同源（同一份 Hydra 配置），
+              而 `PEFTHelper.from_dict` 只需要 r / lora_alpha / target_modules 三个必填字段
+              （vllm/lora/peft_helper.py:28-30，多余的键会被过滤掉）。
+            ⇒ 少一条序列化路径就少一个静默失败的地方。
+            """
+            from verl.utils.py_functional import convert_to_regular_types   # ⚠️ 不在 utils.model 里
+
+            rank = getattr(model_config, "lora_rank", 0) or 0
+            if rank <= 0:
+                return None
+            cfg = {
+                "task_type": "CAUSAL_LM",
+                "peft_type": "LORA",
+                "r": rank,
+                "lora_alpha": getattr(model_config, "lora_alpha", 2 * rank),
+                "target_modules": convert_to_regular_types(model_config.target_modules),
+                "bias": "none",
+            }
+            exclude = convert_to_regular_types(getattr(model_config, "exclude_modules", None))
+            if exclude:
+                cfg["exclude_modules"] = exclude
+            return cfg
+
+        async def ce_update_weights(self, global_steps: int = None):
+            weights = self.checkpoint_engine.receive_weights(global_steps=global_steps)
+            base_done = getattr(self, "_syncopate_base_sync_done", False)
+            kwargs = {}
+            if base_done:
+                pc = _peft_config_dict(self.model_config)
+                if pc is not None:
+                    kwargs = {"peft_config": pc, "base_sync_done": True}
+            await self.server_adapter.update_weights(weights, global_steps=global_steps, **kwargs)
+            self._syncopate_base_sync_done = True
+            print(f"[adapter-sync] rollout 侧：按 "
+                  f"{'**adapter**' if kwargs else '基座（首次）'} 装载"
+                  f"（base_done={base_done}）", flush=True)
+
+        ce_update_weights.__dict__.update(orig_ce_update.__dict__)   # ★ 同上，@register 必须保住
+        CEW.update_weights = ce_update_weights
+        CEW._syncopate_adapter_sync = True
+        done_any = True
+        print("[verl-patch] ★ E22 修法① · rollout 侧已装", flush=True)
+
+    if done_any:
+        print("[verl-patch] ★ E22 修法①（SYNCOPATE_LORA_ADAPTER_SYNC=1）—— 判据："
+              "第 2 次同步起载荷应从 ~8.4 GB 掉到 ~132 MB、含 lora_ 的张量数 > 0", flush=True)
+
+# ★ 0-B 的最后一环：**vLLM 引擎里到底有没有那个 adapter**。
+#   前面的判据只能证明"推出去了 / 传到 rollout 侧了"，而 vLLM 的 worker 是它自己 spawn 的
+#   子进程，我们的钩子够不着；但 `vLLMHttpServer` 是 Ray actor，够得着。
+#   ⇒ 挂在每次权重同步收尾都会调的 `set_global_steps` 上，打一行 `list_loras()`。
+#   判据：**adapter 模式下这个集合必须非空**（vllm_async_server.py:527 就是拿它决定要不要用 LoRA 的）。
+def _patch_vllm_lora_probe() -> None:
+    from verl.workers.rollout.vllm_rollout.vllm_async_server import vLLMHttpServer as S
+
+    if getattr(S, "_syncopate_lora_probe", False):
+        return
+    orig = S.set_global_steps
+
+    async def probed(self, global_steps=None, *a, **kw):
+        r = await orig(self, global_steps, *a, **kw) if orig.__code__.co_argcount > 1 \
+            else await orig(self, *a, **kw)
+        try:
+            loras = await self.engine.list_loras()
+            ok = "✅ 引擎里有 adapter" if loras else "🔴 **引擎里一个 adapter 都没有** ⇒ 生成用的是裸基座"
+            print(f"[lora-probe] step={global_steps} engine.list_loras()={loras} ⇒ {ok}", flush=True)
+        except Exception as exc:                      # noqa: BLE001  探针不许拖垮训练
+            print(f"[lora-probe] ⚠️ 读不到 list_loras：{exc}", flush=True)
+        return r
+
+    S.set_global_steps = probed
+    S._syncopate_lora_probe = True
+    print("[verl-patch] vLLM adapter 探针已装 —— 判据：每次同步后 list_loras() 必须非空", flush=True)
+
 
 def _patch_pool_sampler() -> None:
     """在 worker 进程里装动态分池的 sampler 补丁。判据行由 DynamicPoolSampler 自己打。"""

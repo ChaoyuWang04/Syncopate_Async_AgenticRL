@@ -210,7 +210,25 @@ if effective_mode != "naive":
     self.base_sync_done = True
     return
 ```
-✅ **🆕 可行性已查实：两端的能力都在，缺的只是中间传参。**
+✅✅ **🆕 我们已经把这条修法实现出来并跑通了**（2026-08-18，60 步 / 0 错误）：
+
+```
+判据①  vLLM 引擎里    list_loras() 从 [] 变成 **[123]**（= VLLM_LORA_INT_ID）
+判据②  载荷           第 1 次 399 张量 / 8,414 MiB（基座）→ 之后 **504 张量 / 252 MiB（全是 lora_）**
+判据③  rollout_corr/kl 每次同步后**回落到数值地板**（末两次 0.00032 / 0.00034）
+                       对照未修时同位置 0.00344 —— **相差 10×**
+附带    param_sync     **6.25 s → 0.974 s（6.4×）**，占一步从 ~6.5% 掉到 **0.8%**
+```
+
+**实现只需要两处各补一段**（我们写成了 monkey patch，没改 verl 源码）：
+① trainer 侧记住"基座推过了没有"，首次 `base_sync_done=False`、之后 `True`；
+② rollout 侧把 `peft_config` + `base_sync_done` 传给 `server_adapter.update_weights`。
+`peft_config` 可以在 rollout 侧用同源的 `model_config` **就地重建**
+（`PEFTHelper.from_dict` 只要 `r / lora_alpha / target_modules`），**不必跨进程传 PEFT 对象**。
+
+⇒ ★ **所以这条修法是低风险、可立即落地的**，而且**顺带把每次同步的载荷从 8.4 GB 降到 252 MB**。
+
+**🆕 可行性（我们查实的接线图）：两端的能力都在，缺的只是中间传参。**
 
 ```
 trainer 侧   get_per_tensor_param(base_sync_done=True) ⇒ 直接吐 LoRA 张量 + peft_config   ✅ 有

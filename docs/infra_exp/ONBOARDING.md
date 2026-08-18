@@ -88,26 +88,31 @@ E20  RL 学不动：① 序列级 IS 在 694 token 上指数崩塌（chi2_seq 64
 E19  FP8 在 sm_120 上是真的（1.70–2.22×）；ref 可换、rollout 先别换
 ```
 
-## 4 · ★ 第一件事：**R0-a → R0-b，别直接开始重跑**
+## 4 · ★ 第一件事：**R1 —— 在修好的异步基线上重测 E20**
 
-E22 的止血（`--lora-merge`）**是在 bf16 里合并** —— 而主线实测过，RL 那一级的增量
-（占基座 0.056%）合并进 bf16 之后**保真残差 0.87：幅度留住了，方向被舍入噪声打乱**。
+2026-08-18 晚 **异步 RL 第一次真正跑通**（E22 §6.4）：我们自己补上了 verl 缺的那段管子，
+adapter 现在真的会到达 vLLM（`list_loras()=[123]`），载荷 8,414→252 MiB，
+`param_sync` 6.25→**0.974 s**。⇒ **三个前提（梯度同步 / 归约口径 / adapter 送达）全部就位。**
 
 ```bash
-# R0-a 止血验证跑：--lora-merge + E21 修复，一次能过尺子的短跑
-#      判据：SYNCOPATE_SYNC_PAYLOAD=1 打的盯住层 ‖W‖ 必须**逐次变化**且 ≠ 起点
-#      （起点参考：models/Qwen3-4B-sft-v13-e1 的 layers.0.q_proj，‖W‖=75.377708）
-SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377708 \
-  .venv/bin/python -m syncopate.train.launch_rl --lora-merge ... --mode fully_async
-
-# R0-b ★ 决定性的一条：vLLM 的 logprob vs trainer 的 logprob，同一批 prompt 逐 token 比
-#      不过关 ⇒ 止血无效，重跑出来的还是坏基线
+# R1：E20 全套重测（序列级 vs token 级 IS），**直接在 fully_async 上跑**
+SYNCOPATE_LORA_ADAPTER_SYNC=1 SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377708 \
+  .venv/bin/python -m syncopate.train.launch_rl --model models/Qwen3-4B-sft-v13-e1 \
+  --lora-rank 32 --rollout-is token --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
+  --weight-sync-bucket-mb 512 --steps 60 --sync-every 4 ...
 ```
 
-⛔ **R0-b 没过之前，不要用任何重跑结果去定 lr / mini_batch / 停机线。**
-⚠️ **判据（重测时省一半力气用的）**：
-**同一批里两臂都受同样影响的 A/B，比值仍可信；绝对值一律作废。**
-⚠️ 但 E22 比 E21 更严：`ESS` / `log_ppl_diff` 量的是「当前策略 vs π₀」，**连比值都不能用**。
+⛔ **每一跑必须带 `SYNCOPATE_LORA_ADAPTER_SYNC=1`** —— 不带就退回"推冻结基座"。
+⛔ **不要用 `--lora-merge`**（R0-b：bf16 合并毁掉 adapter 一半的作用）。
+
+★ **三条常驻判据，一跑完就查**：
+```
+① [lora-probe] list_loras() 必须非空（step≥1）    ⇒ adapter 真的在引擎里
+② [sync-payload] 第 2 次同步起含 lora_ 张量 > 0    ⇒ 推的是 adapter 不是基座
+③ rollout_corr/kl 每次同步后回落到地板 ~3.4e-4     ⇒ 策略真的被交付了
+```
+⚠️ **判据要有能力分辨**：跑太短（<8 次同步）时 ①②③ 里的 ③ 分辨不出来 ——
+坏基线早期也贴着地板，两条曲线要到第 7 个版本才拉开 10×。
 
 ## 5 · ⚠️ 五条会让你踩坑的
 

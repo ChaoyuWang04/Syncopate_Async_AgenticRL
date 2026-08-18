@@ -1,6 +1,6 @@
 # E22 · 异步模式下 **LoRA 从没被推给 rollout** —— 生成数据的策略两个月没变过
 
-> 状态：✅ **已确证 → 已定根因 → 已找到止血方案并验证**　建于 2026-08-18
+> 状态：✅ **已确证 → 已定根因 → 止血方案被自己否掉 → 已自己实现真正的修法并验证**　建于 2026-08-18
 > ⚠️⚠️⚠️ **这是正确性 bug，影响面比 [`E21`](E21-ddp-not-syncing.md) 更大。**
 > 上游草稿：[`../upstream/verl-lora-adapter-never-synced-disaggregated.md`](../upstream/verl-lora-adapter-never-synced-disaggregated.md)
 > 作废清单与重跑队列：[`00-INFRA-HANDOFF §5`](00-INFRA-HANDOFF.md)
@@ -16,7 +16,7 @@
 | **判据** | 推出去的 `q_proj.base_layer.weight` `‖W‖=75.377708`，与**磁盘上起点模型逐位相同**；4 次独立短跑、每跑 2 次同步、全部一致 |
 | **后果** | **rollout 永远用起点策略采样** ⇒ 整个 RL 回路是断开的：策略梯度算的是"当前策略"，数据来自"起点策略"，而这个偏离**随训练单调增大** |
 | **根因** | `engine_workers.py:698` 在 disaggregated 分支上**只调一次** `get_per_tensor_param()` 且不传参 ⇒ `base_sync_done=False` ⇒ `collect_lora_params` **显式跳过所有 `lora_` 张量**。colocate 那条路**调两次**，是对的 |
-| **止血** | ⛔ `model.lora.merge=True` **已被 R0-b 否掉**（bf16 合并毁掉 adapter 一半的作用，§6.1）⇒ 正确性实验改走 **colocate**（§6.2）；异步线可自己补 adapter 推送（**§6.3：两端能力都在，缺中间传参，估 30–60 行**） |
+| **修法** | ✅ **已自己实现修法①并验证跑通（§6.4）**：`SYNCOPATE_LORA_ADAPTER_SYNC=1`，vLLM 引擎里 `list_loras()=[123]`、载荷 8,414→252 MiB、`kl` 回到地板、`param_sync` 6.25→0.97 s。<br>⛔ 而 `model.lora.merge=True` **已被 R0-b 否掉**（bf16 合并毁掉 adapter 一半的作用，§6.1）⇒ 正确性实验改走 **colocate**（§6.2）；异步线可自己补 adapter 推送（**§6.3：两端能力都在，缺中间传参，估 30–60 行**） |
 | **不受影响** | **colocate 全部正确**；所有吞吐 / 通信 / kernel 类测量不受影响 |
 
 ⇒ ⛔ **我们从来没有跑过一次正确的异步 RL。** 所有 fully_async 的**学习类**结论作废。
@@ -324,6 +324,59 @@ rollout 侧   vllm_rollout.update_weights(..., **kwargs) ⇒ update_weights_from
 （"agentic RL 训练系统的框架级改造"）都建立在"能正确地跑异步"上。
 **只有 colocate 能跑正确实验 = 这条线的兑现物做不出来。**
 ⚠️ 但**先拿一份 colocate 的干净基线**（R0-c），否则补完了也没有正确的东西可以对照。
+
+## 6.4 ✅✅ 修法① 已自己实现并验证 —— **异步 RL 第一次真正跑通**（2026-08-18 晚）
+
+补丁：`verl_patches._patch_lora_adapter_sync`（`SYNCOPATE_LORA_ADAPTER_SYNC=1`）。
+就是 §6.3 说的那段"没接上的管子"，两处各补一段：
+
+```
+trainer 侧  ActorRolloutRefWorker.update_weights
+            自己记 `_syncopate_base_sync_done` ⇒ 首次 get_per_tensor_param(base_sync_done=False)（基座）
+            之后 base_sync_done=True（**adapter**）
+rollout 侧  CheckpointEngineWorker.update_weights
+            首次原样装基座；之后带上 peft_config + base_sync_done=True
+            ⇒ 一路到 `TensorLoRARequest` + `add_lora`
+```
+
+★ 两处**各自**记状态、**不跨进程传标志** —— 它们由 `CheckpointEngineManager.update_weights`
+在同一步里成对调用（`base.py:497-500`），天然同步；判据行把两侧状态都打出来。
+★ `peft_config` 也**不跨进程传**，在 rollout 侧用同源的 `model_config` 就地重建
+（`PEFTHelper.from_dict` 只要 `r / lora_alpha / target_modules`）—— **少一条序列化路径就少一个静默失败点**。
+⚠️ 两侧都用 `func.__dict__.update(orig.__dict__)` 保住 `@register` 的元数据
+（E12 §262 踩过：包装丢了装饰器 ⇒ 组级方法直接消失）。
+
+### 6.4.1 验证（60 步 / 15 个 param_version，`r0d_adapter`，**0 错误**）
+
+| 判据 | 结果 |
+|---|---|
+| **★ vLLM 引擎里有没有 adapter**（新探针 `[lora-probe]`，挂在 `vLLMHttpServer.set_global_steps`） | `step=0 list_loras()=[]`（首次只推基座，符合设计）→ **`step≥1 list_loras()=[123]`** ✅<br>`123` 就是 `VLLM_LORA_INT_ID` —— `vllm_async_server.py:527` 正是拿它决定生成时挂不挂 LoRA |
+| **载荷** | 第 1 次 `399 张量 / 8,414.1 MiB / lora_ 0`（基座）→ 之后 **`504 张量 / 252.0 MiB / lora_ 504`** ✅ |
+| **`rollout_corr/kl`** | `0.00041 0.00257 0.00074 0.00184 0.00114 **0.00032 0.00034**` —— **震荡并回到地板**<br>对照坏基线同位置：`0.00034 0.00028 0.00168 0.00122 0.00160 0.00208 **0.00344**` —— **单调爬升**<br>⇒ 第 7 个版本上 **相差 10×**，判据这次**有能力分辨**了 |
+
+⇒ ⭐ **异步 RL 第一次真正跑通**：rollout 用的是当前策略，不是 π₀，也不是 bf16 合并的残骸。
+
+### 6.4.2 ⛔ 预测偏了一处（照纪律记下来）
+
+```
+预测  第 2 次起载荷 ~132 MiB
+实测  **252.0 MiB**
+原因  LoRA 参数是 **fp32**（66M × 4 B = 264 MB ≈ 252 MiB），我按 bf16 算了
+⇒ 降幅是 **33×**，不是我说的 64×。张量数 504 的预测是对的。
+```
+
+### 6.4.3 ★ 白捡的一大块：`param_sync` 6.25 s → **0.974 s**（6.4×）
+
+| | R0-a（merge 止血，每次推 8.4 GB） | **R0-d（推 adapter）** |
+|---|---|---|
+| 稳态 `param_sync` | **6.25 s** | **0.974 s**（中位；各次 1.04/0.97/0.92/1.10/1.02/0.84/0.79） |
+| 占一步 | ~6.5% | **0.8%** |
+| 首次（推基座） | — | 13.3 s，**一次性** |
+
+⇒ **这直接改写 E12 的结论**：那份「权重同步 99.9% 不是传输」是在**误以为只推 132 MB**、
+而实际推 8.4 GB 的前提下算的。**按真实载荷，同步就是 1 秒的事。**
+⇒ 一步的构成随之变成：**三次前向占 88.9%**（`update_actor` 56.8% + `old_log_prob` 17.2% + `ref` 14.9%）
+—— 吞吐线的靶子现在毫无争议地是 E17/B12。
 
 ## 7 · 已落地
 
