@@ -8,6 +8,12 @@ metadata:
   modified: 2026-08-16T17:09:54.660Z
 ---
 
+> ⛔⛔ **2026-08-18：本条里所有「异步 / 陈旧度 / ESS」相关的结论作废** ——
+> 两个基石级 bug（E21 梯度没跨 rank 同步 · E22 权重从没推给 rollout engine）。
+> 见 [[two-foundational-bugs-2026-08-18]] 与 `docs/syncopate/21-invalidated-numbers.md`。
+> ✅ **纯硬件/通信/kernel 的测量不受影响**（E18 对齐悬崖 · E16 FP8 · B11 拓扑 ·
+> B20 dynamic_bsz · E01/A5 阶段归属 · E00 带宽）。
+
 infra 线与主线**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
 infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，含明天的队列）。
 

@@ -15,6 +15,14 @@ docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令�
 docs/syncopate/06-rl-run-protocol.md      RL 跑之前的预期与停止条件（预期写在跑之前）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
+docs/syncopate/21-invalidated-numbers.md ⛔★★★ **先读这份**：哪些数字不能引用
+                                          （2026-08-18 两个基石 bug 污染了所有 RL 实测）
+                                          判据强制：check_pipeline_invariants --only quarantine
+docs/syncopate/20-mainline-task-queue.md ★★ 主线执行顺序的**唯一来源**，每条带「谁在打」
+docs/syncopate/19-2026-08-18-postmortem.md ★ 一天六个问题 + 它们的共同形状
+docs/infra_exp/MAINLINE-HANDOFF-2026-08-18.md 主线交给 infra 的问题清单
+docs/syncopate/18-pipeline-assumption-probes.md 管线前提探针审计（E21 之后的同族排查）
+docs/syncopate/17-rl-learning-blocked.md ESS/lr 方案（⚠️ §2 的观测已被 E22 解释）
 docs/syncopate/16-m7b-rl-run.md          ★ M7-b（2026-08-17）：lr 被夹在两堵墙之间 ——
                                           3e-5 时 ESS 跌破 0.3 停机、1e-5 时位移只有 0.0487%
                                           ⇒ 下一跑 colocate+3e-5 对照（异步的代价）

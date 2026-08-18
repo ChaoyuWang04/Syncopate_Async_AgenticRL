@@ -305,8 +305,12 @@ def main(argv: list[str] | None = None) -> int:
     #   而 GRPO 的梯度完全来自组内方差 ⇒ **起点的熵直接决定了有多少东西可学**。
     #   ⚠️ M6 那条「零梯度<30% 与 多样性≥70% 互斥」是在**4 个整 epoch 点**上得的，
     #     曲线这么陡的地方用这么粗的采样判"互斥"，很可能只是没采到中间。
-    parser.add_argument("--save-fractions", default="",
-                        help="在训练总步数的这些比例处额外存点，如 0.125,0.25,0.375。"
+    #   ⇒ **默认就开**（不是可选项）：默认空等于又一个"记得传这个参数"的手动步骤，
+    #     而手动步骤一定会被忘 —— 本项目第一失效形状。同「wandb 默认开，要关得显式」。
+    #     代价 3 个点 × 126 MB = 378 MB，相对 300 G 盘是 0.1%；清理路径已内建。
+    parser.add_argument("--save-fractions", default="0.125,0.25,0.375",
+                        help="在训练总步数的这些比例处额外存点（**默认开**，覆盖 0→e1 那段"
+                             "此前完全没有采样点的陡区）。设成空串关掉。"
                              "★ 这些是**临时选点产物**，选完就删（跑完会打印清理命令）")
     parser.add_argument("--profile-steps", type=int, default=0,
                         help="H0 观测仪：抓 N 个 micro-step 的 torch.profiler 时间线后自动收工"
