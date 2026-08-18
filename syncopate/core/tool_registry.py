@@ -99,6 +99,13 @@ class ToolSpec:
     kind: str                            # "read" 只查不改 / "write" 产生副作用
     handler: Callable[..., Any]
     fact_key: str | None = None          # 写工具翻转哪个谓词；读工具为 None
+    # ★ 2026-08-18：写工具再分一档 —— **判据是工具自己的描述，不是拍的**：
+    #   "immediate" 立即产生外部副作用、不可逆（campaign.* / creative.upload）
+    #   "deferred"  只是**提议**，需人审后才生效（approval.create_case / memory.*）
+    # 为什么要分：`unauthorized_write_cap` 原来把这两类罚得一样重（都封顶 0.30），
+    # 而它们的真实代价差几个数量级 —— 一个是"多问了一句"，一个是"没打招呼就开始花钱"。
+    # ⚠️ 这个字段**不进 openai_schema()** ⇒ 不改 prompt ⇒ 不需要重建数据版本。
+    effect: str = "immediate"
     latency_seconds: float = 0.0         # 真实等待时长
     requires: list[str] = field(default_factory=list)  # 前置工具，做依赖检查用
 
@@ -149,6 +156,7 @@ class ToolRegistry:
         parameters: dict[str, Any],
         kind: str = "read",
         fact_key: str | None = None,
+        effect: str = "immediate",
         latency_seconds: float = 0.0,
         requires: list[str] | None = None,
         api_ref: str | None = None,
@@ -159,11 +167,17 @@ class ToolRegistry:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if kind == "write" and not fact_key:
                 raise ValueError(f"write tool {name!r} must declare a fact_key")
+            # ★ 只有写工具才谈"生效方式"；读工具标 deferred 一定是笔误，硬失败别静默
+            if effect not in ("immediate", "deferred"):
+                raise ValueError(f"tool {name!r}: effect 只能是 immediate / deferred，得到 {effect!r}")
+            if kind != "write" and effect != "immediate":
+                raise ValueError(f"tool {name!r} 不是写工具，不该声明 effect={effect!r}")
             self._tools[name] = ToolSpec(
                 name=name,
                 description=description,
                 parameters=parameters,
                 kind=kind,
+                effect=effect,
                 handler=func,
                 fact_key=fact_key,
                 latency_seconds=latency_seconds,
@@ -188,6 +202,10 @@ class ToolRegistry:
     def write_tools(self) -> dict[str, str]:
         """{工具名: fact_key}，verifier 用它把工具映射到谓词。"""
         return {n: s.fact_key for n, s in self._tools.items() if s.kind == "write" and s.fact_key}
+
+    def deferred_write_tools(self) -> set[str]:
+        """只是提议、需人审后才生效的写工具（见 ToolSpec.effect）。"""
+        return {n for n, t in self._tools.items() if t.kind == "write" and t.effect == "deferred"}
 
     def menu(self, names: list[str] | None = None) -> list[dict[str, Any]]:
         """渲染进 prompt 的工具菜单。

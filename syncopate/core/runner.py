@@ -93,6 +93,7 @@ async def run_plan(
 
         if step >= bundle.case.max_steps:
             trajectory.truncated = True
+            trajectory.truncation_reason = "turns"       # 计划回放只有这一种截断
             break
 
     return trajectory, sandbox

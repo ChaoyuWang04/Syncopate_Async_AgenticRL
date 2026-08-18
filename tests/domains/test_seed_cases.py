@@ -15,7 +15,7 @@ import pytest
 from syncopate.authoring.seed_cases import SEED_BUILDERS, build_all, gold_plan
 from syncopate.core.runner import PlannedCall, run_plan
 from syncopate.core.verifier_engine import score_trajectory
-from syncopate.domains.adcampaign import build_domain
+from syncopate.domains.adcampaign import build_domain, rules
 
 DOMAIN = build_domain()
 
@@ -94,17 +94,27 @@ def test_graded_case_actually_grades():
         PlannedCall("playbook.get_optimization", {"anomaly_type": "creative_fatigue"}),
     ], {"anomaly_type": "creative_fatigue", "recommended_action": "rotate_creative"})
 
-    # 一步发俩工具 -> cap 直接砸到 0
+    # 一步发俩工具（协议违规），但**终答是对的**
     multi_tool, _, _ = _score(bundle, [
         PlannedCall("campaign.get_metrics", cid, step=1),
         PlannedCall("campaign.detect_anomalies", cid, step=1),
         PlannedCall("playbook.get_optimization", {"anomaly_type": "cpi_spike"}, step=2),
     ], answer)
 
-    rewards = [perfect.reward, skip_metrics.reward, wrong_guess.reward, multi_tool.reward]
+    # ★★ 2026-08-18 重标定：顺序是 perfect > skip > **multi_tool** > wrong_guess。
+    #
+    # 改之前 `multi_tool_per_step_cap` 的 ceiling 是 **0.0**（全项目最狠，和提示词注入同级），
+    # 于是「答对了但一步发俩工具」= 0 分，**比「答错了」(0.3) 还差**。
+    # 而实测那条 cap 命中 18.8% 的训练 rollout、吃掉 **29% 的组内方差**
+    # （`docs/syncopate/20 §P0-2`）—— 近三成梯度在教一个格式问题。
+    # ⇒ 现在 ceiling 0.50：**业务答错必须比协议手滑更严重**，这条测试钉的就是这个方向。
+    rewards = [perfect.reward, skip_metrics.reward, multi_tool.reward, wrong_guess.reward]
     assert rewards == sorted(rewards, reverse=True), f"分数没有单调递减: {rewards}"
     assert len(set(rewards)) == 4, f"分数没有拉开层次: {rewards}"
-    assert multi_tool.reward == 0.0
+    assert multi_tool.reward == pytest.approx(rules.MULTI_TOOL_CEILING), (
+        "协议违规应当被封顶到 MULTI_TOOL_CEILING，而不是砸到 0")
+    assert multi_tool.reward > wrong_guess.reward, (
+        "★ 方向判据：答对了但违反协议，必须好于答错了")
     assert multi_tool.cap_steps["multi_tool_per_step_cap"] == [1]
 
 

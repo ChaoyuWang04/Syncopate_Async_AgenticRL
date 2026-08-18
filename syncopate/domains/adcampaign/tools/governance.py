@@ -190,6 +190,7 @@ def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="approval.create_case",
+    effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
         "为超出自动执行范围的变更创建审批单（不会立即生效）。"
         "当政策判定 requires_approval、或风控/记忆显示该操作过于频繁时，"

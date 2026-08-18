@@ -96,6 +96,7 @@ def memory_read(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="memory.write_proposal",
+    effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
         "提交一条记忆写入提案（不会立即入库，需经审核）。"
         "要求 confidence ≥ 0.7 且 evidence_refs 至少 2 条；"
@@ -160,6 +161,7 @@ def _called_risk_check(ctx: ToolContext) -> bool:
 
 @REGISTRY.tool(
     name="memory.invalidate",
+    effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
         "提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。同样需要审核。"
         "· 只是**提议**作废，**不会**立即生效，也**不删除**原记录 —— 你需要知道「我们曾经这么以为」。"
@@ -186,6 +188,7 @@ def memory_invalidate(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 @REGISTRY.tool(
     name="memory.conflict_resolve",
+    effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
         "两条记忆互相矛盾时，提议如何处置：supersede=用新的取代旧的，merge=合并。"
         "record_ids 必须至少给两条。"

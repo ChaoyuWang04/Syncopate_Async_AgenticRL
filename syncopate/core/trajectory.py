@@ -57,6 +57,18 @@ class Trajectory:
     final_text: str = ""
     parse_ok: bool = True
 
+    # ★★ 2026-08-18：截断的**原因**。`truncated` 只说"没走到终答"，
+    # 而它有四个出口、三种成因，**修法方向完全不同甚至相反**：
+    #     "tokens"       模型自己把 token 预算写满了      ⇒ 加 token 预算
+    #     "observation"  工具返回塞不进剩余预算（不是模型的锅）⇒ 截断 observation
+    #     "turns"        轮数用完还没给终答                ⇒ 缩链路 / 加轮数 / 查为什么打转
+    # ⚠️ 此前四个出口共用一个布尔值 ⇒ 数据里**根本不存在**这个区分，只能事后猜；
+    #   2026-08-18 就因此按错的假设（`num_steps>=8`，而真实上限逐 case 是 4–14）
+    #   得出过一个整个反了的结论。
+    # ⚠️ `truncated` 保留（= `truncation_reason is not None`）：下游消费者很多，
+    #   而且历史 dump 里没有新字段，必须照读。判据在 check_pipeline_invariants。
+    truncation_reason: str | None = None
+
     # 每个 token 属于第几步。token→step 的映射表，步级信用分配要用。
     token_trace: dict[str, Any] = field(default_factory=dict)
 
@@ -103,5 +115,6 @@ class Trajectory:
             "final_text": self.final_text,
             "parse_ok": self.parse_ok,
             "truncated": self.truncated,
+            "truncation_reason": self.truncation_reason,
             "num_steps": self.num_steps,
         }

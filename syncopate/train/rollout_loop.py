@@ -42,7 +42,10 @@ ASSISTANT_TURN_END = "<|im_end|>"
 # 两边都在截，而且截得不一样，等于训练和评测跑在两个不同的输入分布上。
 # 左截断砍掉的是 system 规则书的**开头**（工具规则 + clarify/reject/defer 枚举），
 # 实测让 CLAR/REJ 的 reward 从 0.9 掉到恒等于 0。
-MAX_PROMPT_LENGTH = 5120
+# ★ 2026-08-18：这个值挪进了 `rollout_budget.py`，因为**训练和评测必须共用同一份**
+#   （此前评测硬编码 2048 而训练传 1536 —— 两边跑在不同的输入分布上）。
+#   这里保留同名 re-export，下游的 import 一个字都不用改。
+from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH  # noqa: E402,F401
 
 # ★ 显式关掉 thinking，SFT / RL / gold 回放三处必须完全一致。
 #
@@ -227,6 +230,7 @@ async def run_rollout(
         # 和下面 `added == 0` 那条出口是同一套语义。
         if config.max_response_length - len(response_ids) < MIN_GENERATION_HEADROOM:
             trajectory.truncated = True
+            trajectory.truncation_reason = "tokens"      # 生成之前预算就不够了
             break
         step += 1
 
@@ -257,6 +261,7 @@ async def run_rollout(
         new_ids = new_ids[:kept] + suffix_ids
         if not new_ids:
             trajectory.truncated = True
+            trajectory.truncation_reason = "tokens"      # 截到只剩结束符都放不下
             break
 
         response_ids.extend(new_ids)
@@ -291,13 +296,38 @@ async def run_rollout(
             continue
 
         # ---- 4. 执行工具 ----
+        # ★★ 2026-08-18：一步多调用时，**只执行第一个**，其余当协议错误退回。
+        #
+        # 起因（实测 5280 条训练 rollout，见 `docs/syncopate/20 §P0-2`）：
+        #   18.8% 的 rollout 一步发了多个 tool call，而 system.txt 第 8 行明确禁止；
+        #   截尾采样（评测口径 top_p 0.95 / top_k 20）下这个数是 **0%**
+        #   ⇒ 它是**采样尾巴**，不是模型不懂规矩。
+        #
+        # 为什么要拦在这里而不是只靠 cap 事后封顶：
+        #   ① system.txt 自己说了危险在哪 ——「不要在没看到前一个 observation 的情况下
+        #      就调用依赖它的工具」。**执行了才叫危险**，拦下来危害就没了。
+        #   ② 事后封顶把整条轨迹打成 0 分，实测**吃掉 29% 的组内方差**
+        #      —— GRPO 的梯度完全来自组内方差，等于近三成梯度在教"别进采样尾巴"。
+        #
+        # ⚠️ **仍然把没执行的那些记进 trajectory.actions**：
+        #   `multi_tool_per_step_cap` 靠 `multi_tool_steps()` 按 step 计数来判，
+        #   不记的话这条 cap 会直接失效 —— 那就是本项目第一失效形状（机制在但没接上）。
+        # ⚠️ topology == "parallel" 的 case 本来就要求同一步发多个，不拦（同 cap 的豁免口径）。
+        parallel_ok = bundle.case.metadata.topology == "parallel"
         for call_index, call in enumerate(parsed.tool_calls):
             tool_call_id = f"tc_{step}" if len(parsed.tool_calls) == 1 else f"tc_{step}_{call_index}"
             ctx = ToolContext(case=bundle.case, env=bundle.env, sandbox=sandbox,
                               step=step, tool_call_id=tool_call_id)
 
+            if call_index > 0 and not parallel_ok:
+                # 不执行，只把协议错误回灌 —— 模型能看见自己错在哪，下一步可以改
+                result_ok, result_data, result_error = False, {}, (
+                    "protocol_violation: 每步只能发起一个 tool call，"
+                    f"本步的第 {call_index + 1} 个调用（{call['name']}）未执行。"
+                    "请等上一个 observation 返回后再决定下一步。"
+                )
             # 菜单外的工具直接拒绝——不能让模型靠调用隐藏工具绕过 tool_missing 类 case
-            if tool_names is not None and call["name"] not in tool_names:
+            elif tool_names is not None and call["name"] not in tool_names:
                 result_ok, result_data, result_error = False, {}, f"tool_not_available: {call['name']}"
             else:
                 tool_start = time.monotonic()
@@ -321,6 +351,9 @@ async def run_rollout(
             )
             if added == 0:
                 trajectory.truncated = True
+                # ★ 这一种**不是模型的锅**：工具返回太大塞不进剩余预算。
+                #   混在 "tokens" 里会把"该截 observation"误判成"该加预算"。
+                trajectory.truncation_reason = "observation"
                 break
         else:
             continue
@@ -328,6 +361,7 @@ async def run_rollout(
     else:
         # while 正常走完 = 撞上 max_assistant_turns 还没给终答
         trajectory.truncated = True
+        trajectory.truncation_reason = "turns"           # ★ 只有这一种才是真的"撞步数上限"
 
     # ★ 硬约束：这个长度是 verl 的批次契约，超一个 token 都会在 _postprocess 的
     # torch.cat 里炸（"Sizes of tensors must match"）。上面每处 append 都算过预算了，
@@ -357,6 +391,7 @@ async def run_rollout(
             "tool_errors": tool_errors,
             "parse_errors": parse_errors,
             "truncated": trajectory.truncated,
+            "truncation_reason": trajectory.truncation_reason,
             # >0 就是事故：system 规则书的开头被砍掉了
             "prompt_truncated_tokens": max(0, prompt_truncated),
             # ★ 把「生成耗时」和「工具耗时」分开记。长尾 case 的时间全在 tool_seconds 上，
