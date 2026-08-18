@@ -40,7 +40,11 @@ import torch
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
-from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
+from syncopate.train.rollout_budget import (
+    MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
+    SAMPLING_TOP_K, SAMPLING_TOP_P,
+)
+from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
 # 多轮累积的预算：最长的模板（GEO）max_steps=14，实测每步约 140 token
 #（模型输出 + 工具返回），留一倍余量。
@@ -71,7 +75,8 @@ class HFEngine:
                 max_new_tokens=self.max_new_tokens,
                 do_sample=self.temperature > 0,
                 temperature=self.temperature if self.temperature > 0 else None,
-                top_p=0.95 if self.temperature > 0 else None,
+                top_p=SAMPLING_TOP_P if self.temperature > 0 else None,
+                top_k=SAMPLING_TOP_K if self.temperature > 0 else None,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
         return out[0][len(prompt_ids):].tolist()
@@ -164,10 +169,12 @@ class VLLMEngine:
 
             # 不合并权重，运行时应用 LoRA（W + BA·scale，数学上等价于 merge_and_unload）
             self.lora = LoRARequest("eval_adapter", 1, adapter)
+        # ★ 2026-08-18：top_p / top_k 改从 `rollout_budget` 取 —— **和训练同一份**。
+        # 此前是 0.95 / 20（对齐的是 eval-HF），而训练是 1.0 / -1 ⇒ 两边采的不是同一个分布。
         self.params = SamplingParams(
             temperature=temperature,
-            top_p=0.95 if temperature > 0 else 1.0,
-            top_k=20 if temperature > 0 else -1,
+            top_p=SAMPLING_TOP_P if temperature > 0 else 1.0,
+            top_k=SAMPLING_TOP_K if temperature > 0 else -1,
             max_tokens=max_new_tokens,
             stop_token_ids=eos_ids,
             detokenize=False,       # 核心循环自己管 token，不需要引擎反解文本
@@ -525,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         output = await run_rollout(
             bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
             config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
+                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=MAX_RESPONSE_LENGTH),
             rollout_id=f"eval{k}",
         )
         result = score_trajectory(
@@ -537,6 +544,9 @@ def main(argv: list[str] | None = None) -> int:
             "parse_errors": output.metrics["parse_errors"],
             "tool_errors": output.metrics["tool_errors"],
             "truncated": output.metrics["truncated"],
+            # ★ 截断的**原因**（tokens / observation / turns）——三者修法方向相反，
+            #   合并成一个布尔值就等于不知道该拧哪个旋钮（`20 §P1-3`）
+            "truncation_reason": output.metrics.get("truncation_reason"),
             "num_steps": output.metrics["num_steps"],
             "caps": [h.name for h in result.cap_hits],
             "behavior": output.trajectory.behavior,
@@ -573,6 +583,8 @@ def main(argv: list[str] | None = None) -> int:
             "parse_errors": sum(g["parse_errors"] for g in group),
             "tool_errors": sum(g["tool_errors"] for g in group),
             "truncated": sum(g["truncated"] for g in group) / len(group),
+            **{f"trunc_{r}": sum(g.get("truncation_reason") == r for g in group) / len(group)
+               for r in ("tokens", "observation", "turns")},
             "num_steps": statistics.mean(g["num_steps"] for g in group),
             "caps": [c for g in group for c in g["caps"]],
             "behavior": collections.Counter(g["behavior"] for g in group).most_common(1)[0][0],

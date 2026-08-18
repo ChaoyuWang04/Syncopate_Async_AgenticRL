@@ -46,7 +46,8 @@ from syncopate.core.schemas import CaseBundle
 from syncopate.domains.adcampaign import build_domain
 from syncopate.pipeline.split import load_bucket
 from syncopate.train.eval_local import HFEngine, load_model
-from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
+from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
+from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -120,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         output = asyncio.run(run_rollout(
             bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
             config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
+                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=MAX_RESPONSE_LENGTH),
             rollout_id="stale"))
         if output.metrics["logprob_coverage"] < 0.99:
             # 占位 logprob 会让 ratio 变成噪声，这种轨迹不能进统计

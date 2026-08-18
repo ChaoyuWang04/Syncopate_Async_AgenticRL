@@ -379,7 +379,7 @@ python -m syncopate.train.launch_rl --mode one_step_off \
   --save-path checkpoints/grpo/<name> --experiment <name> --lora-rank 32 \
   --steps 150 --train-batch-size 6 --rollout-n 8 --ppo-mini-batch-size 6 \
   --micro-batch-size 1 --max-num-seqs 64 --object-store-gb 2 \
-  --max-prompt-length 3584 --max-response-length 1536 --save-freq 25 --latency-scale 0.01
+  --max-prompt-length 5120 --max-response-length 2048 --save-freq 25 --latency-scale 0.01
 ```
 
 ★ **RL 起点必须是 merge 后的模型**（`train/merge_adapter.py`）：`launch_rl` 没有加载
@@ -393,6 +393,7 @@ adapter 的入口，而且 verl 用 LoRA 时 reference = 关掉 adapter = **基�
 | `--fsdp-size` | **1**（DDP，不切分） | LoRA 下每步只同步 260 MB（≈10 ms）；分片要每层 all-gather 全部权重。⚠️ FULL_SHARD/ZeRO-2 稳态对照由队列 A6 补 |
 | `--dynamic-bsz` | **False** | ⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测**。sdpa 下打包会让注意力退化成 O(总长²) |
 | `--trainer-gpus / --rollout-gpus` | 3 / 1 | gen 只占 12%，rollout 不是瓶颈 |
+| `--max-prompt-length` / `--max-response-length` | **5120 / 2048** | 🆕 2026-08-18：**训练与评测共用一份**（`syncopate/train/rollout_budget.py`）。此前训练 3584/1536、评测硬编码 5120/2048，**两边跑在不同的输入分布上** —— 见 `20 §P0-1`。取宽的那一档：放宽只会让原本被截断的轨迹跑完，不会新增截断 |
 | `--rollout-gpu-util` | 0.75 | 0.85 会让第一次权重同步 OOM（bucket 也在 rollout 卡上） |
 | `--attention-backend` | TRITON_ATTN | vLLM 自带 FA2 的 sm_120 PTX 比驱动新，编不了 |
 | `--bypass-mode` | **False**（decoupled） | **只有这个模式产出 ESS 等 `rollout_corr/*` 指标**，停止条件 P6 依赖它 |
