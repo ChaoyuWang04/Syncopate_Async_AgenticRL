@@ -107,6 +107,56 @@ def phase_attribution(con, window: tuple[int, int]) -> dict:
     }
 
 
+def gap_analysis(con, top: int = 15) -> dict:
+    """★ 空泡：**GPU 上两个 kernel 之间的间隙**，按进程分、按总时长排。
+
+    这是「图形界面用眼睛看时间轴」那件事的可计算版本：
+    把每个进程的 kernel 按开始时间排好，算相邻之间的空档，
+    再按「空档长度」分档统计。**GUI 看得见的东西，这里都能算出来** ——
+    差别只在 GUI 适合开放式探索，这个适合量化与两次跑对比。
+
+    ⚠️ 一个 kernel 结束到下一个开始之间的空档，成因可能是：
+    CPU 侧还没提交（launch 慢 / Python 慢）、在等别的流、在等 memcpy、或者在等别的进程。
+    **本函数只回答「有多少、多长、在谁身上」，不回答「为什么」** —— 后者要看那段时间里
+    CPU 侧在跑什么 API（`CUPTI_ACTIVITY_KIND_RUNTIME`），排成下一步。
+    """
+    procs = {r[0]: (r[1], r[2]) for r in con.execute("SELECT globalPid, Pid, name FROM PROCESSES")}
+    out = {}
+    for gpid, (pid, pname) in procs.items():
+        rows = list(con.execute(
+            "SELECT start, end FROM CUPTI_ACTIVITY_KIND_KERNEL WHERE globalPid=? ORDER BY start",
+            (gpid,)))
+        if len(rows) < 2:
+            continue
+        span = rows[-1][1] - rows[0][0]
+        busy = sum(e - s for s, e in rows)
+        gaps = []
+        prev_end = rows[0][1]
+        for s, e in rows[1:]:
+            if s > prev_end:
+                gaps.append(s - prev_end)
+            prev_end = max(prev_end, e)
+        gaps.sort(reverse=True)
+        total_gap = sum(gaps)
+        # 分档：看空泡是「很多小的」还是「少数大的」——两者的解法完全不同
+        buckets = {"<10µs": 0, "10–100µs": 0, "0.1–1ms": 0, "1–10ms": 0, ">10ms": 0}
+        for g in gaps:
+            us = g / 1e3
+            k = ("<10µs" if us < 10 else "10–100µs" if us < 100 else
+                 "0.1–1ms" if us < 1000 else "1–10ms" if us < 10000 else ">10ms")
+            buckets[k] += g
+        out[f"{pname}(pid={pid})"] = {
+            "span_s": round(span / 1e9, 3),
+            "busy_s": round(busy / 1e9, 3),
+            "busy_share": round(busy / span, 4) if span else None,
+            "gap_s": round(total_gap / 1e9, 3),
+            "n_gaps": len(gaps),
+            "top_gaps_ms": [round(g / 1e6, 3) for g in gaps[:top]],
+            "gap_seconds_by_size": {k: round(v / 1e9, 3) for k, v in buckets.items()},
+        }
+    return out
+
+
 def analyze(db: Path) -> dict:
     con = sqlite3.connect(str(db))
     q = lambda s, *a: list(con.execute(s, *a))
@@ -159,6 +209,7 @@ def analyze(db: Path) -> dict:
         ],
     }
     out["phases"] = phase_attribution(con, (t0, t1)) if t0 is not None else {"error": "无 kernel"}
+    out["gaps"] = gap_analysis(con)
     for dev, ns in sorted(by_device.items()):
         out["devices"][str(dev)] = {
             "kernel_seconds": round(ns / 1e9, 3),
@@ -214,6 +265,15 @@ def main() -> int:
               f"   {u['kernels']} 个 kernel   ← 大多是 rollout 侧（它不在 trainer 的 range 里）")
     elif ph.get("error"):
         print(f"\n  ⚠️ 阶段归属不可用：{ph['error']}")
+
+    if res.get("gaps"):
+        print("\n  ★★ 空泡（每个进程的 kernel 之间的空档）—— 「有多少、多长、在谁身上」")
+        print(f"    {'进程':<34}{'跨度':>8}{'忙':>8}{'空':>8}{'忙占比':>8}   空泡按长度分档（秒）")
+        for k, v in sorted(res["gaps"].items(), key=lambda kv: -kv[1]["gap_s"]):
+            dist = " ".join(f"{kk}:{vv}" for kk, vv in v["gap_seconds_by_size"].items() if vv > 0.01)
+            print(f"    {k:<34}{v['span_s']:>8.1f}{v['busy_s']:>8.1f}{v['gap_s']:>8.1f}"
+                  f"{(v['busy_share'] or 0) * 100:>7.1f}%   {dist}")
+        print("    ⚠️ 本节只答「有多少空泡」，不答「为什么」——后者要把空档和 CPU 侧的 API 调用对齐")
 
     print("\n  ★ 最贵的 kernel")
     for k in res["top_kernels"][:8]:
