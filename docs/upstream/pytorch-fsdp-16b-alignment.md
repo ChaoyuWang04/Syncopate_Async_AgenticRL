@@ -4,6 +4,35 @@
 > 归属：这是一条**独立的线**（不属于 Track A/B 的兑现物，但由 E18 的调查产出）
 > 完整实验记录：[`../infra_exp/E18-rank3-allgather-collapse.md`](../infra_exp/E18-rank3-allgather-collapse.md)
 
+> 🆕🆕 **2026-08-19 · 提交前核查完成，六条（定位要按它们重摆）**：
+>
+> 1. **PyTorch main 三处全部未修**（源码逐字核对）：FSDP1 `_get_unpadded_shard` 仍是裸
+>    `.chunk(world_size)`；FSDP2 `_get_dim0_padded_size` 仍只补到 `dim0_factor` 整除；
+>    FSDP1 的 `ALIGNMENT = 16`（`_flat_param.py`，注明来自 TorchInductor）仍只用于
+>    **段内**对齐 —— ⇒ PR 框架：「你们已经在乎 16B，只是没对齐到分片边界」。
+>    issue 侧四组搜索（`_get_dim0_padded_size`/shard alignment/…）**空白**。
+> 2. **NCCL#413（2020）**：同一现象 6 年前就报过（+4 字节 ⇒ ~13×，与我们 12.2× 吻合），
+>    负责人 sjeaugey 确认「expected」并把修法指派给调用方 ——
+>    **"padding is a solution that would always work well"**；2025-07 被清理机器人关闭，
+>    留了「仍相关请重开」的口。⇒ NCCL 侧动作 = **评论重开**，不是新 issue。
+> 3. **NCCL 机制在 master 源码坐实**（`src/device/common_kernel.h:219-247`）：
+>    `BigPackSize=16`；对齐检查是**警报式全员投票**（任一 src/dst 指针 %16≠0 ⇒
+>    `__all_sync` 整体判负）⇒ 整段掉到 `BytePerPack=sizeof(T)`（bf16=2 字节/包），
+>    **没有头尾剥离**。该文件自 2023 实质未动 ⇒ 2.27.5 → **2.31.2（当前版）机制零变化**。
+> 4. ★ **DeepSpeed 先例**：`stage_1_and_2.py` 的 `nccl_start_alignment_factor`
+>    （注释原话 *"align nccl all-gather send buffers to 4-byte boundary"*）——
+>    把 flat 组补到 `factor × world_size` 的倍数并**断言每个分区起点对齐**。
+>    与本文 §6 的修法**同构**（他们 4 字节，NCCL 向量化要 16）。
+> 5. ★★ **veScale-FSDP（arXiv 2602.22437，字节，2026-02）独立撞到并记载**：
+>    *"both FSDP1 and FSDP2 suffer from slow collectives due to unaligned communication
+>    buffer"* · *"FSDP1 and FSDP2 overlook NCCL address alignment caveat, leading to
+>    substantial degenerate communication"* —— 引用键就叫 `[nccl16byte]`；
+>    他们的分片规划按 "collective preferred unit size" 对齐。
+>    ⇒ **FSDP2 也中招从我们的 [推断] 升级为有独立来源**；且故事从「没人知道」
+>    变成「**工业界各自私下绕开（DeepSpeed/veScale），上游 tracker 是空白**」—— 更硬。
+> 6. FSDP1 维护模式的墙（pytorch#154888 先例）对 `_flat_param.py` 同样成立
+>    ⇒ 修法主推 **FSDP2**（活代码），FSDP1 同报但预期可被 not_planned。
+
 ---
 
 ## 0 · 一句话
