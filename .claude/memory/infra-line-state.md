@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-19T12:10:31.203Z
+  modified: 2026-08-19T13:34:45.625Z
 ---
 
 > ⛔⛔ **2026-08-18：本条里所有「异步 / 陈旧度 / ESS」相关的结论作废** ——
@@ -244,7 +244,7 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 → ③ KL 多种子 → ④ token vs sequence 多种子。
 **新增第四条常驻判据**：`prompt_length/clip_ratio` 必须 0.0000。
 **上游第四包**（`docs/upstream/verl-prefix-grouper-not-wired/`）：掩码语义是我们独有的；
-接线部分挂起（#7202 已被维护者关闭）。回信：`INFRA-TO-MAINLINE-2026-08-19b.md`。
+接线部分挂起（#7202 已被维护者关闭）。回信机制已废：⛔ 2026-08-19 起两线往来**只写根目录 `MAINLINE-INFRA.md`**（唯一文档，办完删行），旧信件全删。
 
 ## ★★★ 2026-08-19 下午：E26 集成收口 —— Adam dtype 的真身是 FSDP 归约竞态
 
@@ -258,8 +258,23 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ✅ 修法：前向走根 FSDP（CausalLM forward 临时换回 HF 原版 + logits_to_keep=1）+ hook 捕获
    hidden + log_probs 加 0×根输出的锚。验收：三 rank 梯度和与健康路径**逐位相同**、
    log_probs sum 分毫未动；真实冒烟四常驻判据全绿
-🟡 端到端方向数 step 119.43→56.44 s（2.12×）、update_actor 2.87×（n=1 未转正 ⇒ 队首②）
+⛔ 2.12× 那个方向数当天即作废（单行 timing 的覆盖数没实测过，坑 5 变体）
 ✅ 顺手修：launch_rl 数据默认值 v3→跟 DATA_VERSION 走 · --help 裸 % 崩溃
 ```
 ⇒ 教训进 ONBOARDING §5 坑 24–26：**FSDP1 下绕过根 forward = 静默不归约**；
 单因素复现不了先全抄再留一法；盯长跑必须带进程退出兜底。
+
+## ★★★ 2026-08-19 下午（续）：同尺子 A/B 定案 + 队列按 Chaoyu 重排
+
+```
+✅ A/B 四臂（20 gstep × seed 42，覆盖数实测=4，logs/queue_e26ab/AB.done）：
+   off_mb1 34.52 · off_mb8 33.26 · **on_mb8 14.94** · on_mb16 15.79 s/gstep
+   ⇒ **生产→PG 端到端 2.31×** · PG 净效果 2.23× · mb1→mb8 仅 +3.8% · mb16 慢 5.7%
+   ⇒ **PG 生产配置 = mb8（一组一批）**；微基准 3.96× 兑现 ~70%
+★ gen 占步 12%→26%：trainer 加速后瓶颈向 rollout 移 ⇒ **陈旧度剂量条件首次具备**
+   （配比之谜的完整解释在 [[disaggregation-is-a-memory-decision]]）
+🔄 队列重排（Chaoyu）：lr 1e-4 重测**降级**为可选上限基线——主因是**步数太少**
+   （≤1 epoch）不是 lr 低；「固定 epoch 而非步数」的原因②验证进队列
+⇒ 队首：**E26 B5 任务尺子**（过了才谈 PG 默认开）→ KL 多种子 → token/seq 多种子
+   （三个都是 ~4 h 级，适合夜间队列；已向 Chaoyu 提议，待点头）
+```

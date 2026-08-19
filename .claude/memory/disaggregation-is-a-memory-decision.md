@@ -1,8 +1,11 @@
 ---
 name: disaggregation-is-a-memory-decision
 description: 我们的训推分离是显存逼出来的，不是为了吃异步的重叠收益；负载配比与业界相反
-metadata:
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 8fda7c79-7275-5040-8ca9-2552dddaa97f
+  modified: 2026-08-19T13:33:43.206Z
 ---
 
 **我们的 3 trainer + 1 rollout 不是「为了异步」，是显存逼出来的**：
@@ -31,4 +34,27 @@ rollout 卡 idle_ratio 0.70，且**每次都是被陈旧度上限叫停的**（1
   干净基线上**从没在任务尺子上比过** colocate vs fully_async。空白 ≠ 通过。
 - ⇒ 要让配比合理，只有让 trainer **少算**（见 [[trainer-is-compute-bound-not-starved]]）。
 
+## ★★ 2026-08-19 下午：配比之谜的完整解释（Chaoyu 问「为什么我们和大厂反着」）
+
+**逐 token 的账（普适）**：生成 1 token ≈ 2N FLOPs;训练 1 token = 3 次前向 + 反向 + GC 重算
+≈ **10–12N** ⇒ trainer 天生干 5–6 倍的活。
+
+**把配比反过来的是负载形状**：
+- **我们**：prompt 4100 / response 650、组内 8 条共享题面。rollout 侧 vLLM prefix cache
+  实测命中 **98.7%** ⇒ 题面只 prefill 一次;trainer（PG 前）把题面**×8 再 ×10N** 地算
+  ⇒ FLOPs 比 ≈ **20:1**（380k·N vs 19k·N）⇒ 3:1 给 trainer 都不够。
+- **大厂**：long-CoT，response 16k+、prompt 短 ⇒ 没有大题面可共享;decode 串行且带宽受限
+  （MFU 个位数 vs 训练 40–60%）+ 长尾 ⇒ rollout 占端到端 **70–85%**（SortedRL/RollPacker/
+  Laminar/MIT News, 2026-08-19 检索）⇒ 卡往 rollout 堆 + 异步吃长尾（AReaL 等 2.2–2.7×）。
+
+**与 DDP/消费卡通讯无关，TP/PP 会更糟**（全有实测）：LoRA 下 all-reduce 占步 <0.1%;
+E25 GPU 算力已饱和;TP=2 rollout 净负 20%（E04）;ZeRO-3 慢 6×（E18）。4B+LoRA 单卡放得下
+⇒ **DP 就是正确答案，4D 里另外三个 D 在这个规模不需要**。
+
+**解法与后果**：让 trainer 少算（= E26 PG，端到端 2.31×）⇒ gen 占步 12%→**26%**
+⇒ **trainer 越快，配比越向业界靠，陈旧度的剂量条件第一次真正具备**——
+加速 trainer 不只是省时间，是「异步的代价」这个研究问题的**前置条件**。
+⇒ 上面那条「rollout 干完就在等」的旧图景已开始失效，B11 配比实验要按新形状重想。
+
 相关：[[infra-line-state]] [[machine-4x5090-constraints]] [[blank-thresholds-are-not-passes]]
+[[trainer-is-compute-bound-not-starved]]

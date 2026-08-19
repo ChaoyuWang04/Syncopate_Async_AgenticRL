@@ -3,7 +3,7 @@
 > **每次收尾时更新这份文件**（怎么更新见文末 §7）。新窗口开场只说一句
 > 「读 `docs/infra_exp/ONBOARDING.md`」就够了。
 >
-> 最后更新：**2026-08-18**
+> 最后更新：**2026-08-19**
 
 ---
 
@@ -21,7 +21,7 @@
                                         其余文档只写当前态、不做新旧对照）
 3. docs/infra_exp/STORY-async-lora-weight-sync.md ★★★ **先读这份** —— 异步 RL 为什么两个月
                                         没在学、我们怎么接通的（现象→误判→根因→修法→结果）
-4. docs/infra_exp/INFRA-REPLY-TO-MAINLINE-2026-08-19.md  📮 与主线的往来（还开着哪一项）
+4. /MAINLINE-INFRA.md（仓库根目录）      📮 与主线往来的**唯一**文档（⛔ 铁律：禁止再写信件）
 5. docs/infra_exp/E18-rank3-allgather-collapse.md   ★★ 方法论样板
 4. docs/infra_exp/TRACK-A / TRACK-B     两条线各要兑现什么、现在在哪（A*/B* 全表）
 5. docs/infra_exp/E26-prefix-grouper.md ★★ **判据方法论集大成**（§7 判据失效七形状 · §6 十三处接线）
@@ -53,8 +53,9 @@ set -a; . /workspace/.env; set +a
 ## 3 · 最近一轮做完了什么（2026-08-19 下午：E26 集成收口）
 
 **一句话**：E26 的 Adam dtype 卡点用**脱 Ray 复现**（12 轮 × 30 s）定了案 —— 真身不是 dtype，
-是**打包前向绕过了根 FSDP ⇒ 梯度归约竞态**（E21 形状的静默错误）；已修，真实 fully_async
-冒烟四常驻判据全绿，第一次拿到端到端方向数 **step 2.12×**（n=1，未转正）。
+是**打包前向绕过了根 FSDP ⇒ 梯度归约竞态**（E21 形状的静默错误）；已修，冒烟四常驻判据全绿；
+随后同尺子 A/B 四臂定案：**生产现状→PG 端到端 2.31×**（34.52→14.94 s/gstep）、最优 mb=8。
+队列已按 Chaoyu 重排（lr 1e-4 降级——主因是步数太少不是 lr 低）。
 
 ### 3.1 ★★★ 根因与修法（全文 [E26 §6.3–6.4](E26-prefix-grouper.md)）
 
