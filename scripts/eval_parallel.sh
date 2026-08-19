@@ -47,10 +47,14 @@ mkdir -p "$LOGDIR"
 rm -f "${OUT}.done"
 TMPDIR_SHARDS="$(mktemp -d)"
 pids=()
+# EVAL_EXTRA：透传给 eval_local 的额外参数（如 --max-new-tokens 2048）。
+# ★ 默认为空 = 行为不变；裸基座臂要显式给 2048（256 会把它的长输出砍断，
+#   截断与真实弱分不开 —— v13_base 那份就是这么作废的，2026-08-19）。
+EXTRA=(${EVAL_EXTRA:-})
 for i in $(seq 0 $((N-1))); do
   CUDA_VISIBLE_DEVICES="$i" "$PY" -m syncopate.train.eval_local \
     --model "$MODEL" --adapter "$ADAPTER" --batch "$BATCH" --split-dir "$SPLIT" \
-    --shard "$i/$N" --out "$TMPDIR_SHARDS/shard_$i.json" \
+    --shard "$i/$N" --out "$TMPDIR_SHARDS/shard_$i.json" "${EXTRA[@]}" \
     > "$LOGDIR/shard_$i.log" 2>&1 &
   pids+=($!)
 done

@@ -44,7 +44,7 @@ from syncopate.pipeline.split import (
     DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, assert_same_data_version, data_version_of,
 )
 from syncopate.train.rollout_budget import (
-    MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
+    MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH, THINK_ON,
     SAMPLING_TOP_K, SAMPLING_TOP_P,
 )
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
@@ -485,7 +485,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="只跑第 I 片（0-indexed）共 N 片，如 --shard 0/4")
     parser.add_argument("--per-class", type=int, default=4, help="每个 signal_class 取几条")
     parser.add_argument("--split-every", type=int, default=8, help="和 data build 的 val_every 对齐")
-    parser.add_argument("--max-new-tokens", type=int, default=256)
+    # 单轮生成上限（vLLM SamplingParams.max_tokens）。默认跟 think 开关走：
+    #   off = 256（单个 JSON 动作 ~30–90 token，256 是老默认，逐字节不变）
+    #   on  = 2048（单轮思考 0.5–1.5k + 动作 + 余量；256 会把每一轮思考拦腰砍断——
+    #        E27 B 臂第一跑就是这么作废的，2026-08-19）
+    parser.add_argument("--max-new-tokens", type=int, default=None,
+                        help="单轮生成上限；不传则按 SYNCOPATE_THINK 取 256/2048")
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="测组内方差必须 >0；要看确定性行为才设 0")
     parser.add_argument("--samples-per-case", type=int, default=4,
@@ -500,6 +505,8 @@ def main(argv: list[str] | None = None) -> int:
                              "补了新尺子之后，用它把历史基线的值反算出来 —— "
                              "不必为了一个新指标重跑几小时 GPU")
     args = parser.parse_args(argv)
+    if args.max_new_tokens is None:
+        args.max_new_tokens = 2048 if THINK_ON else 256
 
     if args.from_audit:
         return _rereport(ROOT / args.from_audit, ROOT / args.batch)

@@ -25,17 +25,20 @@ bash scripts/gpu_gate.sh || { echo "⛔ 门禁没过，不起"; exit 1; }
 wait_gpu() { while :; do b=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
   [ "${b:-99999}" -lt 2000 ] && break; sleep 15; done; }
 
-run_arm() {  # $1=臂名 $2=adapter $3=THINK(0/1)
-  local name=$1 adapter=$2 think=$3
-  say "════════ 臂 $name（adapter='${adapter}' think=$think）"
+run_arm() {  # $1=臂名 $2=adapter $3=THINK(0/1) $4=EVAL_EXTRA
+  local name=$1 adapter=$2 think=$3 extra=${4:-}
+  say "════════ 臂 $name（adapter='${adapter}' think=$think extra='${extra}'）"
   wait_gpu
-  SYNCOPATE_THINK=$think MODEL=$BASE timeout 7200 \
+  SYNCOPATE_THINK=$think EVAL_EXTRA="$extra" MODEL=$BASE timeout 7200 \
     bash scripts/eval_parallel.sh "$adapter" "_audit/e27_${name}.json" > "$Q/${name}.log" 2>&1 \
     || say "──────── 臂 $name 退出码 $?（继续下一臂，判据文件里会显形）"
   say "──────── 臂 $name 完成"
 }
 
-run_arm base_off ""             0
+# ★ 裸基座两臂单轮上限都给 2048（A 臂不给的话 256 会砍长输出，截断与真实弱分不开
+#   —— v13_base 就是这么作废的）；SFT 臂用生产默认 256（实测 0 token 截断）。
+#   ⇒ A vs B 单变量 = thinking；A vs C 的差异里含单轮上限，但 C 实测碰不到上限。
+run_arm base_off ""             0 "--max-new-tokens 2048"
 run_arm base_on  ""             1
 run_arm sft_new  "$SFT_ADAPTER" 0
 

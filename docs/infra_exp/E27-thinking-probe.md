@@ -30,6 +30,9 @@ P5  C vs A：显著为正（SFT 本来就该赢裸基座；这一臂同时是新
 模型     models/Qwen3-4B（思考能力原生；SFT/RL 一直用 enable_thinking=False 关着）
 评测     scripts/eval_parallel.sh → syncopate.train.eval_local（全管线同一份脚本）
 契约     rollout_budget.py：off = 5120/2048（现基线）；on = 5120/8192
+单轮上限 --max-new-tokens：SFT 臂 256（生产默认，实测 0 token 截断）；
+         **裸基座两臂都给 2048** —— 256 会把未 SFT 模型的长输出砍断，截断与真实弱
+         分不开（v13_base@256 实测截断 40.2%/parse_errors 909，已删并在此登记）
          采样三臂同一份（1.0/1.0/-1）——单变量纪律；⚠️ Qwen3 官方给 thinking 模式
          推荐 0.6/0.95，温度 1.0 下思考可能啰嗦/复读，第一轮先不动，异常再开第二轮
 增量拼接 rollout 循环不重渲染 ⇒ 历史轮 <think> 留在上下文并计入 response 预算
