@@ -6,12 +6,27 @@
 
 ---
 
-> 🆕🆕 **2026-08-18 检索到的关键情报 —— 这份文档的优先级因此提上来：**
-> [PyTorch 论坛 #220486](https://discuss.pytorch.org/t/potential-bug-with-hybrid-shard-and-n-1-device-mesh-falling-back-to-no-shard/220486)
-> 已有人报告**完全相同**的现象（`(n,1)` mesh 回退 `NO_SHARD` ⇒ 梯度不跨复制维归约 ⇒ 一步后参数发散），
-> 维护者 **H-Huang 回复「looks like a bug」，请对方到 GitHub 提 issue 并附可复现脚本 —— 而那个 issue 一直没被提。**
-> ⇒ **我们手上正好就是他们要的那个脚本**（纯 PyTorch · 3 卡 · 带 DDP 对照组 · 兼作修复验证）。
-> 同族：[pytorch#90050](https://github.com/pytorch/pytorch/issues/90050) · [pytorch#152710](https://github.com/pytorch/pytorch/issues/152710)
+> ⛔ **2026-08-18/19 调查后，本文的定位整个换了**（原「issue 一直没被提」是**错的**，保留下面时间线示错）：
+>
+> ```
+> 2025-05-31  论坛 #220486  报告 (n,1) mesh 回退 NO_SHARD 后梯度不同步
+> 2025-06-02  H-Huang 回「looks like a bug」，请对方提 issue —— **当天就提了**：pytorch#154888
+> 2025-06-03  triage：cc 整个 distributed oncall，assign 给 mori360
+> 2025-06-05  FSDP 维护者 weifengpy 确认 "this is a bug ... we might be slow in fixing
+>             fsdp1, are you interested in fsdp2?"
+> 2025-06-09  被 assignee 关成 **not_planned**。至今零个 PR 引用它。
+> ```
+>
+> ⇒ **bug 已被 PyTorch 承认过一次，然后因 FSDP1 维护模式被主动放弃**
+> （`_init_utils.py` 自 2025-06 的 17 次提交里 16 次是 lint/typing；`NO_SHARD` 自身已挂
+> FutureWarning「deprecated, use DDP」）。**空着的不是 issue 位，是修复。**
+> ⇒ **主战场移到 verl**（[`verl-fsdp-size-1-degenerate-mesh.md`](verl-fsdp-size-1-degenerate-mesh.md)）；
+> 本文降级为它的**上游证据链**：PyTorch 侧的动作改为
+> ① 在 #154888 评论补真实训练证据、请求 reopen（几分钟，不指望结果）
+> ② 可选：提一个只加 `raise` 的小 PR（§6-①）——「不修行为可以，但不该继续静默」。
+> 同族：[pytorch#90050](https://github.com/pytorch/pytorch/issues/90050) ·
+> [pytorch#152710](https://github.com/pytorch/pytorch/issues/152710)（FSDP2 侧讨论，
+> 维护者确认 `(Replicate, Shard=1)` 在 FSDP2 **开箱即用** —— 已被我们实测证实，见 §3.1-F）
 
 ## 0 · 一句话
 
@@ -55,7 +70,9 @@ NCCL       2.27.5（torch 自带）
 关键环境   NCCL_CUMEM_ENABLE=0
 ```
 
-⚠️ **提交前必须复核 torch 主干是否已改**（本文基于 2.9.0）。
+✅ **主干已复核（2026-08-18）**：main 与 2.9.0 在全部关键位置**逐字相同**——
+`_init_utils.py:127`（`world_size = process_group.size()`）、`:152-153`（hybrid 的两个组）、
+`_runtime_utils.py:936`（`all_reduce(grad, group=state.process_group)`）。**未修。**
 
 ---
 
@@ -87,6 +104,29 @@ loss.backward()
 ★ **最后两行打出逐位相同的数值** —— 说明测试装置本身是对的，
 且 `FSDP(NO_SHARD)` + 默认进程组的行为与 `DDP` 完全一致。
 ★ **"部分参数可训"不是触发条件**（第二行也坏）—— 这一条排除了 LoRA/PEFT 之类的干扰。
+
+### 3.1 🆕 2026-08-19 扩成七变体确定性矩阵（提交时用这张表）
+
+脚本已改造：每个模型创建前固定 seed ⇒ **全部正确实现打出同一个数，任何人可逐位复验**。
+产物 `_audit/infra/e21_grad_sync_matrix.json`（环境指纹/逐变体范数/warning 原文/内部状态取证）。
+
+| 变体 | 三 rank 梯度范数 | 判定 |
+|---|---|---|
+| A `mesh(3,1)`+`HYBRID_SHARD`·部分可训 | `[0.04565846, 0.09131692, 0.13697541]` | 🔴 没同步，一步 SGD 后已发散 |
+| B 同 A·全部可训 | 同 A | 🔴 |
+| C `mesh(3,)`+`FULL_SHARD` | 梯度按 rank 分片 | ⚠️ 无可比值 |
+| E `NO_SHARD`·不传 mesh | `0.27395082` ×3 | ✅ |
+| **G `mesh(3,1)`+`NO_SHARD`（显式）** | `0.27395082` ×3 | ✅ **网格不动也对** |
+| **F `mesh(3,1)`+FSDP2 `fully_shard`** | `0.27395082` ×3 | ✅ **同一网格 FSDP2 正确** |
+| D 纯 DDP | `0.27395082` ×3 | ✅ |
+
+★ **F 行是给 PyTorch 看的核心一行**：同一个 mesh，FSDP2 对、FSDP1 静默错
+⇒ 唯一解释是 FSDP1 的降级路径坏了，不是用户配置问题。
+★ **算术闭环**：A 的三个数恰为 `[g, 2g, 3g]`（各 rank 只剩自己数据的梯度，
+且被 FSDP 预除以 3 —— 它以为会有一个从未发生的 all-reduce）；
+均值 `2g=0.27395077` 与同步变体实测差 4.5e-8。
+★ **内部状态取证**（写进 JSON）：`state.world_size=1`、归约组 size=1、
+**复制组（size=3）建了但被遗弃** —— `orphaned_inter_node_pg_size: 3`。
 
 复现时 PyTorch 自己打出的唯一提示（`torch/distributed/fsdp/_init_utils.py:430`）：
 
@@ -139,6 +179,20 @@ step=4  rank=2  lora_B  权重=0.013628       梯度=8.142963e-05      ← 梯�
 | **② FSDP：策略降级** | 分片维只有 1 个 rank ⇒ 降级为 `NO_SHARD` | 逻辑正确 | 🟠 只是 `UserWarning` |
 | **③ FSDP：降级后的归约** | 在**分片进程组**（大小 1）上做梯度归约 | 🔴 **这里错了** | **降级之后，复制维上的 N 个 rank 再也不同步，而没有任何提示** |
 
+★ 机制已在源码坐实（2026-08-18，main 分支同）：
+
+```
+_init_utils.py:152-153  hybrid 分支：_inter_node_pg = mesh.get_group(0)   ← 复制维（N 个 rank）
+                                     process_group  = mesh.get_group(1)   ← 分片维（1 个 rank）
+_init_utils.py:127      state.world_size = state.process_group.size()  ⇒ 1
+_init_core_state        world_size==1 ⇒ UserWarning + 钳成 NO_SHARD
+_runtime_utils.py:936   dist.all_reduce(flat_param.grad, group=state.process_group)
+                        ⇒ 在那个 size-1 的组上 ⇒ 空操作
+                        （_inter_node_pg 只在 hybrid 分支 :868 使用 —— 策略已被钳走，永不到达）
+对照 FSDP2：分派只看 mesh.ndim（_fully_shard.py:194-203），没有"降级"动作；
+复制维 all_reduce 显式存在（_fsdp_param_group.py:554）且 ReduceOp.AVG 分母含两维。
+```
+
 ★ **最该修的是 ③**：它是唯一一个**用户无法察觉**的环节。
 ①②都还留有痕迹（一行 warning、一个可读的配置），而 ③ 的后果**只能通过逐 rank 比较梯度才能发现**。
 
@@ -171,11 +225,11 @@ if sharding_strategy in (ShardingStrategy.HYBRID_SHARD, ShardingStrategy._HYBRID
 
 ## 7 · ⚠️ 我们还没做的（提交前要么补做、要么写明）
 
-1. **没有读 FSDP 源码定位到具体是哪一行选错了进程组** ——
-   本文的因果链是「黑盒复现 + PyTorch 自己的 warning」推出来的，**机制层面尚未在源码上坐实**。
+1. ~~没有读 FSDP 源码定位~~ ✅ **已坐实**（§5 的四行源码，2026-08-18）。
 2. **只测了 `world_size=3`、分片维 =1** 这一种退化形状。
    `(N, 1)` 之外（比如 `(1, N)`）没测。
-3. **只在 torch 2.9.0 上测过**，主干是否已改未查。
+3. ~~只在 torch 2.9.0 上测过，主干未查~~ ✅ **主干已查，逐字相同、未修**（§2）。
+   另 FSDP2 同网格对照 ✅ **已做**（§3.1-F）。
 4. `FULL_SHARD`（一维 mesh）那一档在我们的复现里**读不到梯度**，因此**没有结论** ——
    不是"它也坏"，是"没测出来"。
 
@@ -183,7 +237,7 @@ if sharding_strategy in (ShardingStrategy.HYBRID_SHARD, ShardingStrategy._HYBRID
 
 ## 8 · 提交清单（真要提的时候照做）
 
-- [ ] 复核 torch 主干 / 最新 release 是否已修
+- [x] 复核 torch 主干 / 最新 release 是否已修 ——**未修**（§2；#154888 closed not_planned）
 - [ ] 把 `scripts/repro_fsdp_hybrid_nosync.py` 精简成**不依赖本仓库**的单文件（去掉四变体，只留 A + D 对照）
 - [ ] 附 §3 的表（**必须含 DDP 对照组** —— 它证明测试装置本身是对的）
 - [ ] 附 §4 的真实训练证据（LoRA `B` 零初始化那条判据尤其有说服力）

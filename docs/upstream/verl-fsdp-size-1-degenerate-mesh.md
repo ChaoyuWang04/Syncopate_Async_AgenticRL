@@ -1,8 +1,26 @@
 # 上游 issue 草稿 · verl：`fsdp_size=1` 会造出退化的 `(N, 1)` mesh，导致**梯度不再同步**
 
-> 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
+> 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18　**★ 2026-08-19 升级为主战场**
 > 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../infra_exp/E21-ddp-not-syncing.md)
 > 配套：[`pytorch-fsdp-hybrid-shard-no-grad-sync.md`](pytorch-fsdp-hybrid-shard-no-grad-sync.md)（同一根因的上游那一半）
+
+> 🆕 **2026-08-19 · 提交前调查完成，五条结论**：
+>
+> 1. **仓库已迁移 `volcengine/verl` → `verl-project/verl`**（旧名下 GitHub 搜索 API 直接报
+>    「resources do not exist」——先前"搜不到"有一半是这个原因）。提交与引用一律用新名。
+> 2. **空白确认**：新仓库 issues+PRs 全历史 —— `HYBRID_SHARD` **0 命中**；
+>    `NO_SHARD`(9)/`create_device_mesh`(2)/`fsdp_size`(90) 逐条看过，无一是本问题。
+>    **没有人报过、没有 PR、没有官方回复。**
+> 3. 最形似的 [#2478](https://github.com/verl-project/verl/issues/2478)（2025-07）：贴的是**同一行
+>    UserWarning**，但成因是集群没配好（FULL_SHARD、world_size 真的是 1），维护者答「去查 ray status」，
+>    半年后被清理机器人关闭。⇒ ★ **同一行 warning 的常见成因是良性的** —— 看到它的人第一反应是查集群，
+>    没有人会想到"梯度不再同步了"。这行 warning 无法承担报警职责，**必须在框架层堵**。
+> 4. **PyTorch 侧确定不修**：[pytorch#154888](https://github.com/pytorch/pytorch/issues/154888)
+>    维护者确认是 bug（"this is a bug ... we might be slow in fixing fsdp1"）后被关成
+>    `not_planned`（FSDP1 维护模式）⇒ **verl 是唯一能兜住的地方** —— 这句要写进 issue，
+>    把"该谁修"提前回答死。
+> 5. ★ **修法已换成更小的形态并实测通过**（§5-①，七变体矩阵的 G 行）；ckpt 探针证明它
+>    **不改变 checkpoint 行为**（§5-①-c）。产物：`_audit/infra/e21_grad_sync_matrix.json`。
 
 ---
 
@@ -32,7 +50,7 @@ actor_rollout_ref.actor.strategy: fsdp                # FSDP1
 
 ---
 
-## 2 · 代码路径（verl 0.8.0）
+## 2 · 代码路径（verl 0.8.0；✅ 2026-08-18 复核：main 分支 `create_device_mesh` / `get_sharding_strategy` **逐字未变**，今天写 `fsdp_size=1` 的人仍在踩）
 
 ```python
 # verl/workers/engine/fsdp/utils.py:40
@@ -90,11 +108,18 @@ step 1 时三个 rank 的权重**都是 `0.000000`**（起点完全一致），
 | `lora_B` 跨 rank | 范数 0.0931 / 0.0787 / 0.0754，相对差 **1.3** | 零初始化 ⇒ 差异全部来自更新 |
 | Adam `exp_avg_sq` 跨 rank | 相对差 **99%** | 梯度历史完全不同 |
 
-### 3.3 脱离 verl 的最小复现
+### 3.3 脱离 verl 的最小复现（2026-08-19 扩成七变体确定性矩阵）
 
-见配套文档 §3：纯 PyTorch、3 卡，`mesh(3,1)+HYBRID_SHARD` 不同步，
-而 `NO_SHARD`（不传 mesh）与 `DDP` **打出逐位相同的梯度**。
-⇒ **根因在 FSDP，但 verl 的 mesh 构造是触发条件。**
+见配套文档 §3.1：纯 PyTorch、3 卡、全脚本确定性（任何人可逐位复验）。给 verl 看的三行：
+
+```
+A  mesh(3,1)+HYBRID_SHARD（= fsdp_size=1 现状）   [0.0457, 0.0913, 0.1370]   🔴 没同步，一步后已发散
+G  mesh(3,1)+NO_SHARD（本文提议的修法）            [0.27395082] ×3            ✅ 网格一个字不动
+D  纯 DDP（对照组）                                [0.27395082] ×3            ✅ 装置是对的
+```
+
+⇒ **根因在 FSDP，但 verl 的 mesh 构造是触发条件；而 FSDP1 上游已确认不修（#154888）。**
+产物：`_audit/infra/e21_grad_sync_matrix.json` · 脚本 `scripts/repro_fsdp_hybrid_nosync.py`。
 
 ---
 
@@ -114,19 +139,40 @@ step 1 时三个 rank 的权重**都是 `0.000000`**（起点完全一致），
 
 ## 5 · 建议的修法
 
-**① 直接的修法**：`fsdp_size == 1` 时不要构造二维 mesh
+**① 直接的修法（★ 2026-08-19 已实测验证 —— 矩阵 G 行）**：
+`get_sharding_strategy` 遇分片维为 1 时返回 `NO_SHARD`，**mesh 一个字不动**：
 
 ```python
-def create_device_mesh(world_size, fsdp_size):
-    if fsdp_size < 0 or fsdp_size >= world_size:
-        return init_device_mesh(device_name, mesh_shape=(world_size,), mesh_dim_names=["fsdp"])
-    if fsdp_size == 1:
-        # 「不分片」应当用 NO_SHARD + 默认进程组表达；
-        # (N, 1) 的 mesh 会让 FSDP 降级成 NO_SHARD 却把梯度归约留在大小为 1 的组上
-        return None            # 并让 get_sharding_strategy 返回 NO_SHARD
-    return init_device_mesh(device_name, mesh_shape=(world_size // fsdp_size, fsdp_size),
-                            mesh_dim_names=["ddp", "fsdp"])
+# verl/workers/engine/fsdp/utils.py :: get_sharding_strategy
+elif device_mesh.ndim == 2:
+    if device_mesh.size(1) == 1:
+        # fsdp_size=1 ⇒ 分片维退化。HYBRID_SHARD 会被 FSDP 钳成 NO_SHARD，
+        # 但梯度归约仍留在那个 size-1 的分片组上 ⇒ 空操作，跨 rank 永不同步且不报错
+        # （PyTorch 侧已确认是 bug 且不修：pytorch#154888, closed not_planned）。
+        # 显式 NO_SHARD：FSDP 的非 hybrid 路径取 mesh_dim=0（复制维）当归约组
+        # （torch/distributed/fsdp/_init_utils.py:119）⇒ 归约落在正确的 N 个 rank 上。
+        return ShardingStrategy.NO_SHARD
+    sharding_strategy = hsdp_strategy
 ```
+
+为什么它是影响面最小的：
+
+```
+a. get_sharding_strategy 全仓库只有 1 个调用点（transformer_impl.py:375）；签名/配置项零变化
+b. mesh 形状与 mesh_dim_names 完全不变 ⇒ model_merger 的
+   assert mesh_dim_names in (("fsdp",), ("ddp","fsdp")) 不受影响；state._device_mesh 照设
+c. ★ ckpt 行为实测不变：NO_SHARD 下 SHARDED_STATE_DICT 本来就短路成 full tensor
+   （torch 自打 "When using NO_SHARD ... full_state_dict will be returned"）——
+   当前坏形态（被钳的 NO_SHARD）、本修法、我们线上补丁三者的探针输出**完全相同**
+   ⇒ resume 兼容，不需要动 checkpoint 路径
+d. 非退化配置（size(1)>1 / 一维 mesh）走原路，一个字节都没动
+e. 唯一改变的语义 = 梯度归约的进程组：size-1 分片组 → 复制维组。正是坏掉的那件事
+```
+
+> ⛔ **被否掉的旧方案（2026-08-18 首版，保留示错）**：`create_device_mesh` 在 `fsdp_size==1` 时
+> 返回 `None`/一维 mesh。否决理由：要同时改两个函数的契约；`mesh_dim_names` 变成 `("fsdp",)`
+> 会撞 `model_merger` 的断言、影响旧 ckpt 恢复；下游所有拿 mesh 的地方要加 None 判断。
+> **改动面数倍于 ①，收益相同。**
 
 **② 防御性的修法（建议同时做）**：构造完之后**断言梯度确实会同步**
 
@@ -138,21 +184,30 @@ def create_device_mesh(world_size, fsdp_size):
 ★ **我们更希望有②** —— 因为①只修了这一种退化形状，
 而"梯度没同步"这一类失败**在任何配置下都应该是硬失败，不是靠人去比对 checkpoint 才发现**。
 
+**PR 必须带的测试**：③ 3 rank 玩具模型（照矩阵脚本缩）——修前梯度各异、修后逐位相同；
+④ `SHARDED_STATE_DICT` save→load→resume 一轮（钉住 c 那条「格式不变」）。
+
 ---
 
 ## 6 · ⚠️ 还没做的
 
-1. **没有验证修法在 verl 里跑通** —— 本文提交时我们正在打补丁并复验；
-   若复验通过会补上「修复前后梯度逐位相同」的对照。
-2. **只在 FSDP1（`strategy: fsdp`）上测过**；`fsdp2` / megatron 路径未测。
+1. ~~没有验证修法在 verl 里跑通~~ ✅ **半闭合（2026-08-19）**：
+   ①的**语义**已在纯 PyTorch 七变体矩阵验证（G 行：同网格+NO_SHARD ⇒ 梯度逐位相同）；
+   我们线上跑的是等价的 monkeypatch 形态（NO_SHARD+默认组，`r0a_clean` 24 步真实训练复验通过）。
+   ⚠️ **①这个确切 diff 没有在 verl 源码树里真跑过** —— PR 前要做一次（改 utils.py 跑短训练）。
+2. ~~`fsdp2` 路径未测~~ ✅ **已测**：同一个 `(3,1)` mesh 交给 `fully_shard` 梯度同步正确（矩阵 F 行）
+   ⇒ `strategy: fsdp2` 不受此 bug 影响，issue 里可写「workaround: 切 fsdp2 或等本修法」。
 3. **只测了 `world_size=3`**。
-4. 只在 **verl 0.8.0 / torch 2.9.0** 上测过。
+4. 只在 **verl 0.8.0 / torch 2.9.0** 上测过（⚠️ main 的两个函数逐字未变，见 §2）。
 
 ---
 
 ## 7 · 提交清单
 
-- [ ] 复核 verl 主干是否已改（本文基于 0.8.0）
+- [x] 复核 verl 主干是否已改 ——**未改，逐字相同**（2026-08-18；仓库已迁 verl-project/verl）
+- [x] 全库搜索确认空白（issues+PRs：HYBRID_SHARD 0 命中；#2478 是同 warning 的良性成因，反成论据）
+- [x] 修法实测（矩阵 G 行）+ ckpt 探针（格式不变）——`_audit/infra/e21_grad_sync_matrix.json`
+- [ ] ①的确切 diff 在 verl 源码树里跑一次短训练（§6-1 的最后一步）
 - [ ] 附 §3.1 的运行时探针输出（**LoRA `B` 零初始化那条判据是核心**）
 - [ ] 附 §3.3 的纯 PyTorch 复现（**含 DDP 对照组**）
 - [ ] 附 §4 的后果说明（"在任何指标上都看不出来"这一句要突出）

@@ -180,6 +180,18 @@ FSDP(module, sharding_strategy=ShardingStrategy.NO_SHARD, use_orig_params=True, 
 ⇒ 而那个 issue **一直没有被提**。
 ```
 
+> ⛔ **2026-08-18 晚更正（上面最后一句是错的，按纪律保留原文示错）**：那个 issue **当天就提了** ——
+> [pytorch#154888](https://github.com/pytorch/pytorch/issues/154888)（同一报告者，GitHub 账号 origin-bio）。
+> 时间线：2025-06-02 提 → 06-03 triage、cc 整个 distributed oncall、assign 给 mori360 →
+> 06-05 FSDP 维护者 weifengpy 确认 *"this is a bug ... **we might be slow in fixing fsdp1**,
+> are you interested in fsdp2?"* → **06-09 被 assignee 关成 `not_planned`**。至今零个 PR 引用它。
+> ⇒ **空着的不是"issue 位"，是"修复"** —— FSDP1 维护模式下 PyTorch 明确不修
+> （`_init_utils.py` 自 2025-06 起 17 次提交里 16 次是 lint/typing，`NO_SHARD` 自己已挂 FutureWarning）。
+> ⇒ **论点随之要换**：不是"替他们补一个没提的 issue"，而是
+> 「**上游已确认、已放弃 ⇒ 框架层（verl）是唯一能兜住的地方**」——主战场移到 verl（§4.8）。
+> ⚠️ 教训同 §5.5-②：「搜不到 ⇒ 没人提」是一句夹在事实中间的**推断** ——
+> 当时只查了论坛帖有没有回链，没搜 GitHub issue 标题。
+
 ⇒ ★ **我们手上正好就是他们要的那个东西**：`scripts/repro_fsdp_hybrid_nosync.py`
 （纯 PyTorch · 3 卡 · 带 DDP 对照组 · `REPRO_APPLY_FIX=1` 还能兼作修复验证）。
 ⇒ **这把上游那份文档从"可提可不提"变成了"该提"** —— 是一个维护者明确要过、且一直空着的位置。
@@ -321,6 +333,59 @@ verl 乘的 `dp_size` 对不上。⇒ 已在补丁里写成断言（`verl_patche
 ⇒ 若日后要做真正的端到端级验证，可行的做法是**离线回放**：
 从 `rollout_dumps` 取一个真实批次，喂给 1 卡 / 3 卡的 actor 更新 —— 数据同一性有保证。
 **成本约 1–2 小时写harness，建议并进 B5 那一轮做，不单独占卡。**
+
+## 4.8 ★★★ 修法×实现矩阵（2026-08-19，七变体一次跑完）——「同一个网格，FSDP2 对、FSDP1 静默错」
+
+> 提上游前要回答三个问题：① 同一个 `(N,1)` 网格交给 **FSDP2** 对不对（决定 PyTorch 侧论点）
+> ② 拟提给 verl 的**最小修法**（网格原样保留、只把策略换成 `NO_SHARD`）真的有效吗
+> ③ 修法会不会改变 ckpt 格式（verl 的 fsdp ckpt 走 `SHARDED_STATE_DICT`）。
+> 脚本：`scripts/repro_fsdp_hybrid_nosync.py`（2026-08-19 改造：**全脚本确定性** + 七变体 +
+> 一步 SGD 后果 + A 的内部状态取证 + ckpt 探针）
+> 产物：`_audit/infra/e21_grad_sync_matrix.json`（+ `_fixmode`）·
+> `logs/e21_grad_sync_matrix{,_fixmode}_20260819.log`
+
+```
+变体（确定性 seed，任何人可逐位复验）                三 rank 梯度范数                          判定
+A  mesh(3,1) HYBRID_SHARD·部分可训（我们的）  [0.04565846, 0.09131692, 0.13697541]   🔴 没同步，一步 SGD 后权重已发散
+B  同 A·全部可训                             同 A                                   🔴（排除「部分可训」变量）
+C  mesh(3,)  FULL_SHARD 真分片               [None, None, 0.27395082]               ⚠️ 梯度按 rank 分片，无可比值（历来无结论）
+E  NO_SHARD·不传 mesh（已上线的补丁形态）      [0.27395082, 0.27395082, 0.27395082]   ✅
+G  mesh(3,1)·NO_SHARD（拟提 verl 的修法）     [0.27395082, 0.27395082, 0.27395082]   ✅ ★ 网格原样保留也对
+F  mesh(3,1)·FSDP2 fully_shard               [0.27395082, 0.27395082, 0.27395082]   ✅ ★ 同一网格 FSDP2 正确
+D  纯 DDP（对照组）                           [0.27395082, 0.27395082, 0.27395082]   ✅ 装置本身是对的
+```
+
+**五条结论**：
+
+1. **★ 同一个 `(3,1)` 网格：FSDP2 正确、FSDP1 静默错误** ⇒ 「你用法不对」这个反驳被排除了。
+   机制差异在源码上坐实：FSDP2 **没有"降级"这个动作**（mesh 即策略，`_fully_shard.py:194-203`
+   只看 `ndim`），复制维的 all_reduce 显式存在（`_fsdp_param_group.py:554`）且 `ReduceOp.AVG`
+   分母含两维（1×3=3，`_fsdp_collectives.py:693-707`）—— 顺带按同一口径回答了主线 I1。
+2. **★ G 成立 ⇒ verl 侧的 3 行修法验证通过**：`get_sharding_strategy` 在 `mesh.size(1)==1` 时
+   返回 `NO_SHARD` 即可，**mesh 一个字不动** —— FSDP1 的非 hybrid 路径自己会取
+   `mesh_dim=0`（复制维，N 个 rank）当归约组（`_init_utils.py:119`）。
+3. **ckpt 探针：修法不改变 checkpoint 行为**。E / G / 当前坏形态三者的 `SHARDED_STATE_DICT`
+   **全部**被 `NO_SHARD` 短路成 full tensor（torch 自打 `When using NO_SHARD ... full_state_dict
+   will be returned`，值类型全是 `Tensor`）⇒ resume 兼容不受影响。
+   ⚠️ 我此前读码推断「sharded hook 对 NO_SHARD 不短路、G 可能撞 DTensor chunking」——**推断错了，
+   探针纠正**。又一条「读码会漏、判据要实测」（§5.5-②同族）。
+4. **算术闭环（坏变体连"错的方式"都完全可解释）**：A 的三个数恰为 `[g, 2g, 3g]` ——
+   各 rank 手里只有**自己那份数据**的梯度（数据按 rank+1 缩放），且已被 FSDP 预除以 3
+   （它以为会有一个**从未发生**的 all-reduce）。均值 `(1+2+3)g/3 = 0.27395077`，
+   与全部同步变体的实测 `0.27395082` 差 4.5e-8。
+5. **fix-mode 复验**：`REPRO_APPLY_FIX=1` 装上我们的补丁后 A/B 变绿，A 的内部状态
+   `world_size` 1→3。
+
+**A 的内部状态取证（bug 的结构性证据，写进了 JSON）**：
+
+```
+sharding_strategy_after_init = NO_SHARD（被钳）
+state_world_size = 1 · process_group_size = 1        ← 归约用的组
+orphaned_inter_node_pg_size = 3                       ← 复制组**建了、从没被用**
+构造期唯一提示 = "FSDP is switching to use `NO_SHARD` ... since the world size is 1."
+```
+
+---
 
 ## 5 · 下一步（按"先定根因、再修、最后重测"）
 

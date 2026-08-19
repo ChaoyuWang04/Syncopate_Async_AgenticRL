@@ -1,0 +1,195 @@
+{
+  "experiment": "E21 · FSDP1 HYBRID_SHARD (N,1) 梯度同步矩阵（复现 + 三种修法对照）",
+  "script": "scripts/repro_fsdp_hybrid_nosync.py",
+  "date": "2026-08-19T02:29:56",
+  "fix_mode": true,
+  "env": {
+    "torch": "2.9.0+cu128",
+    "cuda": "12.8",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "world_size": 3,
+    "NCCL_CUMEM_ENABLE": null
+  },
+  "criteria": "同步 ⇔ 三 rank 梯度范数逐位相同（all-reduce 求平均）；一步 SGD 后权重范数逐位相同 ⇔ 未发散",
+  "variants": [
+    {
+      "key": "A",
+      "tag": "A · mesh(N,1) HYBRID+部分可训（我们的）",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "plain",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395080775022507,
+        0.027395080775022507,
+        0.027395080775022507
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [
+        "The `NO_SHARD` sharding strategy is deprecated. If having issues, please use `DistributedDataParallel` instead."
+      ],
+      "state_info": {
+        "sharding_strategy_after_init": "ShardingStrategy.NO_SHARD",
+        "state_world_size": 3,
+        "process_group_size": 3
+      }
+    },
+    {
+      "key": "B",
+      "tag": "B · mesh(N,1) HYBRID+全部可训",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "plain",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395080775022507,
+        0.027395080775022507,
+        0.027395080775022507
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [
+        "The `NO_SHARD` sharding strategy is deprecated. If having issues, please use `DistributedDataParallel` instead."
+      ],
+      "state_info": {
+        "sharding_strategy_after_init": "ShardingStrategy.NO_SHARD",
+        "state_world_size": 3,
+        "process_group_size": 3
+      }
+    },
+    {
+      "key": "C",
+      "tag": "C · mesh(N,) FULL_SHARD+部分可训",
+      "grad_norms": [
+        null,
+        null,
+        0.27395081520080566
+      ],
+      "grad_read": "missing",
+      "grad_synced": null,
+      "param_norms_after_step": null,
+      "param_identical": null,
+      "warnings_at_construction": [],
+      "state_info": {
+        "sharding_strategy_after_init": "ShardingStrategy.FULL_SHARD",
+        "state_world_size": 3,
+        "process_group_size": 3
+      }
+    },
+    {
+      "key": "E",
+      "tag": "E · NO_SHARD 无 mesh（我们的补丁形态）",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "plain",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395080775022507,
+        0.027395080775022507,
+        0.027395080775022507
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [
+        "The `NO_SHARD` sharding strategy is deprecated. If having issues, please use `DistributedDataParallel` instead."
+      ],
+      "state_info": {
+        "sharding_strategy_after_init": "ShardingStrategy.NO_SHARD",
+        "state_world_size": 3,
+        "process_group_size": 3
+      },
+      "sharded_state_dict_probe": {
+        "ok": true,
+        "n_entries": 3,
+        "value_types": [
+          "Tensor"
+        ]
+      }
+    },
+    {
+      "key": "G",
+      "tag": "G · mesh(N,1) NO_SHARD（拟提 verl 的修法）",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "plain",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395080775022507,
+        0.027395080775022507,
+        0.027395080775022507
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [
+        "The `NO_SHARD` sharding strategy is deprecated. If having issues, please use `DistributedDataParallel` instead."
+      ],
+      "state_info": {
+        "sharding_strategy_after_init": "ShardingStrategy.NO_SHARD",
+        "state_world_size": 3,
+        "process_group_size": 3
+      },
+      "sharded_state_dict_probe": {
+        "ok": true,
+        "n_entries": 3,
+        "value_types": [
+          "Tensor"
+        ]
+      }
+    },
+    {
+      "key": "F",
+      "tag": "F · mesh(N,1) FSDP2 fully_shard",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "dtensor_local",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395080775022507,
+        0.027395080775022507,
+        0.027395080775022507
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [
+        "Deallocating Tensor that still has live PyObject references.  This probably happened because you took out a weak reference to Tensor and didn't call _fix_weakref() after dereferencing it.  Subsequent accesses to this tensor via the PyObject will now fail. (Triggered internally at /pytorch/torch/csrc/PyInterpreter.cpp:265.)"
+      ],
+      "state_info": {
+        "param_type": "DTensor",
+        "placements": "(Replicate(), Shard(dim=0))",
+        "mesh_shape": "(3, 1)"
+      }
+    },
+    {
+      "key": "D",
+      "tag": "D · 纯 DDP（对照组）",
+      "grad_norms": [
+        0.27395081520080566,
+        0.27395081520080566,
+        0.27395081520080566
+      ],
+      "grad_read": "plain",
+      "grad_synced": true,
+      "param_norms_after_step": [
+        0.027395082637667656,
+        0.027395082637667656,
+        0.027395082637667656
+      ],
+      "param_identical": true,
+      "warnings_at_construction": [],
+      "state_info": {
+        "param_type": "Parameter"
+      }
+    }
+  ]
+}
