@@ -3,7 +3,7 @@
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提
 - [集合通信的 16 字节对齐悬崖](collective-alignment-cliff.md) — 分块不被 16 整除，all_gather 掉 12×；「3 卡受诅咒」的真相
 - [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、只能 DDP；2+2 跨 socket、Gen5、四卡 25.6 GB/s；A6 决定「模型内并行净亏损」还剩多少力气
-- [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-INFRA-HANDOFF.md
+- [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-START.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错（一天撞三次）
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★第三条：判据太宽会**为错误的理由通过**（xfail 会把它一起吞掉）
@@ -15,11 +15,11 @@
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
 - [静默降级：三个 rank 没同步梯度](silent-degradation-fsdp-nosync.md) — 上游只给一行 UserWarning；四处信号我们一处都没接住，最后靠一句随手写的断言抓到
 - [静默降级：LoRA 从没推给 rollout](silent-degradation-weight-sync.md) — 异步 RL 的策略两个月没变过；★「验了耗时 ≠ 验了内容」，且它制造了一整套自洽的错误解释
-- [trainer 是活重不是没喂饱](trainer-is-compute-bound-not-starved.md) — ★ 喂饱 GPU 的单位是 **token 不是序列条数**；micro_batch 拉高是负收益
-- [训推分离是显存逼的](disaggregation-is-a-memory-decision.md) — 配比与业界相反（他们 1:3 偏生成）；陈旧度测不出代价是因为**剂量本就极低**
+- [trainer 是活重不是没喂饱](trainer-is-compute-bound-not-starved.md) — ★ 喂饱 GPU 的单位是 **token 不是序列条数**（三次验证：E25 · mb8 仅+3.8% · PG 下 mb16 反慢 5.7%）；PG 生产配置=mb8
+- [训推分离是显存逼的](disaggregation-is-a-memory-decision.md) — 配比与业界相反的**完整解释已齐**（负载形状：题面重×8×10N vs prefix cache 98.7%）；E26 后 gen 12%→26%，陈旧度剂量条件首次具备
 - [归因之前先看输入被没被截断](check-the-input-before-blaming-the-model.md) — ★ 一整套「reward 在教不拒绝」的分析作废，量的是 prompt 100% 被砍；`clip_ratio` 一个数能挡住整条错误归因链
 - [挡晋级不挡起跑](gate-the-promotion-not-the-run.md) — 要挡的是"把没做完的当成做完的"，不是"不许做短的"；这样不会变成另一条线的路障
 - [登记 ≠ 实现](registered-is-not-implemented.md) — WRITE_TOOLS 填了 8 个、实现只有 2 个；登记表是最像"证据"的东西
-- [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 证明正确的优化接进真实系统花了 13 处修复；★ 报错位置几乎总在别人家里
+- [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 14 处修复后端到端 **2.31×**（微基准兑现 70%）；★ 第 14 处=绕过根 FSDP 的归约竞态（静默不同步）；报错位置几乎总在别人家里
 - [行为异常先查输入](behavior-collapse-check-input-first.md) — ★ defer 崩塌是 **prompt 被截断**，不是 reward 教的；夜跑那条归因已翻案
 - [截断家族一天三例](budget-truncation-family.md) — ★v13 SFT 26% 样本没终答（轮数上限默认 8，已修已重建）；预算必须从契约派生、截断必须报错或计数；RL prompt 余量只剩 466

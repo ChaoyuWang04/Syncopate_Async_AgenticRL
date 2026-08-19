@@ -19,7 +19,7 @@ metadata:
 
 **How to apply**：
 - `micro_batch=1` / `dynamic_bsz=False` / `gradient_checkpointing=True` 三条**别再动**，
-  理由已写进 `launch_rl.py` 的参数 help 与 `00-INFRA-HANDOFF §2`。
+  理由已写进 `launch_rl.py` 的参数 help 与 `02-DECISIONS §1`。
 - 省时间只剩「**让它少算**」：prefix grouper（8 条样本共享题面只算一次，上界 4.1×）·
   砍 ref（12.7%）· ref 走 FP8。
 - ⚠️ `use_prefix_grouper` verl 内置但**不是即插即用**：包没装，且 verl 把 `response_mask`

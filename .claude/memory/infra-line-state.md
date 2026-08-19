@@ -1,6 +1,6 @@
 ---
 name: infra-line-state
-description: infra 线（多卡/异步/MoE）的已定决策与当前状态；入口是 docs/infra_exp/00-INFRA-HANDOFF.md
+description: infra 线（多卡/异步/MoE）的已定决策与当前状态；入口是 docs/infra_exp/00-START.md
 metadata: 
   node_type: memory
   type: project
@@ -15,11 +15,11 @@ metadata:
 > B20 dynamic_bsz · E01/A5 阶段归属 · E00 带宽）。
 
 infra 线与主线**分开交接**：主线看 `docs/syncopate/00-START.md`，
-infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，含明天的队列）。
+infra 线看 **`docs/infra_exp/00-START.md`**（08-19 重组：00 导航/守则 · 01 队列 · 02 决策与作废 · TRACKS 兑现物；旧的 ONBOARDING/00-INFRA-HANDOFF/TRACK-A/TRACK-B 已并入，E12 归档）。
 
 **组织方式**：E 编号是身份（永不重排），track 是叠加的索引视图：
-`TRACK-A-hardware-kernel.md`（负载稀疏 × 6.4GB/s 拓扑 ⇒ 该写什么算子）、
-`TRACK-B-framework-async.md`（通用 RL 框架的假设在 agentic 负载上逐条失效）。
+`TRACKS.md`（负载稀疏 × 6.4GB/s 拓扑 ⇒ 该写什么算子）、
+`TRACKS.md`（通用 RL 框架的假设在 agentic 负载上逐条失效）。
 每个实验必须能答「服务哪条兑现物 / 需求由哪个测量指出」，答不上就显式停放（E04/E05/E06 已停）。
 
 ## ★★ 2026-08-17 的状态（第 1 批全部跑完 + 四条追加）
@@ -107,9 +107,9 @@ Track A  ~30%   论证 80% / 兑现 25% / 硬手艺 0%    ← 三条腿断了两
 - 新文档 **`docs/infra_exp/NARRATIVE-AND-RESUME.md`**：完成态的故事线 + 简历。
   ★ **它只写终点**（所有实验做完的样子），没测的数字留 `〔 〕` 由实验填；
   **刻意不维护「现在能写的」那一版**——进度归 track 文档，两份并存最后两份都不准。
-  欠的实验清单在 `TRACK-B §3.5`（B1–B9）和 `TRACK-A §7.5`（A1–A6）。
+  欠的实验清单在 `TRACKS.md`（B1–B9）和 `TRACKS.md`（A1–A6）。
 
-## 队列（全表见 `00-INFRA-HANDOFF.md` §5）
+## 队列（全表见 `01-TASKS.md`）
 
 **排序原则，按顺序应用**：① **短探测优先，尤其是能防止长实验白做的**
 （30 分钟的 go/no-go 挡住 2–3 天的工作量，期望收益比任何优化都高）；
@@ -153,7 +153,7 @@ E01  三次前向占 kernel 时间 83.2%；但卡只忙 74.6–78.2%（我曾说
 （PyTorch + verl）。**都等 Chaoyu 点头再提。**
 
 ⇒ **排序原则已换**（Chaoyu 2026-08-18）：**影响正确性的 > 影响速度的**；
-第二看**端到端**收益，不看组件收益。清单唯一来源是 `00-INFRA-HANDOFF §5`。
+第二看**端到端**收益，不看组件收益。清单唯一来源是 `01-TASKS`。
 
 ## 🔴🔴🔴 2026-08-18 下午：第二个静默正确性 bug（E22），比 E21 影响更大
 
@@ -166,7 +166,7 @@ E22  disaggregated（fully_async / one_step_off）下 **LoRA 从没被推给 rol
      白捡：verl「按全局 token 数归一 × dp_size」在变长序列下确实在保护我们
 ```
 
-⇒ **重跑队列已整段重排**（`00-INFRA-HANDOFF §5`），一句话判据：
+⇒ **重跑队列已整段重排**（`01-TASKS`），一句话判据：
 **算了多少、搬了多少字节 → 不受影响；算得对不对、学到没有 → 全部作废。**
 ⇒ **上游草稿三份**（PyTorch 一条 + verl 两条），都等 Chaoyu 点头。
 ⇒ 相关记忆：[[silent-degradation-weight-sync]]
@@ -192,7 +192,7 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ⇒ **队列下一件：R1（E20 全套在修好的异步基线上重测）**，直接跑 fully_async。
 ⚠️ 但**读任务分之前要等主线 ⑥ 的重基线评测**（配对比较的合法基线，4 卡 15 分钟）。
 ⇒ 故事全文：`docs/infra_exp/STORY-async-lora-weight-sync.md`
-⇒ 管线验证状态总表：`00-INFRA-HANDOFF §5.6`
+⇒ 管线验证状态总表：`01-TASKS §5`
 
 ## ⭐⭐ 2026-08-18 夜 · 9 小时队列（19 项 / 7.1 h）的结论
 
@@ -220,7 +220,7 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
    分组口径 ≠ 主线 P4）⇒ **判据必须能对自己失败**
 ```
 
-⇒ 新队首（`00-INFRA-HANDOFF §5.1`）：**reward 设计（主线）→ 常驻行为判据 → 多种子 →
+⇒ 新队首（`01-TASKS §1`）：**reward 设计（主线）→ 常驻行为判据 → 多种子 →
 原因② 重新设计（固定 epoch 而非步数）→ 同步不打断 rollout → sync_every 过 B5**
 
 
@@ -240,7 +240,7 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 🔴 代修主线阻断 bug   `val_kwargs.seed` 是不存在的键 ⇒ launch_rl 100% 启动即死
 ```
 
-**队首（`00-INFRA-HANDOFF §5.1`）**：① 5120 下重测 lr 1e-4 → ② E26 同尺子吞吐 A/B → B5
+**队首（`01-TASKS §1`）**：① 5120 下重测 lr 1e-4 → ② E26 同尺子吞吐 A/B → B5
 → ③ KL 多种子 → ④ token vs sequence 多种子。
 **新增第四条常驻判据**：`prompt_length/clip_ratio` 必须 0.0000。
 **上游第四包**（`docs/upstream/verl-prefix-grouper-not-wired/`）：掩码语义是我们独有的；
@@ -261,7 +261,7 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ⛔ 2.12× 那个方向数当天即作废（单行 timing 的覆盖数没实测过，坑 5 变体）
 ✅ 顺手修：launch_rl 数据默认值 v3→跟 DATA_VERSION 走 · --help 裸 % 崩溃
 ```
-⇒ 教训进 ONBOARDING §5 坑 24–26：**FSDP1 下绕过根 forward = 静默不归约**；
+⇒ 教训进 00-START §5 坑 24–26：**FSDP1 下绕过根 forward = 静默不归约**；
 单因素复现不了先全抄再留一法；盯长跑必须带进程退出兜底。
 
 ## ★★★ 2026-08-19 下午（续）：同尺子 A/B 定案 + 队列按 Chaoyu 重排

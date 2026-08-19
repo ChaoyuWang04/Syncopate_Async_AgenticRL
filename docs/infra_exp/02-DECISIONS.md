@@ -1,0 +1,75 @@
+# Infra · 02 · DECISIONS — 已定决策 · 作废登记 · 已落地改动
+
+> **回查「当时为什么这么定 / 这个数字还能不能引用」才读它，不必通读。**
+> 新决策**就地改行**（理由变了要写为什么），不追加重复行。
+
+---
+
+## 1 · 已定决策（别再重新讨论）
+
+| 决策 | 结论 | 详见 |
+|---|---|---|
+| 框架 | **verl 不换** | E07 §1 |
+| 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）。三档稳态实测：DDP 7.97 s / ZeRO-2 慢 3.42× / ZeRO-3 慢 6.02×（3 卡）；TP=2 rollout 净负 20% ⇒ **这台 P2P 全关的机器上模型内并行是净亏损** | E02 · E04 · E18 |
+| attention | `flash_attention_2`，**必须官方 cu13torch2.9 轮子**（社区 cu128 反向是坏的，RL 静默空转）。换轮子先跑 `check_flash_attn_backward.py` | 00 §5-⑧ |
+| `micro_batch` / `dynamic_bsz` / GC | **mb=1 · dynamic_bsz=False · GC 开着**（喂饱 GPU 的单位是 token；mb 拉高负收益、关 GC 就 OOM）。**PG 开时例外：mb=8**（一组一批；mb16 慢 5.7%） | E25 · E26 §6.6.1 |
+| **PrefixGrouper** | ✅ 集成已通、吞吐 2.31× 已定（`SYNCOPATE_PREFIX_GROUPER=1`，**默认关**）；**默认开的门槛 = B5** | E26 |
+| **LoRA 权重同步** | **必须走 adapter 推送**（`SYNCOPATE_LORA_ADAPTER_SYNC` 默认开）。⛔ 禁 `--lora-merge`（bf16 合并毁掉 adapter 一半作用，启动即拦） | E22 §6.1/§6.4 |
+| **FSDP 后端** | **留在 FSDP1**（Chaoyu 08-18；上游不修退化网格）⇒ `SYNCOPATE_FSDP_DDP_FIX` 必须一直默认开；且**前向必须走根模块**（绕过 = 归约竞态） | STORY §8.1 · E26 §6.3 |
+| **MoE 选型** | `Qwen3-30B-A3B-Instruct-2507`（GLM-4.7-Flash 当前栈不支持）；LoRA **绝不 all-linear**（98.7% Linear 在专家里 ⇒ 26×），用「注意力+router」30.1M | E07 §4.5 |
+| NCCL 协议 | 按并行策略分设：DDP 用默认；分片路径开 `NCCL_PROTO=LL128`（**不能全局开**：all_reduce −30%）。launch_rl 已自动 | E18 §9–10 |
+| 满载降频 | 多卡对照**不需要扣这一项**（满载单卡 −2.0%） | E00 |
+| E11 稀疏 logprob | 🔻 降级不写 kernel（端到端 4.3%，切片就有 4.0%）。★「浪费的比例」和「能拿回的收益」隔着一个分母 | E11 §6 |
+| 采样口径 | 训练侧不截尾（`top_p=1.0/top_k=-1` 已钉死），**评测对齐训练**（落地挂 01 §2） | E23 §3 |
+| 配对比较基线 | 一律 `_audit/v13_sft_e1_merged.json`（旧 v13_sft_e1 会系统性低估 RL +0.025） | E24 |
+| **KL / ref** | 🟠 倾向砍（省 15.4%，任务分无差异），**默认值等多种子过了才改**（safety_cap +2 待复核）；⛔ 连带「ref 走 FP8」失效 | E17 §9 |
+| **lr 与步数**（Chaoyu 08-19） | 「学不动」主因是**步数太少**（≤1 epoch）不是 lr 低 ⇒ 解法是加步数/固定 epoch；**上线候选不用 lr 1e-4**；400 步是下限、停由判据定 | 01 §1-4 |
+| 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4 · `clip_ratio=0.0000` | 00 §6 |
+| launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 | launch_rl help |
+
+## 2 · 排序原则沿革
+
+```
+08-17  短探测优先（30 min go/no-go 挡 2–3 天）→ 看对核心数字的贡献
+08-18  Chaoyu：影响正确性的 > 影响速度的；第二看端到端收益不看组件收益
+08-19  Chaoyu：lr 1e-4 类「上限基线」不占队首；能把 before 变 after 的排前面
+```
+
+## 3 · 已落地的改动（都在 `syncopate/train/`，出问题先查这张表）
+
+| 改动 | 效果 | 守护 |
+|---|---|---|
+| 🔴 `_patch_lora_adapter_sync`（默认开） | E22 修法①：首推基座、之后推 adapter。载荷 8414→252 MiB、param_sync→0.97 s | 常驻判据①②③ + `--lora-merge` 互斥 |
+| 🔴 `_patch_fsdp_degenerate_mesh`（默认开） | E21 修复：退化网格→NO_SHARD+默认组，三 rank 梯度逐位同 | 常驻断言 + `repro_fsdp_hybrid_nosync.py` |
+| 🔴 `_patch_prefix_grouper`（默认关） | E26：打包前向走根 FSDP + hook 捕获 hidden + 0×根输出锚 | `repro_pg_dtype.py` + 判据A/组构成 |
+| `ddp_save_to_cpu` 加 `if requires_grad` | E13：old_log_prob/ref 比值 1.94→1.07（≈8.5 s/步） | 3 条测试 |
+| launch_rl 启动守卫 | mini_batch×rollout_n 整除检查（列可用值 [3,6,9,12,15]）· lora-merge 拦截 · 数据默认值跟 DATA_VERSION | 都在最早能判的地方炸 |
+| 探针族（verl_patches） | SYNCOPATE_SYNC_PAYLOAD / OPT_STEP_PROBE / DDP_PROBE / SYNC_TIMING | 绑不上就报红，不打结论 |
+| NVTX 阶段标注（`--nvtx`） | verl `marked_timer` 有名无实，补齐后 nsys 才能按阶段归属 | — |
+
+## 4 · ⛔ 作废登记（引用旧数字前必查）
+
+> 判据一句话：**算了多少、搬了多少字节 → 不受影响；算得对不对、学到没有 → 作废。**
+
+| 结论 | 状态 |
+|---|---|
+| E20 全部数字（ESS/chi2/位移；量的是「当前策略 vs π₀」） | 🔴 作废，连比值都不能用 |
+| B10 陈旧度阈值 / B19 精度侧（旋钮当时没接到任何东西） | 🔴 作废 ⇒ 01 §2 R2 |
+| B3 三模式**学习类**对比 | 🔴 作废；吞吐对比保留 |
+| E12「99.9% 不是传输」及全部权重同步耗时（55.8 s / 18.8%…） | 🔴 前提错（以为推 132 MB 实推 8.4 GB）。现值 param_sync ~0.97 s / 0.8%。报告已归档 `docs/archive/E12-weight-sync.md` |
+| E00/E02「DDP 每步同步 260 MB」 | 🔴 算出来的，从没量过 ⇒ 01 §3 R6 |
+| E26 早期「2.12×」 | 🔴 单行 timing 的覆盖数没实测 ⇒ 正式数 2.31×（E26 §6.6） |
+| E25「mb=4 OOM」外推到变长真实批 | 🟡 未迁移（mb=8 实测 29–31 GB 贴顶跑完），但余量不能当生产配置 |
+| 「lr 被夹在两堵墙之间」叙事 · M7/M7-b 全部评测 | 🔴 双重作废（E21+E22 坏基线） |
+| B11 拓扑放置 1.6% | 🟡 数字仍真，理由要按 E26 后的新构成重写 |
+| E18/A14/A16 对齐 · E03 NCCL · E16/E19 FP8 数值 · B20 · E01/A5 kernel · E13 | ✅ 完全不受影响 |
+
+## 5 · 已结案（别再捡起来）
+
+```
+✅ E21 梯度不同步 · E22 LoRA 没推 · E23 采样口径 · E24 基线选择 · E25 喂饱证伪
+✅ E26 数学/微基准/集成/吞吐 A/B（欠 B5）· E17 KL 两臂（欠多种子）
+✅ E18+A14+A16 16 字节对齐 · E03 NCCL 旋钮 · E01+A5 一步时间 · A7 降频 · A6 三档稳态
+⛔ E04 rollout TP=2 净负 · A9 预量化 · B1 权重同步优化（param_sync 只占 0.8%）
+⛔ E11 手写 kernel · mb/GC/mb16 三条路（E25/E26 证伪）
+```

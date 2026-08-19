@@ -3,7 +3,7 @@
 > 状态：✅ **已确证 → 已定根因 → 止血方案被自己否掉 → 已自己实现真正的修法并验证**　建于 2026-08-18
 > ⚠️⚠️⚠️ **这是正确性 bug，影响面比 [`E21`](E21-ddp-not-syncing.md) 更大。**
 > 上游草稿：[`../upstream/verl-lora-adapter-never-synced-disaggregated.md`](../upstream/verl-lora-adapter-never-synced-disaggregated.md)
-> 作废清单与重跑队列：[`00-INFRA-HANDOFF §5`](00-INFRA-HANDOFF.md)
+> 作废清单与重跑队列：[`01-TASKS`](00-START.md)
 
 ---
 
@@ -483,4 +483,4 @@ rollout 传的是**未解析的** `"all-linear"` 字符串）。
    见 §6，它是止血不是修好，但**不开一定是错的**。⇒ 等 Chaoyu 定。
 2. ⬜ **R0-b：量 vLLM ↔ trainer 的 logprob 一致性**（§6 那条判据）—— 决定止血够不够。
 3. ⬜ **上游 issue 是否提交**（三份草稿都等 Chaoyu 点头）。
-4. ⬜ **重跑队列**见 `00-INFRA-HANDOFF §5`。
+4. ⬜ **重跑队列**见 `01-TASKS`。
