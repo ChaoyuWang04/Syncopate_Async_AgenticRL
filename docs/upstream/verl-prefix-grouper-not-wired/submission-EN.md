@@ -3,7 +3,8 @@
 > 状态：**按"掩码 bug 主打"定位重写完成（2026-08-19），等 Chaoyu 过目后提交。**
 > 中文分析与考古 → [`analysis.md`](analysis.md)。零 GPU 复现 → [`repro_prefix_grouper_wiring.py`](repro_prefix_grouper_wiring.py)。
 > **提交顺序**：① issue（掩码 bug 为主、no-op 现状为辅）→ ② 小 PR 填 `Fixes #<n>`
-> （掩码修复 + 死开关警告，刻意不做接线）→ ③ 两条评论把掩码发现递给 MAGI 方向（#6689 / #6401）。
+> （掩码修复 + 死开关警告，刻意不做接线）→ ③ **三条评论**：#7202（作者本人，他的复活版仍带此 bug，
+> 最高优先）· #6689 / #6401（MAGI 方向）。
 > ⚠️ 刻意**不**提"重新接线"的 PR —— #7202 已为此被关（维护者转向 MAGI），别撞同一堵墙；
 > 我们自己的接线走本地补丁，验证数据回头作为评论补充。
 
@@ -43,10 +44,14 @@ Two related facts about `actor.use_prefix_grouper`, one known and one new:
    conversation with the tool results removed.
 
    This is latent today only because of (1). It will bite the moment *any*
-   shared-prefix path is re-enabled — a PrefixGrouper revival like #7202, or
-   the prefix-tree work in #6689/#6401, if they reuse these utils or the same
-   mask convention. Filing it now so the trap is on record before the wiring
-   comes back.
+   shared-prefix path is re-enabled — and concretely: **#7202 (the closed
+   revival PR) still carries it.** Its diff to `prefix_grouper_utils.py` only
+   converts nested tensors and unwraps UIDs; the
+   `suffix_mask=response_mask` line is untouched, so re-opening that PR as-is
+   would ship the token-dropping behavior. The prefix-tree work in
+   #6689/#6401 inherits the same question wherever packed inputs are built
+   from multi-turn rollouts. Filing it now so the trap is on record before any
+   wiring comes back.
 
 ## The mask bug, concretely
 
@@ -226,6 +231,31 @@ the loss mask — same trap, and it is invisible to shape checks. Happy to test
 this PR on our workload once the FSDP path is covered.
 ````
 
+**贴在 [#7202](https://github.com/verl-project/verl/pull/7202)（已关闭的复活 PR，作者 supercharleszhu）：**
+
+````markdown
+Thanks for writing this up — the "silent no-op since #6067" diagnosis matched
+what we hit independently on a multi-turn agentic workload, and we converged on
+the same design as your model-forward patch (split at hidden states, then
+response-only `FusedLinearForPPO`) before finding this PR. Two notes in case
+this gets revived:
+
+1. `build_pg_from_micro_batch` still passes `response_mask` as PrefixGrouper's
+   `suffix_mask`. That is a *gradient* mask, and PrefixGrouper treats it as an
+   *existence* mask — in multi-turn rollouts (`tool_agent_loop` zeroes it on
+   tool observations) every tool-observation token gets dropped from the packed
+   model input, silently, with all shapes still lining up. Packing should use
+   `attention_mask[:, prompt_len:]`, with `response_mask` kept loss-only.
+   CPU repro + details in #<issue>.
+2. Your comment about flattening outside the custom autograd Function (so the
+   hidden-state gradient survives) saved us a debugging round — thank you.
+
+We are running the equivalent wiring locally on FSDP1 + multi-turn tooling
+(group size 8, ~4.2k-token shared prefix). Happy to report equivalence
+(`log_probs` bitwise) and throughput numbers here if that is useful evidence
+for re-opening.
+````
+
 **贴在 [#6401](https://github.com/verl-project/verl/issues/6401)（RFC 评论）：**
 
 ````markdown
@@ -249,5 +279,8 @@ model just never sees its tool results.
 ⚠️ 我们自己的接线（本地补丁 + response-only LM-head 投影 + logprob 逐位判据）
    完成后，验证数据以评论形式补进 issue —— 它是"FSDP 侧有真实需求"的证据
 ⚠️ 与包①②③ 同批提交时互相引用一句（第四例同形状：config accepted, wire missing）
-⚠️ tag：supercharleszhu（#7202，盟友）· arvyanh（#6689/#6401）；wuxibin89 会自己看到
+⚠️ tag：supercharleszhu（#7202，盟友；他的 PR 仍带掩码 bug —— 评论稿见 §3 第一条）·
+   arvyanh（#6689/#6401）；wuxibin89 会自己看到
+⚠️ 三条评论里都别提"我们有更好的方案" —— #7202 的隐状态切分与我们的设计同构，
+   正确说法是"独立收敛 + 我们补上你缺的那块（掩码）"（见 SYNC 文档更正②）
 ```

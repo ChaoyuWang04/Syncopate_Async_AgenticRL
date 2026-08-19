@@ -25,7 +25,8 @@
 |---|---|
 | [`submission-EN.md`](submission-EN.md) | **issue + PR 英文正文**（GitHub 直接粘贴） |
 | [`repro_prefix_grouper_wiring.py`](repro_prefix_grouper_wiring.py) | **零 GPU 复现**：三条判据（A 不传参 / B 零调用者 / C 掩码丢 token），全部 PASS |
-| [`analysis.md`](analysis.md) | 中文分析与证据链（三处断点 · 为什么它比"慢"更坏 · 与包①② 的同构性） |
+| [`analysis.md`](analysis.md) | 中文分析与证据链（三处断点 · 为什么它比"慢"更坏 · 与包①② 的同构性 · 顶部十条考古） |
+| [`SYNC-2026-08-19-fused-kernel-conflict.md`](SYNC-2026-08-19-fused-kernel-conflict.md) | infra 负责人的 fused-kernel 冲突同步 **+ 三条核实更正**（#7202 已同构解决投影问题；但它仍带掩码 bug） |
 
 ## 复现输出（`python repro_prefix_grouper_wiring.py`）
 
@@ -59,7 +60,11 @@ verl 0.8.0
 - [x] main 新鲜度：`prefix_grouper_utils.py` 与 0.8.0 **逐字相同**、调用点仍缺参 —— 掩码 bug 在 main 上原样存在
 - [x] submission-EN 按新定位重写（issue 掩码主打 · PR=掩码修复+警告 · 两条评论稿）
 - [ ] 查 verl CONTRIBUTING（DCO / pre-commit / 测试目录惯例）
-- [ ] （并行，不挡提交）本地接线补丁：#7202 的 response-only LM-head 投影 + rmpad 退出 A/B +
-      logprob 逐位判据 —— 完成后验证数据以评论补进 issue
+- [ ] （并行，不挡提交）本地接线补丁：**照 #7202 的做法**（`self.model(...)[0]` 拿隐状态 →
+      `split_output` 在隐状态上切 → 只对 suffix 跑 `FusedLinearForPPO`；**flatten 必须在
+      autograd Function 外**，否则静默丢隐状态梯度）+ rmpad 退出 A/B + logprob 逐位判据
+      —— 完成后验证数据以评论补进 #7202 / issue
+- [x] fused-kernel 冲突线核实完毕（SYNC 文档回复段）：根因成立、失败形状钉死（logits=None）；
+      「更干净的修法」不成立（#7202 已同构）；**新增行动 = 去 #7202 评论**
 - [x] 考古完成：#4368（kevssim，原集成）· #6067（切断点）· #7202（supercharleszhu 修复，被关）·
       #6689（arvyanh，MAGI draft）· wuxibin89（裁决人）—— 人物表见 analysis 顶部

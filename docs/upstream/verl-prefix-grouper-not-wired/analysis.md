@@ -30,6 +30,17 @@
 >
 > **人物表**：kevssim（原作者）· supercharleszhu（修复者，天然盟友，另有 #7292 ref-KV-cache wip）·
 > wuxibin89（裁决维护者）· arvyanh（#6401 RFC + #6689 MAGI）。
+>
+> 🆕 **8/19 晚追加三条**（读 #7202 实际 diff，详见 [`SYNC-2026-08-19-fused-kernel-conflict.md`](SYNC-2026-08-19-fused-kernel-conflict.md) 的回复段）：
+> 8. ★ **#7202 的复活版仍带掩码 bug**：它对 `prefix_grouper_utils.py` 的 diff 只改 nested→padded
+>    与 uid 解包，**`suffix_mask=response_mask` 一字未动** ⇒ 维护者一旦重开它，工具 observation
+>    照样被静默删掉。**⇒ 新增行动：直接去 #7202 下评论递给作者本人。**
+> 9. **#4368 时代还有一个"静默无效"的平行版本**：它的门槛是
+>    `can_use_pg = … and not self.use_fused_kernels` ⇒ 在 PG 真正接着的那半年里，
+>    **开着融合算子的用户默默拿不到 PG**（verl 默认 False，但它是推荐的性能项，我们默认 True）。
+>    ⇒ 同一个功能，**在两个时代因两个不同原因静默失效**。
+> 10. `use_fused_kernels` × PG 的失败形状比"不返回 logits"更毒：`CausalLMOutputForPPO.logits`
+>    **存在但为 None** ⇒ 不是 AttributeError，而是 None 流进 `split_output` 后炸在无关的地方。
 
 ## 0 · 我们为什么会去看它
 
