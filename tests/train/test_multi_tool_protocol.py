@@ -1,6 +1,6 @@
 """一步多调用：**只执行第一个**，其余当协议错误退回；cap 从最狠一档退回轻罚。
 
-★ 为什么（实测 5280 条训练 rollout，`docs/syncopate/20 §P0-2`）
+★ 为什么（实测 5280 条训练 rollout，`docs/syncopate/01 §P0-2`）
 
 18.8% 的 rollout 一步发了多个 tool call，而 `system.txt` 第 8 行明确禁止。
 **而截尾采样（评测口径 top_p 0.95 / top_k 20）下这个数是 0%**

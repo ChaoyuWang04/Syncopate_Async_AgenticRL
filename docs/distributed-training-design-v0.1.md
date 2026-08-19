@@ -10,7 +10,7 @@
 > 2026-08-13。**搬到 4×RTX 5090 服务器之后的施工蓝图。**
 >
 > 三份文档的分工（别混）：
-> - `docs/syncopate/05-handoff.md` —— 业务/数据/训练主线的交接（infra 增量在 §17）
+> - `docs/syncopate/00-START.md` —— 业务/数据/训练主线的交接（infra 增量在 §17）
 > - `docs/ostinato-project-design-v0.2.md` —— **单卡** infra 优化（前缀缓存 / 量化 / 手写算子）
 > - **本文档** —— **多卡才能做的事**：异步 RL、并行策略、通信画像
 >

@@ -117,7 +117,7 @@ def _tags(b: CaseBundle) -> dict[str, str]:
 #
 # ⇒ 所以保底从 dead_grid 分支里提出来，**两个分支走同一个函数** `_apply_sft_floors`。
 #   「换一条代码分支，保底就悄悄没了」这个形状，正是本项目反复栽的那个
-#   （05-handoff §6「机制在，但没接上」）。
+#   （00-START §6「机制在，但没接上」）。
 #   ⚠️ 共用的是**函数**，不是**策略**：在场保底只对 difficulty_proxy 开，
 #      理由写在 `_apply_sft_floors` 的 docstring 里（一句话：dead_grid 说得出
 #      「这个模板是活的」这个理由，difficulty_proxy 说不出任何理由）。
@@ -402,7 +402,7 @@ def split(
                                            "rl": buckets.rl}),
         "eval_strata_coverage": {"|".join(k): len(v) for k, v in sorted(strata.items())},
         # ★ 保底补了什么必须可见。静默的保底，下次它没生效同样是静默的 ——
-        #   而"机制在但没接上"正是本项目最贵的那类 bug（05-handoff §6）。
+        #   而"机制在但没接上"正是本项目最贵的那类 bug（00-START §6）。
         "sft_floors_applied": sft_floors,
         # 每个模板在 SFT 桶里最终有几条。**0 就是这次要修的那个 bug 又回来了。**
         "sft_template_counts": _count_by_template(buckets.sft),
@@ -443,3 +443,61 @@ def write(buckets: Buckets, report: dict[str, Any], out_dir: Path) -> None:
 def load_bucket(split_dir: Path, name: str) -> list[str]:
     path = split_dir / f"{name}_cases.json"
     return json.loads(path.read_text(encoding="utf-8"))["case_ids"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 数据版本：**一份值**，`entropy` / `eval_local` 共用
+# ══════════════════════════════════════════════════════════════════════════
+#
+# ★★ 为什么要有这一节（2026-08-18 晚查出来的）
+#
+# `--batch` 和 `--split-dir` 是**必须同时动的一对**，而它们此前各写各的默认值，
+# 且都是陈旧的：`entropy.py` 默认 v3、`eval_local.py` 默认 v2 ——
+# 而 `data/batches/v2` 与 `data/batches/v3` **在本机根本不存在**。
+#
+# ⚠️ 两个失效方向，严重程度差很远：
+#   ① 两个都用默认 ⇒ `FileNotFoundError`，**是响的**，只浪费一次上机
+#   ② 🔴 只传 `--batch data/batches/v13`、忘了 `--split-dir`
+#      ⇒ 拿 **v3 的 eval 桶 id** 去 v13 的 batch 里读，**24/24 全部读成功，不报错**
+#        v3 eval 64 条 vs v13 343 条、交集仅 49 ⇒ 量的是另一个 case 集；
+#        且那 24 条里 **4 条落在 v13 的 sft/rl 桶**（模型训过的题）⇒ 熵被记忆压低。
+#      而决策位熵**正是决定 RL 起点的那把尺子**。
+#
+# ⇒ 这就是记过多次的第七形态：**默认值指向了另一件事，且不报错**。
+#   修法两条，缺一不可：
+#     ① 默认值收成**一份**（下面这个常量），换版本改一处
+#     ② `assert_same_data_version` —— 「两个东西应当相同」型判据，
+#        非黑即白、不需要阈值（守则①）。只改一个参数就硬失败。
+#
+# ⚠️ 换数据版本（v14）时**只改这一行**。不要在调用方各自写死。
+DATA_VERSION = "v13"
+DEFAULT_BATCH_DIR = f"data/batches/{DATA_VERSION}"
+DEFAULT_SPLIT_DIR = f"data/splits/{DATA_VERSION}"
+
+
+def data_version_of(path: str | Path) -> str | None:
+    """从 `data/batches/v13` / `data/splits/v13` 这类路径里取出版本段。
+
+    ⚠️ 认不出就返回 `None`，**不猜**（守则④）—— 调用方据此决定是"放过"还是"报没有"。
+    """
+    name = Path(str(path).rstrip("/")).name
+    return name or None
+
+
+def assert_same_data_version(batch: str | Path, split_dir: str | Path) -> str:
+    """`--batch` 与 `--split-dir` 必须是同一个数据版本，不是就**硬失败**。
+
+    返回那个共同的版本串（给调用方写进审计产物，见 `entropy.py`）。
+
+    ⚠️ 刻意做成 `ValueError` 而不是 warning：这条的整个价值就在于
+    「只改了一个参数」这件事**必须停下来**，而 warning 会被滚过去
+    —— 上游那两个 bug 各自都只给了一行 UserWarning，我们一处都没接住。
+    """
+    vb, vs = data_version_of(batch), data_version_of(split_dir)
+    if vb != vs:
+        raise ValueError(
+            f"数据版本不一致：--batch 是 {vb!r}，--split-dir 是 {vs!r}。\n"
+            f"这两个参数**必须同时动** —— 只改一个不会报错，但会拿一个版本的 case_id "
+            f"去另一个版本的 batch 里读，量出一个看起来合理的错数字。\n"
+            f"⇒ 两个都传 {DATA_VERSION}，或者两个都不传（默认已是 {DATA_VERSION}）。")
+    return vb

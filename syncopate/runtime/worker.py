@@ -19,6 +19,7 @@ import contextlib
 from dataclasses import dataclass
 from typing import Any
 
+from syncopate.runtime.action_gate import ActionGate, ToolBinding
 from syncopate.runtime.db import Database, approved_action, claim_run, finish_run
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
@@ -102,6 +103,10 @@ class WorkerConfig:
     # 所以默认 False：检索照查、信号照产、但不拿它阻断。
     # ⇒ 这是一笔明写的欠债，不是忘了接。
     policy_lookup_is_evidence: bool = False
+    # ★ 把这个 worker 限定在一个租户上（None = 全局）。
+    # 生产上用于 worker 池按租户切分；测试/探针上用于**结构性隔离** ——
+    # 队列是全局的，不限定就会抢走别人遗留的活，然后得出一个错误的结论。
+    org_id: str | None = None
 
 
 class Worker:
@@ -113,6 +118,90 @@ class Worker:
         self.config = config or WorkerConfig()
         self.tools = ToolRuntime(db)
         self.retrieval = retrieval or RetrievalService(db)
+
+    # ---- 工具名 → 真正打外部世界的那个协程 --------------------------------
+    #
+    # ★★ 这张表交给 `ActionGate` 持有，**循环拿不到 platform** ——
+    #   `ToolRuntime.call` 的 `invoke=` 由调用方传实现，那是个洞：
+    #   agent loop 完全可以绕过收口直接调 platform。收口自己持有绑定就堵上了。
+    # ⚠️ 只登记**这一版真的接了实现**的那几个。缺的 22 个读工具是 B-2 的活 ——
+    #   缺的工具会被收口报 `unknown_tool`（**报"没有"，不猜**），不会静默走空。
+    def _bindings(self, org_id: str = "", run_id: str = "") -> dict[str, ToolBinding]:
+        # ⚠️ `ActionGate` 只把模型给的 `arguments` 展开传进去 ——
+        #   platform / retrieval / org_id 这些**模型碰不到的东西**在这里闭包绑定。
+        #   这也是收口"模型给不了实现"那条的自然结果。
+        from functools import partial
+
+        from syncopate.runtime import tool_impls as impl
+        return {
+            "campaign.get_metrics": ToolBinding(self.platform.get_metrics),
+            "campaign.update_budget": ToolBinding(self.platform.update_budget),
+            "campaign.list": ToolBinding(partial(impl.campaign_list, self.platform)),
+            "metrics.get_freshness": ToolBinding(
+                partial(impl.metrics_get_freshness, self.platform)),
+            "policy.search": ToolBinding(
+                partial(impl.policy_search, self.retrieval, org_id)),
+            "insight.search_claims": ToolBinding(
+                partial(impl.insight_search_claims, self.retrieval, org_id)),
+            # 记忆库 + 安全线（B-2 第二批）
+            "memory.read": ToolBinding(partial(impl.memory_read, self.db, org_id)),
+            "memory.search": ToolBinding(partial(impl.memory_search, self.db, org_id)),
+            "benchmark.get_safety_line": ToolBinding(
+                partial(impl.benchmark_get_safety_line, self.db, org_id)),
+            # ⚠️ 写类要 run_id（提案要记在哪一条 run 上）⇒ 由 _gate 传进来
+            "memory.write_proposal": ToolBinding(
+                partial(impl.memory_write_proposal, self.db, org_id, run_id)),
+            "memory.invalidate": ToolBinding(
+                partial(impl.memory_invalidate, self.db, org_id, run_id)),
+            "memory.conflict_resolve": ToolBinding(
+                partial(impl.memory_conflict_resolve, self.db, org_id, run_id)),
+            # 素材库（B-2 第三批）—— upload → poll_review 是一条**异步链**
+            "creative.upload": ToolBinding(partial(impl.creative_upload, self.platform)),
+            "creative.poll_review": ToolBinding(
+                partial(impl.creative_poll_review, self.platform)),
+            "creative.get_asset_tags": ToolBinding(
+                partial(impl.creative_get_asset_tags, self.platform)),
+            "creative.get_metrics_by_asset": ToolBinding(
+                partial(impl.creative_get_metrics_by_asset, self.platform)),
+            "creative.search_similar": ToolBinding(
+                partial(impl.creative_search_similar, self.platform)),
+            # ⚠️ 等待上限受**租约**约束，不是 spec 里那个 600 秒（见 tool_impls 的长注释）
+            "system.wait": ToolBinding(
+                partial(impl.system_wait, asyncio.sleep, self.config.lease_seconds)),
+            # 写工具（B-2 第四批）—— 两条**跨工具前置条件**在实现里硬执行
+            "approval.create_case": ToolBinding(
+                partial(impl.approval_create_case, self.db, org_id, run_id)),
+            "campaign.create": ToolBinding(
+                partial(impl.campaign_create, self.platform, self.db, org_id, run_id)),
+            "campaign.scale_budget": ToolBinding(
+                partial(impl.campaign_scale_budget, self.platform, self.db,
+                        org_id, run_id)),
+            # 数据源类（B-2 第五批）
+            "analysis.feature_lift": ToolBinding(partial(impl.analysis_feature_lift, self.db)),
+            "analysis.geo_breakdown": ToolBinding(partial(impl.analysis_geo_breakdown, self.db)),
+            "benchmark.get_industry_baseline": ToolBinding(
+                partial(impl.benchmark_get_industry_baseline, self.db)),
+            "calendar.get_seasonal_context": ToolBinding(
+                partial(impl.calendar_get_seasonal_context, self.db)),
+            "campaign.detect_anomalies": ToolBinding(
+                partial(impl.campaign_detect_anomalies, self.platform)),
+            "mmp.get_attribution": ToolBinding(
+                partial(impl.mmp_get_attribution, self.platform)),
+            "playbook.get_optimization": ToolBinding(
+                partial(impl.playbook_get_optimization, self.db)),
+            "policy.get_budget_rule": ToolBinding(
+                partial(impl.policy_get_budget_rule, self.db, org_id)),
+            "risk.check_account": ToolBinding(
+                partial(impl.risk_check_account, self.db, org_id)),
+        }
+
+    def _gate(self, *, org_id: str, run_id: str) -> ActionGate:
+        return ActionGate(
+            self.db, self.tools, self._bindings(org_id, run_id),
+            org_id=org_id, run_id=run_id,
+            over_budget=lambda: self._over_budget(org_id),
+            emit=emit, audit=audit,
+            amount_threshold=self.config.amount_threshold)
 
     # ---- 成本闸：压测场景⑤ ------------------------------------------------
 
@@ -128,7 +217,8 @@ class Worker:
     async def run_once(self) -> str | None:
         """抢一条并跑完。返回 run_id；没活干返回 None。"""
         claimed = await claim_run(self.db, worker_id=self.config.worker_id,
-                                  lease_seconds=self.config.lease_seconds)
+                                  lease_seconds=self.config.lease_seconds,
+                                  org_id=self.config.org_id)
         if claimed is None:
             return None
         org_id, run_id = claimed["org_id"], claimed["run_id"]
@@ -213,15 +303,17 @@ class Worker:
         ctx.data_maturity = fresh["maturity"]
         await record_step(self.db, org_id=org_id, run_id=run_id, step=1,
                           phase="investigate", data_maturity=fresh["maturity"])
-        metrics = await self.tools.call(
-            org_id=org_id, run_id=run_id, step=1, tool="campaign.get_metrics",
-            arguments={"campaign_id": "CMP_1"},
-            invoke=self.platform.get_metrics)
-        await emit(self.db, org_id=org_id, run_id=run_id, kind="tool.result",
-                   payload={"tool": "campaign.get_metrics", "ok": metrics.ok})
+        # ★ 2026-08-19：改走 `ActionGate` —— 横切从"代码顺序保证"变成"绕不过去"。
+        #   这一版行为不变，是为了先证明收口能承载**现有全部横切**，
+        #   再把写死的计划换成模型驱动的循环（B-3 的下半段）。
+        gate = self._gate(org_id=org_id, run_id=run_id)
+        gate.skip_triggers = decided is not None
+        metrics = await gate.invoke(tool="campaign.get_metrics",
+                                    arguments={"campaign_id": "CMP_1"},
+                                    ctx=ctx, param_source="system")
         await record_usage(self.db, org_id=org_id, run_id=run_id,
                            tokens_in=800, tokens_out=120, cost_micros=1_200)
-        if not metrics.ok:
+        if metrics.status != "ok":
             ctx.tool_failed = "campaign.get_metrics"
 
         # ---- 成本闸再查一次：一条 run 自己也可能把额度烧穿 ----
@@ -241,45 +333,29 @@ class Worker:
         if decided is not None:
             new_budget = int(decided["params"].get("new_budget", new_budget))
         ctx.write_amount = new_budget
-        # ★ 已裁决的动作**不再过网关** —— 否则刚批准就又被同一个触发器拦下来，
-        #   run 在 waiting_for_user 和 queued 之间来回弹，永远跑不完。
-        triggers = ([] if decided is not None
-                    else evaluate_triggers(ctx, amount_threshold=self.config.amount_threshold))
-        if triggers:
-            # ★ 停下来 ≠ 拒绝：开一张**带证据**的审批单，人看的是证据不是结论。
-            case_ref = await open_approval_case(
-                self.db, org_id=org_id, run_id=run_id, action_type="campaign.update_budget",
-                proposed_params={"campaign_id": "CMP_1", "new_budget": new_budget},
-                rationale=f"用户请求：{user_message[:200]}",
-                evidence={"metrics": metrics.data, "triggers": [t.reason for t in triggers]},
-                triggers=triggers)
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.waiting_for_user",
-                       payload={"case_ref": case_ref,
-                                "triggers": [t.reason for t in triggers]})
-            return
 
         await record_step(self.db, org_id=org_id, run_id=run_id, step=2, phase="act")
-        try:
-            written = await self.tools.call(
-                org_id=org_id, run_id=run_id, step=2, tool="campaign.update_budget",
-                arguments={"campaign_id": "CMP_1", "new_budget": new_budget},
-                invoke=self.platform.update_budget)
-        except PermissionDenied as exc:
-            await audit(self.db, org_id=org_id, run_id=run_id, action="permission_denied",
-                        object_key="CMP_1", param_source="system", detail={"error": str(exc)})
-            await finish_run(self.db, org_id=org_id, run_id=run_id, status="failed",
-                             error=str(exc))
-            return
-
+        # ★ 网关触发 / 成本闸 / 权限 / 幂等 / 审计 / 事件 **全部在收口里**，
+        #   这里只提出一次动作。`skip_triggers` 在上面按"是否已被人裁决"设过了。
         # ★ param_source="user"：这个金额是用户要求的，不是从工具返回里读出来的。
-        await audit(self.db, org_id=org_id, run_id=run_id, action="campaign.update_budget",
-                    object_key="CMP_1", param_source="user",
-                    detail={"new_budget": new_budget, "replayed": written.replayed})
-        await emit(self.db, org_id=org_id, run_id=run_id, kind="tool.result",
-                   payload={"tool": "campaign.update_budget", "ok": written.ok,
-                            "replayed": written.replayed})
+        written = await gate.invoke(
+            tool="campaign.update_budget",
+            # ⚠️ `client_request_id` 是沙盒 spec 的**必填参数** —— 此前这条编排没传，
+            #   而 B-6 加上参数校验之后当场炸了 12 条测试。判据是对的，该补的是这里。
+            #   ★ 取值必须**确定性**（从 run_id 推）：重试要推出同一个键，
+            #     否则"有意的第二次"和"重放"就分不开（见 platform.update_budget 的注释）。
+            arguments={"campaign_id": "CMP_1", "new_budget": new_budget,
+                       "client_request_id": f"{run_id}:budget"},
+            ctx=ctx, param_source="user",
+            rationale=f"用户请求：{user_message[:200]}")
 
-        if not written.ok:
+        if written.status == "halted":
+            return                                   # 已开审批单、已发 waiting_for_user
+        if written.status == "refused":
+            await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
+                             error=written.error)
+            return
+        if written.status != "ok":
             await finish_run(self.db, org_id=org_id, run_id=run_id, status="failed",
                              error=written.error)
             await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",

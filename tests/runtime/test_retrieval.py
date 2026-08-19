@@ -272,7 +272,7 @@ def test_immature_data_stops_the_run_for_approval() -> None:
         org, run = f"org_{_uuid.uuid4().hex[:8]}", f"run_{_uuid.uuid4().hex[:8]}"
         await create_run(db, org_id=org, run_id=run, user_message="D1 就砍预算")
         plat = FakeAdPlatform(faults=FaultPlan(data_age_days=2))     # 远没到 D7
-        w = Worker(db, plat, WorkerConfig(concurrency=1, amount_threshold=10_000_000))
+        w = Worker(db, plat, WorkerConfig(concurrency=1, amount_threshold=10_000_000, org_id=org))
         for _ in range(50):
             if await w.run_once() == run:
                 break

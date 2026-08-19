@@ -1,7 +1,7 @@
 # Syncopate · 08 — 机器、环境与运行配置
 
 > 2026-08-13 在 4×RTX 5090（RunPod）上从零搭起来并逐条实跑验证过。
-> **这份是"怎么把它跑起来"，方法论和研究结论在 `05-handoff.md`。**
+> **这份是"怎么把它跑起来"，方法论和研究结论在 `00-START.md`。**
 
 ---
 
@@ -257,6 +257,58 @@ SFT  →  python -m syncopate.train.sft
 RL   →  python -m syncopate.train.launch_rl
 ```
 
+### 4.0 ★★ 固定管线的两条纪律（2026-08-19 立，**判据已进仓库**）
+
+> `python scripts/check_pipeline_invariants.py --only contract`
+
+**① 入口只有这两个 —— 不许直接调训练框架。**
+`launch_rl` 上挂着契约默认值、起手断言（`--model` 目录带 `lora_adapter/` 就报错）、
+以及守卫的挂载点。**绕过去，这些全都不生效。**
+
+**② 契约参数一律不许在脚本里传** —— 长度预算与采样参数的唯一来源是
+`syncopate/train/rollout_budget.py`，`launch_rl` / `eval_local` 的默认值从那里取，
+**不传就是对的**。
+
+```
+--max-prompt-length   --max-response-length
+--temperature         --top-p                --top-k
+```
+
+★★ **为什么判据是"一律不许传"，而不是"传的值要对"** —— 这是这条纪律的全部要点：
+
+2026-08-18 的实况是，15 个启动脚本**全都**走 `launch_rl`（纪律①一直守着），
+但**每个脚本各自抄了一份参数**，于是抄着抄着漂成了两套：
+
+```
+11 个   5120/2048   ✅ 当时是对的
+ 4 个   3584/1536   🔴 停在旧值 —— 而 2026-08-19 02:55 还真有一跑用了它
+```
+
+⇒ **那 11 个当时是对的，而它们才是下一次漂移的来源。**
+  旧判据只比"值对不对"，所以一路绿灯 —— 问题不是值错，是**存在一份副本**。
+⇒ 所以判据写在「**只该有一份**」上，不写在「这一份的值对不对」上（守则①）。
+
+⚠️ **逃生口**：确实要做契约参数的 A/B，在**同行或上一行**写
+
+```bash
+# CONTRACT-OVERRIDE: <为什么这次必须覆盖>
+```
+
+声明过的不算违反，但会被打出来**留痕**。
+留这个口子是刻意的：没有它，合法的对照实验会天天报红，
+而**假警报会训练人忽略这条判据 —— 那比没有判据更糟**（守则③）。
+⚠️ 标记只在同行或上一行生效 —— 否则在文件顶上写一句就把整个文件豁免了。
+
+### 4.0.1 已清理掉的（2026-08-19）
+
+```
+scripts/run_v10_eval.sh   ⚰️ 删除 —— v10 时代，cd 到 /home/samwang/…（本机不存在）
+15 个启动脚本             剥掉显式传的契约参数（其余一字未动，bash -n 全过）
+budget 组的第③条         并进新的 contract 组（避免"同一件事两份实现"）
+budget 组的第②条         🟡→🔴：那句「这是修复**之前**的跑，属预期」是**无条件**的，
+                          它刚放过了一跑修复**之后**的跑，且以后每次都会放过
+```
+
 ### 4.1 SFT
 
 ```bash
@@ -411,7 +463,7 @@ adapter 的入口，而且 verl 用 LoRA 时 reference = 关掉 adapter = **基�
 | `--fsdp-size` | **1**（DDP，不切分） | LoRA 下每步只同步 260 MB（≈10 ms）；分片要每层 all-gather 全部权重。⚠️ FULL_SHARD/ZeRO-2 稳态对照由队列 A6 补 |
 | `--dynamic-bsz` | **False** | ⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测**。sdpa 下打包会让注意力退化成 O(总长²) |
 | `--trainer-gpus / --rollout-gpus` | 3 / 1 | gen 只占 12%，rollout 不是瓶颈 |
-| `--max-prompt-length` / `--max-response-length` | **5120 / 2048** | 🆕 2026-08-18：**训练与评测共用一份**（`syncopate/train/rollout_budget.py`）。此前训练 3584/1536、评测硬编码 5120/2048，**两边跑在不同的输入分布上** —— 见 `20 §P0-1`。取宽的那一档：放宽只会让原本被截断的轨迹跑完，不会新增截断 |
+| `--max-prompt-length` / `--max-response-length` | **5120 / 2048** | 🆕 2026-08-18：**训练与评测共用一份**（`syncopate/train/rollout_budget.py`）。此前训练 3584/1536、评测硬编码 5120/2048，**两边跑在不同的输入分布上** —— 见 `22 §P0-1`。取宽的那一档：放宽只会让原本被截断的轨迹跑完，不会新增截断 |
 | `--rollout-gpu-util` | 0.75 | 0.85 会让第一次权重同步 OOM（bucket 也在 rollout 卡上） |
 | `--attention-backend` | TRITON_ATTN | vLLM 自带 FA2 的 sm_120 PTX 比驱动新，编不了 |
 | `--bypass-mode` | **False**（decoupled） | **只有这个模式产出 ESS 等 `rollout_corr/*` 指标**，停止条件 P6 依赖它 |

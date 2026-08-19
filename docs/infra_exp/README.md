@@ -4,7 +4,7 @@
 > **新窗口先读 [`ONBOARDING.md`](ONBOARDING.md)**（20 分钟上手），再看 [`00-INFRA-HANDOFF.md`](00-INFRA-HANDOFF.md)——现在在哪、下一步做什么。
 >
 > 三份设计文档负责「我们打算做什么、为什么」，**这里负责「我们真的做了什么、量到了什么」**：
-> - `docs/syncopate/05-handoff.md` —— 业务/数据/训练主线的交接
+> - `docs/syncopate/00-START.md` —— 业务/数据/训练主线的交接
 > - `docs/ostinato-project-design-v0.2.md` —— 单卡 infra 优化与手写算子的**设计**
 > - `docs/distributed-training-design-v0.1.md` —— 多卡实验的**设计**
 > - **`docs/infra_exp/`（本目录）** —— 上面两份设计的**实验记录**
@@ -115,6 +115,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 > —— 不是实验报告，是把「现象 → 误判 → 根因 → 为什么框架自带的办法不行 → 我们改了什么 → 结果」讲一遍。
 
 | **E24** 🆕 | [bf16 合并损失的任务分](E24-merge-loss-on-task-score.md) | RL 的真起点（合并后的 SFT 模型）比一直当基线用的那个（裸基座+SFT adapter）**低 0.025**，而 MDE 只有 0.016 ⇒ **旧配对比较系统性低估 RL 的效果**。与权重空间的保真残差 0.36 互相印证 | **B** | ✅ **完成** | — | — |
+| **E25** 🆕 | [trainer 是活重还是没喂饱](E25-trainer-feed.md) | **否定结果**：两个候选解法都被证伪 —— `micro_batch` 1→2 是**负收益**（定长慢 1.0%、变长慢 6.3%、mb=4 OOM）；关 `gradient_checkpointing` 在 mb=1 就 OOM。★ **喂饱 GPU 的单位是 token 不是序列条数**（一条已 ~4850 token）⇒ trainer 是真在算，慢是因为**活多 11.6 倍**。⇒ 省时间只剩「让它少算」：prefix grouper（上界 4.1×，⚠️ 非即插即用）· 砍 ref · ref 走 FP8 | **B** | ✅ **完成** | — | ⬜ prefix grouper 立项 |
 
 ### 2.1 「无主」实验的停放理由（不删，理由是资产）
 

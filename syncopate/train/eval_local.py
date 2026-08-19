@@ -40,6 +40,9 @@ import torch
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
+from syncopate.pipeline.split import (
+    DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, assert_same_data_version, data_version_of,
+)
 from syncopate.train.rollout_budget import (
     MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
     SAMPLING_TOP_K, SAMPLING_TOP_P,
@@ -461,8 +464,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地自回归推理评测")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
     parser.add_argument("--adapter", default=None, help="LoRA adapter 目录，不给就是基座")
-    parser.add_argument("--batch", default="data/batches/v2")
-    parser.add_argument("--split-dir", default="data/splits/v2",
+    # ★ 默认值来自**一份共用常量**（`pipeline/split.py`）——此前这里写死 v2，
+    #   而 `data/batches/v2` 在本机根本不存在。⚠️ 这两个参数必须同时动，见下面的断言。
+    parser.add_argument("--batch", default=DEFAULT_BATCH_DIR)
+    parser.add_argument("--split-dir", default=DEFAULT_SPLIT_DIR,
                         help="用冻结 EVAL 桶（推荐）；设为空字符串则退回旧的 per-class 取样")
     parser.add_argument("--limit", type=int, default=None)
     # ★★ 按 case 分片，配合 `scripts/eval_parallel.sh` 做多卡并行。
@@ -504,6 +509,9 @@ def main(argv: list[str] | None = None) -> int:
     adapter = str((ROOT / args.adapter).resolve()) if args.adapter else None
     engine = VLLMEngine(model_path, adapter, args.max_new_tokens, args.temperature, args.gpu_util)
     if args.split_dir:
+        # ★ 「两个东西应当相同」型判据：只改一个参数会静默评另一个 case 集（见 split.py 那一节）。
+        # ⚠️ 只在用冻结桶时查 —— `--split-dir ""` 是**合法**的退回路径，那时没有版本可比。
+        assert_same_data_version(args.batch, args.split_dir)
         bundles = load_frozen_eval(ROOT / args.batch, ROOT / args.split_dir, args.limit)
     else:
         bundles = load_cases(ROOT / args.batch, args.per_class, args.split_every)
@@ -545,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
             "tool_errors": output.metrics["tool_errors"],
             "truncated": output.metrics["truncated"],
             # ★ 截断的**原因**（tokens / observation / turns）——三者修法方向相反，
-            #   合并成一个布尔值就等于不知道该拧哪个旋钮（`20 §P1-3`）
+            #   合并成一个布尔值就等于不知道该拧哪个旋钮（`01 §P1-3`）
             "truncation_reason": output.metrics.get("truncation_reason"),
             "num_steps": output.metrics["num_steps"],
             "caps": [h.name for h in result.cap_hits],
@@ -658,7 +666,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         path = ROOT / args.out
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"label": label, "rows": rows}, ensure_ascii=False, indent=1),
+        # ★ 带上**数据版本**：下游只靠 label 里的路径判断，会把一份旧版本的审计
+        #   静默当成本次结果（写 select_sft_ckpt 时就撞上过 v3 时代的那份）。
+        path.write_text(json.dumps({"label": label,
+                                    "data_version": data_version_of(args.split_dir)
+                                    if args.split_dir else None,
+                                    "batch": args.batch, "split_dir": args.split_dir,
+                                    "rows": rows}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
         print(f"\n明细 -> {path}")
     return 0

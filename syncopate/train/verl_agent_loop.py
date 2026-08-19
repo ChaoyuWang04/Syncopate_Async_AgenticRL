@@ -321,7 +321,7 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             if extra.get("max_global_steps") is not None:
                 _LAST_SEEN_PARAM_VERSION["max_global_steps"] = extra["max_global_steps"]
             # ★ log_probs 必须带出来，否则 rollout_corr/* 那套 TIS 诊断全是空的
-            #   —— 而它正是 docs/syncopate/00-research-question 的观测基础。
+            #   —— 而它正是 docs/syncopate/23-research-question 的观测基础。
             #   需要 actor_rollout_ref.rollout.calculate_log_probs=True 才有值。
             return Generation(token_ids=list(token_output.token_ids),
                               log_probs=list(token_output.log_probs or []) or None)

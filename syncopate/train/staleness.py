@@ -2,7 +2,7 @@
 
 ★★★ 为什么可以不跑真异步
 
-研究假设（docs/syncopate/00-research-question.md）的核心是
+研究假设（docs/syncopate/23-research-question.md）的核心是
 
     ESS/N ≈ exp(−T · σ²(k))
 
@@ -74,7 +74,7 @@ def ess_from_log_ratios(log_ratios: list[list[float]], level: str) -> dict[str, 
     sequence-level：整条序列的 log ratio 求和后取指数 —— 无偏，但方差随 T 指数增长
     token-level   ：逐 token 权重 —— 有 O(T²Δ) 偏差，但方差与 T 无关
 
-    这正是 00-research-question 里那个对偶：没有一方在所有 T 上占优。
+    这正是 23-research-question 里那个对偶：没有一方在所有 T 上占优。
     """
     if level == "sequence":
         weights = [math.exp(min(sum(seq), 20.0)) for seq in log_ratios]

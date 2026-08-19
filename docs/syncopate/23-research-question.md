@@ -1,9 +1,4 @@
-# Syncopate · 00 — 核心研究问题
-
-> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
-> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
-> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
-> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
+# Syncopate · 23 — 核心研究问题
 
 > 立项日期：2026-07-28
 > 状态：**假设已成型，待实证**。理论推导见 [[../learning-notes/02-train-inference-mismatch]] §8。
@@ -72,7 +67,7 @@ ESS/N = 1/E[w̃²]   = exp(−T σ²)
 > T 已用真实 Qwen3 tokenizer 在 121 条 gold 轨迹上实测（见 [[../learning-notes/05-anatomy-of-a-trajectory]] §2.1），
 > **只计 `response_mask=1` 的模型生成 token**——它只占 response 区的 39%，其余 61% 是工具返回。
 > ⚠️ 但 gold 轨迹**不含 thinking 块**（SFT 侧 `enable_thinking=False`），而 RL rollout 侧模板默认允许模型输出真实 thinking 且计入 mask=1
-> （见 05 §4.3）。**所以真实 RL 的 T 分布可能显著宽于上表**，Phase 0 必须用 `token_trace` 实测校准。
+> （见 00 §4.3）。**所以真实 RL 的 T 分布可能显著宽于上表**，Phase 0 必须用 `token_trace` 实测校准。
 
 **σ 的两个来源**：
 - **实现失配**（BF16 vs FP32 等）：文献量级 1e-3 ~ 1e-2，**同步 colocate 下只有这一项** → 本任务 T≈300–800 时 `Tσ² ≈ 0.003–0.08`，ESS/N > 0.92，**完全安全**。这解释了为什么老师的工业配置能稳定跑。
@@ -406,8 +401,8 @@ log_ratio_t = old_log_prob_t − rollout_log_prob_t
 ```
 partial_ratio    0.000      ← 没有任何一条轨迹跨越参数版本边界
 分布漂移 TV      0.000      ← 下发 7200 = 训练 7200，一条不差
-ESS/N            0.74–0.88  ← 整跑稳定；离线合成 k=0 的预测是 0.846，落在区间内 ✅
-陈旧轨迹          576 / 7200 = 8.0%
+ESS/N            0.74–0.88  ← 整跑稳定；离线合成 k=0 的预测是 0.846，落在区间内 ✅  ⛔(21)
+陈旧轨迹          576 / 7200 = 8.0%  ⛔(21)
 ```
 
 ⇒ **§9.7 那条待验证项的答案是「很低，低到 0」**，所以研究重心**不转向** partial rollout。

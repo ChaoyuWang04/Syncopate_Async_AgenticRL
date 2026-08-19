@@ -175,7 +175,7 @@ def test_new_cap_never_fires_on_existing_templates() -> None:
     """★★★ 新 cap 必须**自动闭合**：存量 case 一条都不许被打中。
 
     不闭合的话，1550 条存量的历史评测基线**当场全废** —— 这条纪律是
-    「新 cap 必须自动闭合」（05-handoff 坑 #15），M8 那两条也是这么做的。
+    「新 cap 必须自动闭合」（00-START 坑 #15），M8 那两条也是这么做的。
     """
     for name in ("policy_drill", "insight_conflict", "budget_change", "safety_line_drill"):
         for _, b in _bundles(name)[:6]:

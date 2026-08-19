@@ -2,7 +2,7 @@
 
 > 写于 **2026-08-16**（M8 施工完成后的第一次独立审查）。
 > 本文是 **RAG / 检索这条线的权威文档**：存什么、怎么检索、为什么这么选、验收到哪一步。
-> 沙盒的整体结构 → `07-toolbox-and-runtime-design.md`　主线进度 → `05-handoff.md`
+> 沙盒的整体结构 → `07-toolbox-and-runtime-design.md`　主线进度 → `00-START.md`
 > §14 的指标定义 → `../syncopate-project-design-v0.1.md`
 
 ---

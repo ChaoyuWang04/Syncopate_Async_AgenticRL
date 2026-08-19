@@ -1,7 +1,7 @@
 # Syncopate · 07 — Toolbox 与训练 Runtime 设计：怎么训出一个抗得住真实世界的 agent
 
 > 写于 2026-08-11。
-> 上游依据：`00-research-question`（第二目标）、`syncopate-project-design-v0.1` §27/§34/§38、
+> 上游依据：`23-research-question`（第二目标）、`syncopate-project-design-v0.1` §27/§34/§38、
 > 以及本文第 2 节实查的 Meta / AppsFlyer 官方文档。
 
 ---

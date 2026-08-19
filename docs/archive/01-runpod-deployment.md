@@ -190,7 +190,7 @@ bash scripts/run_agenticrl_stage.sh \
 
 ## 8. 接线通过后：立刻验证 TIS 指标链路
 
-这是 [[00-research-question]] 的前置条件，趁环境热着做：
+这是 [[23-research-question]] 的前置条件，趁环境热着做：
 
 ```bash
 # 在上面的命令后追加：
@@ -201,7 +201,7 @@ bash scripts/run_agenticrl_stage.sh \
 
 然后确认日志里有 `rollout_corr/` 前缀的指标，**至少要有这四个**：`kl`、`k3_kl`、`rollout_is_eff_sample_size`、`chi2_seq`。
 
-有了它们，[[00-research-question]] §4.2 的 σ² 反解自检就能做了（`σ² ≈ 2·k3_kl − kl²`），**零额外成本**。
+有了它们，[[23-research-question]] §4.2 的 σ² 反解自检就能做了（`σ² ≈ 2·k3_kl − kl²`），**零额外成本**。
 
 ---
 

@@ -4,7 +4,7 @@
 > 当前状态与操作指南一律看：
 >
 > ```
-> docs/syncopate/05-handoff.md    主线：现在在哪 / 下一步
+> docs/syncopate/00-START.md    主线：现在在哪 / 下一步
 > docs/syncopate/20-...queue.md   主线：执行顺序的唯一来源
 > docs/syncopate/21-...numbers.md ⛔ 哪些数字不能引用
 > docs/syncopate/08-...environment.md  环境与命令

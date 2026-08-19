@@ -67,6 +67,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -191,6 +192,22 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.actor.ppo_mini_batch_size={args.ppo_mini_batch_size}",
         f"actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu={args.micro_batch_size}",
         f"actor_rollout_ref.actor.use_kl_loss={str(args.use_kl_loss)}",
+
+        # ⛔ **不要**打开 verl 的 `actor.use_prefix_grouper`（2026-08-19 实测）：
+        #   它会启用 `ray_trainer._balance_batch` 的组感知划分，而那条路径在 verl 0.8.0
+        #   里**本身是坏的** —— `workers/utils/padding.py` 假设张量是 nested：
+        #        AttributeError: 'NoneType' object has no attribute 'is_nested'
+        #   （上游 #7202 对 prefix_grouper_utils.py 的改动正是 "nested→padded"，
+        #     我们撞的就是它修的那个 bug；而 #7202 已被维护者关闭。）
+        #   ⇒ 我们改为**在 micro-batch 内自己重排**（见 verl_patches._patch_prefix_grouper），
+        #     不依赖 verl 的划分，也就不需要这个配置项。
+        #
+        # ★ 但**必须关掉 `trainer.balance_batch`**：它按序列长度排序来均衡各卡负载，
+        #   顺手把同一道题的 8 条答案打散 —— 实测一个 8 条的 micro-batch 里装的是
+        #   5 个不同题目的碎片（组大小 [2,2,2,1,1]）⇒ 打包退化成「5 个前缀各算一次」，
+        #   比不打包还慢。关掉之后 GRPO 天然的「每题连续 n 条」顺序才保得住。
+        *( ["trainer.balance_batch=False"]
+           if os.environ.get("SYNCOPATE_PREFIX_GROUPER") == "1" else [] ),
         "actor_rollout_ref.actor.kl_loss_coef=0.001",
         "actor_rollout_ref.actor.entropy_coeff=0",
 
@@ -251,7 +268,18 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         #   🔴 该函数**永不返回 None**（单序列也返回全零张量）⇒ allow_is_causal_skip 恒
         #      False ⇒ **不打包的 rmpad 基线同样在物化 mask 的慢路径上**。
         # ⇒ 已装真 flash-attn 2.8.3（attn_implementation 默认已切 flash_attention_2），
-        #    varlen 按 cu_seqlens 分段、不物化 mask ⇒ **这一条要重测，大概率翻过来**。
+        #    varlen 按 cu_seqlens 分段、不物化 mask ⇒ 垫片那条根因**已经消失**。
+        #
+        # ✅✅ **2026-08-19 重测完毕（E25），结论：仍然关，但理由整个换了。**
+        #    旧理由「打包会让注意力退化成 O(总长²)」——**已随垫片一起作废，别再引用**。
+        #    新理由是实测出来的：**打包在我们这个长度上根本没有收益可拿。**
+        #        每条序列 = 4196 题面 + 654 回答 ≈ **4850 token**
+        #        ⇒ 一次前向已经是 [4850 × 2560] 量级的 GEMM，**GPU 早就吃饱了**
+        #        ⇒ micro_batch 1 → 2 实测：定长**慢 1.0%**、变长**慢 6.3%**，多花 4.2 GB 显存
+        #        ⇒ 变长更慢是因为 mb>1 要 pad 到 max(lens)，**mb=1 反而等价于完美打包**
+        #    ⇒ ★ **喂饱 GPU 的单位是 token，不是序列条数。**「batch=1」在这里不代表批次小。
+        #    ⇒ B20 那个「FA2 下打包只有 +4~5%」也由此得到解释：收益本来就接近零。
+        #    详见 docs/infra_exp/E25-trainer-feed.md §4.1
         #
         # ⚠️ 它同时管住 ref（`log_prob_use_dynamic_bsz` 默认跟随这个开关），所以 ref 一起变慢。
         f"actor_rollout_ref.actor.use_dynamic_bsz={str(args.dynamic_bsz)}",
@@ -578,6 +606,15 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
     if args.rollout_correction:
         overrides += [
             f"algorithm.rollout_correction.rollout_is={args.rollout_is}",
+            # ★ 种子要真的传下去 —— 加了参数却不传，就是"机制在但没接上"
+            f"data.seed={args.seed}",
+            # ⛔ 2026-08-19 infra 修：**这一行会让 launch_rl 每次启动都死**。
+            #    verl 的 `SamplingConfig` 字段只有 [_target_, temperature, top_k, top_p,
+            #    do_sample, n]，`rollout.yaml` 顶层也没有 seed ⇒ Hydra struct 模式直接拒绝：
+            #        Key 'seed' is not in struct / full_key: ...rollout.val_kwargs.seed
+            #    ⇒ 100% 触发、无法起跑。`data.seed` 那条是有效的，保留。
+            #    ★ 教训：**新增的 config 覆盖必须起一次跑才算落地** —— 它不是写完就成立的，
+            #      而这条的失败发生在**任何训练开始之前**，任何冒烟都会抓到。
             f"algorithm.rollout_correction.rollout_is_threshold={args.rollout_is_threshold}",
             "algorithm.rollout_correction.rollout_is_batch_normalize=false",
         ]
@@ -672,6 +709,22 @@ def _resolve_topology(args: argparse.Namespace) -> None:
         print(f"[拓扑] ⚠️ 只用了 {used}/{total} 张卡，剩下 {total - used} 张闲着", flush=True)
 
 
+# 候选跑的最少步数（**下限，不是目标**）。理由见 --purpose 那一段。
+MIN_CANDIDATE_STEPS = 400
+
+
+def write_run_purpose(save_path: Path, *, purpose: str, steps: int) -> None:
+    """把"这一跑是干什么用的"落盘。
+
+    ★ 没有这个标记，晋级闸就只能靠**问人**"这跑是不是候选" ——
+      而那是个手动步骤，一定会被忘（本项目第一失效形状）。
+    """
+    save_path.mkdir(parents=True, exist_ok=True)
+    (save_path / "run_purpose.json").write_text(
+        json.dumps({"purpose": purpose, "steps_requested": steps},
+                   ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
@@ -680,16 +733,49 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--save-path", default="checkpoints/grpo/smoke")
     parser.add_argument("--project", default="syncopate")
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
+    # ★★ 2026-08-19：此前**没有 seed 参数** ⇒ 两次同配置的跑不可比。
+    #
+    # 这不是理论顾虑，是当场付的账：E17 的 KL 两臂只差 `--use-kl-loss` 一个变量，
+    # 但因为没有固定种子，**它们其实是两次独立的随机跑**。
+    # 于是逐模板出现 4 个"显著退化"、1 个"显著提升"（|t|>2），
+    # 而 KL 惩罚项只占损失的 **0.0019%** —— 它没有能力造成那种量级的差异。
+    # ⇒ 那组差异量的是**跑间方差**，不是 KL 的效应。
+    #
+    # ★ 副产品（留着当尺子）：同配置两次跑的**模板级差异可以到 ±0.14** ——
+    #   低于这个幅度的模板级"差异"不该当信号看。
+    parser.add_argument("--seed", type=int, default=1234,
+                        help="固定随机种子。**默认固定**：两次跑之间不该多一个自由变量，"
+                             "要做多种子对照就显式传不同的值（同 wandb 默认开、要关得显式）")
     parser.add_argument("--experiment", default="smoke")
     parser.add_argument("--logger", default="console,wandb",
                         help="verl 会把 rollout_corr/* 和 critic/* 全套指标上报")
 
     parser.add_argument("--steps", type=int, default=10)
+    # ══════════════════════════════════════════════════════════════════
+    # ★★★ 这一跑是干什么用的（2026-08-19 立）
+    # ══════════════════════════════════════════════════════════════════
+    #
+    #   probe      精度/吞吐实验 —— 跑几步就够，**不受任何约束**
+    #   candidate  **上线候选** —— 必须跑到"没东西可学了"，不是跑到步数就停
+    #
+    # ★★ 默认是 `probe`，这是刻意的：infra 一直在用 RL 跑短的精度实验，
+    #   默认成 candidate 会**当场挡住他们**，而他们本来就不需要跑到没梯度。
+    #
+    # ⚠️⚠️ 那"主线忘了声明 candidate"怎么办？——**不靠记性**：
+    #   约束不加在**起跑**上，加在**晋级**上（`scripts/candidate_gate.py`）：
+    #   任何跑都随便跑，但**声称自己是上线候选**的跑必须过闸。
+    #   ⇒ 忘了声明的后果是"晋级时被拦下"，不是"悄悄用了一个短跑当候选"。
+    parser.add_argument("--purpose", default="probe", choices=["probe", "candidate"],
+                        help="probe=实验（不受约束）· candidate=上线候选（受最少步数 + 完成判据约束）")
     parser.add_argument("--rollout-n", type=int, default=8, help="GRPO 组大小")
     parser.add_argument("--train-batch-size", type=int, default=2)
     parser.add_argument("--val-batch-size", type=int, default=2)
     parser.add_argument("--ppo-mini-batch-size", type=int, default=2)
-    parser.add_argument("--micro-batch-size", type=int, default=1)
+    parser.add_argument("--micro-batch-size", type=int, default=1,
+                        help="每次前向算几条**序列**（不是几个题目）。★ **1 是实测最优，别拉高**："
+                             "E25 实测 1→2 在定长上慢 1.0%%、变长上慢 6.3%%，且多花 4.2 GB 显存，"
+                             "4 直接 OOM。原因是一条序列已有 ~4850 token ⇒ GPU 早就吃饱了。"
+                             "见 docs/infra_exp/E25-trainer-feed.md §4.1")
     # ★ 2026-08-18：默认值从 `rollout_budget` 取 —— **训练与评测共用一份**。
     #   显式传别的值是允许的，但 check_pipeline_invariants 会把不一致标红。
     parser.add_argument("--max-prompt-length", type=int, default=BUDGET_PROMPT)
@@ -779,9 +865,10 @@ def main(argv: list[str] | None = None) -> int:
                              "-1 是 verl 的默认（全部切分 / FULL_SHARD），"
                              "在这台没有 P2P 的机器上实测慢 6 倍，别用")
     parser.add_argument("--dynamic-bsz", default="False", choices=["True", "False"],
-                        help="按 token 预算打包 micro-batch。⛔ **本机实测是倒退（慢 2.2×）**，"
-                             "默认关。原因见 build_overrides 里的注释：我们的 flash-attn 是垫片，"
-                             "打包后注意力退化成 O(总长²)。装了真 flash-attn 之后再来重测")
+                        help="按 token 预算打包 micro-batch。⛔ **默认关，而且 E25 已重测过**："
+                             "我们每条序列已有 ~4850 token，GPU 本来就吃饱了，打包无收益可拿；"
+                             "变长负载上 mb=1 等价于完美打包。⚠️ 旧理由（垫片时代的「慢 2.2×」）"
+                             "**已作废，别再引用**。见 docs/infra_exp/E25-trainer-feed.md")
     parser.add_argument("--max-token-len-per-gpu", type=int, default=16384,
                         help="--dynamic-bsz 的预算：每个 micro-batch 最多多少 token。"
                              "★ 这是**显存旋钮**，调大 = 激活值更大 = 更快但更吃显存")
@@ -856,13 +943,54 @@ def main(argv: list[str] | None = None) -> int:
                              "跑完用 scripts/prune_rl_ckpts.py 瘦身（只留 LoRA 权重）。")
 
     parser.add_argument("--rollout-correction", action="store_true", default=True)
-    parser.add_argument("--rollout-is", default="token", choices=["token", "sequence"],
-                        help="重要性采样的聚合口径。⛔ 2026-08-18 默认从 sequence 改成 **token**："
-                             "序列级 IS 在长序列上是**指数**脆弱的（每 token 的小偏差乘上 694 个 token）"
-                             "—— 这是数学性质，不依赖任何被 E21/E22 作废的实测数字。"
-                             "E20 实测过 chi2_seq 64.19 vs chi2_token 0.065（差 989×），"
-                             "**那个数字要在 R1 重测，但符号不会变**。"
-                             "而 verl 文档自己也写着 ESS<0.3 时应当换聚合口径（见 E23 §3.3）。")
+    # ══════════════════════════════════════════════════════════════════════
+    # ★★★ 2026-08-19：默认改回 **sequence**（这是第二次改，理由和第一次不同）
+    # ══════════════════════════════════════════════════════════════════════
+    #
+    # ⛔ 2026-08-18 曾从 sequence 改成 token，依据是「序列级 IS 指数脆弱」，
+    #    实测支撑是 `chi2_seq 64.19 vs chi2_token 0.065`（差 989×）。
+    #    ⇒ **那批数字在作废清单里**（`21 §2.1`：E20 的全部 ESS/chi2 数字，B1+B2 污染）。
+    #      它们量的是「trainer 的权重从没推给 rollout」那个**无界 bug** ——
+    #      策略错位无限增长，序列级当然指数崩塌。
+    #      **那不是序列级的性质，是那个 bug 的性质。**
+    #
+    # ✅ 干净基线上的实测（`seqis_long120`：序列级 · lr 3e-5 · **120 步**，
+    #    约等于一个 epoch 的 88%）：
+    #        ESS 前半均值 0.8768 · 后半均值 0.8734 · 线性斜率 **+0.00016/点**
+    #        全程在 [0.78, 0.94] 震荡，**没有衰减趋势**
+    #        离 A4 停机线（需掉到 0.500）有 **1.6 倍**余量
+    #
+    # ✅ 而行为维度上序列级明显更好（`compare` 的行为读数，同一份冻结 EVAL）：
+    #        该 defer   序列 97%（= 起点，没掉）  vs  token **83%**
+    #        误 defer   序列 0.1%                 vs  token 1.3%
+    #        REJ 类     序列 −0.031               vs  token **−0.188**
+    #        任务总分   两者**完全打平**（+0.000，MDE 0.016）
+    #
+    # ★★ 决定性的理由不是上面的数，是**可观测性的不对称**：
+    #        选 sequence  ESS 在 [0.78, 0.94] 真实波动 ⇒ 它是一个**有读数**的仪表
+    #        选 token     ESS ≈ 0.999 恒定          ⇒ 它是一个**永远不会响**的警报器
+    #    而 token 级的 ESS≈1 **不是"漂移小"的证据，是算术结果** ——
+    #    token 级按定义就不去连乘那些比值，所以它测不到序列级的错位；
+    #    再叠一层：verl 报的 ESS 是 `clamp(0, 2.0)` 之后算的（`21 §3.3`）。
+    #    ⇒ 选 token 等于主动选一个测不到东西的指标，再用"它没报警"来安心。
+    #
+    # ⚠️⚠️ **但不要据此说「ESS 这个指标没用」** —— 这是两回事：
+    #    `[实测]` `seqis_long120` 的 `partial_ratio` **30 个点全是 0.0**
+    #    ⇒ **没有任何一条轨迹跨越过权重版本边界**。
+    #      trainer 的一步比 rollout 慢得多，rollout 每次都早早做完在等
+    #      ⇒ **我们从来没有真正跑出过 fully_async 的陈旧度条件。**
+    #    ⇒ π_rollout ≈ π_train ⇒ IS 修正本身就近乎恒等
+    #      ⇒ 上面那个「任务分完全打平」**不是"两者一样好"，是"这个条件下 IS 几乎没参与"**。
+    #    ⇒ **ESS 的作用没有被观测出来 ≠ ESS 没有作用。** 它只是还没面对它该检测的条件。
+    #      真到了陈旧度起来的负载（长尾工具延迟 / rollout 更快 / sync_every 更大），
+    #      这个默认值要重新审 —— 那时序列级**可能真的**会塌，而那正是它会告诉我们的。
+    parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"],
+                        help="重要性采样的聚合口径。**默认 sequence**（2026-08-19，见源码里的长注释）："
+                             "干净基线 120 步实测序列级 ESS 无衰减，而行为维度上它明显更好"
+                             "（该 defer 97% vs 83%）；且序列级的 ESS **会动**，token 级恒 ≈1 "
+                             "⇒ 后者等于一个永不报警的警报器。"
+                             "⚠️ ESS/N 真的跌破 0.3 时，换成 token 是**逃生口**（06 §2.B）。"
+                             "⚠️ 陈旧度条件至今没被跑出来过（partial_ratio 全程 0）⇒ 结论有范围。")
     parser.add_argument("--rollout-is-threshold", type=float, default=2.0)
 
     parser.add_argument("--latency-scale", type=float, default=0.01,
@@ -874,6 +1002,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
+
+    # ★ 候选跑的**最少**步数。⚠️ 它是**下限不是目标** ——
+    #   真正的停止条件是「零梯度率不再创新高」（scripts/pool_readout.py）。
+    #   [依据] e17a 跑 60 步时零梯度率仍在创新高（15%→52%），且 RL 桶只覆盖 22.7%；
+    #   一个 epoch = 824/6 ≈ 137 步只让每条题被看**一次**，
+    #   而分池的 WEIGHT_FLOOR=0.05 本身就预设了几十轮往返。
+    #   ⇒ 400 步 ≈ 3 个 epoch，是"分池能开始起作用"的下限，不是"够了"。
+    if args.purpose == "candidate" and args.steps < MIN_CANDIDATE_STEPS:
+        raise SystemExit(
+            f"🔴 --purpose candidate 要求至少 {MIN_CANDIDATE_STEPS} 步（本次 {args.steps}）。\n"
+            f"   ⚠️ 而且步数是**下限不是目标**：真正该停的时候是"
+            f"「零梯度率不再创新高」（scripts/pool_readout.py）。\n"
+            f"   ⇒ 只是做实验的话用 --purpose probe（默认），不受任何约束。")
     _assert_model_is_merged(str((ROOT / args.model).resolve()))
     _resolve_topology(args)
 
@@ -892,6 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_RUN_ID"] = args.experiment
     env["SYNCOPATE_LATENCY_SCALE"] = str(args.latency_scale)
     # 下发侧记账，和 trainer.rollout_data_dir 的训练侧 dump 配对算分布漂移
+    write_run_purpose(ROOT / args.save_path, purpose=args.purpose, steps=args.steps)
     env["SYNCOPATE_DISPATCH_LOG"] = str(ROOT / args.save_path / "dispatched.jsonl")
     # 动态分池的状态（per-case 的 ema_std / seen / last_seen_step），断点续跑要用
     env["SYNCOPATE_POOL_STATE"] = str(

@@ -293,7 +293,7 @@ rollout_corr_helper 算出 (bs, seq_len) 张量
 
 | 方案 | 改动 | 风险 |
 |---|---|---|
-| **A. 复用 `rollout_is_weights`** | 在 `compute_rollout_correction_and_add_to_batch` 之后把 `c_t` 乘进去 | 🔴 **和 TIS 语义冲突**——它已经承载了重要性采样权重，两者相乘会污染 `rollout_corr/*` 全部诊断指标，也破坏 [[00-research-question]] 的 ESS 分析 |
+| **A. 复用 `rollout_is_weights`** | 在 `compute_rollout_correction_and_add_to_batch` 之后把 `c_t` 乘进去 | 🔴 **和 TIS 语义冲突**——它已经承载了重要性采样权重，两者相乘会污染 `rollout_corr/*` 全部诊断指标，也破坏 [[23-research-question]] 的 ESS 分析 |
 | **B. 新增平行字段 `step_credit_weights`** | ① `losses.py:88` 加 2 行 select ② `:112` 传参 ③ `core_algos:1358` 后加 1 行乘法 ④ AgentLoop 侧产出该张量 | 🟢 **推荐**。约 10 行框架改动 + adapter 侧生成逻辑 |
 
 **方案 B 的关键实现点**：`c_t` 必须在 AgentLoop 里生成并塞进 `AgentLoopOutput.extra_fields`，然后由 `_agent_loop_postprocess` pad 成定长（和 `response_logprobs` 完全同构，`agent_loop.py:758-761` 就是现成模板）。**因为只有 AgentLoop 知道每个 token 属于第几步**（`token_trace["segments"]` 里已经有 `step` 字段了）。
@@ -344,6 +344,6 @@ gen_batch_output = gen_batch.repeat(repeat_times=rollout_n, interleave=True)
 
 这条线**和异步化研究是正交的**，但有一处交汇值得注意：
 
-**步级信用分配会加剧 sequence-level TIS 的问题。** 如果 `c_t` 让不同步的 token 权重差异变大，而 [[00-research-question]] §8 的 `S = Σδ_t` 是无权求和——**两者对"一条轨迹内 token 不等价"这件事的处理是不一致的**。真要同时上，得先想清楚 TIS 的求和是否也该加权。
+**步级信用分配会加剧 sequence-level TIS 的问题。** 如果 `c_t` 让不同步的 token 权重差异变大，而 [[23-research-question]] §8 的 `S = Σδ_t` 是无权求和——**两者对"一条轨迹内 token 不等价"这件事的处理是不一致的**。真要同时上，得先想清楚 TIS 的求和是否也该加权。
 
 **建议：Phase 2 先专注异步化主线，步级信用分配作为 Phase 3 的可选模块。** 但**第 0 步的测量应该在 Phase 1 顺手做掉**——它零成本，而且结论（翻转率）本身就是这个任务的一个有价值的刻画。

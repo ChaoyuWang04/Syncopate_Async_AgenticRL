@@ -111,7 +111,8 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
 # --------------------------------------------------------------------------
 
 
-async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60) -> dict | None:
+async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
+                    org_id: str | None = None) -> dict | None:
     """抢一个待跑的 run。**原子**：同一条 run 不可能被两个 worker 同时抢到。
 
     ★ `FOR UPDATE SKIP LOCKED` 是这里的关键：没有它，多个 worker 会锁在同一行上
@@ -119,6 +120,17 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60) ->
 
     ★ lease 过期才能被重抢 —— worker 崩了不会让任务永远卡住，
     而正常在跑的任务也不会被别人偷走。这就是"队列重投不重复执行"的实现。
+
+    ★★ `org_id` = **把这个 worker 限定在一个租户上**（None = 全局，老行为）。
+
+    ⚠️ 它不只是测试用的开关，是一条真实的生产能力：worker 池按租户切分
+      （大客户独占一组 worker）是标准做法。
+    ⚠️⚠️ 但它**首先修的是一个探针污染问题**：队列是全局的 ⇒ 任何调 `run_once`
+      的测试/探针都会抢走别人遗留的活。2026-08-19 我自己就中过一次 ——
+      探针报「C 档没走审批」，实际是它抢到了别的 run，**得出了一个完全错误的结论**。
+      ⇒ 此前的修法是"每处记得先排空"（`test_worker._drain`），
+        而**手动步骤一定会被忘** —— `test_retrieval.py` 就没排，它正是那条偶发红的来源。
+      ⇒ 结构上拿不到别人的活，比"记得排空"可靠。
     """
     async with db.tx() as conn:
         row = await conn.fetchrow(
@@ -131,8 +143,9 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60) ->
             ), claimable AS (
                 SELECT r.id FROM agent_runs r
                 LEFT JOIN inflight i ON i.org_id = r.org_id
-                WHERE r.status = 'queued'
-                   OR (r.status = 'running' AND r.lease_expires_at < now())
+                WHERE ($3::text IS NULL OR r.org_id = $3)     -- ★ 可选的租户限定，见下
+                  AND (r.status = 'queued'
+                       OR (r.status = 'running' AND r.lease_expires_at < now()))
                 -- ★★ 公平分配：先按"这个 org 手上已经有几条在跑"排，再按先来后到。
                 -- 之前是纯全局 FIFO ⇒ **一个 org 灌满队列就把别人饿死**
                 -- （压测场景⑤「单 org 刷爆预算」考的正是这个）。
@@ -153,7 +166,7 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60) ->
             RETURNING r.run_id, r.org_id, r.user_message, r.attempt,
                       r.intent, r.automation_tier, r.requires_approval
             """,
-            worker_id, lease_seconds)
+            worker_id, lease_seconds, org_id)
         return dict(row) if row else None
 
 
@@ -177,12 +190,18 @@ async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> No
     ⇒ **人点了同意，run 永远不会继续**，飞轮回路 2 的 `modified_params`
     落了库却没有任何东西会去执行它。
 
-    ★ 恢复语义选的是**从头重跑**，不是从断点续：
+    ⛔ **原本选的是"从头重跑"，2026-08-19 已改成"从 transcript 续"** ——
+       原理由是「重跑一遍读操作，读是便宜的那一侧，代价可以接受」。
+       **那个前提不成立了**（三条都变了）：
 
-        重跑安全   工具级幂等键是 (org, run, 工具, 参数) 的确定性函数 ⇒
-                   已经做过的写动作第二次会命中幂等，**不会重复扣款**
-        断点续贵   要先给 `checkpoints` 补写入路径，而那张表现在没人写
-        代价       重跑一遍读操作。读是便宜的那一侧，这个代价可以接受
+        ① 平台加了 BUC 积分制（B-1a）⇒ **读也扣配额**，不再免费
+        ② 编排改成模型驱动（B-3b）⇒ 重跑要**重新花模型调用的钱**
+        ③ 重跑会重新踩改动频次上限 —— 一小时只有 4 格
+
+       ⇒ `agent_loop.save_transcript` 给 `checkpoints` 补上了它一直缺的写入路径
+         （原文说"那张表现在没人写"，现在有了）。
+       ⚠️ **幂等键那条兜底没有撤** —— transcript 只是省掉重复劳动，
+         不是正确性的唯一依赖。两条都在，才敢在生产上恢复。
 
     ⇒ 记在这里，因为"为什么不做断点续"以后一定会被再问一次。
     """

@@ -298,7 +298,7 @@ async def run_rollout(
         # ---- 4. 执行工具 ----
         # ★★ 2026-08-18：一步多调用时，**只执行第一个**，其余当协议错误退回。
         #
-        # 起因（实测 5280 条训练 rollout，见 `docs/syncopate/20 §P0-2`）：
+        # 起因（实测 5280 条训练 rollout，见 `docs/syncopate/01 §P0-2`）：
         #   18.8% 的 rollout 一步发了多个 tool call，而 system.txt 第 8 行明确禁止；
         #   截尾采样（评测口径 top_p 0.95 / top_k 20）下这个数是 **0%**
         #   ⇒ 它是**采样尾巴**，不是模型不懂规矩。

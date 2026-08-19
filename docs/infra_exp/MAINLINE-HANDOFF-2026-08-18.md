@@ -152,7 +152,7 @@ metrics["rollout_is_eff_sample_size"] = 1.0 / masked_mean(normalized.square())
 
 ### 3.3 ★ 上游原话是「换聚合方式」，被我们写成了「停机」
 
-`00-research-question §7` 里我们自己抄下来的原文：
+`23-research-question §7` 里我们自己抄下来的原文：
 
 > verl 文档：*若 ESS < 0.3, **consider switching to geometric aggregation***
 

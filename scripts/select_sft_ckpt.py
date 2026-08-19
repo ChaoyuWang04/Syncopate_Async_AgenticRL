@@ -29,9 +29,16 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+# ★ 数据版本从**共用常量**取，不在这里再写一份（本项目为"同一件事两份实现"付过多次钱）
+from syncopate.pipeline.split import (  # noqa: E402
+    DATA_VERSION, DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR,
+)
 
 
 def _candidates(out_dir: Path) -> list[Path]:
@@ -51,6 +58,20 @@ def _metric(kind: str, cand_dir: Path) -> dict | None:
 
     ⇒ 改成：只认 label 里出现**这个候选的相对路径**；认不出就返回 None。
       **宁可报"没有"，也不要猜。**
+
+    ★★ 2026-08-18 晚补的第二道门：**数据版本也要对得上。**
+    上面那道门只管"是不是同一个模型"，管不了"是不是同一份数据"。
+    而 `entropy.py` 的 `--batch/--split-dir` 是必须同时动的一对、默认值又是陈旧的 v3
+    ⇒ 一份在 v3 eval 桶上量出来的熵，模型路径完全对得上、会被这里收下。
+      （v3 eval 64 条 vs v13 343 条、交集仅 49；且其中有落在 v13 训练桶里的题。）
+    ⇒ 所以：审计**写着** `data_version` 而不等于期望版本的，一律当"没有"。
+
+    ⚠️⚠️ 但**没写**这个字段的要区别对待 —— 那是这次改造**之前**的老产物
+      （`_audit/v13_sft_e1.json` 等，按 `21 §3.5` 是**已知有效**的 v13 审计）。
+      把它们也判成"没有"就是过度作废：会扔掉有效证据、还逼一次 15 分钟的 GPU 重评，
+      而「过度作废的代价和引用错数字一样大」（`21 §3` 开头那条）。
+    ⇒ 分界：**身份**（是哪个模型）由 label 定，本来就是确定的；缺的只是**出处**。
+      ⇒ 收下，但由调用方**显式标出"版本未记录"**，让人自己看见，而不是静默当成对的。
     """
     want = str(cand_dir.relative_to(ROOT)) if cand_dir.is_absolute() else str(cand_dir)
     for p in sorted((ROOT / "_audit").glob("*.json")):
@@ -62,19 +83,40 @@ def _metric(kind: str, cand_dir: Path) -> dict | None:
         if want not in label:
             continue
         is_entropy = "decision_mean_entropy" in d
-        if (kind == "entropy") == is_entropy:
-            return d
+        if (kind == "entropy") != is_entropy:
+            continue
+        ver = d.get("data_version")
+        if ver is not None and ver != DATA_VERSION:
+            continue                      # 写着别的版本 ⇒ 确定不是这次要的，跳过
+        return d
     return None
 
 
-def _grad_alive(audit: dict) -> tuple[int, int, int]:
-    """(有梯度, 饱和, 卡死) —— 判据同 `compare.py`：组内 std 与均分。"""
+def _grad_alive(audit: dict) -> tuple[int, int, int, float | None]:
+    """(有梯度, 饱和, 卡死, **零梯度占比**) —— 判据同 `compare.py`：组内 std 与均分。
+
+    零梯度的格子分成**三类**（std ≤ 0.01，8 次采样几乎同分）：
+
+        饱和   分高（> 0.9）    已经会了，没梯度**不是问题**
+        死格   分低（< 0.15）   全错且稳定错 —— RL 够不着，该由 SFT 覆盖去解
+        卡死   中间分           在里面打转（GEO 那一类，`01 §P0-1.3`）
+
+    ⚠️ 旧版**只返回前三个**，而"死格"那一类是用减法隐式算掉的、从没打印过 ——
+      于是这张表加起来不等于总数（v13-e1 实测 222+96+22=340，少 3 条），
+      而少掉的正是"全错且稳定错"那一类。
+    ⚠️⚠️ 更要紧的是：**M6 的毕业条件问的是"零梯度占比 < 30%"**，
+      而这张表从来没有把这个数打出来 —— 人得自己拿 1−有梯度/总数 心算。
+      判据不在屏幕上，就等于判据没接上（`01 §P2-2` 记的 e1 = 35.3% **不达标**）。
+    """
     rows = audit.get("rows") or []
-    alive = sum(r.get("reward_std", 0) > 0.01 for r in rows)
-    sat = sum(r.get("reward_std", 0) <= 0.01 and r.get("reward", 0) > 0.9 for r in rows)
-    stuck = len(rows) - alive - sat - sum(
-        r.get("reward_std", 0) <= 0.01 and r.get("reward", 0) < 0.15 for r in rows)
-    return alive, sat, stuck
+    if not rows:
+        return 0, 0, 0, None
+    flat = [r for r in rows if r.get("reward_std", 0) <= 0.01]
+    alive = len(rows) - len(flat)
+    sat = sum(r.get("reward", 0) > 0.9 for r in flat)
+    dead = sum(r.get("reward", 0) < 0.15 for r in flat)
+    stuck = len(flat) - sat - dead
+    return alive, sat, stuck, len(flat) / len(rows)
 
 
 def main(argv=None) -> int:
@@ -90,28 +132,54 @@ def main(argv=None) -> int:
         print(f"🔴 {out} 下没有候选（epoch* / sel_f*）")
         return 1
 
-    print(f"{'候选':<14}{'大小MB':>8}{'决策位熵':>10}{'有梯度':>8}{'饱和':>7}{'卡死':>7}   判据：熵高 + 有梯度多")
+    print(f"{'候选':<14}{'大小MB':>8}{'决策位熵':>10}{'有梯度':>8}{'饱和':>7}{'卡死':>7}"
+          f"{'零梯度%':>9}   判据：熵高 + 有梯度多（数据版本 {DATA_VERSION}）")
     rows = []
+    unversioned = []
     for d in cands:
         mb = sum(f.stat().st_size for f in d.glob("*")) / 1048576
         ent = _metric("entropy", d)
         e = ent.get("decision_mean_entropy") if ent else None
         ev = _metric("eval", d)
-        alive = sat = stuck = None
+        alive = sat = stuck = dead_pct = None
         if ev:
-            alive, sat, stuck = _grad_alive(ev)
+            alive, sat, stuck, dead_pct = _grad_alive(ev)
+        for a in (ent, ev):
+            # ⚠️ 老产物没有 `data_version`：**收下但要说出来**，不静默当成对的。
+            if a is not None and a.get("data_version") is None:
+                unversioned.append(d.name)
         rows.append((d, mb, e, alive))
         f = lambda v, w, p=3: (f"{v:>{w}.{p}f}" if isinstance(v, float)
                                else (f"{v:>{w}}" if v is not None else "  —".rjust(w)))
-        print(f"{d.name:<14}{mb:>8.0f}{f(e, 10)}{f(alive, 8)}{f(sat, 7)}{f(stuck, 7)}")
+        pct = f"{dead_pct:>8.1%}" if dead_pct is not None else "       —"
+        print(f"{d.name:<14}{mb:>8.0f}{f(e, 10)}{f(alive, 8)}{f(sat, 7)}{f(stuck, 7)}{pct}")
+
+    if unversioned:
+        print(f"\nℹ️ 这些候选的审计**没记数据版本**（本次改造之前的老产物）："
+              f"{sorted(set(unversioned))}"
+              f"\n   已按 label 里的模型路径收下，但它量在哪份数据上**无从确认** ——"
+              f"\n   要它确定，重跑一次即可（下面的命令已带上版本参数）。")
 
     missing = [r[0].name for r in rows if r[2] is None and r[3] is None]
     if missing:
-        print(f"\n⚠️ 这些候选还没有审计（**没找到就报没有，不猜**）：{missing}"
-              "\n   先跑："
-              "\n   python -m syncopate.train.entropy    --adapter <候选> --limit 24"
-              "\n   python -m syncopate.train.eval_local --adapter <候选> ...")
-        print("⚠️ **不要拿 val_loss 选** —— 它在这份数据上不含信息（见本脚本文档串）")
+        # ★ 打**照抄就能跑**的完整命令。此前这里印的是
+        #   `--adapter <候选> --limit 24`，缺 `--batch/--split-dir/--out` 三样：
+        #   缺 --out ⇒ 根本不落审计文件，这张表永远显示"—"；
+        #   缺版本参数 ⇒ 默认值是陈旧的 v3（`data/batches/v3` 本机都不存在）。
+        #   ⇒ 「打印出来的指令本身就是接口」，印不全就等于机制没接上。
+        print(f"\n⚠️ 这些候选还没有审计（**没找到就报没有，不猜**）：{missing}")
+        for name in missing:
+            cand = f"{out.relative_to(ROOT)}/{name}"
+            print(f"\n   # {name}")
+            print(f"   python -m syncopate.train.entropy --adapter {cand} --limit 24 \\")
+            print(f"       --batch {DEFAULT_BATCH_DIR} --split-dir {DEFAULT_SPLIT_DIR} \\")
+            print(f"       --out _audit/{DATA_VERSION}_entropy_{name}.json")
+            print(f"   python -m syncopate.train.eval_local --adapter {cand} "
+                  f"--samples-per-case 8 \\")
+            print(f"       --batch {DEFAULT_BATCH_DIR} --split-dir {DEFAULT_SPLIT_DIR} \\")
+            print(f"       --out _audit/{DATA_VERSION}_eval_{name}.json")
+        print("\n⚠️ **不要拿 val_loss 选** —— 它在这份数据上不含信息（见本脚本文档串）")
+        print("⚠️ 先只跑熵（≈1 分钟/点）排序，前二才跑 eval_local（15 分钟/点）")
 
     if not args.prune:
         if args.keep:

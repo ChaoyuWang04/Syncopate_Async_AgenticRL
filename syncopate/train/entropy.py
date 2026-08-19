@@ -37,7 +37,9 @@ import torch
 
 from syncopate.core.schemas import CaseBundle
 from syncopate.domains.adcampaign import build_domain
-from syncopate.pipeline.split import load_bucket
+from syncopate.pipeline.split import (
+    DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, assert_same_data_version, load_bucket,
+)
 from syncopate.train.eval_local import load_model
 from syncopate.train.rollout_loop import (
     CHAT_TEMPLATE_KWARGS, MAX_PROMPT_LENGTH, build_messages,
@@ -140,14 +142,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="输出熵监控")
     parser.add_argument("--model", default="models/Qwen3-4B")
     parser.add_argument("--adapter", default=None, help="不给就是基座")
-    parser.add_argument("--batch", default="data/batches/v3")
-    parser.add_argument("--split-dir", default="data/splits/v3")
+    # ★ 默认值来自**一份共用常量**（`pipeline/split.py`）——此前这里写死 v3，
+    #   而 `data/batches/v3` 在本机根本不存在。⚠️ 这两个参数必须同时动，见下面的断言。
+    parser.add_argument("--batch", default=DEFAULT_BATCH_DIR)
+    parser.add_argument("--split-dir", default=DEFAULT_SPLIT_DIR)
     parser.add_argument("--limit", type=int, default=16, help="取冻结 EVAL 的前 N 条")
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="只影响采样出的路径，不影响熵的计算（熵用原始 logits）")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
+
+    # ★ 「两个东西应当相同」型判据：只改一个参数会静默量错另一个 case 集（见 split.py 那一节）
+    data_version = assert_same_data_version(args.batch, args.split_dir)
 
     batch = ROOT / args.batch
     case_ids = load_bucket(ROOT / args.split_dir, "eval")[: args.limit]
@@ -170,7 +177,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         path = ROOT / args.out
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"label": label, **stats}, ensure_ascii=False, indent=1),
+        # ★ 把**数据版本**写进产物：否则下游（`select_sft_ckpt`）只能靠 label 里的
+        #   model/adapter 路径判断，一份 v3 时代的审计会被静默当成本次的结果 ——
+        #   写这个工具时就是这么撞上 v3 的 `M1_ctrl_epoch1.json` 的。
+        path.write_text(json.dumps({"label": label, "data_version": data_version,
+                                    "batch": args.batch, "split_dir": args.split_dir,
+                                    **stats}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
         print(f"  明细 -> {path}")
     return 0

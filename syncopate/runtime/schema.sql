@@ -257,3 +257,152 @@ CREATE TABLE IF NOT EXISTS insights (
     UNIQUE (scope, claim_id)
 );
 CREATE INDEX IF NOT EXISTS insights_by_scope ON insights (scope, status);
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- B-2 · 记忆库与安全线表（2026-08-19）
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- 记忆库。四个 lane：
+--   episodic  历史投放动作   ★ **系统维护，agent 不可写**（硬边界，等价于 403）
+--   semantic  素材与受众属性
+--   business  优化干预效果
+--   risk      风控标记      ★ 写它之前必须先调 risk.check_account
+CREATE TABLE IF NOT EXISTS memory_records (
+    id            BIGSERIAL PRIMARY KEY,
+    org_id        TEXT        NOT NULL,
+    record_id     TEXT        NOT NULL,
+    lane          TEXT        NOT NULL
+                  CHECK (lane IN ('episodic','semantic','business','risk')),
+    subject       JSONB       NOT NULL DEFAULT '{}'::jsonb,   -- account/campaign/creative/region
+    content       TEXT        NOT NULL,
+    confidence    NUMERIC(3,2) NOT NULL,
+    evidence_refs JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    -- ★ TTL：`memory.search` 要自动剔除已过期的（沙盒描述里的原话）。
+    --   ⚠️ 但 `memory.read` **不剔除** —— 它明写「不校验这条记忆现在还成不成立」。
+    --     两个工具对同一条记录的可见性刻意不同，别"顺手统一"。
+    expires_at    TIMESTAMPTZ,
+    -- ★ 作废是**标记**不是删除：「你需要知道『我们曾经这么以为』」。
+    invalidated_at TIMESTAMPTZ,
+    invalidate_reason TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, record_id)
+);
+CREATE INDEX IF NOT EXISTS memory_by_lane ON memory_records (org_id, lane);
+
+-- 记忆写入**提案**。★ 沙盒描述：「不会立即入库，需经审核」
+-- ⇒ 提案和记录是两张表。写进 memory_records 的唯一路径是审核通过，
+--   不是这张表的 INSERT —— 否则"需经审核"就只是一句话。
+CREATE TABLE IF NOT EXISTS memory_proposals (
+    id            BIGSERIAL PRIMARY KEY,
+    org_id        TEXT        NOT NULL,
+    run_id        TEXT        NOT NULL,
+    kind          TEXT        NOT NULL
+                  CHECK (kind IN ('write','invalidate','conflict_resolve')),
+    payload       JSONB       NOT NULL,
+    status        TEXT        NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','approved','rejected')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS memory_proposals_by_run ON memory_proposals (org_id, run_id);
+
+-- 投放安全线（内部每周更新）。
+-- ⚠️⚠️ **表里不存 `expired` 这一列，也不许查询时算出来。**
+--   `axes.py` 的纪律：「工具不替模型判断过没过期，只如实返回 valid_to。
+--   真实世界里没人会在返回里塞一个 expired: true。模型必须自己拿它和今天比。」
+--   ⇒ 加一个 expired 字段 = 把这道判断从模型手里拿走，且与训练侧不一致。
+CREATE TABLE IF NOT EXISTS safety_lines (
+    id            BIGSERIAL PRIMARY KEY,
+    org_id        TEXT        NOT NULL,
+    product_id    TEXT        NOT NULL,
+    region        TEXT        NOT NULL,
+    cpi_d7_max    NUMERIC(10,2),
+    roas_d7_min   NUMERIC(10,4),
+    retention_d1_min NUMERIC(10,4),
+    daily_budget_max INTEGER,
+    valid_from    DATE        NOT NULL,
+    valid_to      DATE        NOT NULL,
+    UNIQUE (org_id, product_id, region, valid_from)
+);
+CREATE INDEX IF NOT EXISTS safety_lines_lookup ON safety_lines (org_id, product_id, region);
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- B-2 第五批 · 数据源表（2026-08-19）
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- 行业基准。⚠️ **不是决策依据**（决定能不能扩量要用 safety_lines 的内部安全线）。
+CREATE TABLE IF NOT EXISTS industry_baselines (
+    id          BIGSERIAL PRIMARY KEY,
+    platform    TEXT NOT NULL,
+    game_genre  TEXT NOT NULL,
+    metric      TEXT NOT NULL,
+    p25         NUMERIC(12,4),
+    p50         NUMERIC(12,4),
+    p75         NUMERIC(12,4),
+    sample_size INTEGER,
+    UNIQUE (platform, game_genre, metric)
+);
+
+-- 时令活动。只给背景，不判断该不该投。
+CREATE TABLE IF NOT EXISTS seasonal_events (
+    id           BIGSERIAL PRIMARY KEY,
+    region       TEXT NOT NULL,
+    event        TEXT NOT NULL,
+    event_date   DATE NOT NULL,
+    lift_factor  NUMERIC(6,2),
+    creative_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    UNIQUE (region, event, event_date)
+);
+
+-- 账户级预算调整规则。⚠️ 只给规则，**不做风控判断**（那在 account_risk）。
+CREATE TABLE IF NOT EXISTS budget_rules (
+    org_id            TEXT PRIMARY KEY,
+    max_increase_pct  NUMERIC(6,2) NOT NULL DEFAULT 20,
+    approval_threshold INTEGER      NOT NULL DEFAULT 100000,
+    risk_check_required BOOLEAN     NOT NULL DEFAULT true,
+    monthly_cap       INTEGER
+);
+
+-- 账户风控。⚠️ 只看账户状态，**不判断金额合不合政策**。
+CREATE TABLE IF NOT EXISTS account_risk (
+    org_id      TEXT NOT NULL,
+    account_id  TEXT NOT NULL,
+    flags       JSONB NOT NULL DEFAULT '[]'::jsonb,
+    state       TEXT  NOT NULL DEFAULT 'normal'
+                CHECK (state IN ('normal','restricted','frozen')),
+    allow_increase BOOLEAN NOT NULL DEFAULT true,
+    PRIMARY KEY (org_id, account_id)
+);
+
+-- 打法库。⚠️ `anomaly_type` 必须是 detect_anomalies 真的会返回的那些。
+CREATE TABLE IF NOT EXISTS playbooks (
+    anomaly_type TEXT PRIMARY KEY,
+    steps        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    cautions     JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+-- 素材 feature 的地域 lift。★★ **必须逐地域存**：
+-- 同一个 feature 在不同地域可能**符号相反**，混在一起算会得出一个两头都不对的数。
+CREATE TABLE IF NOT EXISTS feature_lifts (
+    id          BIGSERIAL PRIMARY KEY,
+    feature     TEXT NOT NULL,
+    region      TEXT NOT NULL,
+    product_id  TEXT,
+    lift        NUMERIC(8,4) NOT NULL,
+    ci_low      NUMERIC(8,4),
+    ci_high     NUMERIC(8,4),
+    n_treatment INTEGER,
+    n_control   INTEGER,
+    UNIQUE (feature, region, product_id)
+);
+
+-- 地域表现。⚠️ 素材条数少的地域，数字本身就不可信 ⇒ `asset_count` **必须返回**，
+-- 否则模型没法判断"这个地域不行"和"这个地域样本太少"的区别。
+CREATE TABLE IF NOT EXISTS geo_performance (
+    id          BIGSERIAL PRIMARY KEY,
+    product_id  TEXT NOT NULL,
+    region      TEXT NOT NULL,
+    roas_d7     NUMERIC(8,4),
+    cpi_d7      NUMERIC(10,2),
+    asset_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (product_id, region)
+);

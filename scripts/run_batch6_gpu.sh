@@ -12,9 +12,10 @@ COMMON=(
   --model models/Qwen3-4B-sft-v13-e1
   --train-file data/rl/v13/train.parquet --val-file data/rl/v13/val.parquet
   --lora-rank 32 --train-batch-size 6 --rollout-n 8 --ppo-mini-batch-size 6 --micro-batch-size 1
-  # ★ 2026-08-18 由 3584/1536 提到 5120/2048：训练与评测此前不同源（评测宽 43%/33%），
-  #   见 docs/syncopate/20 §P0-1。⚠️ max_model_len 随之 5120→7168，首次跑请盯 vLLM KV cache。
-  --max-num-seqs 64 --object-store-gb 2 --max-prompt-length 5120 --max-response-length 2048
+  # ★ 长度预算与采样参数**不在这里传** —— 唯一来源是 syncopate/train/rollout_budget.py，
+  #   launch_rl 的默认值从那里取。⚠️ 显式传会被 check_pipeline_invariants 的 contract 组判红
+  #   （2026-08-18 就是各脚本各抄一份，抄着抄着漂成了 3584/1536 vs 5120/2048 两套）。
+  --max-num-seqs 64 --object-store-gb 2
   --save-freq 999 --wandb-mode offline --logger console --dynamic-bsz False --max-token-len-per-gpu 16384
 )
 RUN_TIMEOUT="${RUN_TIMEOUT:-5400}"

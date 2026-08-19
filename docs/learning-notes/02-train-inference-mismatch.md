@@ -189,7 +189,7 @@ GRPO advantage 完全不受影响：`compute_grpo_outcome_advantage`（`core_alg
 ## 6. 仍不确定 / 待验证
 
 1. ~~`docs/algo/rollout_corr_math.md` 未随包~~ → **已补**，见 §7 对照笔记。
-2. `rollout_is=sequence` 在 **multi-turn** 场景的语义：`masked_sum` 会把一条轨迹里**所有轮次**的模型 token 的 log_ratio 全加起来。轮次越多、序列越长，S 的方差越大，w 越容易撞上截断上界 C=2.0。**已做纸面量纲分析，见 §8**——结论是 ESS 随 T 指数衰减，这是 Syncopate 的核心研究问题（[[../syncopate/00-research-question]]）。
+2. `rollout_is=sequence` 在 **multi-turn** 场景的语义：`masked_sum` 会把一条轨迹里**所有轮次**的模型 token 的 log_ratio 全加起来。轮次越多、序列越长，S 的方差越大，w 越容易撞上截断上界 C=2.0。**已做纸面量纲分析，见 §8**——结论是 ESS 随 T 指数衰减，这是 Syncopate 的核心研究问题（[[../syncopate/23-research-question]]）。
 3. RS（`rollout_rs`）老师完全没开。它和 partial rollout 在"丢弃 off-policy 样本"这件事上是竞争关系，Phase 2 可以对比。
 4. bypass_mode 省掉的那次 forward 在 8B/64 卡下占比多少，未测。
 

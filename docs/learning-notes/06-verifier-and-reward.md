@@ -387,4 +387,4 @@ confidence = 1.0   # 注释："当前版本 confidence 恒为 1.0（留作未来
 
 - **reward 的方差来源**：caps 是**离散**的（0.0 / 0.25 / 0.30 / 0.35 / 0.45 / 0.55 / 不封顶），意味着 reward 分布是**多峰**的而不是连续的。GRPO 的组内归一化（`compute_grpo_outcome_advantage`）在多峰分布上的行为值得 Phase 1 观察——如果一组 8 条 rollout 全部命中同一个 cap，组内标准差趋 0，advantage 会被 `epsilon=1e-6` 放大成噪声。
 - **`multi_tool_per_step_cap = 0.0` 是个硬悬崖**：小模型早期高频违反协议 → 整组 reward 全 0 → advantage 全 0 → 没有梯度信号。Phase 0 用 0.6B 时大概率遇到，**这不是 bug，但会让前若干 step 看起来"什么都没学到"**。
-- **verifier 调 LLM judge 是 rollout 长尾的一个来源**：`score_and_persist_rollout` 在 AgentLoop 内同步调用（`verl_agent_loop_adapter.py:288`），一次外部 API 往返直接进 rollout 关键路径。这是 [[../syncopate/00-research-question]] 里长尾 T 之外**另一个独立的长尾源**，Phase 1 测 rollout 时长分布时要把 `compute_score` 的耗时单独拆出来（`AgentLoopMetrics.compute_score` 已经有这个字段）。
+- **verifier 调 LLM judge 是 rollout 长尾的一个来源**：`score_and_persist_rollout` 在 AgentLoop 内同步调用（`verl_agent_loop_adapter.py:288`），一次外部 API 往返直接进 rollout 关键路径。这是 [[../syncopate/23-research-question]] 里长尾 T 之外**另一个独立的长尾源**，Phase 1 测 rollout 时长分布时要把 `compute_score` 的耗时单独拆出来（`AgentLoopMetrics.compute_score` 已经有这个字段）。

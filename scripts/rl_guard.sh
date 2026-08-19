@@ -30,6 +30,9 @@ MIN_EFFECTIVE_SEQS=24        # A4：绝对有效条数，不是比例
 MAX_CLIPPED_FRACTION=0.40    # 2.B：被截到上下界的比例
 MIN_ENTROPY=0.05             # 2.C
 MIN_DISK_GB=40               # 磁盘（nsys 那次的教训）
+# D 族：连续多少步没有 defer 就算塌陷。⚠️ 同样是反填的工程值，见 defer_watch.py 的表
+#   [实测] 健康跑最长连零 9 / 16 / 18 步；崩塌那跑 56 步。取 25。
+MAX_DEFER_ZERO_STREAK="${MAX_DEFER_ZERO_STREAK:-25}"
 BATCH_SEQS="${BATCH_SEQS:-48}"   # 一次更新的序列数 = mini_batch × rollout_n
 
 say () { echo "$(date '+%H:%M:%S') $*" | tee -a "$OUT"; }
@@ -95,7 +98,25 @@ while true; do
   # ⚠️ ESS<0.3 **不停机**：上游原话是"换聚合口径"，不是"停"（06 §2.B）
   if [ -n "$ESS" ]; then
     SW=$(awk -v e="$ESS" 'BEGIN{print (e<0.3)?1:0}')
-    [ "$SW" = "1" ] && say "🟡 ESS/N=$ESS < 0.3 ⇒ 建议换 --rollout-is token（**不停机**）"
+    # ⚠️ 2026-08-19：默认已改回 sequence ⇒ 这句从"默认动作"变成**逃生口**。
+    #   序列级在干净基线 120 步上无衰减（ESS 0.78–0.94），真跌破 0.3 才换 token。
+    [ "$SW" = "1" ] && say "🟡 ESS/N=$ESS < 0.3 ⇒ 逃生口：换 --rollout-is token（**不停机**）"
+  fi
+
+  # ── D 族 · 行为塌陷（2026-08-19 新增）────────────────────────────────
+  # 判据：**连续 N 步一条 defer 都没有** ⇒ 拒绝能力可能已经塌了。
+  #
+  # ⚠️ 为什么不看 defer **率**：`r1_seqis` 完全健康（评测该 defer 97%），
+  #   总体率却从 5.1% 降到 1.6% —— 降的是**误 defer**，那是好事。
+  #   **水平分不开好坏，"持续为零"才分得开。**
+  # ⚠️ 为什么这条要停机而不是只报警：它**不可逆** —— 塌了之后那些题
+  #   组内 std=0 ⇒ advantage 恒为 0 ⇒ 再也不产生梯度，RL 自己爬不出来。
+  #   （其余 C 族的指标坏了，继续跑还有救；这条没有。）
+  if [ -d "$CKPT/rollout_dumps" ]; then
+    STREAK=$(.venv/bin/python scripts/defer_watch.py "$CKPT" --streak 2>/dev/null)
+    if [ -n "$STREAK" ] && [ "$STREAK" -ge "$MAX_DEFER_ZERO_STREAK" ]; then
+      stop "连续 $STREAK 步没有任何 defer（门槛 $MAX_DEFER_ZERO_STREAK）—— 拒绝能力塌陷，**不可逆**"
+    fi
   fi
 
   # ── 2.C · 模型学得怎么样 ─────────────────────────────────────────────

@@ -103,7 +103,7 @@ response 区 =  553 token
 **① mask 掉 61%。** 模型 token 占 response 区的比例极其稳定：P10=0.34、P90=0.44，全体均值 0.39。也就是说 **loss 只作用在 response 区约五分之二的 token 上**，另外五分之三是环境注入。
 
 - 对 GRPO：`compute_grpo_outcome_advantage` 把标量 reward 挂在最后一个 token 上再对整条求和，advantage 再 broadcast 回 `response_mask`——所以**有效的信用分配目标只有这 39%**。
-- 对 [[02-train-inference-mismatch]] 的 TIS：`masked_sum` 求 `S = Σδ_t` 时只累加这 39%，所以 **T ≈ 222（P50）而不是 538**。这个数比我上次用字符估的 280 低 21%，需要修正 [[../syncopate/00-research-question]] §3 的表格。
+- 对 [[02-train-inference-mismatch]] 的 TIS：`masked_sum` 求 `S = Σδ_t` 时只累加这 39%，所以 **T ≈ 222（P50）而不是 538**。这个数比我上次用字符估的 280 低 21%，需要修正 [[../syncopate/23-research-question]] §3 的表格。
 
 **② prompt 长度方差几乎为零，response 长度方差 4.5 倍。**
 
@@ -233,7 +233,7 @@ customer_market={{ case.market }}
 | 工具 schema | 4000–5500 | **4457** | 区间正确 |
 | T（模型 token，P50） | ~280 | **222** | 高估 26% |
 
-**要改的地方**：[[../syncopate/00-research-question]] §3 的安全边界表用的是 T=300/800，实测应改成 **T=222(P50) / 381(P90) / 534(max)**。方向不变（同步 colocate 下安全），但边界更宽松一点。
+**要改的地方**：[[../syncopate/23-research-question]] §3 的安全边界表用的是 T=300/800，实测应改成 **T=222(P50) / 381(P90) / 534(max)**。方向不变（同步 colocate 下安全），但边界更宽松一点。
 
 ### 4.2 「response 区 61% 被 mask」这个数字之前完全没量过
 
@@ -265,7 +265,7 @@ add_generation_prompt=True, enable_thinking=False → "…<|im_start|>assistant\
 **三个后果**：
 
 1. **SFT 教的是"输出空 think 块"，RL 允许的是"输出真实 thinking"。** 而 README 明说 GRPO 默认从 `models/original_model/Qwen3-8B` 冷启、不依赖 SFT 输出——那模型会按 Qwen3 的默认习惯输出真实 thinking。
-2. **thinking token 占 `max_response_length` 预算，而且拿梯度。** gold 轨迹 response 区 P50 才 538 token；真实 RL rollout 里 thinking 很可能是 response 长度的主要来源，**也是长尾的主要来源**。这直接影响 [[../syncopate/00-research-question]] 的核心变量 T ——**T 的实际分布可能远比 gold 数据宽**。
+2. **thinking token 占 `max_response_length` 预算，而且拿梯度。** gold 轨迹 response 区 P50 才 538 token；真实 RL rollout 里 thinking 很可能是 response 长度的主要来源，**也是长尾的主要来源**。这直接影响 [[../syncopate/23-research-question]] 的核心变量 T ——**T 的实际分布可能远比 gold 数据宽**。
 3. **和 system prompt 冲突**：守则明写"不要输出隐藏推理过程"，模板默认却鼓励它。`strip_reasoning_blocks`（`agent/runtime.py:462-470`）只把 think 块从 `final_text` 剥掉（供 verifier 打分），**token 仍然全额进 loss**。
 
 **Phase 0 必做的一次验证**：dump 一条真实 rollout 的 `token_trace`，看 `<think>` 块到底出现在哪个 segment、占多少 token、mask 是 1 还是 0。这是零成本的（老师的 `token_trace` 就是为这个设计的），而且直接决定我们对 T 的估计对不对。

@@ -60,6 +60,13 @@ class DecisionContext:
     #    「**我们不知道有没有限制**」。合并的话一次故障看起来就是放行信号。
     retrieval_unavailable_tools: list[str] = field(default_factory=list)
     automation_tier: str | None = None        # C 档天然要审批（§3）
+    # ⑧ 🆕 **副作用状态未知**（2026-08-19，任务三的设计决定）
+    #
+    # 来源：同一幂等键的上一次调用**仍在执行中** —— 我们既不能说它成功，也不能说它失败。
+    # ⚠️ 它和 `tool_failed` **必须分开**：失败可以重试，**未知不能重试** ——
+    #   重试一个可能已经生效的写动作，正是幂等机制存在的全部理由。
+    # ★ 语义上它和 `retrieval_unavailable` 同族：**"我们不知道" 一律阻断，交给人。**
+    unknown_state_tools: list[str] = field(default_factory=list)
 
 
 def evaluate_triggers(ctx: DecisionContext, *,
@@ -98,6 +105,14 @@ def evaluate_triggers(ctx: DecisionContext, *,
         fired.append(Trigger("retrieval_unavailable",
                              "检索不可用（**不是**查不到）：" +
                              "、".join(ctx.retrieval_unavailable_tools)))
+    if ctx.unknown_state_tools:
+        # ★★ 「结果未知」**不能靠一句话托付给模型** —— 见 DecisionContext 那段。
+        #   两种误判的代价不对称：
+        #     当成失败去重试 ⇒ **可能重复扣款**（不可逆）
+        #     停下来问人     ⇒ 最多慢一点
+        fired.append(Trigger("side_effect_unknown",
+                             "副作用状态未知（上一次同键调用仍在执行）：" +
+                             "、".join(ctx.unknown_state_tools)))
     if ctx.automation_tier == "C":
         fired.append(Trigger("tier_c", "C 档动作按 §3 一律走审批"))
     return fired

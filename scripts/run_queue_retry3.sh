@@ -33,7 +33,7 @@ timeout 7200 .venv/bin/python -m syncopate.train.launch_rl \
   --model models/Qwen3-4B-sft-v13-e1 \
   --train-file data/rl/v13/train.parquet --val-file data/rl/v13/val.parquet \
   --lora-rank 32 --train-batch-size 6 --rollout-n 8 --micro-batch-size 1 \
-  --max-num-seqs 64 --object-store-gb 2 --max-prompt-length 3584 --max-response-length 1536 \
+  --max-num-seqs 64 --object-store-gb 2 \
   --save-freq 999 --wandb-mode offline --logger console --dynamic-bsz False \
   --max-token-len-per-gpu 16384 --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
   --weight-sync-bucket-mb 512 --rollout-is token --lr 1e-4 --ppo-mini-batch-size 6 \

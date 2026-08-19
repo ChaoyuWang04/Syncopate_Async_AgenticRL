@@ -1,10 +1,5 @@
 # Syncopate · 14 — 训练健康度：看哪些指标、红线在哪
 
-> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
-> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
-> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
-> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
-
 > 写于 **2026-08-17**，v13 第一次 SFT 之前。
 > **面板已经程序化建好了，不用手拖**：`python scripts/make_wandb_panels.py`
 > W&B 项目 `spaemtuerl-northwestern-university/syncopate`。
@@ -20,7 +15,7 @@ M7 那次跑完 150 步、零错误、曲线好看，结论却是「**什么都�
 根因是一个不在任何常规面板上的数：
 
 ```
-‖ΔW‖/‖W‖ = 0.0093%      正常 LoRA 微调是 0.5%–5%，小了两三个数量级
+‖ΔW‖/‖W‖ = 0.0093%      正常 LoRA 微调是 0.5%–5%，小了两三个数量级  ⛔(21)
 ```
 
 **loss 降了、指标好看、而权重几乎没动。** 所以面板第一屏放的是位移，不是 loss。
@@ -39,7 +34,7 @@ M7 那次跑完 150 步、零错误、曲线好看，结论却是「**什么都�
 > 第一版算的是 `‖Δθ_trainable‖/‖θ_trainable(初始)‖`，而 **LoRA 的 B 矩阵初始化为零**
 > ⇒ 分母里只有 A、B 从 0 长起来 ⇒ epoch 1 报 **15.99%**，看着像"训过头"要停车。
 > **同一份权重按正确口径量出来是 0.485%** —— 尺子错了 33 倍，而且那个数
-> **根本不能和 M7 的 0.0093% 比**。
+> **根本不能和 M7 的 0.0093% 比**。  ⛔(21)
 > ⇒ 正确口径：**LoRA 实际叠加到基座上的增量比基座本身**，只对被适配的层算：
 > `ΔW_eff = scaling · B @ A`，`ratio = ‖ΔW_eff‖_F / ‖W_base‖_F`。
 > 命令行复算：`python -m syncopate.train.weight_shift --base models/Qwen3-4B --adapter <ckpt>`
@@ -64,6 +59,26 @@ M7 那次跑完 150 步、零错误、曲线好看，结论却是「**什么都�
 **决策位熵高 + 有梯度格子多**，跑完用 `train/entropy.py` 和 `eval_local` 量。
 **每个 epoch 都存了 adapter 就是为了这个。**
 
+★ **零梯度的格子分三类，别混着看**（`select_sft_ckpt.py` 现在把四类都打出来）：
+
+| 类 | 判据（std ≤ 0.01） | 意味着 |
+|---|---|---|
+| **饱和** | 分高 > 0.9 | 已经会了 —— 没梯度**不是问题** |
+| **死格** | 分低 < 0.15 | 全错且稳定错 ⇒ RL 够不着，**该由 SFT 覆盖去解** |
+| **卡死** | 中间分 | 在里面打转（GEO 那一类，`22 §P0-1.3`） |
+
+`[实测 2026-08-18]` v13：
+
+```
+e1   有梯度 222 · 饱和 96 · 卡死 22 · 死格 3    ⇒ 零梯度 35.3%
+e2   有梯度 154 · 饱和 155 · 卡死 34 · 死格 0   ⇒ 零梯度 55.1%
+```
+
+⚠️ **M6 的毕业条件问的是「零梯度占比 < 30%」，而这张表此前从没把这个数打出来** ——
+人得自己拿 `1 − 有梯度/总数` 心算。**判据不在屏幕上，就等于判据没接上。**
+⚠️ 而且旧版只打前三类、"死格"是用减法隐式算掉的 ⇒ **三个数加起来不等于总数**
+（222+96+22 = 340 ≠ 343），少掉的正是死格。现在四类和 = 总数，可以直接对账。
+
 ### ③ 吞吐与资源
 
 | 指标 | v11 基线（单卡） | 用途 |
@@ -76,8 +91,10 @@ M7 那次跑完 150 步、零错误、曲线好看，结论却是「**什么都�
 ### ④ 跑完必须补的三件（不在 W&B 自动曲线里）
 
 ```bash
-python -m syncopate.train.entropy    --adapter checkpoints/sft/v13/epoch1 --limit 24
-python -m syncopate.train.eval_local --adapter checkpoints/sft/v13/epoch1 ...
+python -m syncopate.train.entropy    --adapter checkpoints/sft/v13/epoch1 --limit 24 \
+    --out _audit/v13_entropy_epoch1.json
+python -m syncopate.train.eval_local --adapter checkpoints/sft/v13/epoch1 --samples-per-case 8 \
+    --out _audit/v13_eval_epoch1.json
 python -m syncopate.train.compare    <基线审计> <新审计>
 ```
 

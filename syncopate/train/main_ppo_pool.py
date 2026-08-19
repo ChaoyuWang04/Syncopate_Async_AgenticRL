@@ -234,7 +234,7 @@ def main() -> None:
         #    真正生效的判据是 rollouter 进程打出来的
         #    `[pool] 动态分池启用：N 条 case`（带 `(FullyAsyncRollouter pid=…)` 前缀）。
         #    ⇒ 判据行**只许写观测，不许写断言**：一行断言"为什么不行"的日志，
-        #      能把"其实已经行了"整个盖住，而且它长得像个合格判据（05-handoff §6 变种②）。
+        #      能把"其实已经行了"整个盖住，而且它长得像个合格判据（00-START §6 变种②）。
         print("[pool] fully_async：sampler 在 rollouter 的 Ray worker 进程里装 —— "
               "**判据是那个进程打出的 `[pool] 动态分池启用`，不是这一行**",
               flush=True)

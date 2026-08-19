@@ -1,10 +1,5 @@
 # Syncopate · 18 — 管线前提探针审计（E21 之后的同族排查）
 
-> ⛔⛔ **本文含已作废的实测数字**（2026-08-18）—— 查出两个基石级 bug：
-> **三个 trainer rank 的梯度没有同步** · **trainer 的权重从没推给 rollout engine**。
-> ⇒ 2026-08-14 至 08-18 之间**所有 RL 训练的实测数字都不可引用**。
-> **引用之前必须先读 [`21-invalidated-numbers.md`](21-invalidated-numbers.md)** —— 那里也列了**仍然有效**的部分（SFT / 数据 / 静态代码事实 / 硬件测量）。
-
 > 建于 **2026-08-18**，起因是 [`../infra_exp/E21-ddp-not-syncing.md`](../infra_exp/E21-ddp-not-syncing.md)。
 >
 > **E21 教给我们的不是"FSDP 有个坑"，而是一个方法**：
@@ -161,7 +156,7 @@ ckpt global_step_27  rank0 = 0.041530   rank1 = 0.046643   rank2 = 0.043280
 在 E21 之前这是**正确且高效**的做法。E21 之后它变成了「静默丢掉 2/3」。
 
 ⇒ **E21 §4 那句「最终被保存/被推给 vLLM 的那一份只学到 1/3」，在产物层面得到了确证。**
-⇒ 因此 **M7-b 的全部评测数字（逐题 85 涨/70 跌、写桶 +0.057、`unauthorized_write` 91→128）
+⇒ 因此 **M7-b 的全部评测数字（逐题 85 涨/70 跌、写桶 +0.057、`unauthorized_write` 91→128）  ⛔(21)
 都是 rank_0 那 1/3 的结果。** 结论的**方向**未必错，但**幅度全部要在 E21 修好后重测。**
 
 ---
@@ -209,7 +204,7 @@ full.unlink()
 - **P5 评测分片合并**：`v13_sft_e1 / v13_sft_e2 / v13_rl_s110` 三份审计
   **各 343 行 / 343 唯一 case / 重复 0 / 漏 0 / 多 0**，与 `data/splits/v13/eval_cases.json` 完全一致。
   ⇒ `merge_eval_shards --expect` 那道闸是有效的。
-  ⚠️ **顺带一处文档过期**：`05-handoff §1` 写 v13 三桶是「EVAL 278 / SFT 511 / RL 881」，
+  ⚠️ **顺带一处文档过期**：`00-START §1` 写 v13 三桶是「EVAL 278 / SFT 511 / RL 881」，
   实测 `eval_cases.json` 是 **343**（`16-m7b` 写的 343 才对）。**引用桶大小请以 splits 为准。**
 - **P7 SFT 桶泄漏**：case 级交集 = **0**（L1/L2 门禁有效）。
   ⚠️ **但 val 的 21 个模板家族 100% 出现在 train 里**，而全库只有 160 种句式
@@ -227,7 +222,7 @@ full.unlink()
 | **Q1** | 🔴 **权重同步之后，vLLM 里的权重 == trainer 里的权重** | 同步后各取同一层的范数，两边比；相对差应 < 1e-3。<br>★ **这是 E21 的同族**：中间隔着 CheckpointEngine 的 bucket 推送，我们只验过"没 OOM" | 训练里加 10 行探针 |
 | **Q2** | 🔴 **评测走 vLLM LoRA，训练走合并权重，两条路径等价** | 同一 prompt、同一 ckpt，`base+peft adapter` 的 logprob vs `合并权重` 的 logprob，逐 token 比。<br>★ 若不等价，**所有 RL 评测都系统性偏**，而且和 E20 的 `log_ppl_diff` 地板混在一起分不开 | 1 卡 · 10 分钟 |
 | **Q3** | 🔴 **E20 的 `log_ppl_diff` 增长来自陈旧度** | **按 rank 分别打 `log_ppl_diff`**。E21 下 rank1/2 的 π_old 已经偏离被推给 vLLM 的 rank_0 ⇒ 若 rank0 ≈ 地板、rank1/2 明显更大，**E20 §3「229/230 来自陈旧度」要重写** | 1 行 print |
-| **Q4** | 🟠 **失败注入对同一 case 的 8 次 rollout 是确定性的** | 同组 8 条轨迹，注入的失败类型必须一致（`05 §8-13`：GRPO 下随机注入会污染 advantage）。现在**没有任何守卫** | dump 里加字段 |
+| **Q4** | 🟠 **失败注入对同一 case 的 8 次 rollout 是确定性的** | 同组 8 条轨迹，注入的失败类型必须一致（`00 §8-13`：GRPO 下随机注入会污染 advantage）。现在**没有任何守卫** | dump 里加字段 |
 | Q5 | 🟠 SFT 与 RL 看到的 token 序列同构（整段渲染 vs 增量拼接） | 取同一 case，SFT parquet 的 `input_ids` 与 `run_rollout` 回放 gold 的拼接结果逐 token 比 | CPU · 30 分钟 |
 | Q6 | 🟠 `response_mask=1` 只落在模型生成的 token 上，工具返回一律 0 | 从 `segments` 重建 mask，与训练用的 mask 逐位比 | CPU |
 | Q7 | 🟠 RL parquet 的 prompt 与冻结 EVAL 渲染同源、且无截断 | 逐 case 比对渲染结果；`prompt_truncated_tokens` 必须恒为 0 | CPU |
@@ -265,7 +260,7 @@ A5  eval 审计写盘时：assert case 集合 == split 的 eval_cases          �
 | `16-m7b` 的全部评测数字 | 组合是对的（§3.1），但那份 LoRA 是 **rank_0 的 1/3**（§4）⇒ **幅度要重测** |
 | `16 §6` 写的「models/…-rl-v13-s110/（已合并）」 | 🔴 **错的**，要改；否则下一轮 RL 会静默丢掉整轮（§3.2） |
 | `17-rl-learning-blocked` §3 的位移算术 | 位移是 rank_0 一份的位移 ⇒ 「lr 占 10×、次数占 1.9×」的**排序**不变，**倍数要重算** |
-| `05-handoff §1` 的 v13 三桶数字 | 过期（343 不是 278），以 `data/splits/v13` 为准 |
+| `00-START §1` 的 v13 三桶数字 | 过期（343 不是 278），以 `data/splits/v13` 为准 |
 | 历史 ckpt 能否事后修复 | ❌ `global_step_5..25` 的 rank1/2 已删（§5），只有 `global_step_27` 完整 |
 
 
@@ -304,9 +299,9 @@ RL 后审计 v13_rl_s110  跑在  models/Qwen3-4B-sft-v13-e1 + .../lora_adapter
 而 §3.3 刚量出来：**合并进 bf16 会把 SFT 的增量打乱 36%**
 ⇒ **`models/Qwen3-4B-sft-v13-e1` ≠ `裸基座 + SFT adapter`**，两者差着一个 36% 的扰动。
 
-⇒ `05-handoff §2.4` 明写配对比较的前提是「**同一起点模型** + 同一推理引擎」。
+⇒ `00-START §2.4` 明写配对比较的前提是「**同一起点模型** + 同一推理引擎」。
 **引擎对上了（都是 vllm），起点没对上。**
-⇒ M7-b 那个 `+0.020` 的配对差值里混进了「SFT 合并损失」这一项，**而它与 RL 无关**，
+⇒ M7-b 那个 `+0.020` 的配对差值里混进了「SFT 合并损失」这一项，**而它与 RL 无关**，  ⛔(21)
 方向未知（可能压掉了 RL 的效果，也可能制造了假效果）。
 
 **修法（一次评测，~15 分钟 4 卡，一举两得）**：

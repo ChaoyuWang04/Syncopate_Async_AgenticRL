@@ -3,7 +3,11 @@
 
     python scripts/check_pipeline_invariants.py                     # 全跑
     python scripts/check_pipeline_invariants.py --only merge rank   # 只跑某几组
-    退出码 0 = 全过
+
+    退出码  0 = 全过
+            1 = **有判据被违反**（真问题，有行动）
+            2 = **只有无法判定的**（探针自己没跑成，多半是环境/依赖 —— 不等于通过，
+                                    但也不是判据查出来的问题。见 `run_checks` 的注释）
 
 ★★★ 为什么要有这个文件（2026-08-18，E21 之后建）
 
@@ -260,7 +264,9 @@ def _no_unmarked_stale_assertions(log):
 # ── 组 quarantine：作废的数字不许在没有警示的情况下出现 ───────────────────
 
 QUARANTINE_DOC = "docs/syncopate/21-invalidated-numbers.md"
-QUARANTINE_BANNER = "21-invalidated-numbers"     # 横幅里必须出现的指回链接
+QUARANTINE_BANNER = "21-invalidated-numbers"     # 指回链接
+# ★ 就地标记：出现作废数字的**那一行**必须带它。见下面那条判据的长注释。
+QUARANTINE_MARK = "⛔"
 
 
 def _quarantined_tokens() -> list[tuple[str, str]]:
@@ -284,7 +290,7 @@ def _quarantined_tokens() -> list[tuple[str, str]]:
     return out
 
 
-@check("quarantine", "★ 含作废数字的文档，顶部必须挂 ⛔ 横幅指回 21 号")
+@check("quarantine", "★ 每个作废数字必须**就地**标记（不是靠文档顶部的横幅）")
 def _quarantined_numbers_are_flagged(log):
     """🔴 2026-08-18：两个基石级 bug（E21 梯度不同步 · 权重从没推给 rollout）
     把 08-14 至 08-18 之间所有 RL 训练的实测数字都污染了。
@@ -294,7 +300,21 @@ def _quarantined_numbers_are_flagged(log):
     （「M7 已验收」被下游引用了两天，见 blank-thresholds-are-not-passes）。
 
     ⇒ 判据不是"把数字删掉"（删了就没人知道当初错在哪），
-      而是**含作废数字的文档必须自己喊出来**。集合包含型判据，不需要阈值。
+      而是**每个作废数字必须自己喊出来**。集合包含型判据，不需要阈值。
+
+    ⛔⛔ **2026-08-19 改了标记的位置：从"文档顶部横幅"下沉到"数字行内"。**
+
+    原设计是每份含作废数字的文档顶部挂一条 ⛔ 横幅。问题是它长成了**17 份一模一样的横幅**
+    ——而**假警报会训练人忽略这条判据，那比没有判据更糟**（守则③）。
+    更要命的是它**不精确**：横幅在第 3 行，数字在第 160 行，
+    读到数字的人根本不会把两者联系起来。
+
+    ⇒ 改成 `⛔(21)` **就地标在那一行**：警告出现在**数字旁边**，而不是 200 行之外。
+
+    ⚠️⚠️ **不要误读成"作废解除了"**：截至 2026-08-19，
+      21 号清单 **22 条里 21 条仍是「待重测」** —— 基石 bug 修好了，
+      但那些数字**是在坏系统上量的，不会因为 bug 被修而变有效**。
+      这次改的是**警告的形式**，不是警告的内容。
     """
     tokens = _quarantined_tokens()
     if not tokens:
@@ -313,16 +333,36 @@ def _quarantined_numbers_are_flagged(log):
         hits = [t for t, _ in tokens if t in text]
         if not hits:
             continue
-        # 横幅只认"文档开头 40 行内出现指回链接"——挂在末尾没人看得见
-        head = "\n".join(text.splitlines()[:40])
-        if QUARANTINE_BANNER not in head:
-            offenders[rel] = hits
+        # ★ 逐行查：出现作废数字的**那一行**必须自己带标记
+        # ⚠️ archive/ 整个目录已有总声明「里面的一切都不是当前状态」⇒ 不重复标
+        if "/archive/" in rel:
+            continue
+        # ⚠️ infra_exp/ 是另一条线的文档（`交界`）⇒ **只报告不判红**。
+        #   主线单方面改他们的文档，比"标记不一致"更糟（两条线共用一个仓库）。
+        if "/infra_exp/" in rel:
+            todo = [str(i) for i, line in enumerate(text.splitlines(), 1)
+                    if any(t in line for t, _ in tokens)
+                    and QUARANTINE_MARK not in line and "作废" not in line]
+            if todo:
+                log(f"  ℹ️ {rel}: {len(todo)} 行还没就地标记 —— **infra 的文档，交给他们**")
+            continue
+        unmarked = []
+        for i, line in enumerate(text.splitlines(), 1):
+            if any(t in line for t in (t for t, _ in tokens)) and QUARANTINE_MARK not in line:
+                # 这一行本身在解释"某数字已作废"就不算违反
+                if "作废" in line or QUARANTINE_BANNER in line:
+                    continue
+                unmarked.append(f"{i}")
+        if unmarked:
+            offenders[rel] = unmarked
             ok = False
     if offenders:
-        for rel, hits in sorted(offenders.items()):
-            log(f"  🔴 {rel}: 含 {len(hits)} 个作废数字但**顶部没有 ⛔ 横幅** —— {hits[:4]}")
+        for rel, lines in sorted(offenders.items()):
+            log(f"  🔴 {rel}: {len(lines)} 行含作废数字但**没有就地标记** —— 行 {lines[:6]}")
+        log(f"     ⇒ 在那一行末尾加 `{QUARANTINE_MARK}(21)`。"
+            f"**标在数字旁边**，不是文档顶部 —— 横幅隔 200 行没人会联系起来")
     else:
-        log(f"  ✅ 扫了 {len(scope)} 份文档，含作废数字的都挂了横幅")
+        log(f"  ✅ 扫了 {len(scope)} 份文档，作废数字都**就地**标了")
     return ok
 
 
@@ -368,23 +408,109 @@ def _train_eval_budget_match(log):
         bad = [k for k, v in got.items()
                if v != (MAX_PROMPT_LENGTH if "prompt" in k else MAX_RESPONSE_LENGTH)]
         if bad:
-            log(f"  🟡 最近一次跑（{stamp}）用的是 {got} ≠ 共用预算 ——"
-                " 这是修复**之前**的跑，属预期；下一跑起应当一致")
+            # ⚠️⚠️ 旧版这里打的是 🟡 且附一句「这是修复**之前**的跑，属预期」——
+            #   而那句话是**无条件**的：它没有任何东西能判断"之前/之后"。
+            #   2026-08-19 02:55 有一跑（修复**之后**）用了 3584/1536，
+            #   被这句话原样放过了。判据写满了、真的在跑、也真的报了个数，
+            #   只是它量的不是我们以为的那件事（`19 §2.1` 第二层）。
+            # ⇒ 改成 🔴。它会一直红到**下一次干净的跑**为止 —— 这不是误报，
+            #   而是一句真话：「最近一次跑不在当前契约上，别拿它当参照」。
+            log(f"  🔴 最近一次跑（{stamp}）用的是 {got} ≠ 共用预算")
+            log("     ⇒ 要么是修复前的历史跑（那就**别拿它当任何比较的一端**），")
+            log("       要么是有人绕开固定管线手起的 —— 两种都不该沉默放过")
+            log("     ⇒ 下一次从固定脚本起的跑会让这条自动转绿")
+            ok = False
         else:
             log(f"  ✅ 最近一次跑（{stamp}）与共用预算一致")
-    # ③ 批次脚本里显式覆盖的值
+    # ③ 见下面独立的 contract 组：**脚本一律不许显式传契约参数**
+    #    （此前这里只比"传的值对不对"，那挡不住"值现在对、下次改契约时漂掉"）
+    return ok
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 组 contract：**跑训练只能走固定管线，参数不许各抄一份**
+# ══════════════════════════════════════════════════════════════════════════
+
+# ★ 契约参数 → 命令行开关的映射。**这是唯一的耦合点**，加契约参数时改这里。
+#   值本身不在这里写 —— 唯一来源是 `syncopate/train/rollout_budget.py`。
+CONTRACT_FLAGS = (
+    "--max-prompt-length", "--max-response-length",
+    "--temperature", "--top-p", "--top-k",
+)
+
+# ⚠️ 逃生口：确实要做契约参数的 A/B 时，在**同一行或上一行**写这个标记 + 理由。
+#   为什么留：判据太宽会制造假警报，而假警报会训练人忽略这条判据（守则③）。
+#   为什么要求写理由：让"我就改一下"变成一个**留痕**的动作。
+CONTRACT_OVERRIDE_MARK = "CONTRACT-OVERRIDE:"
+
+
+@check("contract", "★ 跑训练的脚本一律不许显式传契约参数（长度预算 + 采样参数）")
+def _no_script_overrides_contract(log):
+    """★★ 为什么判据是"一律不许传"，而不是"传的值要对"
+
+    2026-08-18 的实况：15 个启动脚本**全都**走 `launch_rl`（唯一入口这条纪律是守住的），
+    但**每个脚本各自抄了一份参数**。于是抄着抄着漂成了两套：
+    11 个是 5120/2048，4 个还停在 3584/1536。
+
+    ⇒ 关键在于：那 11 个当时**是对的**。旧判据只比"值对不对"，所以它们一路绿灯 ——
+      而它们的问题不是值错，是**存在一份副本**。副本在下一次改契约时必然漏掉几个。
+    ⇒ 所以判据要写在「**只该有一份**」上，而不是「这一份的值对不对」上（守则①）。
+
+    ⚠️ 这条是源码扫描：「将来有人又抄一份」这件事**还没发生**，没有行为可测，
+       只有扫源码看得见（同 `truncation` 组那条）。
+    """
     import re as _re
-    stale = []
+    ok = True
+    pat = _re.compile("|".join(_re.escape(f) for f in CONTRACT_FLAGS))
+    offenders, waived = [], []
     for sh in sorted((ROOT / "scripts").glob("*.sh")):
-        txt = sh.read_text(encoding="utf-8")
-        m1 = _re.search(r"--max-prompt-length\s+(\d+)", txt)
-        m2 = _re.search(r"--max-response-length\s+(\d+)", txt)
-        if m1 and m2 and (int(m1.group(1)) != MAX_PROMPT_LENGTH or int(m2.group(1)) != MAX_RESPONSE_LENGTH):
-            stale.append(f"{sh.name}({m1.group(1)}/{m2.group(1)})")
-    if stale:
-        log(f"  🔴 {len(stale)} 个批次脚本仍显式传旧预算：{', '.join(stale[:6])}"
-            + (" …" if len(stale) > 6 else ""))
+        lines = sh.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if line.lstrip().startswith("#") or not pat.search(line):
+                continue
+            context = line + (lines[i - 1] if i else "")
+            (waived if CONTRACT_OVERRIDE_MARK in context else offenders).append(
+                f"{sh.name}:{i + 1}")
+    if offenders:
+        log(f"  🔴 {len(offenders)} 处脚本显式传了契约参数：{', '.join(offenders[:8])}"
+            + (" …" if len(offenders) > 8 else ""))
+        log(f"     ⇒ 删掉即可 —— launch_rl / eval_local 的默认值已从 "
+            f"rollout_budget.py 取，不传就是对的")
+        log(f"     ⇒ 确实要做契约参数的 A/B，在同行或上一行写 "
+            f"`# {CONTRACT_OVERRIDE_MARK} <理由>`")
         ok = False
+    else:
+        log(f"  ✅ 扫了 {len(list((ROOT / 'scripts').glob('*.sh')))} 个脚本，"
+            f"没有一处显式传契约参数")
+    if waived:
+        log(f"  ℹ️ {len(waived)} 处已显式声明覆盖（留痕，不算违反）：{', '.join(waived)}")
+    return ok
+
+
+@check("contract", "★ 起训练只能走固定入口（sft / launch_rl），不许另起一套")
+def _only_canonical_entrypoints(log):
+    """`08 §4`：入口只有两个，不许再写第三个 —— 临时脚本会**静默地和主路径长出差异**。
+
+    ⚠️ 这条此前只写在文档里，没有任何东西在执行它。
+    """
+    import re as _re
+    ok = True
+    # 直接调训练框架 = 绕过了我们自己的入口（那里挂着守卫、默认值、契约）
+    bypass = _re.compile(r"python[0-9.]*\s+-m\s+verl\.|torchrun.*verl|"
+                         r"python[0-9.]*\s+.*verl/trainer/")
+    bad = []
+    for sh in sorted((ROOT / "scripts").glob("*.sh")):
+        for i, line in enumerate(sh.read_text(encoding="utf-8").splitlines()):
+            if line.lstrip().startswith("#"):
+                continue
+            if bypass.search(line):
+                bad.append(f"{sh.name}:{i + 1}")
+    if bad:
+        log(f"  🔴 {len(bad)} 处直接调了训练框架，绕过 launch_rl：{', '.join(bad)}")
+        log("     ⇒ launch_rl 上挂着契约默认值、起手断言、守卫 —— 绕过去这些全都不生效")
+        ok = False
+    else:
+        log("  ✅ 没有脚本绕过 syncopate.train.sft / syncopate.train.launch_rl")
     return ok
 
 
@@ -504,7 +630,7 @@ def _audit_covers_eval_bucket(log):
 def _paired_audits_same_base(log):
     """🔴 2026-08-18 抓到：基线跑在 `裸基座 + SFT adapter`，
     而 RL 的起点是 `合并后的 SFT 模型`（合并丢了 36% 的增量）⇒ 两端基座不是同一个模型。
-    05-handoff §2.4 明写配对比较要求「同一起点模型 + 同一推理引擎」。"""
+    00-START §2.4 明写配对比较要求「同一起点模型 + 同一推理引擎」。"""
     pairs = [("v13_sft_e1", "v13_rl_s110")]
     ok = True
     for a, b in pairs:
@@ -552,16 +678,29 @@ def _grpo_groups_wellformed(log):
     return ok
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="管线前提检查")
-    ap.add_argument("--only", nargs="*", default=None, help="只跑这些组")
-    args = ap.parse_args(argv)
+def run_checks(groups_to_run) -> tuple[list[str], list[tuple[str, Exception]]]:
+    """跑检查，把结果分成**两种失败**返回：`(违反, 无法判定)`。
 
+    ★★ 为什么必须分开（2026-08-18 晚，当场踩的）
+
+    这个脚本原本把「检查抛异常」和「检查真的查出违反」写进**同一个 `failed` 列表**，
+    汇总只打一句「🔴 N 条不通过」。结果：用错解释器跑了一次（`/venv/main` 而不是项目
+    `.venv`），4 条检查因 `ModuleNotFoundError: torch / safetensors / syncopate`
+    变成"不通过"，和 3 条**真红**混报成「🔴 7 条不通过」。
+
+    ⇒ 危险方向不是"假通过"，是**假失败**：任何没装依赖的环境跑它都会稳定红 4 条，
+      而**假警报会训练人忽略这条判据 —— 那比没有判据更糟**（守则③）。
+    ⇒ 但「无法判定」也**不许算过**（守则⑦：空着的门槛应读作"无法判定"）
+      ⇒ 所以它仍然是非零退出码，只是**和"违反"分开计数、分开显示**。
+
+    ★ 同一天在 `E22 §6.5.3` 记下的那条，说的正是这件事：
+      **判据可以假通过，也可以假失败；打印本身要能区分"读不到"和"读到了是空"。**
+    """
     groups = sorted({g for g, _, _ in CHECKS})
-    run = args.only or groups
-    failed = []
+    violated: list[str] = []
+    undetermined: list[tuple[str, Exception]] = []
     for group in groups:
-        if group not in run:
+        if group not in groups_to_run:
             continue
         print(f"\n══════ {group} ══════")
         for g, name, fn in CHECKS:
@@ -572,18 +711,58 @@ def main(argv=None) -> int:
             try:
                 ok = fn(lines.append)
             except Exception as exc:  # 探针自己坏了要看得见，不能静默算过
-                lines.append(f"  ⛔ 检查抛异常：{exc!r}")
-                ok = False
+                lines.append(f"  ⛔ 无法判定 —— 检查抛异常：{exc!r}")
+                undetermined.append((name, exc))
+            else:
+                if not ok:
+                    violated.append(name)
             for line in lines:
                 print(line)
-            if not ok:
-                failed.append(name)
+    return violated, undetermined
+
+
+def _interpreter_note() -> str | None:
+    """用的不是项目 `.venv` 时给一句提示。
+
+    ⚠️ 只是**提示**，不是判据：脚本在别的解释器下跑是合法的（干净机器、CI）。
+    这里做的只是把「无法判定」这个症状和它最常见的成因摆在同一屏上 ——
+    2026-08-18 那次误报，从看到「🔴 7 条不通过」到发现是解释器不对，中间隔了一整轮。
+    """
+    expected = ROOT / ".venv"
+    if not expected.is_dir():
+        return None
+    if Path(sys.prefix).resolve() == expected.resolve():
+        return None
+    return (f"   ℹ️ 当前解释器不是项目 .venv（{sys.prefix}）——"
+            f"若上面是缺依赖，先换成 `source {expected}/bin/activate` 再跑")
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="管线前提检查。退出码：0=全过 · 1=有判据被违反 · 2=只有无法判定的")
+    ap.add_argument("--only", nargs="*", default=None, help="只跑这些组")
+    args = ap.parse_args(argv)
+
+    run = args.only or sorted({g for g, _, _ in CHECKS})
+    violated, undetermined = run_checks(run)
+
     print("\n" + "=" * 60)
-    if failed:
-        print(f"🔴 {len(failed)} 条不通过：")
-        for f in failed:
-            print(f"   - {f}")
+    if violated:
+        print(f"🔴 {len(violated)} 条判据被违反：")
+        for name in violated:
+            print(f"   - {name}")
+    if undetermined:
+        # ⚠️ 措辞刻意不叫"不通过" —— 它没查出问题，是**没查成**。
+        print(f"⛔ {len(undetermined)} 条无法判定（探针自己没跑成，**不等于通过**）：")
+        for name, exc in undetermined:
+            print(f"   - {name}：{type(exc).__name__}")
+        note = _interpreter_note()
+        if note:
+            print(note)
+    if violated:
         return 1
+    if undetermined:
+        return 2
     print("✅ 全部通过")
     return 0
 

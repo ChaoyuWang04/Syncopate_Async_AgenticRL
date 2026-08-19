@@ -106,7 +106,7 @@ def test_graded_case_actually_grades():
     # 改之前 `multi_tool_per_step_cap` 的 ceiling 是 **0.0**（全项目最狠，和提示词注入同级），
     # 于是「答对了但一步发俩工具」= 0 分，**比「答错了」(0.3) 还差**。
     # 而实测那条 cap 命中 18.8% 的训练 rollout、吃掉 **29% 的组内方差**
-    # （`docs/syncopate/20 §P0-2`）—— 近三成梯度在教一个格式问题。
+    # （`docs/syncopate/01 §P0-2`）—— 近三成梯度在教一个格式问题。
     # ⇒ 现在 ceiling 0.50：**业务答错必须比协议手滑更严重**，这条测试钉的就是这个方向。
     rewards = [perfect.reward, skip_metrics.reward, multi_tool.reward, wrong_guess.reward]
     assert rewards == sorted(rewards, reverse=True), f"分数没有单调递减: {rewards}"

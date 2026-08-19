@@ -14,7 +14,7 @@ metadata:
 > ✅ **纯硬件/通信/kernel 的测量不受影响**（E18 对齐悬崖 · E16 FP8 · B11 拓扑 ·
 > B20 dynamic_bsz · E01/A5 阶段归属 · E00 带宽）。
 
-infra 线与主线**分开交接**：主线看 `docs/syncopate/05-handoff.md`，
+infra 线与主线**分开交接**：主线看 `docs/syncopate/00-START.md`，
 infra 线看 **`docs/infra_exp/00-INFRA-HANDOFF.md`**（2026-08-14 晚更新，含明天的队列）。
 
 **组织方式**：E 编号是身份（永不重排），track 是叠加的索引视图：
