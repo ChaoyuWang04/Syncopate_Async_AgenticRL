@@ -21,7 +21,8 @@
                                         其余文档只写当前态、不做新旧对照）
 3. docs/infra_exp/STORY-async-lora-weight-sync.md ★★★ **先读这份** —— 异步 RL 为什么两个月
                                         没在学、我们怎么接通的（现象→误判→根因→修法→结果）
-4. docs/infra_exp/E18-rank3-allgather-collapse.md   ★★ 方法论样板
+4. docs/infra_exp/INFRA-REPLY-TO-MAINLINE-2026-08-19.md  📮 与主线的往来（还开着哪一项）
+5. docs/infra_exp/E18-rank3-allgather-collapse.md   ★★ 方法论样板
 4. docs/infra_exp/TRACK-A / TRACK-B     两条线各要兑现什么、现在在哪（A*/B* 全表）
 5. docs/infra_exp/README.md             E 编号索引 / §6 全局常量 / §7 最近实测 / 报告模板
 6. docs/syncopate/08-machine-and-environment.md   环境怎么跑起来（★ 尤其 §2.0 和 §2.2）
