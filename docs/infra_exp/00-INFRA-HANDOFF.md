@@ -3,7 +3,7 @@
 > ★★ **新窗口从这里开始：[`ONBOARDING.md`](ONBOARDING.md)** —— 读什么、第一件做什么、五条会踩的坑，20 分钟接上手。**每次收尾更新它**（它的 §8 写了怎么改）。
 >
 > 更新于 **2026-08-17**。给下一个上下文窗口。
-> **分工**：主线训练（数据/SFT/RL/RAG/Runtime 里程碑）看 `../syncopate/05-handoff.md`；
+> **分工**：主线训练（数据/SFT/RL/RAG/Runtime 里程碑）看 `../syncopate/00-START.md`；
 > **本文档只管 infra 线**——多卡并行、异步 RL、通信、kernel、框架/模型选型。
 > 按 Chaoyu 的约定：**短，只保证下一个窗口能接上**；细节全部指向对应文档。
 >
@@ -89,18 +89,21 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 |---|---|---|
 | 框架 | **verl 不换** | E07 §1 |
 | 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）：LoRA 每步只同步 260 MB。⚠️ 三档稳态对照待 **A6** | E02 |
-| attention | `flash_attention_2` 默认 —— 🆕 **必须是官方 cu13torch2.9 轮子**（社区 cu128 那个**反向**是坏的，RL 会静默空转）。换轮子先跑 `scripts/check_flash_attn_backward.py` | 05-handoff §0.1 |
-| dynamic_bsz | 代码默认 **False**。⚠️ **符号由 attention 决定**，当前机器 + FA2 下**未测** | README §6 |
+| attention | `flash_attention_2` 默认 —— 🆕 **必须是官方 cu13torch2.9 轮子**（社区 cu128 那个**反向**是坏的，RL 会静默空转）。换轮子先跑 `scripts/check_flash_attn_backward.py` | 00-START §0.1 |
+| dynamic_bsz | 代码默认 **False**，✅ **2026-08-19 已定案（E25）**：不是「怕慢」，是**没收益可拿** —— 每条序列已 ~4850 token，GPU 本来就吃饱 | **E25 §4.1** |
 | **MoE 模型** | 🆕 ~~GLM-4.7-Flash~~ → **`Qwen3-30B-A3B-Instruct-2507`**（已下载 57 GB）。GLM 的 `Glm4MoeLiteForCausalLM` **当前栈不支持**，要 transformers 5.0rc | **E07 §4.5.1** |
 | **MoE 的 LoRA** | 🆕 **绝不能用 `all-linear`**（98.7% 的 Linear 在专家里 ⇒ 参数 26×、张量 74×、每步同步 3.39 GB）。用「注意力+router」30.1 M | **E07 §4.5.3** |
 | 🆕 **NCCL 协议** | **按并行策略分设**：DDP（走 all_reduce）用默认；分片（走 all_gather）开 `NCCL_PROTO=LL128`。**不能全局开** —— LL128 让 all_reduce −30%/broadcast −41%。已写进 `launch_rl`（`fsdp_size>1` 自动带 + 判据行） | **E18 §9–10** |
 | 🆕 **满载降频** | **不需要在多卡对照里扣这一项**：4 卡满载单卡算力仅 −2.0%（整机 2325 W） | E00 / README §7 |
-| 🆕 **`dynamic_bsz`** | 代码默认 **False**。当前 FA2 下实测仅 +4~5%（旧记录的 ÷1.37 不成立）。⚠️ 本次在 512 长度下测，正式跑是 1536，**值得复测** | README §7 附 |
+| 🆕 **`micro_batch` / `dynamic_bsz`** | ✅ **已结案（E25）**：`micro_batch=1` **就是最优**（1→2 定长慢 1.0%、变长慢 6.3%、mb=4 OOM）；`dynamic_bsz` 保持 False。★ **喂饱 GPU 的单位是 token 不是序列条数**。B20 那个 +4~5% 由此得到解释 | **E25** |
+| 🆕 **`gradient_checkpointing`** | **保持开着**（E25）：关掉后 `micro_batch=1` 就 OOM。⛔ 「峰值 15.55/32 GB ⇒ 还剩 16 GB 可用」是**错读** —— 那 15.55 正是它省出来的 | **E25 §4.2** |
 | E11 稀疏 logprob | 🔻 **降级，不写 kernel**（端到端仅 4.3%，切片就有 4.0%） | E11 §6-③ |
 | 🆕🔴 **LoRA 权重同步** | **必须走 adapter 推送**（`SYNCOPATE_LORA_ADAPTER_SYNC`，**默认开**）。⛔ **禁止 `--lora-merge`**：bf16 合并毁掉 adapter **一半**的作用（启动即报错拦住） | **E22 §6.1/§6.4** |
 | 🆕🔴 **FSDP 后端** | **留在 FSDP1**（Chaoyu 2026-08-18）。上游已确认 FSDP1 最低限度维护、退化网格那条**不会修**；FSDP2 不会遇到但另有张量形态问题 ⇒ **`SYNCOPATE_FSDP_DDP_FIX` 必须一直默认开** | STORY §8.1 |
 | 🆕 **采样口径** | **训练侧不截尾**（`top_p=1.0 / top_k=-1`，已显式钉死），把**评测**对齐到训练 | **E23 §3** |
 | 🆕🔴 **配对比较的基线** | **一律用 `_audit/v13_sft_e1_merged.json`**（= RL 的真起点）。旧的 `v13_sft_e1.json`（裸基座+SFT adapter）比它**强 0.025**，用它当基线会**系统性低估 RL 的效果** | **E24** |
+| 🆕 **KL / `ref`** | 🟠 **倾向砍掉**（省 15.4%，任务分 −0.009 < MDE 0.015、defer/REJ 无退化）。⚠️ **默认值尚未改**：等多种子复核 `fabricated_safety_line_cap`（+2）。⛔ 连带 E19「ref 走 FP8」失效 | **E17 §9** |
+| 🆕 **`prompt_length/clip_ratio`** | **必须是 0.0000**，提为第四条常驻判据。夜跑 19 项全在 1.0（100% 截断）下跑，行为类结论已翻案 | **E20 §7.12** |
 | 🆕 **三个默认值已改对** | `--weight-sync-bucket-mb` 2048→**512**（2048 已知 OOM）· `--rollout-is` sequence→**token** · `ulysses_sp=1` 显式钉死 | launch_rl |
 
 ## 3 · 已落地的改动
@@ -166,26 +169,20 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 
 ### ▶ 5.1 现在就做（队首，按这个顺序）
 
+> ⭐ **2026-08-19 整段重排**：R-1 的前提被推翻（defer 崩塌 = prompt 截断，不是 reward，
+> [E20 §7.12](E20-rl-not-learning.md)）；KL 两臂定案（[E17 §9](E17-triple-forward.md)）；
+> PrefixGrouper 微基准 3.96× 但**真实集成未通**（[E26 §6](E26-prefix-grouper.md)）。
+
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🔴🔴 **reward 设计：RL 在学"不拒绝"** —— `lr 3e-5` 该 defer 97%→**83%**；`lr 1e-4` →**0%**，而总分仍 +0.063。`fabricated_safety_line_cap` 同时上涨 | **主线** | 设计 | **这是今晚最严重的发现**，且是 reward 问题不是 infra 问题（[E20 §7.9](E20-rl-not-learning.md)） |
-| **2** | **把 `defer` 双向率 / `REJ` 分 / `fabricated_safety_line_cap` 提成常驻判据** | 双方 | 小 | **总分连着两次盖住真实差异**（§7.5、§7.9）；三计数也没抓住第二次 |
-| **3** | **token vs sequence 各跑 2–3 个种子**，判据用 **defer 双向率**而不是总分 | infra | 4 卡 × ~4 h | 总分打平（+0.000）但 defer 差 14 点；每臂现在只有 1 个种子（§7.11.1） |
-| **4** | **原因② 重新设计**：固定**数据量（跑满一个 epoch）**而不是固定步数 | infra | 4 卡 × ~2 h | A1/A2 实测：固定 `--steps` 时改 `mini_batch` 只会让**数据减半**，更新次数不变（§7.10） |
-| **5** | 🆕 **同步不打断 rollout**（双缓冲权重 / 加深样本队列） | infra | 设计 + 实现 | **B1 死了**：`param_sync` 只占 0.2–0.7%，而"少打断一次"值 **3.5 s**（[E08 §5.5](E08-async-rl.md)） |
-| **6** | **提高 `sync_every` 之前先过 B5** | infra | 4 卡 × 1 h | 估计量上没代价（+11.4% 吞吐白拿），**任务尺子上没测过** |
+| **1** | 🔴 **5120 下重测 `lr 1e-4`** | infra | 4 卡 ~40 min | R-1 的证据（defer→0%）**量在 100% 截断之下** ⇒ 重测前**不许动 reward** |
+| **2** | 🔴 **E26 集成：脱 Ray 最小复现打 dtype** | infra | 写码 + 秒级迭代 | 卡在 Adam `expected BFloat16 got float`。⛔ **别再用"起训练"当调试循环** —— 最近 6 轮有 3 轮在修诊断工具本身 |
+| **3** | 🟠 **KL 多种子**，盯 `fabricated_safety_line_cap` | infra | 4 卡 × ~4 h | A vs B 无差异（−0.009 < MDE 0.015），但 safety_cap +2 是唯一反向信号 ⇒ **过了才改默认值** |
+| **4** | 🟠 **token vs sequence 多种子**，判据用 defer | infra | 4 卡 × ~4 h | 每臂仍只有 1 种子；且 83% 那个数已被证明是截断造成的 |
+| **5** | **常驻行为判据进 `compare`** | 主线 | 小 | R-2，不受翻案影响 —— 正是它让本次翻案成为可能 |
+| **6** | 🆕 **同步不打断 rollout**（双缓冲 / 加深队列） | infra | 设计 + 实现 | B1 死后钱在这里（"少打断一次"值 3.5 s） |
 
-#### 5.1.1 每一跑都要查的三条常驻判据
-
-```
-① [lora-probe]   list_loras() 必须非空（step≥1）      ⇒ adapter 真的在引擎里
-② [sync-payload] 第 2 次同步起含 lora_ 张量 > 0        ⇒ 推的是 adapter 不是基座
-③ rollout_corr/kl 每次同步后回落到地板 ~3.4e-4         ⇒ 策略真的被交付了
-```
-⚠️ **判据要有能力分辨**：跑太短（< 8 次同步）时 ③ 分辨不出来 —— 坏基线早期也贴着地板。
-⛔ 每一跑**不要**传 `--lora-merge`（启动即报错拦住）。
-
----
+⛔ **已从队首撤下**：R-1「reward 在教不拒绝」（前提被推翻，改为任务 1）。
 
 ### ▶ 5.2 接下来（正确性收尾）
 
@@ -205,12 +202,14 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 
 | # | 任务 | 预计端到端收益 | 状态 |
 |---|---|---|---|
+| **7.5** | 🆕🔴 **prefix grouper**：一组 8 条样本共享的 4196 token 题面**只算一次** | **上界 4.1×** | ⚠️ **不是即插即用**，见 E25 §5：包没装 + verl 把梯度掩码当成了存在掩码（多轮下会把工具返回从输入里删掉） |
 | 8 | **E17-C · `ref` 抽样**（抽序列，不是抽 token） | ~13% | 设计完成 |
 | 9 | **E19 · `ref` 走 FP8** | ~7.8% | 数值对拍已过 |
 | 10 | **A18 · 空泡成因归属** | 未知（空档占 22–25%） | 先量成因 |
 | 11 | **A4 · RL 侧稀疏 logprob** | ~3.6% | SFT 侧已做 |
 | 12 | **R6 · 实测一次 NCCL 流量** | — | 「DDP 每步 260 MB」是**算出来的**，从没量过 |
 | 13 | B19/B10 的吞吐旋钮 | 10% / 8% | ⛔ 等 5 的新代价曲线出来才有意义 |
+| ⛔ | ~~拉高 `micro_batch`~~ · ~~关 `gradient_checkpointing`~~ | **负收益 / 显存不够** | **E25 已证伪，别再捡** |
 
 ---
 
@@ -291,6 +290,10 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 ✅ E23 采样口径          训练侧不截尾，评测对齐训练（落地见任务 7）
 ✅ E18+A14+A16 16 字节对齐 · E03 NCCL 旋钮 · E01+A5 一步的时间 · B11 拓扑 · B20 dynamic_bsz
 ⛔ E04 rollout TP=2 净负 · A9 预量化 · **B1 权重同步优化**（现在只占一步 0.8%）
+⛔ 🆕 **E25**：「trainer 没喂饱」被证伪 ⇒ `micro_batch` / `gradient_checkpointing` 两条路线关闭
+✅ 🆕 **E17 KL 两臂**：吞吐 15.4% + **B5 首次通过**（任务分无差异）⇒ 只欠多种子
+🟡 🆕 **E26 PrefixGrouper**：数学与微基准**完成**（3.96×、fp32 逐位等价）；**真实集成未通**（§6.3）
+⛔ 🆕 **G-3 冒烟**：已被 08-19 凌晨 a17 两跑覆盖（`max_model_len=7168`、0 错误）⇒ 可划掉
 ```
 
 ## 6 · 新窗口阅读顺序

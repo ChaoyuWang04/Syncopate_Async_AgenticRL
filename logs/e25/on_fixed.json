@@ -1,0 +1,41 @@
+{
+  "args": {
+    "model": "models/Qwen3-4B-sft-v13-e1",
+    "gc": "on",
+    "micro_batches": "1,2,4,8",
+    "n_seq": 16,
+    "prompt_len": 4196,
+    "resp_len": 654,
+    "varlen": false,
+    "warmup": 1,
+    "iters": 3,
+    "out": "logs/e25/on_fixed.json"
+  },
+  "results": [
+    {
+      "micro_batch": 1,
+      "gc": "on",
+      "varlen": false,
+      "fwd_bwd_s": 20.437,
+      "fwd_only_s": 6.158,
+      "peak_gb": 12.74,
+      "ok": true
+    },
+    {
+      "micro_batch": 2,
+      "gc": "on",
+      "varlen": false,
+      "fwd_bwd_s": 20.636,
+      "fwd_only_s": 6.208,
+      "peak_gb": 16.92,
+      "ok": true
+    },
+    {
+      "micro_batch": 4,
+      "gc": "on",
+      "varlen": false,
+      "ok": false,
+      "err": "OOM"
+    }
+  ]
+}

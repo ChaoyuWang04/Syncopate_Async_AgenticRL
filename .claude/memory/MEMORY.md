@@ -20,3 +20,5 @@
 - [归因之前先看输入被没被截断](check-the-input-before-blaming-the-model.md) — ★ 一整套「reward 在教不拒绝」的分析作废，量的是 prompt 100% 被砍；`clip_ratio` 一个数能挡住整条错误归因链
 - [挡晋级不挡起跑](gate-the-promotion-not-the-run.md) — 要挡的是"把没做完的当成做完的"，不是"不许做短的"；这样不会变成另一条线的路障
 - [登记 ≠ 实现](registered-is-not-implemented.md) — WRITE_TOOLS 填了 8 个、实现只有 2 个；登记表是最像"证据"的东西
+- [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 证明正确的优化接进真实系统花了 13 处修复；★ 报错位置几乎总在别人家里
+- [行为异常先查输入](behavior-collapse-check-input-first.md) — ★ defer 崩塌是 **prompt 被截断**，不是 reward 教的；夜跑那条归因已翻案

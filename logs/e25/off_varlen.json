@@ -1,0 +1,23 @@
+{
+  "args": {
+    "model": "models/Qwen3-4B-sft-v13-e1",
+    "gc": "off",
+    "micro_batches": "1,2,4,8",
+    "n_seq": 16,
+    "prompt_len": 4196,
+    "resp_len": 654,
+    "varlen": true,
+    "warmup": 1,
+    "iters": 3,
+    "out": "logs/e25/off_varlen.json"
+  },
+  "results": [
+    {
+      "micro_batch": 1,
+      "gc": "off",
+      "varlen": true,
+      "ok": false,
+      "err": "OOM"
+    }
+  ]
+}

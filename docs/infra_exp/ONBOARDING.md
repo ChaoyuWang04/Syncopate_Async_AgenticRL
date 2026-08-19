@@ -24,7 +24,8 @@
 4. docs/infra_exp/INFRA-REPLY-TO-MAINLINE-2026-08-19.md  📮 与主线的往来（还开着哪一项）
 5. docs/infra_exp/E18-rank3-allgather-collapse.md   ★★ 方法论样板
 4. docs/infra_exp/TRACK-A / TRACK-B     两条线各要兑现什么、现在在哪（A*/B* 全表）
-5. docs/infra_exp/README.md             E 编号索引 / §6 全局常量 / §7 最近实测 / 报告模板
+5. docs/infra_exp/E26-prefix-grouper.md ★★ **判据方法论集大成**（§7 判据失效七形状 · §6 十三处接线）
+6. docs/infra_exp/README.md             E 编号索引 / §6 全局常量 / §7 最近实测 / 报告模板
 6. docs/syncopate/08-machine-and-environment.md   环境怎么跑起来（★ 尤其 §2.0 和 §2.2）
 ```
 
@@ -49,67 +50,82 @@ set -a; . /workspace/.env; set +a
 
 ---
 
-## 3 · 最近一轮做完了什么（2026-08-18 ~ 08-19）
+## 3 · 最近一轮做完了什么（2026-08-19）
 
-**两件事**：白天修好了两个静默的正确性 bug，夜里用一条 9 小时队列（19 项）把受影响的实验全部重测。
+**一句话**：修好 prompt 截断之后**一条大归因被推翻**；KL 可以砍；PrefixGrouper 在微基准上
+兑现 3.96×，但**真实训练集成没跑通**（13 处接线，卡在优化器 dtype）。
 
-### 3.1 两个 bug（都已修、已验证、默认开启）
+### 3.1 ⛔⛔ 头条：defer 崩塌是 **prompt 截断**，不是 reward（[E20 §7.12](E20-rl-not-learning.md)）
 
-```
-E22  LoRA **从没被推给 rollout** —— 异步模式下每次同步推的是 8.4 GB 冻结基座
-     ⇒ 生成数据的策略两个月停在起点，整条 RL 回路是断的
-     ⇒ 我们**自己补上了 verl 缺的那段传参**（SYNCOPATE_LORA_ADAPTER_SYNC，**默认开**）
-        验证：引擎里 adapter 从 [] 变 [123] · 载荷 8,414→252 MiB · param_sync 6.25→0.974 s
-E21  三个 trainer rank 的**梯度从没同步过**（退化网格 ⇒ PyTorch 静默降级）
-     ⇒ 已修（SYNCOPATE_FSDP_DDP_FIX，**默认开**）；0-A 又验了归约口径正确（3 卡 = 1 卡）
-     🔻 上游**不会修**（FSDP1 已最低限度维护）⇒ **我们的补丁是长期方案**
-```
-⇒ 完整故事：[`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)
-
-### 3.2 夜跑 19 项的结论（**这些才是现在的事实**）
+E17 A 臂与夜跑 `r1_tokenis` **同配置、只差长度预算**（3584/1536 → 5120/2048）：
 
 ```
-✅ B5 任务尺子**第一次通过**：+0.101（t=9.3，MDE 0.022），且**不是 reward hacking**
-✅ E24 合并损失 −0.025 ⇒ 配对基线一律用 _audit/v13_sft_e1_merged.json
-🔴 **否定结果**：token 级 vs 序列级 IS 在任务尺子上 **+0.000（MDE 0.016）**
-   ⇒ **让 RL 从"学不动"变成"+0.101"的是 E21+E22 的修复，不是 IS 口径**
-🔴🔴 **defer 崩塌**：lr 3e-5 该拒绝时 97%→83%；**lr 1e-4 →0%**，而总分仍 +0.063
-   ⇒ 当前 reward 下 RL 会系统性学"不拒绝" ⇒ **reward 设计问题，归主线**
-✅ B19/B10：sync_every 4→16（吞吐 +11.4%）· 陈旧阈值 0.1→0.5（陈旧样本 6×）
-   两个旋钮在估计量上**都测不出代价**，但**都没过任务尺子**
-★★ 那 11.4% **96% 省在 `gen`（trainer 等样本）上**，param_sync 只占 4%
-   ⇒ **同步的真实代价是"打断 rollout"，不是"搬权重"** ⇒ **B1 彻底死了**
+                    3584（100% 截断）      5120（0% 截断）
+该 defer            97% → **83%** 🟠      97% → **100%** ✅
+REJ（8 条）         **−0.188** 🔴          **+0.203** ✅
+fabricated_safety   **+3** 🔴              **−2** ✅
+任务分              +0.101                 **+0.137**（t=11.6）
 ```
 
-### 3.3 ★ 四条方法论（都是被自己的判据抓到的，比数字更值钱）
+机制：左截断砍掉的正是「调查先于任何结论（含**拒绝**、反问）」（截断后存活 **0/659**）
+⇒ **模型训练时从没见过"可以拒绝"这个选项，评测时却见得到。**
+⇒ 主线 R-1 应从队首撤下（回信 [`INFRA-TO-MAINLINE-2026-08-19b.md`](INFRA-TO-MAINLINE-2026-08-19b.md)）。
+★ **"行为异常"先查输入，再查激励。**
+
+### 3.2 ✅ E17 KL 两臂：砍 KL 省 15.4%，任务分无代价（[E17 §9](E17-triple-forward.md)）
 
 ```
-1. **总分连着两次盖住真实差异**（+0.101 很漂亮而 defer 97→83；总分打平而 defer 差 14 点）
-   ⇒ 三计数比均值好，但**仍是"打包"判据**；要看的是"哪一类行为变了"
-2. **训练分与任务分给出相反排序**：lr 1e-4 训练分更高，任务分显著更低（−0.039）
-   ⇒ **训练时看到的分数不能用来选配置**
-3. **「首值→末值」在噪声带宽 ≥ 变化量时会凭空造出趋势**（把 30 个点全打出来才发现）
-4. **五条判据被证伪，三条是当晚自己写的** ⇒ **判据必须能对自己失败**
+吞吐   step 135.92 → 115.03 s（−15.4%，正好等于 ref 的 20.93 s）；B 臂 timing_s/ref 出现 0 次
+精度   A vs B 直接配对 −0.009 < MDE 0.015 ⇒ 没测出差异；defer 100% vs 100%；REJ 0.953 双同
+🟠 唯一反向信号  fabricated_safety_line_cap A 6 → B 8（+2）⇒ 多种子时必须盯
+⛔ 连带           E19「ref 走 FP8」失效（ref 都不算了）
+⚠️ 默认值尚未改   等多种子证据链齐
 ```
 
-⚠️ **已作废的旧数字全部搬进** [`../syncopate/21-invalidated-numbers.md §5`](../syncopate/21-invalidated-numbers.md)，
-实验报告正文只留一行指针。**归档只用于回溯当时怎么想，不许引用里面的数字。**
-
-## 4 · ★ 第一件事：**队列已被夜跑改写，先读 handoff §5.1**
-
-R1（重测 E20）、⑥（重基线）、B5（任务尺子）**都已做完**。新队首见
-[`00-INFRA-HANDOFF §5.1`](00-INFRA-HANDOFF.md)，一句话版：
+### 3.3 🟡 E25 / E26：喂饱 GPU 的单位是 token，省时间只能靠「少算」
 
 ```
-1 🔴🔴 reward 在教模型"不拒绝"          主线的活（今晚最严重的发现）
-2 把 defer 双向率 / REJ 分 / fabricated_safety_line 提成**常驻判据**
-3 token vs sequence **各跑 2–3 个种子**，判据用 defer 而不是总分
-4 「更新次数」实验**重新设计**：固定跑满一个 epoch，不是固定步数
-5 🆕 **让同步不打断 rollout**（双缓冲 / 加深队列）—— B1 死后钱在这里
-6 调大 sync_every 之前**先过 B5**
+E25 ✅ 「trainer 没喂饱」**被证伪**：micro_batch 1→2 是**负收益**（定长 −1.0% / 变长 −6.3%，
+       mb=4 OOM）；关 gradient_checkpointing 在 mb=1 就 OOM
+       ★ 一条序列已 ~4850 token ⇒ GPU 早就吃饱；变长下 mb=1 等价于完美打包
+E26 ✅ PrefixGrouper 微基准 **3.96×**（三次前向 10.211→2.577 s，显存 +3.6%），
+       等价性 fp32 逐位过（四配置含组 8）
+    🔴 **真实训练集成未完成** —— 16 次尝试 / 13 处接线 / 卡在 Adam dtype（E26 §6.3）
+    ⛔ **端到端吞吐数一个都没有**，3.96× 只在微基准上成立
 ```
 
-**开跑的模板**（三条常驻判据靠这两个环境变量产出）：
+### 3.4 ★★★ 判据失效的**七种形状**（一天集齐，[E26 §7](E26-prefix-grouper.md)）
+
+```
+设计错  D1 太松 ⇒ 为错误的理由通过（"量墙钟"会把"没接上"读成"没收益"）
+        D2 太严 ⇒ 把对的判成错的（bf16 下要求逐位相同；"组大小必须相等"误杀合法情形）
+执行错  E1 读早了（"还没发生"与"不会发生"在日志里一样）
+        E2 读错对象（新跑没起来，读的是旧日志）
+        E3 读到文案（安装横幅里含判据行字符串）
+        E4 覆盖面不足（只挂第一个参数的钩子）
+        E5 打错目标（patch AdamW 而实际是 Adam ⇒ 零迹象）
+★ 四个解药：① 只在**终态**读  ② 配一个**已知必然发生**的对照计数
+           ③ **噪声地板**对照  ④ **一字不变检验**（修完现象完全没变 ⇒ 改错地方了，立刻回头）
+```
+
+### 3.5 ⚠️ 顺手发现并代修的主线阻断 bug
+
+`--seed` 发出的 `actor_rollout_ref.rollout.val_kwargs.seed` **是不存在的键**
+⇒ Hydra 拒绝 ⇒ **launch_rl 100% 启动即死**。已删（`data.seed` 保留）。
+★ **新增的 config 覆盖必须起一次跑才算落地。**
+
+## 4 · ★ 第一件事
+
+**队列见 [`00-INFRA-HANDOFF §5.1`](00-INFRA-HANDOFF.md)。** 一句话版：
+
+```
+1 🔴 5120 下重测 lr 1e-4          4 卡 ~40 min —— R-1 的前提没了，重测前不许动 reward
+2 🔴 E26 集成：脱 Ray 最小复现     秒级迭代打 dtype（⛔ 别再用"起训练"当调试循环）
+3 🟠 KL 多种子（盯 fabricated_safety_line_cap）→ 过了才改默认值
+4 🟠 token vs sequence 多种子      判据用 defer 而不是总分
+```
+
+**开跑模板**（三条常驻判据靠这两个环境变量产出）：
 
 ```bash
 SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377708 \
@@ -118,12 +134,13 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
   --lora-rank 32 --mode fully_async --trainer-gpus 3 --rollout-gpus 1 --steps 60 --sync-every 4 ...
 ```
 
-★ **每跑完必查的三条**（缺一条就不要读结果）：
+★ **每跑必查四条**（前三条老的，第四条 2026-08-19 新增）：
 ```
-① [lora-probe]   list_loras() 非空（step≥1）  ⇒ adapter 真在引擎里
-② [sync-payload] 第 2 次同步起含 lora_ > 0    ⇒ 推的是 adapter 不是基座
-③ rollout_corr/kl 每次同步后回落到 ~3.4e-4    ⇒ 策略真的被交付了
-⚠️ 跑太短（<8 次同步）时 ③ **分辨不出来** —— 坏基线早期也贴着地板
+① [lora-probe]   list_loras() 非空（step≥1）
+② [sync-payload] 第 2 次同步起含 lora_ > 0
+③ rollout_corr/kl 每次同步后回落到 ~3.4e-4
+④ 🆕 prompt_length/clip_ratio **必须是 0.0000** —— 夜跑 19 项全在 1.0 下跑的（E20 §7.12）
+⚠️ 判据一律**只在终态读**（退出码 / timing 首行），并配一个已知必然发生的对照计数
 ```
 
 ## 5 · ⚠️ 五条会让你踩坑的
@@ -185,6 +202,27 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 
 ---
 
+19. 🆕🔴🔴 **判据只在「终态」读，而且要配一个对照计数。**
+   「还没发生」和「不会发生」在日志里**长得一模一样**。今天为此误判三次：读早了、
+   读的是上一次的旧日志（mtime 是唯一证据）、grep 匹配到了安装横幅里含的判据行文案。
+   ⇒ 终态 = 进程退出码 / `timing_s/step` 首行出现；对照计数 = 一个**已知必然发生**的打印
+   （如 `组构成`、`判据A`）——「扫描 0 行」只有在对照计数 >0 时才等于「没找到问题」。
+20. 🆕🔴 **改完之后现象「一字不变」⇒ 改错地方了，立刻回头。**
+   不是"方向对但不够"。今天有两次顺着一个看似合理的假设连改两轮，而报错一个字符都没变。
+21. 🆕🔴🔴 **`setup_worker` 里绝对不能 import 会碰 CUDA 的模块。**
+   它靠 Ray 的 `worker_process_setup_hook` 执行，**早于 Ray 给进程分卡** ⇒ CUDA 上下文
+   绑死 device 0 ⇒ `NCCL WARN Duplicate GPU detected`，三 rank 挤一张卡、训练起不来。
+   实测：`verl.workers.engine.fsdp.transformer_impl` 会初始化 CUDA；
+   `monkey_patch` / `modeling_utils` / `prefix_grouper` / `workers.utils.padding` **不会**。
+   ⇒ 加 import 前先跑一行 `torch.cuda.is_initialized()` 对照。
+22. 🆕 **多 actor 架构里，补丁要问「装在哪个进程」。**
+   `_compute_old_log_prob` 跑在 **trainer driver**，模型构建跑在 **WorkerDict** ——
+   装错进程的表现是「补丁装了、也打印了，但现象一字不变」。
+23. 🆕 **接缝错误的报错位置几乎总在别人家里**（今天 5/13）：返回值顺序反了报在 verl 的
+   postprocess、熵传 None 报在 padding.py、dtype 不一致报在 torch 的 Adam。
+   ⇒ 有效手段只有两个：**接缝处自己打判据行** · **把问题降维成秒级观测**。
+   ⛔ 「看报错位置推根因」今天十三次里错了至少五次。
+
 ## 6 · 三条纪律（这条线的立身之本）
 
 1. **先写预测再跑。** 错了就在报告 §6 写「原猜想 / 实测 / 推翻后 / 教训」四段。
@@ -221,6 +259,8 @@ scripts/run_queue_9h.sh + run_queue_retry{2,3,4}.sh 🆕 ★ 会自己往下走�
 探针开关（都在 verl_patches 里）：
   SYNCOPATE_LORA_ADAPTER_SYNC=1  **默认开** · E22 修法①（推 adapter）
   SYNCOPATE_FSDP_DDP_FIX=1       **默认开** · E21 修复（退化网格）
+  SYNCOPATE_PREFIX_GROUPER=1     🆕 **默认关**·E26 打包前向（⚠️ 真实训练集成未完成，见 E26 §6.3；
+                                 里面暂留有 Adam 扫描的诊断代码，解决后要清）
   SYNCOPATE_SYNC_PAYLOAD=1       每次同步打「张量数/字节/lora_ 个数/盯住层 ‖W‖」+ list_loras()
   SYNCOPATE_OPT_STEP_PROBE=1     **真实**优化器更新次数（不是 fit step / dump 数 / param_version）
   SYNCOPATE_DDP_PROBE=1          三个 rank 的梯度范数（E21 的判据）
@@ -228,6 +268,11 @@ scripts/probe_weight_sync_payload.py 🆕 ★ 0-B：权重同步**推的是什�
   ⇒ 配套运行时探针 `SYNCOPATE_SYNC_PAYLOAD=1`（在 verl_patches 里，判据带 SYNCOPATE_SYNC_REF）
 scripts/probe_sm120_fp8.py / probe_fp8_real_shapes.py / probe_fp8_logprob_error.py  🆕 FP8 三件套
 scripts/probe_moe_4bit_load.py      🆕 4bit MoE 加载路径（碎片）
+scripts/check_prefix_grouper_equivalence.py 🆕 ★ PrefixGrouper 等价性（**fp32 + 噪声地板**，
+  ⛔ 不要在 bf16 下判等价性：噪声地板 mean 1.28e-2 > 要抓的误差）
+scripts/probe_prefix_grouper_speed.py      🆕 四臂吞吐（A 现状FA2 / B 同后端SDPA / C 打包SDPA / D 打包FA2）
+scripts/probe_trainer_feed.py              🆕 E25：micro_batch × gradient_checkpointing（自带保真度自检）
+docs/upstream/verl-prefix-grouper-not-wired/repro_prefix_grouper_wiring.py 🆕 零 GPU 三判据复现
 scripts/gpu_gate.sh                 🆕 ★ 抢卡门禁：显存 + 训练进程 + 主线产物 三条一起查
 scripts/run_batch2_gpu.sh           🆕 第 1.6 批 8 项串行跑（每项自带预测与判据）
 scripts/wait_for_gpu.sh                等显存释放（教训：日志说完了 ≠ 资源还回来了）

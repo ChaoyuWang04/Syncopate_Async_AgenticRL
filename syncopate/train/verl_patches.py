@@ -337,7 +337,7 @@ def setup_worker() -> None:
     # ⚠️ 曾经有一行日志断言「fully_async 不调 create_rl_sampler ⇒ 本轮不生效」——
     #    **那句话是错的**，它把"其实能行、只是没接上"整个盖住了，而且长得像个合格判据。
     #    真因一直是**作用域**：补丁只打在 driver。
-    #    ⇒ 教训：判据行只许写观测，不许写断言（05-handoff §6 变种②）。
+    #    ⇒ 教训：判据行只许写观测，不许写断言（00-START §6 变种②）。
     if os.environ.get("SYNCOPATE_POOL", "1") == "1":
         _defer_until_imported("verl.trainer.main_ppo", _patch_pool_sampler)
     if os.environ.get("SYNCOPATE_NVTX") == "1":
@@ -383,6 +383,8 @@ def setup_worker() -> None:
                               _patch_sync_payload_probe)
         _defer_until_imported("verl.workers.rollout.vllm_rollout.vllm_async_server",
                               _patch_vllm_lora_probe)
+    if os.environ.get("SYNCOPATE_PREFIX_GROUPER") == "1":
+        _patch_prefix_grouper()
     if os.environ.get("SYNCOPATE_FSDP_ALIGN") == "1":
         _defer_until_imported("torch.distributed.fsdp._flat_param", _patch_fsdp_shard_alignment)
 
@@ -1089,3 +1091,363 @@ def apply(mode: str) -> None:
                    "verl.experimental.fully_async_policy.fully_async_rollouter",
                    "verl.experimental.one_step_off_policy.ray_trainer"):
             _defer_until_imported(_m, _patch_nvtx_timers_or_rebind)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PrefixGrouper：一组 8 条样本共享的题面**只算一次**（E25 §5 / docs/upstream/verl-prefix-grouper-not-wired）
+#
+# ⚠️⚠️ 实验性，`SYNCOPATE_PREFIX_GROUPER=1` 才装，**默认关**。
+#
+# verl 0.8.0 里 `actor.use_prefix_grouper=True` 是个**空开关**（四处断线，前三处已复现）：
+#   ① `apply_monkey_patch()` 全包唯一调用点（transformer_impl.py:292）**不传这个参数**
+#      ⇒ ALL_ATTENTION_FUNCTIONS 没被包装 ⇒ prefix_grouper= 这个 kwarg 会被模型忽略
+#   ② `forward_micro_batch_with_prefix_grouper()` **零调用者** ⇒ 打包前向是死代码
+#   ③ `build_pg_from_micro_batch()` 把 `response_mask`（**梯度**掩码）当 `suffix_mask`
+#      （**存在**掩码）⇒ 多轮下工具 observation 的 token 会被从模型输入里删掉
+#      —— verl 自带的 tool_agent_loop.py:400 也是这个语义，不是我们特有的
+#   ④ 它还要 `micro_batch["uid"]`，而 uid 在 `non_tensor_batch` 里，**到不了 engine 的 TensorDict**
+#
+# ⇒ ★ 所以「打开开关量快了多少」这个判据会**为错误的理由通过**（测出 0 收益后放弃）。
+#   本补丁的第一条判据因此是「**这条路径真的被走到了**」，第二条才是等价性，第三条才是快慢。
+#
+# 验收顺序（缺一条都不许往下走）：
+#   判据A  [prefix-grouper] 打包前向已生效  —— 路径真的被走到
+#   判据B  log_probs 与关闭时**逐位相同**   —— 论文保证训练等价，不相同就是我们接错了
+#   判据C  吞吐 / 任务尺子
+def _patch_prefix_grouper() -> None:
+    """PrefixGrouper 接线 · 整体对齐上游 #7202 的形状 + 我们独有的两处修复。
+
+    ★ 为什么是这个形状（2026-08-19）
+      #7202（已被维护者关闭）已经做对了两块：**在隐状态上切分** + **只对 suffix 投影**。
+      我们独立收敛到同一个设计 ⇒ 那是这条路上的唯一自然解 ⇒ **照抄，不自创**。
+      我们独有的是它缺的两块：③ 掩码语义、⑤ 因果对齐。
+
+    ⚠️ 上游踩过的两个坑（照抄以免重踩）：
+      · reshape 必须在 `FusedLinearForPPO` **外面**做 —— 在它 forward 里 flatten 会跑在
+        no_grad 下、**丢掉隐状态的梯度**（又一个不报错只训歪）
+      · 不要用 `output_hidden_states=True` —— 它会物化全部 36 层（≈1.7 GB 白付），
+        直接取基座模型的最后一层输出
+    """
+    import torch
+    from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+    from verl.models.transformers import monkey_patch as _mp
+
+    # ⚠️⚠️⚠️ **绝对不能在这里 import `verl.workers.engine.fsdp.transformer_impl`**（2026-08-19 实测）
+    #
+    #   实测：`import verl.workers.engine.fsdp.transformer_impl` 会让
+    #        `torch.cuda.is_initialized()` 从 False 变 **True**
+    #        （`prefix_grouper` / `monkey_patch` / `modeling_utils` 都不会）
+    #
+    #   而 `setup_worker()` 是靠 Ray 的 `worker_process_setup_hook` 跑的 ——
+    #   **它在进程启动时执行，早于 Ray 把这个进程分配给某张卡**。
+    #   ⇒ CUDA 上下文提前绑到 device 0，Ray 后面再设 CUDA_VISIBLE_DEVICES 已经无效
+    #   ⇒ 三个 trainer rank 全绑在同一张卡上：
+    #        `NCCL WARN Duplicate GPU detected : rank 1 and rank 0 both on CUDA device 21000`
+    #   ⇒ 训练**一次都起不来**，而报错完全不像"你 import 早了"。
+    #
+    #   ★ 修法利用 verl 自己的 from-import 顺序：
+    #     `transformer_impl` 在**模块导入时**做 `from ...monkey_patch import apply_monkey_patch`
+    #     ⇒ 只要我们在它被导入**之前**改掉 `_mp.apply_monkey_patch`（轻量、不碰 CUDA），
+    #        它自然会绑到我们这一版；
+    #     ⇒ 而 `forward_step` / `pg_forward` 的接线推迟到**那个函数被调用时**再做 ——
+    #        那时模型正在构建，卡早就分好了。
+    #   ★ 判据：`grep -c 'Duplicate GPU' <log>` 必须是 0，且**要等到终态才读**
+    #     （"还没走到"和"不会发生"在日志里长得一模一样 —— 今天为此误判了三次）。
+
+    # ⚠️⚠️ **`prefix_grouper_utils` 必须惰性导入**（2026-08-19 实测）。
+    #   它顶层 `from prefix_grouper import PrefixGrouper`，而这个 import 会在
+    #   **Ray 给 worker 分配 GPU 之前**初始化 CUDA 上下文 ⇒ 所有 worker 都绑到 device 0
+    #   ⇒ NCCL 起不来：`Duplicate GPU detected : rank 1 and rank 0 both on CUDA device 21000`
+    #   ★ 判据：关掉 SYNCOPATE_PREFIX_GROUPER 后该告警 0 次、训练正常 ⇒ 是本补丁引入的。
+    #   ★ 这条报错**完全不像**"你自己在 setup 里 import 早了"，像硬件/调度问题 ——
+    #     又一个「误导型失败」。
+    class _LazyPGU:
+        _m = None
+        def _mod(self):
+            if _LazyPGU._m is None:
+                from verl.trainer.ppo import prefix_grouper_utils as m
+                _LazyPGU._m = m
+            return _LazyPGU._m
+        def __getattr__(self, k):
+            return getattr(self._mod(), k)
+        def __setattr__(self, k, v):
+            setattr(self._mod(), k, v)
+
+    _pgu = _LazyPGU()
+
+    # ── ⑤ 因果对齐（本项目独有的发现，也是整条线唯一真正算错的地方）──────────
+    #
+    # PrefixGrouper 把自己的 **2D padding mask** 当第 4 个位置参数传给 attn_func，而
+    # suffix 子调用的形状是 q 长 R、k 长 P+R ⇒ 它需要的是**右下对齐**的因果掩码
+    # （query i 在绝对位置 P+i，应看到 key 0..P+i）。HF 的后端拿到那个 mask 之后：
+    #     eager / sdpa        构造**左上对齐**因果掩码 ⇒ 结构性错误（fp32 实测差 21 万倍）
+    #     flash_attention_2   2D mask 长度 ≠ query 长度 ⇒ 走 _upad_input 变长路径 ⇒ 错位
+    # ⇒ 正解：**不传那个 mask**（打包布局里本来就没有 padding），让后端走纯 causal。
+    #   实测 `flash_attn_func(causal=True)` **就是右下对齐**（与显式右下参考逐位相同，
+    #   与左上差 3.63）⇒ FA2 是对的后端。
+    #
+    # ★ 只替换 wrapper **工厂**，让上游的 apply_prefix_grouper_patch 装我们这一版 ——
+    #   **不要在外面再套一层**（双层包装实测会在 batch_repeat_cat 里非法访存）。
+    def _wrapper_factory(original_fn):
+        def wrapped(module, query, key, value, attention_mask, *args, **kwargs):
+            pg = kwargs.pop("prefix_grouper", None)
+            if pg is None:
+                return original_fn(module, query, key, value, attention_mask, *args, **kwargs)
+
+            def attn_func(q, k, v, _pg_mask, *ia, **ik):
+                # ★ 同时丢掉 position_ids：HF 的 FA2 用它探测「打包序列」并切到变长路径，
+                #   而这里传进来的是**整条 grouped 序列**的 position_ids（长 P+G·R），
+                #   与子调用的形状（B=G, Lq=R）对不上 ⇒ 越界访存。
+                #   ⚠️ 旋转位置编码在进入注意力函数**之前**就已经加过了，这里丢掉是安全的。
+                ik.pop("position_ids", None)
+                return original_fn(module, q, k, v, None, *ia, **ik)[0]
+
+            return pg.forward(attn_func, query, key, value, *args, **kwargs), None
+        return wrapped
+
+    _mp._create_prefix_grouper_wrapper = _wrapper_factory
+
+
+    # ── ① 让 apply_monkey_patch 收到 use_prefix_grouper ──────────────────────
+    _orig_apply = _mp.apply_monkey_patch
+
+    _wired = {"done": False}
+
+    def _apply_with_pg(*args, **kwargs):
+        kwargs["use_prefix_grouper"] = True
+        r = _orig_apply(*args, **kwargs)
+        # ★ 到这里模型正在构建 ⇒ Ray 早已分好卡 ⇒ 现在才碰重模块是安全的
+        if not _wired["done"]:
+            _wired["done"] = True
+            _wire_engine()
+        return r
+
+    _mp.apply_monkey_patch = _apply_with_pg
+
+    # ── ③④ 打包用「存在掩码」；组边界由 prompt 逐位相同推出（uid 到不了 engine）──
+    _grp_reported = {"done": False}
+
+    def _build_pg(micro_batch, pad_token_id, padding_mode="right"):
+        from prefix_grouper import PrefixGrouper
+
+        prompts = micro_batch["prompts"]
+        responses = micro_batch["responses"]
+        prompt_len = prompts.size(1)
+        # ★③ 存在掩码，**不是** response_mask（那是梯度掩码，工具 observation 为 0）
+        #    上游 #7202 这一行没改 ⇒ 多轮下工具返回会被静默删掉
+        existence = micro_batch["attention_mask"][:, prompt_len:]
+
+        group_sizes, cur = [], 1
+        for i in range(1, prompts.size(0)):
+            if torch.equal(prompts[i], prompts[i - 1]):
+                cur += 1
+            else:
+                group_sizes.append(cur); cur = 1
+        group_sizes.append(cur)
+        # ⚠️ 组大小**不必相等**（PrefixGrouper 接受一个列表）—— 当初写死"必须相等"是
+        #   过度保守，会把一个**合法但低效**的情形判成错误。正确性由「同组连续」保证，
+        #   而那一条已由上面的重排保证。这里只做一次性报告，让低效自己显形。
+        if not _grp_reported["done"]:
+            _grp_reported["done"] = True
+            _n1 = sum(1 for g in group_sizes if g == 1)
+            print(f"[prefix-grouper] 组构成 {group_sizes}（{len(group_sizes)} 组 / "
+                  f"{sum(group_sizes)} 条，其中孤立样本 {_n1} 条）"
+                  f"{'  ⚠️ 碎片化严重 ⇒ 打包收益会被吃掉' if _n1 > len(group_sizes)//2 else ''}",
+                  flush=True)
+
+        idx = torch.tensor([sum(group_sizes[:i]) for i in range(len(group_sizes))],
+                           device=prompts.device)
+        prefix_ids = prompts.index_select(0, idx)
+        # ★ 前缀掩码也用 attention_mask（与 response 一致）——
+        #   不要用 `ne(pad_token_id)`：pad id 猜错时会把 padding 一起打包进去
+        #   （实测 grouped 里前缀贡献了 5120 = 完整补齐宽度，而真实 prompt 只有 ~4111）
+        prefix_mask = micro_batch["attention_mask"][:, :prompt_len].index_select(0, idx).bool()
+        pg = PrefixGrouper.from_ungrouped_masks(
+            prefix_mask=prefix_mask, suffix_mask=existence,
+            group_sizes=group_sizes, padding_mode=padding_mode, device=prompts.device)
+        concat_ids = pg.concat_input(prefix_ids, prefix_mask, responses, existence)
+        pos_ids = _pgu.build_position_ids_for_prefix_grouper(pg)
+        # 第 4/5 个返回值当 completion_ids / completion_mask 传进 pg_forward，
+        # 必须与打包用的是**同一个**掩码，否则 convert_padding 会把位置对错
+        return pg, concat_ids, pg.padding_mask, pos_ids, responses, existence
+
+    _pending = {"build": _build_pg}
+
+    # ── ② response-only 投影（照抄 #7202：隐状态上切分，只对 suffix 投影）───────
+    #
+    # 🔴 不做这一步会 OOM：整条 grouped 序列过 vocab 头 = 9,428 × 151,936
+    #    ⇒ fp32 + 梯度 10.67 GB。而我们本来靠 use_fused_kernels 从不物化。
+    def _base_model(module):
+        m = module
+        for _ in range(6):
+            inner = getattr(m, "model", None)
+            if inner is None or inner is m:
+                break
+            m = inner
+        return m
+
+    def _lm_head_weight(module):
+        m = module
+        for _ in range(6):
+            fn = getattr(m, "get_output_embeddings", None)
+            if callable(fn):
+                emb = fn()
+                if emb is not None and hasattr(emb, "weight"):
+                    return emb.weight
+            m = getattr(m, "module", None) or getattr(m, "base_model", None) or getattr(m, "model", None)
+            if m is None:
+                break
+        raise RuntimeError("[prefix-grouper] 找不到 lm_head —— 拒绝退回物化 logits 的路")
+
+    _logged = {"done": False}
+
+    def _pg_forward(model, prefix_grouper, concat_input_ids, attention_mask, position_ids,
+                    completion_ids, completion_mask, *, temperature=1.0, padding_mode="right",
+                    include_prefix_last=1, calculate_entropy=False, entropy_fn=None):
+        from verl.utils.experimental.torch_functional import FusedLinearForPPO
+
+        # ★ 直接取基座最后一层，**不用 output_hidden_states**（那会物化全部 36 层 ≈1.7 GB）
+        hidden = _base_model(model)(
+            input_ids=concat_input_ids, attention_mask=attention_mask,
+            position_ids=position_ids, use_cache=False, prefix_grouper=prefix_grouper,
+        )[0]
+        _, _, suffix_h, suffix_mask_raw = prefix_grouper.split_output(
+            hidden, include_prefix_last=include_prefix_last)
+        completion_right = prefix_grouper.convert_padding(
+            completion_ids, completion_mask, padding_mode=padding_mode)
+
+        # ★ reshape 在 FusedLinearForPPO **外面**做（上游 #7202 的坑：里面 flatten 会跑在
+        #   no_grad 下、丢掉隐状态梯度 —— 不报错，只训歪）
+        h = suffix_h[:, :-1].contiguous()
+        B, T, D = h.shape
+        log_probs, entropy = FusedLinearForPPO()(
+            hidden_states=h.view(B * T, D),
+            vocab_weights=_lm_head_weight(model),
+            input_ids=completion_right.reshape(B * T),
+            temperature=temperature,
+        )
+        log_probs = log_probs.view(B, T)
+        # ⚠️ **始终把熵带出去**：verl 的 `_compute_old_log_prob` 会无条件地对它调
+        #   `no_padding_2_padding(entropy, ...)`，传 None 进去就是
+        #   `AttributeError: 'NoneType' object has no attribute 'is_nested'`
+        #   —— 报在 verl 的 padding.py 里，离根因很远。
+        #   而 `FusedLinearForPPO` 本来就同时返回熵，我们之前是算了却没给出去。
+        entropy = entropy.view(B, T) if entropy is not None else None
+        if not _logged["done"]:
+            _logged["done"] = True
+            # ★ 判据A：没有这一行就是没走到打包路径
+            print(f"[prefix-grouper] 打包前向已生效 · response-only 投影 · "
+                  f"grouped {tuple(concat_input_ids.shape)} → 投影 {B*T} 个位置", flush=True)
+        return log_probs, entropy, suffix_mask_raw[:, 1:]
+
+    _pending["fwd"] = _pg_forward
+
+    # ── forward_step 接到打包前向（**延迟执行**，见文件上方的 CUDA 初始化说明）────
+    def _wire_engine():
+        from verl.workers.engine.fsdp import transformer_impl as _ti
+        _orig_forward_step = _ti.FSDPEngineWithLMHead.forward_step
+
+        def _forward_step(self, micro_batch, loss_function, forward_only):
+            from verl.utils.device import get_device_id, get_device_name
+
+            micro_batch = micro_batch.to(get_device_id())
+            need = ("prompts", "responses", "response_mask", "attention_mask")
+            # ★ PrefixGrouper 只能在**同一个 micro-batch 内**共享题面 ⇒ 一整组必须在一起。
+            #   micro_batch=1 时它无组可分：判据行会打出「投影 31 个位置」这种明显不对的数，
+            #   而且下游形状会崩。⇒ 用 --micro-batch-size = rollout_n。
+            if not all(k in micro_batch.keys() for k in need):
+                return _orig_forward_step(self, micro_batch, loss_function, forward_only)
+
+            if _pending:
+                # ★ 到这里 Ray 已经分好卡了，现在才 import prefix_grouper（见上面的惰性导入注释）
+                _pgu.build_pg_from_micro_batch = _pending.pop("build")
+                _pgu.pg_forward = _pending.pop("fwd")
+            # ★ 自己把同组样本排到一起（不依赖 verl 的组感知划分——那条路径 0.8.0 里是坏的）。
+            #   按 prompt 内容做稳定分组：相同 prompt 的行连续排列，算完再按逆排列还原。
+            _p = micro_batch["prompts"]
+            _key = {}
+            _order = []
+            for _i in range(_p.size(0)):
+                _h = hash(_p[_i].detach().cpu().numpy().tobytes())
+                _key.setdefault(_h, []).append(_i)
+            for _v in _key.values():
+                _order.extend(_v)
+            _perm = torch.tensor(_order, device=_p.device)
+            _inv = torch.empty_like(_perm); _inv[_perm] = torch.arange(len(_order), device=_p.device)
+            mb = {k: micro_batch[k].index_select(0, _perm) for k in need}
+            mb["pad_token_id"] = getattr(self, "pad_token_id", 0)
+            entropy, log_probs = _pgu.forward_micro_batch_with_prefix_grouper(
+                micro_batch=mb, model=self.module,
+                temperature=1.0,
+                calculate_entropy=True,   # ★ 见 _pg_forward 里的说明：verl 无条件要熵
+                device_name=get_device_name(),
+                param_dtype=getattr(self, "_autocast_dtype", torch.bfloat16),
+            )
+            # ⚠️ **dtype 要和标准路径一致**：`FusedLinearForPPO` 内部升到 float32，
+            #   而 verl 标准 rmpad 路径返回的是 bf16。不对齐的话梯度是 float32，
+            #   最后炸在 **优化器**里：
+            #       RuntimeError: expected dtype c10::BFloat16 for `end` but got dtype float
+            #   —— 报在 torch/optim/adam.py，离根因最远的一次。
+            # ⛔ 撤回：曾把 log_probs 转成 bf16 —— **方向是反的**。
+            #    `FusedLinearForPPO` 第 48 行有 `assert token_log_probs.dtype == torch.float32`
+            #    ⇒ float32 才是它的契约，熵才是 orig_dtype(bf16)。
+            #    而那个 Adam 报错在转之前就存在 ⇒ 不是这里的问题。
+            # ⛔ 这里曾放过一段 Adam 扫描的诊断代码（找 param/grad dtype 不一致），
+            #    但它**从没跑起来过**：先打错类（AdamW，实际是 Adam），改对之后仍 0 行、
+            #    原因未明。⇒ 已清掉，避免留下"看起来在监控、其实什么都没做"的死代码。
+            #    ⇒ 正确的下一步是**脱 Ray 最小复现**（E26 §6.3），不是继续在真实训练里塞探针。
+            # ★ 还原成 micro_batch 原来的行顺序
+            log_probs = log_probs.index_select(0, _inv)
+            if entropy is not None:
+                entropy = entropy.index_select(0, _inv)
+
+            # ── ⑦ 转成 verl 要的**锯齿(nested)格式** ────────────────────────
+            #
+            # verl 的 `postprocess_batch_func` 只支持一种格式（其余 raise NotImplementedError）：
+            #     tensors = [t for nt in model_output[key] for t in nt.unbind()]
+            #     torch.nested.as_nested_tensor(tensors, layout=torch.jagged)
+            # ⇒ 每条序列一个**长度 = 该序列真实 token 数**的向量（prompt+response）。
+            # 而下游 `no_padding_2_padding` 取的是 `values[off - R - 1 : off - 1]`（左移一位）
+            # —— **正是我们算的那一段**。所以只要摆到对的偏移上即可。
+            #
+            # ⛔ 走过的弯路：先给稠密 [bsz, max_resp_len] + 打旁路 —— 两次都失败
+            #    （第一次装错进程；第二次 verl 已经把它拼成锯齿张量了）。
+            #    ⇒ **按下游要的格式产出，比在下游加旁路更稳**：少一处补丁，也少一个会漏的判据。
+            _am = micro_batch["attention_mask"]
+            _P = micro_batch["prompts"].shape[1]
+            _plen = _am[:, :_P].sum(1)
+            _rlen = _am[:, _P:].sum(1)
+
+            def _to_jagged(x):
+                if x is None:
+                    return None
+                _outs = []
+                for _i in range(x.shape[0]):
+                    _L = int(_plen[_i].item() + _rlen[_i].item())
+                    _R = int(_rlen[_i].item())
+                    _v = x.new_zeros(_L)
+                    if _R > 0:
+                        _v[_L - _R - 1:_L - 1] = x[_i, :_R]
+                    _outs.append(_v)
+                return torch.nested.as_nested_tensor(_outs, layout=torch.jagged)
+
+            model_output = {"log_probs": _to_jagged(log_probs)}
+            if entropy is not None:
+                model_output["entropy"] = _to_jagged(entropy)
+            if loss_function is not None:
+                loss, metrics = loss_function(model_output=model_output, data=micro_batch,
+                                              dp_group=self.get_data_parallel_group())
+            else:
+                assert forward_only
+                loss, metrics = torch.tensor(1.0, device=get_device_name()), {}
+            # ⚠️ verl 原版是 `return loss, output`（**loss 在前**）。写反了不会报形状错，
+            #    而是让 verl 的 postprocess 拿 Tensor 去做 `"model_output" in <Tensor>`
+            #    ⇒ RuntimeError: Tensor.__contains__ ... —— 报在离根因很远的地方。
+            return loss, {"model_output": model_output,
+                          "loss": loss.detach().item(), "metrics": metrics}
+
+        _ti.FSDPEngineWithLMHead.forward_step = _forward_step
+    print("[verl-patch] PrefixGrouper 已接线（SYNCOPATE_PREFIX_GROUPER=1，对齐 #7202 + 掩码/因果两处修复）"
+          " —— ★ 没看到 [prefix-grouper] 打包前向已生效 就是没走到", flush=True)
+
+

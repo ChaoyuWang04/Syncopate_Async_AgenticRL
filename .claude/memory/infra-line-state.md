@@ -222,3 +222,26 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 
 ⇒ 新队首（`00-INFRA-HANDOFF §5.1`）：**reward 设计（主线）→ 常驻行为判据 → 多种子 →
 原因② 重新设计（固定 epoch 而非步数）→ 同步不打断 rollout → sync_every 过 B5**
+
+
+## ★★★ 2026-08-19：一条大归因被推翻 + KL 定案 + PrefixGrouper 只到微基准
+
+```
+⛔⛔ defer 崩塌 = **prompt 截断**，不是 reward   同配置只改长度预算（3584→5120）：
+     该 defer 97%→83% 变成 97%→**100%**，REJ −0.188 → **+0.203**，任务分 +0.101 → **+0.137**
+     ⇒ 主线 R-1 从队首撤下，换成「5120 下重测 lr 1e-4」 ⇒ [[behavior-collapse-check-input-first]]
+✅ E17 KL 两臂定案   砍 KL 省 **15.4%**，A vs B 任务分 −0.009 < MDE 0.015（无差异）、
+     defer/REJ 双同 —— **B5 首次通过**。🟠 唯一反向信号 fabricated_safety_cap +2 ⇒ 多种子必盯
+     ⛔ 连带 E19「ref 走 FP8」失效。⚠️ **默认值尚未改**
+✅ E25 「trainer 没喂饱」证伪   micro_batch 拉高是**负收益**；关 GC 显存不够
+     ⇒ 省时间只剩「让它少算」 ⇒ [[trainer-is-compute-bound-not-starved]]
+🟡 E26 PrefixGrouper   微基准 **3.96×** + fp32 逐位等价；**真实集成未通**（13 处接线）
+     ⇒ [[integration-is-the-work-not-the-math]]
+🔴 代修主线阻断 bug   `val_kwargs.seed` 是不存在的键 ⇒ launch_rl 100% 启动即死
+```
+
+**队首（`00-INFRA-HANDOFF §5.1`）**：① 5120 下重测 lr 1e-4 → ② E26 脱 Ray 最小复现打 dtype
+→ ③ KL 多种子 → ④ token vs sequence 多种子。
+**新增第四条常驻判据**：`prompt_length/clip_ratio` 必须 0.0000。
+**上游第四包**（`docs/upstream/verl-prefix-grouper-not-wired/`）：掩码语义是我们独有的；
+接线部分挂起（#7202 已被维护者关闭）。回信：`INFRA-TO-MAINLINE-2026-08-19b.md`。
