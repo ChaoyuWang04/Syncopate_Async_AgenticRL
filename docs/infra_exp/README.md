@@ -96,7 +96,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | **B** | ⬜ | 🟠 | 🔴 |
 | **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | **B** | ⬜ | 🟠 | 🟢 画像 |
 | **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **A** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
-| **E12** 🆕 | [权重同步的代价与根因](E12-weight-sync.md) | **fully_async 稳态 55.8 s；反解出固定开销 55.0 s、传输 0.8 s ⇒ 98.6% 不是传输**。根因是每次同步走完 8 步，只有第 5 步在传数据 | **B** | 🟡 读码+日志已完成，分步计时待做 | 🔴 | 🟢 已完成部分 / 🔴 分步计时 |
+| **E12** 🆕 | [权重同步的代价与根因](E12-weight-sync.md) | ⛔ **原结论已作废**（它建立在「稳态只推 132 MB」这个从没量过的前提上，实测每次推 **8,414 MiB 冻结基座**）。✅ **现结论**：修法① 后 `param_sync` **0.974 s / 占步 0.8%**；而调大 `sync_every` 省的钱 **96% 在 `gen`**，不在权重同步 —— 见 E22 §6.4.3 / E08 §5.5 | **B** | 🟡 读码+日志已完成，分步计时待做 | 🔴 | 🟢 已完成部分 / 🔴 分步计时 |
 | **E13** 🆕 | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | decoupled 每步把整模型在 GPU↔CPU 搬 3 趟；**902 张量/8.309 GB 里只有 3.18% 是可训练的 LoRA**，基座冻结根本不用存 ⇒ **4.34 → 0.083 s/步，省 5.7%** | **B** | 🟡 根因+收益已实测，改动未做 | 🔴 | 🟢 已完成部分 |
 | **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | 🆕 **第一枪打完：FP8 点亮了，1.90–2.08×**（8192³ 451 vs 237 TFLOPS）⇒ ⛔ **推翻了我们自己的悲观前提** —— 不是「点不亮」，是**我们的栈没去拿**（E01 实测热点全是 `cutlass_80` 的 bf16）。Triton 低精度路径 / FP4 inline PTX 待做 | **A** | 🟡 **第一枪完成** | 🔴 | 🔴 |
 | **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
@@ -197,6 +197,14 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 
 ## 7 · 踩的坑
 
+> ⛔⛔ **2026-08-19 · 引用本节任何 `param_sync` / 权重同步数字之前必读**：
+> 本节 2026-08-18 之前记录的所有权重同步耗时（`55.8 s` / `103.3 s` / `9.0 s` / 占步 `18.8%` …），
+> 都是在 **「每次同步实际推 8,414 MiB 冻结基座」** 这个状态下量的 —— 而当时以为只推 132 MB LoRA。
+> **计时本身是真的，但它们量的不是"同步 LoRA 要多久"。**
+> ✅ 修法①（[E22 §6.4](E22-lora-never-synced.md)）之后：载荷 **252 MiB**、`param_sync` **0.974 s / 占一步 0.8%**。
+> ✅ 而调大 `sync_every` 省下的钱 **96% 在 `gen`**，不在权重同步（[E08 §5.5](E08-async-rl.md)）。
+
+
 一条一行，写清**症状 → 根因 → 修法**。坑比结论更容易重复发生。
 
 ## 8 · 下一步 / 衍生问题
@@ -257,7 +265,7 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
     跨 socket(0,2)/(1,3)                                256MB **22.2** GB/s   ← 掉 22%
     四卡 0-3（= DDP 实际走的）                           256MB **25.6** GB/s
     ⇒ NUMA 绑定无效（22.23→22.34，噪声内）⇒ 跨 socket 是 UPI 跳的物理代价，没有旋钮
-    ⇒ 换算负载：DDP 梯度 260MB ≈ 10.2 ms/步；跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+    ⛔ 原来这里换算过「DDP 梯度 260MB ⇒ 跨 socket 净代价一步的 0.004%」——**那 260 MB 是算出来的、从没量过**，且 E21 之前那段流量根本不存在。**要实测一次 NCCL 流量之后才能引用**（handoff §5.3 第 12 项）
     ⇒ 传输通道实测 SHM/direct/direct（P2P 全 0）；torch 2.9/NCCL 2.27.5 与 2.11/2.28.9 一致
     ⇒ 对照：H100 NVLink ≈ 900 GB/s，约是它的 1/35
     原始数据 logs/e00_allreduce_{default,default_bind,trainstack}.json
@@ -266,7 +274,7 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 rollout 长尾（同批最慢/平均）                          1.37–2.75×
 actor 峰值 reserved（remove_padding+fused_kernels 后）  13.92 GB / 上限 ~18.8 GB
 prefix cache 命中率（单副本, gpu_util 0.40）            96.7–97.5%
-DDP vs FSDP（4B LoRA）: ⬜ 三档稳态待测（A6）。已知：DDP 每步只同步 260 MB
+DDP vs FSDP（4B LoRA）: ⬜ 三档稳态待测（A6）。⛔「每步只同步 260 MB」是算出来的，**待实测**
 RL 每步实测: colocate 1卡 67.2 s · colocate 3卡 29.2 · one_step_off 3+1 22.9
 flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.2`（补 libcudart.so.13）
     ⚠️ 之前那个社区 cu128 轮子**前向对、反向全错**（nan 或恒为 0）⇒ RL 空转，2026-08-17 换掉
@@ -292,7 +300,7 @@ flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.
 
 ★ 权重同步 —— ⚠️ **按模式分别记，不能跨模式引用**（E12 §6-①）
     ⚠️⚠️ 🆕 2026-08-17：**还要记「bucket 拧在哪」** —— 同为 fully_async 稳态，
-    bucket 2048 是 **55.8 s**，bucket 512 实测 **8.43 s**（差 6.6×，见 §7.4 与 E12 §4.6）。
+    bucket 2048 是 **55.8 s**，bucket 512 是 **8.43 s** —— ⚠️ **两个数都是在「每次推 8.4 GB 冻结基座」时量的**；修法① 之后载荷降到 252 MB、`param_sync` 只剩 **0.974 s**，这条对照**已无实际意义**。
     ⇒ 下面这行 55.8 s **绑死在 bucket=2048**，引用它必须带上这个前提。
     one_step_off  update_weights  11.1–13.6 s（与 attention/打包/卡数全无关）
     fully_async   param_sync      首次 103.3 s（推基座+LoRA）/ **稳态 55.8 s**（只推 LoRA 132 MB）

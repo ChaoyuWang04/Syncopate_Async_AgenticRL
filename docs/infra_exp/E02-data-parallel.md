@@ -24,7 +24,8 @@
 **★ 预测（写在 `distributed-training-design-v0.1.md` §4.2，跑之前）**：
 
 > LoRA 让这个对照特别有意思：可训练参数只占 1.64%，
-> **DDP 的 all-reduce 只需同步 66M 参数（约 132 MB），而 FSDP 要 all-gather 全部 4B 权重。**
+> **DDP 的 all-reduce 只需同步 66M 可训参数，而 FSDP 要 all-gather 全部 4B 权重。**
+> ⛔ **原文这里写的「约 132 MB」是算出来的（66M×2B），从没量过**；而 [E21](E21-ddp-not-syncing.md) 证明**修复之前这段流量根本不存在**（梯度没跨 rank 归约）。⇒ **量级方向仍成立，具体数字要实测一次 NCCL 流量后才能引用**（handoff §5.3 第 12 项）。
 > 在没有 NVLink 的机器上，这个差距会被放大到极致。
 > ⇒ **预期结论：本项目这个规模，DDP 应该显著赢 FSDP。** 但要实测。
 
@@ -73,7 +74,7 @@ FULL_SHARD×3  首步 1182.1 s
 
 1. **DDP 必选，不是优化。** 分片在这台机器上**不是慢一点，是不能用**：
    多给两张卡，首步反而慢 **5.97×**。
-2. **根因是拓扑**：LoRA 下 DDP 只需 all-reduce 132 MB 梯度，
+2. **根因是拓扑**：LoRA 下 DDP 只需 all-reduce 可训参数的梯度（⛔ 具体字节数**待实测**，见 §0 的更正），
    而 FSDP 每层都要 all-gather 全部 4B 权重——在 6.4 GB/s 上这是灾难。
    ⇒ **预测完全命中**（`distributed-training-design` §4.2 写在跑之前）。
 3. ⇒ **并行不该发生在模型内部，该发生在外部**：rollout 副本、时间上的异步、实验级并行

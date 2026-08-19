@@ -142,9 +142,9 @@ SYNCOPATE_LORA_ADAPTER_SYNC=1 SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.377
    `checkpoints/grpo/<exp>/global_step_*`（`dispatched.jsonl` 和 `rollout_dumps` 要留）。
 5. **fully_async 的 timing 行覆盖 4 个 global step**，绝对秒数要 ÷4。
    ⇒ 🆕 别再靠人记：用 `scripts/parse_fully_async_timing.py`，它按 `global_step` 差分**实测**覆盖步数。
-6. 🆕 **引用「权重同步占步 18.8% / 55.8 s」之前先看 bucket**。同为 fully_async 稳态，
-   bucket 2048 是 55.8 s、bucket 512 是 **8.43 s**（差 6.6×，README §7.4）。
-   ⇒ 「同一个指标换个模式就不是一件事」的**下一层**：同一个模式换个默认参数也不是。
+6. ⛔ **「权重同步占步 18.8% / 55.8 s」这组数已作废**（它们是在「每次推 8.4 GB 冻结基座」时量的，
+   而当时以为只推 132 MB）。✅ 现值：修法① 之后 `param_sync` **0.974 s / 占一步 0.8%**。
+   ⇒ 教训仍然有效且更狠：**同一个指标换个默认参数就不是一件事 —— 甚至换个"前提对不对"也不是。**
 7. 🆕 **`nsys` 装了但不在 PATH**：`/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys`。
    ⚠️ 它**只能包住启动**，不能对已经在跑的 Ray 作业 attach ⇒ A5 必须提前规划进某一跑。
    （`py-spy` 在 `.venv/bin/`，那个**可以** attach，用于 Python 栈采样。）
