@@ -1,0 +1,137 @@
+{
+  "experiment": "E18 · FSDP2 (world=3) 分片对齐探针",
+  "script": "scripts/probe_fsdp2_alignment.py",
+  "model_layer": "Qwen3-4B Qwen3DecoderLayer(bf16)",
+  "world_size": 3,
+  "torch": "2.9.0+cu128",
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "predicted_per_rank_bytes": 67319300,
+  "captured": [
+    {
+      "in_elems": 33659650,
+      "dtype": "torch.bfloat16",
+      "in_bytes": 67319300,
+      "in_bytes_mod16": 4,
+      "in_ptr_mod16": 0,
+      "out_ptr_mod16": 0
+    }
+  ],
+  "per_param_shards": [
+    {
+      "param": "self_attn.q_proj.weight",
+      "shape": [
+        4096,
+        2560
+      ],
+      "shard_elems": 3496960,
+      "shard_bytes": 6993920,
+      "mod16": 0
+    },
+    {
+      "param": "self_attn.k_proj.weight",
+      "shape": [
+        1024,
+        2560
+      ],
+      "shard_elems": 875520,
+      "shard_bytes": 1751040,
+      "mod16": 0
+    },
+    {
+      "param": "self_attn.v_proj.weight",
+      "shape": [
+        1024,
+        2560
+      ],
+      "shard_elems": 875520,
+      "shard_bytes": 1751040,
+      "mod16": 0
+    },
+    {
+      "param": "self_attn.o_proj.weight",
+      "shape": [
+        2560,
+        4096
+      ],
+      "shard_elems": 3497984,
+      "shard_bytes": 6995968,
+      "mod16": 0
+    },
+    {
+      "param": "self_attn.q_norm.weight",
+      "shape": [
+        128
+      ],
+      "shard_elems": 43,
+      "shard_bytes": 86,
+      "mod16": 6
+    },
+    {
+      "param": "self_attn.k_norm.weight",
+      "shape": [
+        128
+      ],
+      "shard_elems": 43,
+      "shard_bytes": 86,
+      "mod16": 6
+    },
+    {
+      "param": "mlp.gate_proj.weight",
+      "shape": [
+        9728,
+        2560
+      ],
+      "shard_elems": 8302080,
+      "shard_bytes": 16604160,
+      "mod16": 0
+    },
+    {
+      "param": "mlp.up_proj.weight",
+      "shape": [
+        9728,
+        2560
+      ],
+      "shard_elems": 8302080,
+      "shard_bytes": 16604160,
+      "mod16": 0
+    },
+    {
+      "param": "mlp.down_proj.weight",
+      "shape": [
+        2560,
+        9728
+      ],
+      "shard_elems": 8307712,
+      "shard_bytes": 16615424,
+      "mod16": 0
+    },
+    {
+      "param": "input_layernorm.weight",
+      "shape": [
+        2560
+      ],
+      "shard_elems": 854,
+      "shard_bytes": 1708,
+      "mod16": 12
+    },
+    {
+      "param": "post_attention_layernorm.weight",
+      "shape": [
+        2560
+      ],
+      "shard_elems": 854,
+      "shard_bytes": 1708,
+      "mod16": 12
+    }
+  ],
+  "bench": {
+    "raw_elems": 33659650,
+    "raw_bytes": 67319300,
+    "raw_mod16": 4,
+    "raw_GBps": 2.15,
+    "aligned_elems": 33659656,
+    "aligned_pad_bytes": 12,
+    "aligned_GBps": 27.03,
+    "ratio": 12.56
+  }
+}

@@ -2,7 +2,7 @@
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
 > 归属：这是一条**独立的线**（不属于 Track A/B 的兑现物，但由 E18 的调查产出）
-> 完整实验记录：[`../infra_exp/E18-rank3-allgather-collapse.md`](../infra_exp/E18-rank3-allgather-collapse.md)
+> 完整实验记录：[`../infra_exp/E18-rank3-allgather-collapse.md`](../../infra_exp/E18-rank3-allgather-collapse.md)
 
 > 🆕🆕 **2026-08-19 · 提交前核查完成，六条（定位要按它们重摆）**：
 >
