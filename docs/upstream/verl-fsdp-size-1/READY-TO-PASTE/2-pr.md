@@ -29,7 +29,7 @@ after this PR:   [fsdp_size=1] gradient norms across 2 ranks:
 
 Additionally validated outside CI:
 
-- Deterministic 3-GPU matrix (pure PyTorch): the broken config yields per-rank gradients `[g, 2g, 3g]` (each rank's own data only); with this fix all ranks produce bit-identical values matching a plain-DDP control bit-for-bit. The same `(3,1)` mesh under FSDP2 `fully_shard` is already correct, i.e. this is specific to FSDP1's clamp path.
+- Seeded 3-GPU script (pure PyTorch, in the issue): the broken config yields per-rank gradients `['0.18393682', '0.73574728', '1.65543127']` (each rank's own data only, scaled by its input); with this fix all ranks report `2.57511520`, matching both a plain-DDP control and FSDP2 `fully_shard` on the same `(3,1)` mesh bit-for-bit — i.e. this is specific to FSDP1's clamp path, not to the mesh.
 - Real RL training (Qwen3-4B + LoRA r32, 3 trainer ranks, fully_async) with only this diff applied: the three saved rank checkpoints are bit-identical for all 504/504 trainable tensors, optimizer state included. Without the fix, cross-rank relative difference converges to ~sqrt(2) (statistically unrelated).
 
 ### API and Usage Example
@@ -41,7 +41,7 @@ No API, config or checkpoint-format change. `fsdp_size=1` keeps its meaning ("do
 actor_rollout_ref.actor.fsdp_config.fsdp_size=1 trainer.n_gpus_per_node=3
 ```
 
-Checkpoint format is unchanged: under `NO_SHARD`, `SHARDED_STATE_DICT` short-circuits to full tensors both before and after this PR (the current config is clamped to `NO_SHARD` internally anyway), so resume compatibility is unaffected — verified by probing `state_dict()` value types in both configurations.
+Checkpoint format is unchanged: probing `state_dict()` under `SHARDED_STATE_DICT` before and after this PR returns the same thing (`n_entries=1`, `value_types=['Tensor']`, identical shapes), because the current config is already clamped to `NO_SHARD` internally and `NO_SHARD` short-circuits sharded state dicts to full tensors. Resume compatibility is unaffected.
 
 ### Design & Code Changes
 

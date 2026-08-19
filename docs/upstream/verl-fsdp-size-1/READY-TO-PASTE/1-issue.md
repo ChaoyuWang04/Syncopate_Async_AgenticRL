@@ -48,9 +48,10 @@ PyTorch already confirmed the underlying behavior as a bug and declined to fix i
 ## Minimal reproduction (pure PyTorch, no verl, deterministic)
 
 ```python
-import os, torch, torch.nn as nn, torch.distributed as dist, torch.multiprocessing as mp
+import os, time, torch, torch.nn as nn, torch.distributed as dist, torch.multiprocessing as mp
 from torch.distributed.device_mesh import init_device_mesh
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, ShardingStrategy
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, ShardingStrategy, fully_shard
+from torch.distributed.tensor import DTensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 def worker(rank, world):
@@ -63,19 +64,26 @@ def worker(rank, world):
         x = torch.randn(4, 256, device=rank) * (rank + 1)      # different data per rank
         model(x).square().mean().backward()
         g = next(p.grad for p in model.parameters() if p.grad is not None)
+        # FSDP2 exposes DTensor grads; read the LOCAL shard -- a global .norm()
+        # would reduce across ranks and mask the very difference we test for.
+        g = g.to_local() if isinstance(g, DTensor) else g
         buf = [None] * world; dist.all_gather_object(buf, g.detach().norm().item())
         if rank == 0:
             same = max(buf) - min(buf) < 1e-9 * max(buf)
-            print(f"{tag:<48} {[f'{b:.8f}' for b in buf]}  {'OK' if same else 'NOT SYNCED'}")
+            print(f"{tag:<46} {[f'{b:.8f}' for b in buf]}  {'OK' if same else 'NOT SYNCED'}")
 
     mesh = init_device_mesh("cuda", (world, 1), mesh_dim_names=["ddp", "fsdp"])
     run("(N,1) + HYBRID_SHARD (= fsdp_size=1 today)",
         lambda m: FSDP(m, device_mesh=mesh, sharding_strategy=ShardingStrategy.HYBRID_SHARD,
                        use_orig_params=True, sync_module_states=True, device_id=rank))
     mesh2 = init_device_mesh("cuda", (world, 1), mesh_dim_names=["ddp2", "fsdp2"])
-    run("(N,1) + NO_SHARD (= proposed fix)",
+    run("(N,1) + NO_SHARD (= proposed fix, same mesh)",
         lambda m: FSDP(m, device_mesh=mesh2, sharding_strategy=ShardingStrategy.NO_SHARD,
                        use_orig_params=True, sync_module_states=True, device_id=rank))
+    mesh3 = init_device_mesh("cuda", (world, 1), mesh_dim_names=["ddp3", "fsdp3"])
+    def as_fsdp2(m):
+        fully_shard(m, mesh=mesh3); return m
+    run("(N,1) + FSDP2 fully_shard (same mesh)", as_fsdp2)
     run("plain DDP (control)", lambda m: DDP(m, device_ids=[rank]))
     dist.destroy_process_group()
 
@@ -84,19 +92,20 @@ if __name__ == "__main__":
              nprocs=min(torch.cuda.device_count(), 3), join=True)
 ```
 
-Measured (3x RTX 5090, torch 2.9.0+cu128, fully deterministic — reproducible bit-for-bit):
+Output on 3x RTX 5090, torch 2.9.0+cu128 (seeded, so these values reproduce bit-for-bit):
 
-| variant | grad norms across 3 ranks | verdict |
-|---|---|---|
-| `(3,1)` mesh + `HYBRID_SHARD` (= `fsdp_size=1` today) | `[0.04565846, 0.09131692, 0.13697541]` | not synced |
-| `(3,1)` mesh + `NO_SHARD` (= proposed fix, **same mesh**) | `0.27395082` x3 | OK |
-| `(3,1)` mesh + FSDP2 `fully_shard` | `0.27395082` x3 | OK (fsdp2 backend unaffected) |
-| plain DDP (control) | `0.27395082` x3 | OK |
+```
+(N,1) + HYBRID_SHARD (= fsdp_size=1 today)     ['0.18393682', '0.73574728', '1.65543127']  NOT SYNCED
+(N,1) + NO_SHARD (= proposed fix, same mesh)   ['2.57511520', '2.57511520', '2.57511520']  OK
+(N,1) + FSDP2 fully_shard (same mesh)          ['2.57511520', '2.57511520', '2.57511520']  OK
+plain DDP (control)                            ['2.57511520', '2.57511520', '2.57511520']  OK
+```
 
-Two details worth noting:
+Three details worth noting:
 
-- The broken variant's three numbers are exactly `[g, 2g, 3g]` — each rank holds the gradient of *its own data only* (inputs are scaled by `rank+1`), pre-divided by 3 by FSDP in anticipation of an all-reduce that never happens. Their mean equals the correct value `0.27395082` to 4.5e-8.
-- Internal state of the broken variant: `state.world_size == 1`, reduction group size 1, and an **orphaned replicate group of size 3** that is created but never used.
+- The broken variant's numbers are exactly `[g, 4g, 9g]`: each rank holds the gradient of *its own data only* (inputs are scaled by `rank+1`, and the loss is quadratic in the input), pre-divided by `world_size` by FSDP in anticipation of an all-reduce that never happens. Undoing that, `0.18393682 x 14 = 2.5751155` — the value every synchronized variant reports.
+- **FSDP2 on the same mesh is correct**, so this is specific to FSDP1's clamp path, not to the mesh shape or the way it is built.
+- Internal state of the broken variant, read out of the FSDP instance: `state.world_size == 1`, reduction group size 1, and an **orphaned replicate group of size 3** that is created but never used.
 
 ## Evidence from real training (verl 0.8.0, Qwen3-4B + LoRA r32, 3 trainer ranks)
 
@@ -124,7 +133,9 @@ elif device_mesh.ndim == 2:
         sharding_strategy = hsdp_strategy
 ```
 
-Verified: gradients become bit-identical across ranks (table above), and a real verl training run with only this diff applied produces three rank checkpoints that are bit-identical across all 504/504 trainable tensors, optimizer state included. Checkpoint format is unchanged — under `NO_SHARD`, `SHARDED_STATE_DICT` already short-circuits to full tensors both before and after the fix (the current broken config is clamped to `NO_SHARD` internally anyway), so resume compatibility is unaffected. PR follows.
+Verified: gradients become bit-identical across ranks (output above), and a real verl training run with only this diff applied produces three rank checkpoints that are bit-identical across all 504/504 trainable tensors, optimizer state included.
+
+Checkpoint format is unchanged. Probing `state_dict()` under `SHARDED_STATE_DICT` on both configurations returns the same thing — `n_entries=1`, `value_types=['Tensor']`, identical shapes — because the current config is already clamped to `NO_SHARD` internally, and `NO_SHARD` short-circuits sharded state dicts to full tensors. Resume compatibility is therefore unaffected. PR follows.
 
 Also worth considering as a follow-up: a one-time post-first-step assertion that gradients actually match across data-parallel ranks. This failure class is invisible to every training metric; a single `all_gather` of one gradient norm at step 1 would have caught this — and any future variant — immediately.
 
