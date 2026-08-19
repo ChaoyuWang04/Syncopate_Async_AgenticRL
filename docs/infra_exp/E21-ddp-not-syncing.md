@@ -375,6 +375,12 @@ D  纯 DDP（对照组）                           [0.27395082, 0.27395082, 0.2
    与全部同步变体的实测 `0.27395082` 差 4.5e-8。
 5. **fix-mode 复验**：`REPRO_APPLY_FIX=1` 装上我们的补丁后 A/B 变绿，A 的内部状态
    `world_size` 1→3。
+6. 🆕 **G 的确切 diff 在 verl 源码树里真跑通过（2026-08-19）**：把 3 行改动直接打进
+   `verl/workers/engine/fsdp/utils.py`、**关掉我们的 monkeypatch**（`SYNCOPATE_FSDP_DDP_FIX=0`），
+   fully_async 3+1 真实训练 4 步 ⇒ `assert_ranks_identical` 三 rank **504/504 张量逐位相同** +
+   优化器一致（指纹 `_audit/infra/e21_verl_gdiff_rank_fingerprint.json`）。跑完已还原 stock verl。
+   ⚠️ 过程中的一条判据教训：**Ray 日志去重忽略数字差异** —— `[repeated 6x]` 折叠的探针行
+   **不能**当"逐位相同"读，要靠逃过去重的显式行 + ckpt 比对收口。
 
 **A 的内部状态取证（bug 的结构性证据，写进了 JSON）**：
 

@@ -191,10 +191,14 @@ e. 唯一改变的语义 = 梯度归约的进程组：size-1 分片组 → 复�
 
 ## 6 · ⚠️ 还没做的
 
-1. ~~没有验证修法在 verl 里跑通~~ ✅ **半闭合（2026-08-19）**：
-   ①的**语义**已在纯 PyTorch 七变体矩阵验证（G 行：同网格+NO_SHARD ⇒ 梯度逐位相同）；
-   我们线上跑的是等价的 monkeypatch 形态（NO_SHARD+默认组，`r0a_clean` 24 步真实训练复验通过）。
-   ⚠️ **①这个确切 diff 没有在 verl 源码树里真跑过** —— PR 前要做一次（改 utils.py 跑短训练）。
+1. ~~没有验证修法在 verl 里跑通~~ ✅ **全闭合（2026-08-19）**：
+   ①的**确切 diff** 已打进 verl 源码树（`utils.py::get_sharding_strategy`）真跑 4 步
+   （fully_async 3+1、Qwen3-4B+LoRA r32、**我们的 monkeypatch 关闭** ⇒ verl 侧修法是唯一机制）：
+   - 判据行 `[verl-G-fix] degenerate (N,1) mesh -> NO_SHARD` 在 worker 里打出
+   - 运行时：step=3 逃过 Ray 去重的显式对照 —— rank0 与 rank2 权重范数 0.016867、
+     梯度范数 2.804719e-03 **完全相同**（⚠️ Ray 日志去重忽略数字差异，被折叠的行不算证据）
+   - 落盘：`assert_ranks_identical` 三 rank **504/504 张量逐位相同** + 优化器一致，
+     指纹 `_audit/infra/e21_verl_gdiff_rank_fingerprint.json` · 日志 `logs/e21_verl_gdiff_20260819.log`
 2. ~~`fsdp2` 路径未测~~ ✅ **已测**：同一个 `(3,1)` mesh 交给 `fully_shard` 梯度同步正确（矩阵 F 行）
    ⇒ `strategy: fsdp2` 不受此 bug 影响，issue 里可写「workaround: 切 fsdp2 或等本修法」。
 3. **只测了 `world_size=3`**。
@@ -207,7 +211,7 @@ e. 唯一改变的语义 = 梯度归约的进程组：size-1 分片组 → 复�
 - [x] 复核 verl 主干是否已改 ——**未改，逐字相同**（2026-08-18；仓库已迁 verl-project/verl）
 - [x] 全库搜索确认空白（issues+PRs：HYBRID_SHARD 0 命中；#2478 是同 warning 的良性成因，反成论据）
 - [x] 修法实测（矩阵 G 行）+ ckpt 探针（格式不变）——`_audit/infra/e21_grad_sync_matrix.json`
-- [ ] ①的确切 diff 在 verl 源码树里跑一次短训练（§6-1 的最后一步）
+- [x] ①的确切 diff 在 verl 源码树里跑短训练 ——**504/504 张量三 rank 逐位相同**（§6-1，2026-08-19）
 - [ ] 附 §3.1 的运行时探针输出（**LoRA `B` 零初始化那条判据是核心**）
 - [ ] 附 §3.3 的纯 PyTorch 复现（**含 DDP 对照组**）
 - [ ] 附 §4 的后果说明（"在任何指标上都看不出来"这一句要突出）

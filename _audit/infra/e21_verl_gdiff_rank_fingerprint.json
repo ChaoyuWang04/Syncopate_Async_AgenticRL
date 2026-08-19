@@ -1,0 +1,72 @@
+{
+ "actor_dir": "checkpoints/grpo/e21_verl_gdiff/global_step_1/actor",
+ "n_ranks": 3,
+ "run_mtime": 1787108261.7423995,
+ "ranks": {
+  "0": {
+   "file": "model_world_size_3_rank_0.pt",
+   "n_lora_tensors": 504,
+   "global_norm": 51.75068664550781,
+   "per_layer_norm": {
+    "base_model.model.model.layers.0.mlp.down_proj.lora_A.default.weight": 3.268279790878296,
+    "base_model.model.model.layers.0.mlp.down_proj.lora_B.default.weight": 0.0198956411331892,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_A.default.weight": 3.263723134994507,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_B.default.weight": 0.03896908462047577,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_A.default.weight": 3.2691662311553955,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_B.default.weight": 0.03887643292546272
+   }
+  },
+  "1": {
+   "file": "model_world_size_3_rank_1.pt",
+   "n_lora_tensors": 504,
+   "global_norm": 51.75068664550781,
+   "per_layer_norm": {
+    "base_model.model.model.layers.0.mlp.down_proj.lora_A.default.weight": 3.268279790878296,
+    "base_model.model.model.layers.0.mlp.down_proj.lora_B.default.weight": 0.0198956411331892,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_A.default.weight": 3.263723134994507,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_B.default.weight": 0.03896908462047577,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_A.default.weight": 3.2691662311553955,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_B.default.weight": 0.03887643292546272
+   }
+  },
+  "2": {
+   "file": "model_world_size_3_rank_2.pt",
+   "n_lora_tensors": 504,
+   "global_norm": 51.75068664550781,
+   "per_layer_norm": {
+    "base_model.model.model.layers.0.mlp.down_proj.lora_A.default.weight": 3.268279790878296,
+    "base_model.model.model.layers.0.mlp.down_proj.lora_B.default.weight": 0.0198956411331892,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_A.default.weight": 3.263723134994507,
+    "base_model.model.model.layers.0.mlp.gate_proj.lora_B.default.weight": 0.03896908462047577,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_A.default.weight": 3.2691662311553955,
+    "base_model.model.model.layers.0.mlp.up_proj.lora_B.default.weight": 0.03887643292546272
+   }
+  }
+ },
+ "pairwise": {
+  "0-1": {
+   "n_tensors_differing": 0,
+   "n_tensors_total": 504,
+   "relative_diff": 0.0,
+   "identical": true
+  },
+  "0-2": {
+   "n_tensors_differing": 0,
+   "n_tensors_total": 504,
+   "relative_diff": 0.0,
+   "identical": true
+  },
+  "1-2": {
+   "n_tensors_differing": 0,
+   "n_tensors_total": 504,
+   "relative_diff": 0.0,
+   "identical": true
+  }
+ },
+ "optimizer_0_vs_1": {
+  "n_sampled": 60,
+  "n_differing": 0,
+  "relative_diff": 0.0,
+  "identical": true
+ }
+}
