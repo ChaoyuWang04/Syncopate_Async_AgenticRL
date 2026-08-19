@@ -33,27 +33,36 @@
 | infra→主线 | 🟠 **`fabricated_safety_line_cap` 建议升常驻观察**：两处独立信号汇合（E17 KL 臂 +2 · E27 SFT vs 基座 6→24）。compare 工具归你们 | 主线 | 加进常驻读数后删行 |
 ---
 
-## 🔴 待 infra 二次确认 → 主线开 candidate 首跑（Chaoyu 令，确认完即删本节）
+## ✅ infra 二次确认完毕（2026-08-19 晚）→ 可开 candidate 首跑
 
-拟用命令（默认值已全查，`22 §G-8`）：
+**最终命令（在拟用命令上改三处，其余照旧）**：
 
 ```
+SYNCOPATE_PREFIX_GROUPER=1 \
 launch_rl --model models/Qwen3-4B-sft-v13r2-e1 --lora-rank 32 \
   --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
+  --micro-batch-size 8 --use-kl-loss False \
   --steps 400 --purpose candidate --experiment cand_v13r2_e1 \
   --save-path checkpoints/grpo/cand_v13r2_e1
-# 走默认：lr 3e-5 · mini 6（×8=48）· seed 1234(data.seed) · sequence IS · bucket 512
-# 伴跑：rl_guard --kill · rl_ckpt_rolling_prune · SYNC_PAYLOAD/DDP_PROBE 探针
-# 基线：_audit/v13_sft_v13r2_e1_merged.json（2048 尺子，0.711）
+# ① PG 开（Chaoyu 拍板）⇒ 必须配 --micro-batch-size 8（拟用命令漏了；mb=1 会"无组可分"）
+# ② KL 关：--use-kl-loss False（E17 B 臂原样）
+# ③ 其余走默认（lr 3e-5 · mini 6 · seed 1234 · sequence IS · bucket 512）
+# 伴跑不变：rl_guard --kill · rl_ckpt_rolling_prune · SYNC_PAYLOAD/DDP_PROBE
+# 预计步速 ~13 s/gstep（14.94 − ref 2.0），400 步 ≈ 1.5–2 h 步进 + 收尾
 ```
 
-| # | 请确认 | 背景 |
+五项确认（原节已删，全文见 git log）：
+
+| # | 结论 | 证据 |
 |---|---|---|
-| 1 | **PG 开不开 / 先跑 B5 吗**：你们队首 #1 就是 B5（PG 默认开的门槛）。方案 A = 先 B5（4h），过了 candidate 用 `SYNCOPATE_PREFIX_GROUPER=1 + mb=8`（2.31×，400 步省 ~2.5h）；方案 B = candidate 直接 PG off + mb=1 不等 B5 | E26 定案：mb=1(PG off)/mb=8(PG on)，mb16 慢 5.7% |
-| 2 | **KL 开还是关**：Chaoyu 倾向关（E17 定案无差异+省 15.4%+免 ref 前向）；但你们登记的是「多种子过了才改默认」（fabricated_safety_cap +2 未复核）。⚠️ **若关：常驻判据③（kl 回落地板）随 ref 一起消失** —— A1「权重同步生效」只剩 sync-payload 探针 + list_loras 两条腿，够不够？ | E17 §9 · 02 §1 |
-| 3 | **主线今天改的四个 launch_rl 默认值**：lr 1e-6→3e-5 · mini 2→6 · train-batch 2→6 · max-turns 8→14。你们有没有脚本**依赖旧默认**（没显式传的）？max-turns 那条 verl 内部（async server/agent loop worker）确认没有消费路径？ | 22 §G-8 |
-| 4 | **分池去重窗口修复**：fully_async 下 `train_batch_size=0` 曾让窗口退化成 1；现在 launch_rl 传 `SYNCOPATE_POOL_BATCH=mini_batch`（=6）。rollouter 侧的取样节奏对批宽有没有别的假设？ | 22 §G-8-③ |
-| 5 | 评测单轮上限 256→2048 与审计 `gen` 头（上一行已通报）——E27 基线口径无异议即可 | — |
+| 1 | **PG 开 + mb=8**。B5 独立消融按 Chaoyu 裁定跳过，**由 candidate 晋级评测兜底**（若 candidate 不达标，PG-off 重跑是第一嫌疑，已登记 infra 02） | E26 §6.3–6.6（fp32 逐位等价 + 归约逐位同 + 四常驻判据） |
+| 2 | **KL 关（`--use-kl-loss False`）**。⚠️ 你们的担心不成立：**判据③ `rollout_corr/kl` 不吃 ref** —— 它来自 rollout-IS 诊断（rollout logprob vs trainer 重算）。E17 B 臂（KL off）实证该指标出现 15 次、值在地板（3.7e-4 / 2.3e-4）⇒ **A1 三条腿全保** | logs/e17b_kl_off.log |
+| 3 | **四个新默认值 infra 无暗依赖**：e26ab/e20h 显式钉了 mini/train-batch；吞吐脚本不吃 lr；max-turns 对自定义 loop 是 no-op（真上限 = per-case max_steps 经 extra_info 进 RolloutConfig，launch_rl:791 注释已核，verl 侧无消费路径） | grep 三个 run_*.sh |
+| 4 | **分池接线已核**（launch_rl:1068 → main_ppo_pool:215）；rollouter 侧无已知批宽假设。判据 = 开跑 ~30 min 后 infra 跑 `check_pipeline_invariants --only rollout` + P4 case_id 复查（infra 认领） | — |
+| 5 | **评测 256→2048 + gen 头：无异议**。E27 裸基座臂本来就 @2048 跑的，口径一致；gen 头正好堵了 label 撞名缺口 | — |
+
+⚠️ 两条口径提醒：E26 的 14.94 s/gstep 是 **KL-on** 量的，KL off 后步速会更快，别把差异读成漂移；
+PG/KL 的**库默认值今晚不动**（显式旗子跑）——candidate 过晋级评测后再切默认（"兜底必须是对的那个"要有这次的证据垫底）。
 
 ## 双方现状一句话（过期就改，不追加）
 

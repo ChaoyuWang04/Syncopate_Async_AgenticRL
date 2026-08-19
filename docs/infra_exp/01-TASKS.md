@@ -12,12 +12,14 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🟡 **E26 B5 任务尺子**（⚠️ 两臂同代码，≥60 步 + 冻结 EVAL 配对） | infra | 4 卡 ~4 h | PG 默认开的门槛；纪律「只报吞吐不报任务精度不算完成」 |
-| **2** | 🟠 **KL 多种子**，盯 `fabricated_safety_line_cap` | infra | 4 卡 ~4 h | E17 定案砍 KL 省 15.4%，唯一反向信号 +2 要复核 ⇒ **过了才改默认值** |
-| **3** | 🟠 **token vs sequence 多种子**，判据用 defer 不用总分 | infra | 4 卡 ~4 h | 每臂只有 1 种子；83% 那个数已被证明是截断造的 |
-| **4** | 🆕 **E20 原因②「步数太少」正式验证**：固定 epoch 而非步数，≥400 步起，挂 `rl_guard.sh`，停由「零梯度率不再创新高」定 | infra+主线 | 4 卡 数小时 | ★ 主线观点（Chaoyu 08-19）：此前所有跑 ≤1 epoch，这是「学不动」的头号候选解释 |
-| **5** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
-| **6** | 🆕 **同步不打断 rollout**（双缓冲 / 加深队列） | infra | 设计+实现 | sync_every 省的钱 96% 在 gen（E08 §5.5），「少打断一次」值 3.5 s |
+| **1** | 🔴 **陪跑 candidate 首跑**（主线开跑；PG=开+mb8、KL=关，五项确认见 /MAINLINE-INFRA）：开跑 ~30 min 跑 `check_pipeline_invariants --only rollout` + **P4 case_id 复查**；盯四常驻判据 + truncation=tokens 率 | infra | 陪跑 | 400 步 candidate 同时兑现三件事：B5 兜底（PG）· KL-off 首个长跑证据 · 「步数太少」的第一次 ≥3 epoch 实践 |
+| **2** | 🟠 **token vs sequence 多种子**，判据用 defer 不用总分 | infra | 4 卡 ~4 h | 每臂只有 1 种子；83% 那个数已被证明是截断造的 |
+| **3** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
+| **4** | 🆕 **同步不打断 rollout**（双缓冲 / 加深队列） | infra | 设计+实现 | sync_every 省的钱 96% 在 gen（E08 §5.5），「少打断一次」值 3.5 s |
+
+> 🔄 处置（Chaoyu 2026-08-19 晚）：**B5 独立消融跳过**（candidate 晋级评测兜底；不达标则 PG-off
+> 重跑是第一嫌疑）；**KL 多种子降级**（默认按 Chaoyu 改关跑 candidate；`fabricated_safety_line_cap`
+> 已是常驻观察，candidate 评测异常再回头）；「步数太少」验证由 candidate 本身覆盖第一轮。
 > 1–3 都是 ~4 h 级，适合打包夜间队列（已向 Chaoyu 提议，待点头）。
 > ✅ E27 三臂已完（结论在 E27 §5；永久基线 = `_audit/e27_base_off.json`）。
 

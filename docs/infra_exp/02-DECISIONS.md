@@ -13,7 +13,7 @@
 | 训练侧并行 | **DDP 必选**（`--fsdp-size 1`）。三档稳态实测：DDP 7.97 s / ZeRO-2 慢 3.42× / ZeRO-3 慢 6.02×（3 卡）；TP=2 rollout 净负 20% ⇒ **这台 P2P 全关的机器上模型内并行是净亏损** | E02 · E04 · E18 |
 | attention | `flash_attention_2`，**必须官方 cu13torch2.9 轮子**（社区 cu128 反向是坏的，RL 静默空转）。换轮子先跑 `check_flash_attn_backward.py` | 00 §5-⑧ |
 | `micro_batch` / `dynamic_bsz` / GC | **mb=1 · dynamic_bsz=False · GC 开着**（喂饱 GPU 的单位是 token；mb 拉高负收益、关 GC 就 OOM）。**PG 开时例外：mb=8**（一组一批；mb16 慢 5.7%） | E25 · E26 §6.6.1 |
-| **PrefixGrouper** | ✅ 集成已通、吞吐 2.31× 已定（`SYNCOPATE_PREFIX_GROUPER=1`，**默认关**）；**默认开的门槛 = B5** | E26 |
+| **PrefixGrouper** | ✅ 集成已通、吞吐 2.31×。**candidate 跑显式开**（`SYNCOPATE_PREFIX_GROUPER=1` + mb=8，Chaoyu 08-19 晚拍板，B5 独立消融跳过、晋级评测兜底）；**库默认仍关**，candidate 过晋级评测后再切默认 | E26 · /MAINLINE-INFRA |
 | **LoRA 权重同步** | **必须走 adapter 推送**（`SYNCOPATE_LORA_ADAPTER_SYNC` 默认开）。⛔ 禁 `--lora-merge`（bf16 合并毁掉 adapter 一半作用，启动即拦） | E22 §6.1/§6.4 |
 | **FSDP 后端** | **留在 FSDP1**（Chaoyu 08-18；上游不修退化网格）⇒ `SYNCOPATE_FSDP_DDP_FIX` 必须一直默认开；且**前向必须走根模块**（绕过 = 归约竞态） | STORY §8.1 · E26 §6.3 |
 | **MoE 选型** | `Qwen3-30B-A3B-Instruct-2507`（GLM-4.7-Flash 当前栈不支持）；LoRA **绝不 all-linear**（98.7% Linear 在专家里 ⇒ 26×），用「注意力+router」30.1M | E07 §4.5 |
@@ -22,7 +22,7 @@
 | E11 稀疏 logprob | 🔻 降级不写 kernel（端到端 4.3%，切片就有 4.0%）。★「浪费的比例」和「能拿回的收益」隔着一个分母 | E11 §6 |
 | 采样口径 | 训练侧不截尾（`top_p=1.0/top_k=-1` 已钉死），**评测对齐训练**（落地挂 01 §2） | E23 §3 |
 | 配对比较基线 | 一律 `_audit/v13_sft_e1_merged.json`（旧 v13_sft_e1 会系统性低估 RL +0.025） | E24 |
-| **KL / ref** | 🟠 倾向砍（省 15.4%，任务分无差异），**默认值等多种子过了才改**（safety_cap +2 待复核）；⛔ 连带「ref 走 FP8」失效 | E17 §9 |
+| **KL / ref** | ✅ **candidate 起关 KL**（`--use-kl-loss False`，Chaoyu 08-19 晚拍板；多种子复核降级——`fabricated_safety_line_cap` 已是常驻观察）。★ 判据③ `rollout_corr/kl` **不随 ref 消失**（rollout-IS 诊断，E17 B 臂实证 15 次在地板）。库默认同上，晋级后切；⛔ 连带「ref 走 FP8」失效 | E17 §9 · /MAINLINE-INFRA |
 | **lr 与步数**（Chaoyu 08-19） | 「学不动」主因是**步数太少**（≤1 epoch）不是 lr 低 ⇒ 解法是加步数/固定 epoch；**上线候选不用 lr 1e-4**；400 步是下限、停由判据定 | 01 §1-4 |
 | 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4 · `clip_ratio=0.0000` | 00 §6 |
 | launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 | launch_rl help |
