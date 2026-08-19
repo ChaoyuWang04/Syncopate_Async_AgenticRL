@@ -1,10 +1,10 @@
 # 提交包 · verl `use_prefix_grouper` 从未接上（+ 接上后会咬人的 mask 语义）
 
-> **状态：⛔ 定位待重写（2026-08-19 考古后）—— 证据全部成立，但「从未接上」这个框架是错的。**
-> 真相：#4368 合入过且有 benchmark（1.26–1.70×）→ #6067 引擎重构静默切断 → #7202 已交修复被
-> 维护者关闭（转向 MAGI #6689，draft/未闭合/Megatron 向）→ **main 至今 silent no-op**。
-> **我们的独有增量 = 断点③掩码语义（全网无人报过）+ 零 GPU 复现。** 详见 analysis.md 顶部七条。
-> submission-EN 按旧框架写成，**重写前不要提交**。目标 **verl-project/verl**。
+> **状态：材料齐备（掩码主打定位，2026-08-19 重写完成），等 Chaoyu 过目后提交。** 目标 **verl-project/verl**。
+> 定位（考古后敲定）：**主打断点③掩码语义**（全网无人报过、打中所有 shared-prefix 路线）+
+> 小 PR（掩码修复 + 死开关警告）+ 两条评论递给 MAGI 方向（#6689/#6401）。
+> **刻意不提接线 PR** —— #7202 已为此被关（维护者转向 MAGI），接线走我们自己的本地补丁，
+> 验证数据回头以评论补进 issue。历史链条与人物表见 analysis.md 顶部七条。
 > 与包①（[`../verl-fsdp-size-1/`](../verl-fsdp-size-1/)）、包②（[`../verl-lora-adapter-sync/`](../verl-lora-adapter-sync/)）
 > 是**同一个形状的第三例**：**配置项存在、工具函数齐全、文档也写了，唯独中间那根线没接。**
 
@@ -55,11 +55,11 @@ verl 0.8.0
 
 ## 提交前最后一眼
 
-- [x] 零 GPU 复现三条全 PASS（`repro_prefix_grouper_wiring.py`）
-- [ ] 端到端验证：我们的三处补丁跑通 + logprob 逐位相同（做完回填数字）
+- [x] 零 GPU 复现三条全 PASS（infra 负责人跑过 + 2026-08-19 独立复跑确认）
+- [x] main 新鲜度：`prefix_grouper_utils.py` 与 0.8.0 **逐字相同**、调用点仍缺参 —— 掩码 bug 在 main 上原样存在
+- [x] submission-EN 按新定位重写（issue 掩码主打 · PR=掩码修复+警告 · 两条评论稿）
 - [ ] 查 verl CONTRIBUTING（DCO / pre-commit / 测试目录惯例）
+- [ ] （并行，不挡提交）本地接线补丁：#7202 的 response-only LM-head 投影 + rmpad 退出 A/B +
+      logprob 逐位判据 —— 完成后验证数据以评论补进 issue
 - [x] 考古完成：#4368（kevssim，原集成）· #6067（切断点）· #7202（supercharleszhu 修复，被关）·
       #6689（arvyanh，MAGI draft）· wuxibin89（裁决人）—— 人物表见 analysis 顶部
-- [ ] ⛔ submission-EN 按新定位重写（回归而非从未接上；掩码发现为主打；引用 #7202/#6689）
-- [ ] 我们自己的补丁计划补上 #7202 的 response-only LM-head 投影（裸接线在 5090 上必 OOM）+
-      rmpad 退出的净收益 A/B

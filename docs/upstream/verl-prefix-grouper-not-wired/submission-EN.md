@@ -1,8 +1,11 @@
-# 提交件 · verl issue + PR 正文（英文，GitHub 可直接粘贴）
+# 提交件 · Prefix Grouper 线（英文，GitHub 可直接粘贴）
 
-> 状态：**草稿完成，等 Chaoyu 过目后提交**（2026-08-19）。
-> 中文分析 → [`analysis.md`](analysis.md)。零 GPU 复现 → [`repro_prefix_grouper_wiring.py`](repro_prefix_grouper_wiring.py)。
-> 顺序：先 issue，PR 里填 `Fixes #<n>`。⚠️ 端到端数字待我们的补丁跑通后回填。
+> 状态：**按"掩码 bug 主打"定位重写完成（2026-08-19），等 Chaoyu 过目后提交。**
+> 中文分析与考古 → [`analysis.md`](analysis.md)。零 GPU 复现 → [`repro_prefix_grouper_wiring.py`](repro_prefix_grouper_wiring.py)。
+> **提交顺序**：① issue（掩码 bug 为主、no-op 现状为辅）→ ② 小 PR 填 `Fixes #<n>`
+> （掩码修复 + 死开关警告，刻意不做接线）→ ③ 两条评论把掩码发现递给 MAGI 方向（#6689 / #6401）。
+> ⚠️ 刻意**不**提"重新接线"的 PR —— #7202 已为此被关（维护者转向 MAGI），别撞同一堵墙；
+> 我们自己的接线走本地补丁，验证数据回头作为评论补充。
 
 ---
 
@@ -11,84 +14,65 @@
 **Title:**
 
 ```
-[fsdp, actor] `actor.use_prefix_grouper=True` is a silent no-op — the shared-prefix
-forward is never wired in (and the mask it would use drops tool tokens)
+[trainer, fsdp] prefix_grouper_utils packs the model input with the gradient
+mask — multi-turn tool-observation tokens are silently dropped (latent today,
+bites any re-enablement; + use_prefix_grouper has been a silent no-op since #6067)
 ```
 
 **Body:**
 
 ````markdown
-## Summary
+## TL;DR
 
-`actor.use_prefix_grouper` is accepted by the config, documented in
-`actor.yaml` ("Whether to enable PrefixGrouper shared-prefix forward"), read by
-three trainers, and even has dedicated group-aware batch balancing. **But the
-shared-prefix forward is never actually entered.** Enabling the flag does not
-speed anything up and does not error — the only remaining effect is that
-`_balance_batch` keeps samples of a GRPO group on the same rank.
+Two related facts about `actor.use_prefix_grouper`, one known and one new:
 
-This matters beyond a missing feature: a user who enables the flag and measures
-wall-clock will observe **no improvement**, and will reasonably conclude that
-PrefixGrouper is not worth it for their workload — when in fact it never ran.
+1. (known, context) The flag has been a **silent no-op** on the engine-based
+   FSDP path since the worker-to-engine refactor #6067 — documented in #7202,
+   which was closed in favor of the MAGI-attention direction (#6689). Still
+   true on current `main`: `apply_monkey_patch()`'s single call site
+   (`workers/engine/fsdp/transformer_impl.py`) does not forward the flag, and
+   `forward_micro_batch_with_prefix_grouper()` has zero call sites. The only
+   thing the flag still does is switch `_balance_batch` to group-level
+   balancing.
+2. **(new, the point of this issue)** `verl/trainer/ppo/prefix_grouper_utils.py`
+   builds the packed input from the **wrong mask**: it passes `response_mask` —
+   a *gradient* mask — where PrefixGrouper expects an *existence* mask. In
+   multi-turn / tool-calling rollouts these differ, and **every
+   tool-observation token is silently dropped from the model input**. The
+   shapes still line up, so nothing errors: the model is simply trained on a
+   conversation with the tool results removed.
 
-Reproduced on verl 0.8.0 with a zero-GPU script (attached below); all three
-checks are static/CPU-only.
+   This is latent today only because of (1). It will bite the moment *any*
+   shared-prefix path is re-enabled — a PrefixGrouper revival like #7202, or
+   the prefix-tree work in #6689/#6401, if they reuse these utils or the same
+   mask convention. Filing it now so the trap is on record before the wiring
+   comes back.
 
-## Root cause: two disconnected wires
+## The mask bug, concretely
 
-**(1) The attention patch is never applied.**
-`apply_monkey_patch()` accepts `use_prefix_grouper` and calls
-`apply_prefix_grouper_patch()` when it is true
-(`verl/models/transformers/monkey_patch.py:324`). It has exactly **one** call
-site in the whole package, and that call site does not forward the flag:
-
-```python
-# verl/workers/engine/fsdp/transformer_impl.py:292
-apply_monkey_patch(
-    model=module,
-    use_remove_padding=self.use_remove_padding,
-    ulysses_sp_size=self.ulysses_sequence_parallel_size,
-    use_fused_kernels=use_fused_kernels,
-    fused_kernels_backend=fused_kernels_backend,
-)   # <-- no use_prefix_grouper => defaults to False
-```
-
-So `ALL_ATTENTION_FUNCTIONS` is never wrapped, and the `prefix_grouper=` kwarg
-would be ignored even if something passed it.
-
-**(2) The packed forward has no callers.**
-`forward_micro_batch_with_prefix_grouper()` and `build_pg_from_micro_batch()`
-(`verl/trainer/ppo/prefix_grouper_utils.py`) are never referenced outside their
-own module. The FSDP engine's `forward_step()`
-(`verl/workers/engine/fsdp/transformer_impl.py:1253`) always goes through
-`prepare_model_inputs()` -> `self.module(**model_inputs)` ->
-`prepare_model_outputs()`, i.e. the standard rmpad path.
-
-## Second, latent bug: `suffix_mask` is given the gradient mask
-
-This one does not bite today (because of the above), but it will the moment the
-wiring is fixed, so it belongs in the same issue.
-
-`PrefixGrouper` uses `suffix_mask` to decide **which tokens exist**:
+PrefixGrouper uses `suffix_mask` to decide **which tokens exist**:
 
 ```python
 # prefix_grouper/__init__.py
-suffix_lens = suffix_mask.sum(dim=1)                 # length of each suffix
-suffix_mask.nonzero(as_tuple=False)                  # which positions get gathered
+suffix_lens = suffix_mask.sum(dim=1)      # length of each suffix
+suffix_mask.nonzero(as_tuple=False)       # which positions get gathered into the packed input
 ```
 
 verl passes `response_mask`:
 
 ```python
-# verl/trainer/ppo/prefix_grouper_utils.py
-PrefixGrouper.from_ungrouped_masks(
+# verl/trainer/ppo/prefix_grouper_utils.py  (identical on 0.8.0 and main)
+prefix_grouper = PrefixGrouper.from_ungrouped_masks(
     prefix_mask=prefix_ids.ne(pad_token_id),
-    suffix_mask=response_mask,          # <-- gradient mask, not existence mask
+    suffix_mask=response_mask,            # <-- gradient mask, not existence mask
     ...)
+concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask,
+                                               responses, response_mask)
 ```
 
-In single-turn RLVR the two coincide. In **multi-turn / tool-calling** rollouts
-they do not — and verl's own agent loop is explicit about it:
+In single-turn RLVR the two masks coincide, so nothing is visibly wrong. In
+multi-turn they do not — and this is verl's own convention, not a downstream
+customization:
 
 ```python
 # verl/experimental/agent_loop/tool_agent_loop.py
@@ -96,11 +80,7 @@ agent_data.response_mask += [1] * len(response_ids)   # model-generated  -> grad
 agent_data.response_mask += [0] * len(response_ids)   # tool observation -> no gradient
 ```
 
-Result: every tool-observation token is dropped from the packed model input.
-The model would be trained on a conversation with the tool results removed —
-silently, since the shapes still line up.
-
-Check C of the repro script shows this directly:
+Minimal demonstration (16 tokens, CPU-only; full script attached):
 
 ```
 packed with existence mask : [[1,2,3,4, 10,11,12,13,14,15, 20,21,22,23,24,25]]
@@ -108,117 +88,166 @@ packed with response_mask  : [[1,2,3,4, 10,11,      14,15, 20,21,      24,25]]
 tokens dropped from input  : [12,13,22,23]   <-- the tool observations
 ```
 
-A correct fix needs **two** masks: pack the input with the response *attention*
-mask (`attention_mask[:, prompt_length:]`), and keep `response_mask` for the
-loss. `pg_forward()` currently reuses the single mask returned by
-`split_output()` for both purposes.
+The failure mode is the worst kind: no crash, no shape mismatch, no warning —
+just a model that can no longer see what its tools returned, while every
+metric keeps looking plausible.
+
+## Suggested actions (PR to follow for 1+2)
+
+1. **Fix the mask semantics in `prefix_grouper_utils.py` now**, while the code
+   is dormant: pack with the response *existence* mask
+   (`attention_mask[:, prompt_len:]`), keep `response_mask` strictly for the
+   loss. Small diff, independent of which attention backend eventually wins.
+2. **Make the inert flag loud**: `use_prefix_grouper=True` currently changes
+   batch balancing while silently skipping the optimization it names. A
+   `warnings.warn` in `ActorConfig.__post_init__` until re-enablement lands
+   spares users the "enabled it, measured no speedup, concluded it's useless"
+   trap (#7202 describes exactly this state).
+3. For the prefix-tree direction (#6689 / #6401): the same convention question
+   applies wherever packed inputs are built from multi-turn rollouts —
+   existence must come from the attention mask, never from the loss mask. Happy
+   to help test on a multi-turn agentic workload (group size 8, ~4.2k-token
+   shared prefixes, tool loops) — this is our production shape.
 
 ## Reproduction
 
-```bash
-pip install prefix_grouper          # only needed for check C
-python repro_prefix_grouper_wiring.py
-```
-
-<details>
-<summary>repro_prefix_grouper_wiring.py</summary>
-
-(attached in the PR / gist — static AST scan of the verl package for checks A
-and B, plus a 16-token PrefixGrouper round-trip for check C. No GPU, no model.)
-
-</details>
-
-Output on verl 0.8.0:
-
-```
-[PASS] A. apply_monkey_patch() is never called with use_prefix_grouper
-       verl/workers/engine/fsdp/transformer_impl.py:292
-       kwargs=['model','use_remove_padding','ulysses_sp_size','use_fused_kernels','fused_kernels_backend']
-[PASS] B. forward_micro_batch_with_prefix_grouper() has zero call sites
-[PASS] C. passing response_mask silently drops tool-observation tokens
-```
-
-## Suggested fix
-
-1. Forward `use_prefix_grouper` from the engine config into
-   `apply_monkey_patch()`.
-2. Route `forward_step()` through the packed path when the flag is on (or state
-   in the docs that the feature is not available on the FSDP engine yet).
-3. Use the response attention mask for packing and keep `response_mask` for the
-   loss, so multi-turn rollouts stay correct.
-4. Add an assertion or a one-line log when the flag is enabled but the patch did
-   not apply, so "enabled but inert" cannot happen silently again.
-
-Happy to send a PR for (1)-(3) if the direction looks right.
+`python repro_prefix_grouper_wiring.py` (attached; zero GPU — static scan for
+the two disconnections + the 16-token mask round-trip above). All three checks
+reproduce on verl 0.8.0 and the utils/call-site code is unchanged on `main`.
 
 ## Environment
 
-```
-verl 0.8.0 · torch 2.9 · FSDP engine · flash_attention_2
-prefix-grouper 0.0.1.post1
-```
+verl 0.8.0 (+ `main` re-checked 2026-08-19) · prefix-grouper 0.0.1.post1 ·
+torch 2.9 · FSDP engine · multi-turn tool-calling workload via tool_agent_loop
 ````
 
 ---
 
-## 2 · PR
+## 2 · PR（小而无争议：掩码修复 + 死开关警告，**不含接线**）
 
 **Title:**
 
 ```
-[fsdp, actor] Wire up use_prefix_grouper, and pack with the existence mask
+[trainer] fix: pack prefix-grouped input with the existence mask, not the
+gradient mask; warn while use_prefix_grouper is inert
+```
+
+**Diff ①（掩码语义，`verl/trainer/ppo/prefix_grouper_utils.py`）：**
+
+```diff
+@@ def build_pg_from_micro_batch(
+     prompts = micro_batch["prompts"]
+     responses = micro_batch["responses"]
+     response_mask = micro_batch["response_mask"]
+     uids = micro_batch["uid"]
++    # `response_mask` marks which response tokens receive gradient
++    # (model-generated tokens), NOT which tokens exist: multi-turn rollouts
++    # zero it on tool-observation tokens (tool_agent_loop.py), and those
++    # tokens must still be part of the model input. Pack with the existence
++    # mask; `response_mask` stays loss-only.
++    if "attention_mask" in micro_batch:
++        response_exist_mask = micro_batch["attention_mask"][:, prompts.size(1) :].bool()
++    else:
++        # fallback; only correct when pad_token_id cannot appear inside a response
++        response_exist_mask = responses.ne(pad_token_id)
+@@
+     prefix_grouper = PrefixGrouper.from_ungrouped_masks(
+         prefix_mask=prefix_mask,
+-        suffix_mask=response_mask,
++        suffix_mask=response_exist_mask,
+         group_sizes=group_sizes,
+@@
+-    concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask, responses, response_mask)
++    concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask, responses, response_exist_mask)
+```
+
+（`forward_micro_batch_with_prefix_grouper` 已经把 `response_mask` 单独传给损失
+（`completion_mask=response_mask`）——语义分离之后它恰好就是对的，无需改。）
+
+**Diff ②（死开关警告，`verl/workers/config/actor.py::ActorConfig.__post_init__`）：**
+
+```diff
+     def __post_init__(self):
+         """config validation logics go here"""
++        if self.use_prefix_grouper:
++            warnings.warn(
++                "actor.use_prefix_grouper currently has NO effect on the engine-based "
++                "FSDP path: the shared-prefix forward has been disconnected since the "
++                "worker-to-engine refactor (#6067); only group-aware batch balancing "
++                "remains active. See #<issue> for details; re-enablement is discussed "
++                "in #7202 (closed) and #6689.",
++                stacklevel=2,
++            )
 ```
 
 **Body:**
 
 ````markdown
-Fixes #<issue number>
+Fixes #<issue-number>.
 
-`actor.use_prefix_grouper` was accepted, documented and read, but the
-shared-prefix forward was never entered: the attention patch was not applied
-(the single `apply_monkey_patch()` call site did not forward the flag) and
-`forward_micro_batch_with_prefix_grouper()` had no callers. Enabling the flag
-was a no-op that a user would most likely measure as "PrefixGrouper gives no
-speedup".
+Two small, independent corrections around `use_prefix_grouper`; deliberately
+**no re-wiring** here (that discussion lives in #7202 / #6689):
 
-## Changes
+1. `prefix_grouper_utils.py` packed the grouped model input with
+   `response_mask`, which is a *gradient* mask — in multi-turn tool-calling
+   rollouts (verl's own `tool_agent_loop` convention) it is 0 on
+   tool-observation tokens, so those tokens were silently dropped from the
+   model input. Pack with the response *existence* mask instead;
+   `response_mask` stays loss-only. Fixing it while the code is dormant means
+   whichever re-enablement lands (#7202-style revival or the prefix-tree work)
+   does not inherit the trap. Single-turn behavior is unchanged (the two masks
+   coincide there).
+2. `use_prefix_grouper=True` still switches `_balance_batch` to group-level
+   balancing while silently skipping the optimization it names. Warn until the
+   forward path is reconnected, so "enabled but inert" can no longer be
+   mistaken for "PrefixGrouper gives no speedup".
 
-- `workers/engine/fsdp/transformer_impl.py`: forward `use_prefix_grouper` into
-  `apply_monkey_patch()`; route `forward_step()` through the packed path when
-  enabled.
-- `trainer/ppo/prefix_grouper_utils.py`: build the packed input from the
-  response **attention** mask; keep `response_mask` as the loss mask. This keeps
-  multi-turn / tool-calling rollouts correct — previously every tool-observation
-  token would have been dropped from the model input.
-- Assertion when the flag is on but the attention patch did not apply, so the
-  "enabled but inert" state cannot recur silently.
-
-## Validation
-
-- Zero-GPU repro script for the three failure modes (checks A/B/C) — attached in
-  the issue.
-- **Equivalence**: with the flag on vs off, `log_probs` for the same batch and
-  the same weights are 〔bitwise identical / max abs diff = X〕.
-  ★ Equivalence is the acceptance criterion here, not speed — the whole point of
-  the paper's design is that it is training-equivalent.
-- Throughput on a multi-turn agentic workload (group size 8, shared prefix
-  〔4196〕 tokens, suffix 〔654〕 tokens): 〔to be filled〕.
-
-## Notes
-
-- No wire-format or config changes; the flag keeps its name and default
-  (`false`).
-- Single-turn RLVR is unaffected by the mask change (there the two masks are
-  identical).
+Test: 16-token CPU round-trip (attached in the issue) — packed input with the
+existence mask retains tool-observation tokens; with the old code they are
+dropped. Plus a config test asserting the warning fires.
 ````
 
 ---
 
-## 3 · 提交注意事项
+## 3 · 递给 MAGI 方向的两条评论
+
+**贴在 [#6689](https://github.com/verl-project/verl/pull/6689)（评论）：**
+
+````markdown
+One input from a multi-turn agentic workload (tool loops, ~4.2k-token shared
+prefixes, group size 8), since trie construction here consumes rollout tokens
+directly: the existing `prefix_grouper_utils.py` packs the grouped input with
+`response_mask`, which in multi-turn rollouts is a *gradient* mask
+(`tool_agent_loop` zeroes it on tool observations) — so tool-observation
+tokens get silently dropped from the packed input while all shapes still line
+up. Filed with a CPU-only repro in #<issue>. Worth a check that the packing /
+leaf-segment masks in this PR are derived from the attention mask rather than
+the loss mask — same trap, and it is invisible to shape checks. Happy to test
+this PR on our workload once the FSDP path is covered.
+````
+
+**贴在 [#6401](https://github.com/verl-project/verl/issues/6401)（RFC 评论）：**
+
+````markdown
++1 on the RFC — multi-turn is exactly where shared-prefix pays off most (our
+agentic workload: 87% of tokens are shared prefix at group size 8). One
+convention worth pinning in the design: packed-input construction must take
+token *existence* from the attention mask, never from `response_mask` (which
+is a gradient mask and zeroes tool observations in `tool_agent_loop`). The
+dormant PrefixGrouper utils currently get this wrong — CPU repro in #<issue> —
+and it is the silent kind of wrong: shapes line up, metrics look fine, the
+model just never sees its tool results.
+````
+
+---
+
+## 4 · 提交注意事项
 
 ```
-⚠️ 数字带〔〕的都要用我们自己的补丁跑通后回填 —— 现在**不许**填任何猜测值。
-⚠️ issue 与 PR 分开提，PR 里 Fixes #<n>。
-⚠️ 与包①② 同批时互相引用一句「same shape: config accepted, wire missing」。
-⚠️ C 那条要写清楚「今天不咬人、修好 A/B 之后才咬人」，否则会被当成不存在的问题关掉。
+⚠️ 顺序：issue 先发拿编号 → PR 填 Fixes → 两条评论各自带 #<issue> 链接
+⚠️ PR 刻意不含接线 —— 不要被 review 带偏去"顺便修好它"；那是 #7202 的坟场
+⚠️ 我们自己的接线（本地补丁 + response-only LM-head 投影 + logprob 逐位判据）
+   完成后，验证数据以评论形式补进 issue —— 它是"FSDP 侧有真实需求"的证据
+⚠️ 与包①②③ 同批提交时互相引用一句（第四例同形状：config accepted, wire missing）
+⚠️ tag：supercharleszhu（#7202，盟友）· arvyanh（#6689/#6401）；wuxibin89 会自己看到
 ```
