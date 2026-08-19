@@ -1,0 +1,26 @@
+--- a/verl/workers/engine_workers.py
++++ b/verl/workers/engine_workers.py
+@@ -753,8 +753,22 @@
+                 # snapshot prime), so it drives the training engine itself.
+                 metrics = await self.checkpoint_engine.send_weights(self.actor.engine, global_steps=global_steps)
+                 return metrics or {}
+-            per_tensor_param, _ = self.actor.engine.get_per_tensor_param()
++            # LoRA (merge=False): same two-phase protocol as the colocated path below.
++            # Previously this branch always called get_per_tensor_param() with defaults
++            # (base_sync_done=False), which collects the *frozen base* and skips every
++            # `lora_` tensor -- the adapter never reached the rollout engine, so the
++            # rollout policy silently stayed at the initial checkpoint forever.
++            if not hasattr(self, "ckpt_base_sync_done"):
++                # mirror the colocated init: "dummy" load_format is the only case where
++                # the rollout engine lacks real base weights and needs a base push first
++                self.ckpt_base_sync_done = "dummy" not in self.config.rollout.load_format
++            per_tensor_param, peft_config = self.actor.engine.get_per_tensor_param(
++                layered_summon=self.config.rollout.get("layered_summon", False),
++                base_sync_done=self.ckpt_base_sync_done,
++            )
+             metrics = await self.checkpoint_engine.send_weights(per_tensor_param, global_steps=global_steps)
++            if peft_config is not None:
++                self.ckpt_base_sync_done = True
+             return metrics or {}
+ 
+         set_expandable_segments(False)

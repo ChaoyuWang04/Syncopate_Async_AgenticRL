@@ -6,6 +6,20 @@
 
 ---
 
+> 🆕 **2026-08-19 · 提交前调查完成，四条**：
+> ① **断点在 main 上活着，两处都验过**：`engine_workers.py:756` 仍是 `get_per_tensor_param()`
+>    不传参 + `peft_config` 丢进 `_`；`CheckpointEngineWorker.update_weights` 签名仍没有
+>    `peft_config`（该函数刚被 delta-sync 系列改过、加了 `wire_format` —— 唯独没加这个）。
+> ② **空白确认**：`base_sync_done`(26) / `collect_lora_params`(9) / `TensorLoRARequest`(13)
+>    的 issue+PR 逐条看过 —— **没有人报过这条路、没有修它的 PR**。近期的 adapter-sync 修复
+>    （[#7287](https://github.com/verl-project/verl/pull/7287) / #7413 / #3907）**全在 colocate 侧**。
+> ③ ★ 上游留了面包屑：`engine_workers.py:614` 注释 *"base_sync_done is unused in merge-only
+>    mode but **kept for Phase 2 adapter path**"* —— 他们规划过这个第二阶段，没写。
+>    ⇒ PR 定位：**完成你们自己规划的 Phase 2**。
+> ④ [#7290](https://github.com/verl-project/verl/issues/7290) 确认 `peft_config` 的 base 契约
+>    是 **dict**（vLLM 原样塞进 `TensorLoRARequest`）—— 背书我们 rollout 侧重建 dict 的形态。
+>    另 #7436 显示 LoRA 区域有指定 codeowner（HollowMan6），PR 知道 tag 谁。
+
 > 🆕🆕 **2026-08-18 检索到的情报 —— 论点要按它改写：**
 > [verl#2048 「[Async VLLM] LoRA support?」](https://github.com/verl-project/verl/issues/2048) 明写
 > 「LoRA 只支持同步的 `vLLMRollout`，async worker 会**抛出错误**」，**issue 关成 `not planned`**。
@@ -289,7 +303,11 @@ if effective_mode != "naive" and peft_config is not None and not self.peft_merge
 
 ## 7 · 提交清单（真要提的时候照做）
 
-- [ ] 复核 verl 主干是否已改（本文基于 0.8.0）
+- [x] 复核 verl 主干 ——**未改**（2026-08-19，两处断点都在；见顶部情报块①）
+- [x] ★ 源码版修法在 verl 源码树里实测（2026-08-19，monkeypatch 关闭）：5 步 / 3 次同步
+      **全部 adapter 推送（252 MiB，基座 0 次）**、rollout 侧自描述判别命中、kl 贴地板、
+      三 rank ckpt 504/504 逐位相同。产物 `logs/e22_verl_fix_20260819.log`，
+      PR 版 patch + mock 测试（3/3 过）在本目录
 - [ ] 补上 §6-1 的验证结果（`lora.merge=True` 是否修好）
 - [ ] 附 §3.1 的离线分支复现（**两个分支的对照表是最短的说明**）
 - [ ] 附 §3.2 的真实跑探针输出（**"‖W‖ 与磁盘起点逐位相同"这条判据是核心**）

@@ -428,6 +428,33 @@ rollout 传的是**未解析的** `"all-linear"` 字符串）。
 ⇒ 两个方向都栽过了：**判据可以假通过，也可以假失败。**
 ⇒ 纪律再加一层：**判据打印本身要能区分"读不到"和"读到了是空"**，且**不要对未知类型做格式化操作**。
 
+## 6.6 ★ 源码版修法在 verl 源码树里实测通过（2026-08-19，提交包②收口）
+
+> monkeypatch 验证的是"这个语义修得好"；PR 交出去的是**源码 diff**，两者之间还隔着
+> 移植与 rebase。照 E21 §4.8-6 的流程收口：diff 打进 site-packages、
+> **`SYNCOPATE_LORA_ADAPTER_SYNC=0` 关掉 monkeypatch**（源码修法是唯一机制），真跑 5 步。
+
+**源码版比 monkeypatch 还干净一档**：照抄 colocate 的初始化语义
+`base_sync_done = "dummy" not in load_format` ⇒ 真实权重加载下**第一次同步就只推 adapter**，
+8.4 GB 的基座**一次都不推**（monkeypatch 首推过一次基座）；rollout 侧不再靠自己的计数器，
+改成**自描述判别**——adapter 载荷 100% 是 `lora_` 张量、基座载荷 0 个，peek 第一个名字即可，
+两侧零协调、零 wire 改动、`wire_format` 守卫避开 delta 引擎。
+
+```
+5 步 · sync_every=2 · 3 次同步 · exit 0：
+  trainer  [verl-E22-fix] pushing adapter (peft_config set)   ×3（基座推送 0 次，8,414 MiB 未出现）
+  载荷      504 张量 / 252.0 MiB / lora_ 504 个                ×3
+  rollout  loading as adapter (first tensor: ...q_proj.lora_A.weight)  ×3
+  kl       6.4e-05 / 2.9e-04 —— 贴地板（坏基线同期 3e-3 且爬升）
+  E21 同场  三 rank ckpt 504/504 逐位相同
+  mock 测试 3/3 过（两段式序列 / peek 注解 / 顺序转发）
+```
+
+产物：`logs/e22_verl_fix_20260819.log` · PR 版 patch（基于 main，带 wire_format 守卫）与
+测试草稿在 **`docs/upstream/verl-lora-adapter-sync/`**。跑完 stock verl 已还原。
+
+---
+
 ## 7 · 已落地
 
 | 落点 | 内容 |
