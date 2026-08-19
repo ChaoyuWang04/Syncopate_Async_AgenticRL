@@ -12,6 +12,7 @@
 - [RL 的位移 ∝ lr×√N，不是 reward](rl-step-size-is-lr-times-steps.md) — ~~两堵墙~~已翻案；★Chaoyu 08-19：解法是**加步数**（≤1 epoch 是主因），lr 1e-4 只是可选上限基线
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
+- [文档更新秩序](doc-update-order.md) — ★Chaoyu 08-19（两线通用）：默认**就地改写**不是追加；动笔前四问；膨胀的文档只会被推倒重写
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
 - [静默降级：三个 rank 没同步梯度](silent-degradation-fsdp-nosync.md) — 上游只给一行 UserWarning；四处信号我们一处都没接住，最后靠一句随手写的断言抓到
 - [静默降级：LoRA 从没推给 rollout](silent-degradation-weight-sync.md) — 异步 RL 的策略两个月没变过；★「验了耗时 ≠ 验了内容」，且它制造了一整套自洽的错误解释
