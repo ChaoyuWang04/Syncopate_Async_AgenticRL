@@ -103,7 +103,20 @@ all-reduce busbw @256MB   组内 28.8 · 跨 socket 22.2 · 四卡 25.6 GB/s
 | 🆕🔴 **配对比较的基线** | **一律用 `_audit/v13_sft_e1_merged.json`**（= RL 的真起点）。旧的 `v13_sft_e1.json`（裸基座+SFT adapter）比它**强 0.025**，用它当基线会**系统性低估 RL 的效果** | **E24** |
 | 🆕 **三个默认值已改对** | `--weight-sync-bucket-mb` 2048→**512**（2048 已知 OOM）· `--rollout-is` sequence→**token** · `ulysses_sp=1` 显式钉死 | launch_rl |
 
-## 3 · 已落地的改动（2026-08-14，都在 `syncopate/train/`）
+## 3 · 已落地的改动
+
+### 3.0 🆕 2026-08-18/19（**两条是正确性修复，默认开启，不要关**）
+
+| 改动 | 效果 | 守护 |
+|---|---|---|
+| 🔴 `verl_patches._patch_lora_adapter_sync`<br>（`SYNCOPATE_LORA_ADAPTER_SYNC`，**默认开**） | E22 修法①：首次推基座、之后推 **adapter**。载荷 8,414→**252 MiB**、`param_sync` 6.25→**0.974 s**、引擎里 adapter 从 `[]` 变 `[123]` | 三条常驻判据（ONBOARDING §4）+ `--lora-merge` 互斥守卫 |
+| 🔴 `verl_patches._patch_fsdp_degenerate_mesh`<br>（`SYNCOPATE_FSDP_DDP_FIX`，**默认开**） | E21 修复：退化网格改用 `NO_SHARD`+默认进程组。三 rank 梯度逐位相同；0-A 验了归约口径（3 卡 = 1 卡） | 常驻断言（默认进程组必须覆盖同一批 rank）+ 最小复现脚本 |
+| `syncopate/core/parsing.py` | 模型吐出非对象 payload 不再打崩整个 rollout（畸形 ⇒ 丢弃 = 被扣分的行为） | 回归测试（5 种非对象 JSON + 混合场景），**已验证测试能失败** |
+| `launch_rl` 三个默认值改对 | `--weight-sync-bucket-mb` 2048→**512** · `--rollout-is` sequence→**token** · 显式钉死 `ulysses_sp=1` / `top_p=1.0` / `top_k=-1` | — |
+| `launch_rl` 两条启动守卫 | ① `--lora-merge` 与修法① 互斥 ② `mini_batch × rollout_n` 必须被卡数整除（**并列出可用值**） | 都在**最早能判的地方**判，不等跑起来才炸 |
+| 🆕 探针三件套 | `SYNCOPATE_SYNC_PAYLOAD`（载荷+`list_loras`）· `SYNCOPATE_OPT_STEP_PROBE`（**真实**更新次数）· `probe_merge_logprob_fidelity.py` | 判据绑不上就报红，**不打结论** |
+
+### 3.1 2026-08-14（都在 `syncopate/train/`）
 
 | 改动 | 效果 | 守护 |
 |---|---|---|
