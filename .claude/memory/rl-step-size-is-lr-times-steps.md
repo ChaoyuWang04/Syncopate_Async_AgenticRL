@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 957ae9f2-2820-4a54-ab6d-75be32051e25
-  modified: 2026-08-14T10:07:26.567Z
+  modified: 2026-08-19T12:31:17.768Z
 ---
 
 > ⛔⛔ **2026-08-18 作废通告 —— 先读这段再读下面。**
@@ -123,4 +123,19 @@ grad_norm 整跑 0.011–0.06 稳得发闷，稳定性有余量。不稳就退�
 ★ 参照：SFT 一遍（lr 1e-4 × 210 步）位移 **0.4985%**，是 RL 这跑的 10 倍。
 ★ 敏感度再次确认：位移只有 0.0487%，`unauthorized_write_cap` 就从 91 涨到 128。
 
-相关：[[syncopate-project-framing]] [[feedback-measure-dont-infer]]
+---
+
+## ★★★ 2026-08-19 Chaoyu 定调：解法是「加步数」，不是「提 lr」
+
+**Why：** 此前所有跑**最多刚把全部 prompt 过完一遍**（≤1 epoch），大量格子仍有梯度可探索
+⇒「学不动」的头号候选解释是**步数太少**，不是 lr 太低。且 √N 标度律（上文）说明
+7 个 epoch 才漂到 SFT 一遍的量级 —— **步数的余量非常大**。
+
+**How to apply：**
+- **上线候选不用 lr 1e-4**（主线纪律①早已写死；defer 归零那条证据也已翻案为截断所致）
+- 新脚本已把 **400 步定为下限**、停机由「零梯度率不再创新高」判据定（守则⑩）
+- lr 1e-4 @5120 只是可选的"上限基线"，**不 gate 任何东西、不占队首**
+  （脚本备好 `scripts/run_e20h_lr1e4_5120.sh`，要测随时能跑）
+- 正式验证走 E20 原因②：**固定 epoch 而非步数**（handoff §5.1-5）
+
+相关：[[syncopate-project-framing]] [[feedback-measure-dont-infer]] [[gate-the-promotion-not-the-run]]

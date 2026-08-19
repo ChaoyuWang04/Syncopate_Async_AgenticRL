@@ -9,7 +9,7 @@
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★第三条：判据太宽会**为错误的理由通过**（xfail 会把它一起吞掉）
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
 - [两个基石级 bug（2026-08-18）](two-foundational-bugs-2026-08-18.md) — ★ 梯度没跨 rank 同步 · 权重从没推给 rollout；**所有 RL 结论作废**，登记在 docs/syncopate/21
-- [RL 的位移是 lr×步数，不是 reward](rl-step-size-is-lr-times-steps.md) — ★M7-b：lr **被夹在两堵墙之间**（3e-5 ESS 塌 / 1e-5 推不动）
+- [RL 的位移 ∝ lr×√N，不是 reward](rl-step-size-is-lr-times-steps.md) — ~~两堵墙~~已翻案；★Chaoyu 08-19：解法是**加步数**（≤1 epoch 是主因），lr 1e-4 只是可选上限基线
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
 - [用户的工作方式偏好](user-chaoyu-working-style.md) — 大胆改、快迭代，但要求可验证
@@ -22,3 +22,4 @@
 - [登记 ≠ 实现](registered-is-not-implemented.md) — WRITE_TOOLS 填了 8 个、实现只有 2 个；登记表是最像"证据"的东西
 - [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 证明正确的优化接进真实系统花了 13 处修复；★ 报错位置几乎总在别人家里
 - [行为异常先查输入](behavior-collapse-check-input-first.md) — ★ defer 崩塌是 **prompt 被截断**，不是 reward 教的；夜跑那条归因已翻案
+- [截断家族一天三例](budget-truncation-family.md) — ★v13 SFT 26% 样本没终答（轮数上限默认 8，已修已重建）；预算必须从契约派生、截断必须报错或计数；RL prompt 余量只剩 466

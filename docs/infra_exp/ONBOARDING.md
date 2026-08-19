@@ -94,10 +94,14 @@ set -a; . /workspace/.env; set +a
 **队列见 [`00-INFRA-HANDOFF §5.1`](00-INFRA-HANDOFF.md)。** 一句话版：
 
 ```
-1 🔴 5120 下重测 lr 1e-4          4 卡 ~40 min —— R-1 的前提没了，重测前不许动 reward
-2 🟡 E26 收口：同尺子吞吐 A/B      集成已通（§3.1）；2.12× 要转正 → 之后 B5 任务尺子
-3 🟠 KL 多种子（盯 fabricated_safety_line_cap）→ 过了才改默认值
-4 🟠 token vs sequence 多种子      判据用 defer 而不是总分
+0 ✅ E26 同尺子吞吐 A/B 已定（08-19 13:04）：生产现状→PG **2.31×**、PG 净效果 2.23×、
+  mb1→mb8 仅 +3.8%、gen 占比 12%→26%（E26 §6.6，判据 logs/queue_e26ab/AB.done）
+1 🟡 E26 B5 任务尺子（≥60 步 + 冻结 EVAL 配对）→ 过了才有资格谈 PG 默认开
+2 🟠 KL 多种子（盯 fabricated_safety_line_cap）→ 过了才改默认值
+3 🟠 token vs sequence 多种子      判据用 defer 而不是总分
+4 🆕 E20 原因②「步数太少」正式验证  固定 epoch 而非步数、≥400 步、停由判据定（主线观点）
+🔵 lr 1e-4 @5120 已降级为可选上限基线（Chaoyu 2026-08-19：真实训练不用 1e-4；
+   脚本备好 scripts/run_e20h_lr1e4_5120.sh，不挡任何人）
 ```
 
 **开跑模板**（三条常驻判据靠这两个环境变量产出）：
