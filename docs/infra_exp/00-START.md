@@ -70,7 +70,7 @@
 | E01–E26 | ★ **证据层**：编号是身份、永不重排、不合并 | 引用结论时 |
 | /MAINLINE-INFRA.md | 与主线往来的唯一文档（开着的事 + 双方现状） | 有交界动作前 |
 
-## 3 · 现在到哪一步（2026-08-19）
+## 3 · 现在到哪一步（2026-08-19 晚收工）
 
 ```
 ✅ 正确性   E21（梯度不同步）E22（LoRA 没推给 rollout）已修，异步 RL 第一次真正在学
@@ -78,6 +78,8 @@
 ✅ 吞吐     E26 PrefixGrouper：生产现状→PG **端到端 2.31×**（34.52→14.94 s/gstep），
             生产配置定格 mb=8；gen 占步 12%→26% ⇒ 瓶颈开始向 rollout 移动
 ✅ 学习     RL 任务分 +0.101→+0.137（修截断后）；defer 崩塌翻案 = prompt 截断不是 reward
+✅ 探针     E27 thinking 三臂：净效果 −0.057 但有梯度格子 170→233（探索空间开一半）；
+            永久基线落定 `_audit/e27_base_off.json`；红利路径=带思考的 SFT 数据
 ⬜ 欠的     B5 任务尺子（PG 默认开的门槛）· KL/IS 多种子 · 「步数太少」正式验证
 完成度     Track B：诊断完 + 第一个 before→after（B12/E26）；Track A：四条兑现物落地一条半
 ```
@@ -153,6 +155,9 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 ③ rollout_corr/kl 每次同步后回落 ~3.4e-4（不回落 = 同步没生效）
 ④ prompt_length/clip_ratio 必须 0.0000（100% 截断曾翻案一整条归因链）
 ```
+
+★ 完整的训练前自查清单（环境→检查器→起跑→10 分钟判据行→晋级）在
+**主线 `../syncopate/06-rl-run-protocol.md §1`**，两线通用；上面四条是其中的跑中最小集。
 
 ⚠️ 关机重启后：`/workspace` 是网络盘会活着；记忆软链断了重建：
 `ln -s /workspace/Syncopate_Async_AgenticRL/.claude/memory /root/.claude/projects/-workspace-Syncopate-Async-AgenticRL/memory`

@@ -26,6 +26,9 @@
 | **lr 与步数**（Chaoyu 08-19） | 「学不动」主因是**步数太少**（≤1 epoch）不是 lr 低 ⇒ 解法是加步数/固定 epoch；**上线候选不用 lr 1e-4**；400 步是下限、停由判据定 | 01 §1-4 |
 | 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4 · `clip_ratio=0.0000` | 00 §6 |
 | launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 | launch_rl help |
+| **thinking 开关** | `SYNCOPATE_THINK=1` **只许评测**（launch_rl 拦训练）；开关在契约模块（模板 kwarg + 预算 8192 一起切）；**裸基座 eval 臂单轮上限必须给 2048**（256 的砍断与真实弱分不开）。零训练拨开关不上生产（净 −0.057）；红利路径=带思考的 SFT 数据 | **E27** |
+| **永久基线** | eval 配对的基座参照 = `_audit/e27_base_off.json`（base think-off @2048/轮，修复后管线产）；SFT/RL 配对基线仍是 `v13_sft_*_merged` 族（E24） | E27 §5 |
+| **常驻观察** | `fabricated_safety_line_cap`：两处独立反向信号汇合（E17 KL 臂 +2 · E27 SFT vs 基座 +18）⇒ 每次 compare 必看 | E17 §9 · E27 §5 |
 
 ## 2 · 排序原则沿革
 
@@ -59,6 +62,7 @@
 | E12「99.9% 不是传输」及全部权重同步耗时（55.8 s / 18.8%…） | 🔴 前提错（以为推 132 MB 实推 8.4 GB）。现值 param_sync ~0.97 s / 0.8%。报告已归档 `docs/archive/E12-weight-sync.md` |
 | E00/E02「DDP 每步同步 260 MB」 | 🔴 算出来的，从没量过 ⇒ 01 §3 R6 |
 | E26 早期「2.12×」 | 🔴 单行 timing 的覆盖数没实测 ⇒ 正式数 2.31×（E26 §6.6） |
+| `_audit/v13_base.json`（基座@256/轮） | 🔴 **已删**（Chaoyu 08-19）：256 的砍断与真实弱分不开（截断 40.2%/parse_errors 909）。替身 = `e27_base_off.json`（@2048） |
 | E25「mb=4 OOM」外推到变长真实批 | 🟡 未迁移（mb=8 实测 29–31 GB 贴顶跑完），但余量不能当生产配置 |
 | 「lr 被夹在两堵墙之间」叙事 · M7/M7-b 全部评测 | 🔴 双重作废（E21+E22 坏基线） |
 | B11 拓扑放置 1.6% | 🟡 数字仍真，理由要按 E26 后的新构成重写 |
