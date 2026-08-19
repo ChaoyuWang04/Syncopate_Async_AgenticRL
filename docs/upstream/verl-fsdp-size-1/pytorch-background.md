@@ -1,8 +1,8 @@
 # 上游 issue 草稿 · FSDP 的 `HYBRID_SHARD` 在分片维为 1 时**静默停止同步梯度**
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
-> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../infra_exp/E21-ddp-not-syncing.md)
-> 姊妹文档：[`pytorch-fsdp-16b-alignment.md`](pytorch-fsdp-16b-alignment.md)（同一批调查里的另一个上游问题）
+> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../../infra_exp/E21-ddp-not-syncing.md)
+> 姊妹文档：[`../pytorch-fsdp-16b-alignment.md`](../pytorch-fsdp-16b-alignment.md)（同一批调查里的另一个上游问题）
 
 ---
 
@@ -20,7 +20,7 @@
 > ⇒ **bug 已被 PyTorch 承认过一次，然后因 FSDP1 维护模式被主动放弃**
 > （`_init_utils.py` 自 2025-06 的 17 次提交里 16 次是 lint/typing；`NO_SHARD` 自身已挂
 > FutureWarning「deprecated, use DDP」）。**空着的不是 issue 位，是修复。**
-> ⇒ **主战场移到 verl**（[`verl-fsdp-size-1-degenerate-mesh.md`](verl-fsdp-size-1-degenerate-mesh.md)）；
+> ⇒ **主战场移到 verl**（[`analysis.md`](analysis.md)）；
 > 本文降级为它的**上游证据链**：PyTorch 侧的动作改为
 > ① 在 #154888 评论补真实训练证据、请求 reopen（几分钟，不指望结果）
 > ② 可选：提一个只加 `raise` 的小 PR（§6-①）——「不修行为可以，但不该继续静默」。
@@ -242,4 +242,4 @@ if sharding_strategy in (ShardingStrategy.HYBRID_SHARD, ShardingStrategy._HYBRID
 - [ ] 附 §3 的表（**必须含 DDP 对照组** —— 它证明测试装置本身是对的）
 - [ ] 附 §4 的真实训练证据（LoRA `B` 零初始化那条判据尤其有说服力）
 - [ ] 明确写出 §7 的四条"还没做的"
-- [ ] 同时提 verl 那条（[`verl-fsdp-size-1-degenerate-mesh.md`](verl-fsdp-size-1-degenerate-mesh.md)），互相引用
+- [ ] 同时提 verl 那条（[`analysis.md`](analysis.md)），互相引用

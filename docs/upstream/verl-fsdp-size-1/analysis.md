@@ -1,8 +1,8 @@
 # 上游 issue 草稿 · verl：`fsdp_size=1` 会造出退化的 `(N, 1)` mesh，导致**梯度不再同步**
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18　**★ 2026-08-19 升级为主战场**
-> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../infra_exp/E21-ddp-not-syncing.md)
-> 配套：[`pytorch-fsdp-hybrid-shard-no-grad-sync.md`](pytorch-fsdp-hybrid-shard-no-grad-sync.md)（同一根因的上游那一半）
+> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../../infra_exp/E21-ddp-not-syncing.md)
+> 配套：[`pytorch-background.md`](pytorch-background.md)（同一根因的上游那一半）
 
 > 🆕 **2026-08-19 · 提交前调查完成，五条结论**：
 >

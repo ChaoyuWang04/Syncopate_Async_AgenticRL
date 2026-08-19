@@ -1,8 +1,8 @@
 # 提交件 · verl issue + PR 正文（英文，GitHub 可直接粘贴）
 
 > 状态：**草稿完成，等 Chaoyu 过目后提交**（2026-08-19）。
-> 中文分析与证据链 → [`verl-fsdp-size-1-degenerate-mesh.md`](verl-fsdp-size-1-degenerate-mesh.md)；
-> PyTorch 侧背景 → [`pytorch-fsdp-hybrid-shard-no-grad-sync.md`](pytorch-fsdp-hybrid-shard-no-grad-sync.md)。
+> 中文分析与证据链 → [`analysis.md`](analysis.md)；
+> PyTorch 侧背景 → [`pytorch-background.md`](pytorch-background.md)。
 > 提交目标仓库：**verl-project/verl**（不是旧的 volcengine/verl）。
 > 顺序：先提 issue，PR 在 issue 里预告、随后提交并互相引用。
 
