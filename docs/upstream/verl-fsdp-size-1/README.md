@@ -34,6 +34,16 @@ scripts/repro_fsdp_hybrid_nosync.py               七变体矩阵脚本（本包
 
 ## 提交前最后一眼
 
-- [ ] 查 verl CONTRIBUTING（DCO sign-off？pre-commit？测试目录惯例 → 调整 test 文件路径）
-- [ ] issue 正文再读一遍（英文部分已扫过，无内部路径/实验名）
-- [ ] PR 分支基于 verl-project/verl main（patch 直接适用，两函数逐字未变）
+- [x] 查 verl CONTRIBUTING ✅ 全部落实：标题格式受 CI 检查、PR 模板六节填全、Apache 许可头、
+      测试放 `tests/special_distributed/` 并注册进 `run_all.sh`（`model.yml` 的 paths 已覆盖 ⇒
+      CI 自动触发，无需改 workflow）、ruff + ruff-format 干净、commit 带 DCO 签名
+- [x] issue 正文扫过，无内部路径/实验名
+- [x] PR 分支已基于 verl-project/verl main 建好并本地验证 —— `/workspace/_upstream/verl`
+      分支 `fix/fsdp-size-1-degenerate-mesh-grad-sync`；测试实弹验证**修前红**
+      （[0.313, 1.254]）**修后绿**（逐位相同）
+- [x] ★ **声明审计（2026-08-19）**：逐条核对"写下的每个数是不是真跑出来的"，**抓到两处并已修**：
+      ① issue 内联脚本从没跑过，且其模型/损失/种子与表里数字的来源脚本不同 ⇒ 已重写、实跑、
+         用**它自己的输出**替换表格（顺带把 FSDP2 对照并进同一个脚本）
+      ② "ckpt 格式修复前后一致"当时只探了修复后两档 ⇒ 已补做修复前那档，实测一致
+- [ ] 提交后：CI 结果与 review 回复
+- [ ] 操作手册见 [`READY-TO-PASTE/0-STEPS.md`](READY-TO-PASTE/0-STEPS.md)
