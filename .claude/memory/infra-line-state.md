@@ -278,3 +278,17 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ⇒ 队首：**E26 B5 任务尺子**（过了才谈 PG 默认开）→ KL 多种子 → token/seq 多种子
    （三个都是 ~4 h 级，适合夜间队列；已向 Chaoyu 提议，待点头）
 ```
+
+
+## ★ 2026-08-19 晚：E27 thinking 三臂定案
+
+```
+thinking 净效果 −0.057（t=−4.9，A vs B 单变量）：REJ/FRESH ↑、FAIL/ATTR/CHAT ↓
+  （acted_when_should_not 0→14 —— thinking 会把自己说服到「动手」）
+★ 但有梯度格子 170→233、卡死 109→60 ⇒ 不涨均分却把 RL 探索空间打开一半
+SFT 完胜（A vs C +0.347）⇒ 吃 thinking 红利的路径 = 带思考的 SFT 数据，不是拨开关
+永久基线：_audit/e27_base_off.json（base think-off @2048/轮）；
+  ⚠️ 裸基座臂单轮上限必须 2048（256 的砍断与真实弱分不开，v13_base@256 已删）
+fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常驻观察
+开关：SYNCOPATE_THINK=1 只许评测（launch_rl 拦训练）；预算 on=5120/8192
+```

@@ -1,6 +1,7 @@
 # E27 · thinking 三臂探针：思考对这族任务值几分
 
-> 状态：⬜ **脚本与开关已备好（CPU 判据全过），等主线新 SFT adapter 落地开跑**
+> 状态：✅ **三臂已跑完（2026-08-19 晚）**——thinking 净效果 **−0.057**（t=−4.9），
+> 但 REJ/FRESH 变好、**有梯度格子 170→233**；A 臂 `_audit/e27_base_off.json` 即日起为**永久基线**
 > 尺子 `scripts/run_e27_think_probe.sh` · 开关判据 `scripts/check_think_mode.py`
 > 开关 `SYNCOPATE_THINK=1`（**默认关 = 现行为逐字节不变**；训练路径 launch_rl 启动即拦）
 
@@ -10,7 +11,7 @@
 |---|---|
 | **问题** | 我们的 rollout 短（中位 4 动作 × ~95 字符 JSON）是**模板显式关掉 thinking**（`enable_thinking=False`，继承自老师包）+ SFT 参考答案短 + 任务大多饱和三层叠出来的。打开思考通道，这族任务能换到什么？ |
 | **三臂** | A `think-off 裸基座`（★ 兼任修复后管线的**永久基线**）· B `think-on 裸基座`（探索）· C `think-off 新 SFT`（最新系统+版本） |
-| **结果** | 〔待跑〕 |
+| **结果** | A 0.356 · B 0.298 · C **0.703**。**A vs B（thinking 净效果）−0.057（t=−4.9）**：43 好/196 平/104 差；好的集中在 **REJ/FRESH**，差的集中在 FAIL/ATTR/CHAT/CONF/POL（`acted_when_should_not` 0→14 —— thinking 会把自己说服到动手）。**零梯度：有梯度 170→233、卡死 109→60** ⇒ thinking 不涨均分但把 RL 探索空间打开一半。A vs C +0.347（t=17.8） |
 
 ## 1 · 问题与预测（跑之前写死，不许事后改）
 
@@ -60,10 +61,28 @@ P5  C vs A：显著为正（SFT 本来就该赢裸基座；这一臂同时是新
 tests/train 130 条全过（含守「增量拼接=整段渲染」的那条）
 ```
 
-## 5 · 结论
+## 5 · 结论（2026-08-19 晚，审计 `_audit/e27_{base_off,base_on}.json` + 主线 `v13_sft_v13r2_e1_merged.json`）
 
-〔待跑 —— gate：主线新 SFT adapter〕
+```
+A vs B  −0.057（t=−4.9）  thinking 在这族任务上净减分；但 REJ/FRESH ↑（+0.75 级）、
+        FAIL/ATTR/CHAT/CONF/POL ↓，acted_when_should_not 0→14 —— 想多了会越界
+零梯度  有梯度 170→233 · 卡死 109→60 ⇒ ★ thinking 的真实价值：解锁探索空间（对 RL 而非 eval）
+A vs C  +0.347（t=17.8）  任务 SFT 完胜零训练的 thinking；B vs C +0.404
+B 细节  token 截断 0%（8192 足够）· parse_ok 100% · 步数中位 3.5 · 墙钟 ~1.4×（非 3–5×）
+A 澄清  A@2048 撞轮率 36.4% ≈ 被删的 @256 版 38.8% ⇒ 裸基座烧轮数是真实弱，不是 256 砍的
+        （909 个 parse_errors 里只有 ~116 归 256）
+```
 
-## 6 · ⛔ 推翻了什么
+**决策含义**：① 零训练拨开关不值得上生产；② 要吃 thinking 红利，路径是**带思考的 SFT 数据**
+（B 反超 C 的 7 题集中在 CHAT —— 判断类是它的主场）；③ `_audit/e27_base_off.json` 为永久基线；
+④ `fabricated_safety_line_cap`：SFT 比裸基座 +18（6→24），与 E17 KL 臂的反向信号**汇合** ⇒ 升常驻观察。
 
-〔待跑〕
+## 6 · 预测对账（跑前写死的 P1–P5）
+
+```
+P1 半对   REJ/FRESH 变好方向命中；总分为负（当时明确说"敢押行为不押均值"）
+P2 ✓✓    「≥1 个卡死格子首次得分」→ 实际解锁 ~49 个（109→60）
+P3 ✗     预测慢 3–5×，实测 ~1.4× —— vLLM 批内并行把 decode 增量吸收了
+P4 ✓     token 截断 0%（预算 8192 甚至偏大）
+P5 ✓     SFT +0.347（t=17.8）
+```
