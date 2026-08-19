@@ -50,69 +50,44 @@ set -a; . /workspace/.env; set +a
 
 ---
 
-## 3 · 最近一轮做完了什么（2026-08-19）
+## 3 · 最近一轮做完了什么（2026-08-19 下午：E26 集成收口）
 
-**一句话**：修好 prompt 截断之后**一条大归因被推翻**；KL 可以砍；PrefixGrouper 在微基准上
-兑现 3.96×，但**真实训练集成没跑通**（13 处接线，卡在优化器 dtype）。
+**一句话**：E26 的 Adam dtype 卡点用**脱 Ray 复现**（12 轮 × 30 s）定了案 —— 真身不是 dtype，
+是**打包前向绕过了根 FSDP ⇒ 梯度归约竞态**（E21 形状的静默错误）；已修，真实 fully_async
+冒烟四常驻判据全绿，第一次拿到端到端方向数 **step 2.12×**（n=1，未转正）。
 
-### 3.1 ⛔⛔ 头条：defer 崩塌是 **prompt 截断**，不是 reward（[E20 §7.12](E20-rl-not-learning.md)）
-
-E17 A 臂与夜跑 `r1_tokenis` **同配置、只差长度预算**（3584/1536 → 5120/2048）：
-
-```
-                    3584（100% 截断）      5120（0% 截断）
-该 defer            97% → **83%** 🟠      97% → **100%** ✅
-REJ（8 条）         **−0.188** 🔴          **+0.203** ✅
-fabricated_safety   **+3** 🔴              **−2** ✅
-任务分              +0.101                 **+0.137**（t=11.6）
-```
-
-机制：左截断砍掉的正是「调查先于任何结论（含**拒绝**、反问）」（截断后存活 **0/659**）
-⇒ **模型训练时从没见过"可以拒绝"这个选项，评测时却见得到。**
-⇒ 主线 R-1 应从队首撤下（回信 [`INFRA-TO-MAINLINE-2026-08-19b.md`](INFRA-TO-MAINLINE-2026-08-19b.md)）。
-★ **"行为异常"先查输入，再查激励。**
-
-### 3.2 ✅ E17 KL 两臂：砍 KL 省 15.4%，任务分无代价（[E17 §9](E17-triple-forward.md)）
+### 3.1 ★★★ 根因与修法（全文 [E26 §6.3–6.4](E26-prefix-grouper.md)）
 
 ```
-吞吐   step 135.92 → 115.03 s（−15.4%，正好等于 ref 的 20.93 s）；B 臂 timing_s/ref 出现 0 次
-精度   A vs B 直接配对 −0.009 < MDE 0.015 ⇒ 没测出差异；defer 100% vs 100%；REJ 0.953 双同
-🟠 唯一反向信号  fabricated_safety_line_cap A 6 → B 8（+2）⇒ 多种子时必须盯
-⛔ 连带           E19「ref 走 FP8」失效（ref 都不算了）
-⚠️ 默认值尚未改   等多种子证据链齐
+根因   _pg_forward 直接调基座 ⇒ 损失不流经根 FSDP 的输出 ⇒ 根的 pre-backward 永不触发
+       ⇒ 归约的 final callback 没人排队 ⇒ fp32 all-reduce 挂在没人等的 CUDA stream 上
+       ⇒ optimizer 读竞态快照：有时没归约（**不报错**！），有时抓到半途 fp32（Adam 报错）
+显形   adapter 同步启动时的一次 state_dict() 让真根完成 lazy_init、子单元不再自封根
+       ⇒ 最危险的格子是「state_dict × 单 micro-batch」：**梯度静默不同步、零报错**
+修法   前向走根 FSDP（CausalLM forward 临时换回 HF 原版 + logits_to_keep=1）
+       + hook 捕获 hidden + log_probs 加 0×根输出的锚
+验收   脱 Ray：三 rank 梯度和与健康路径**逐位相同** · log_probs sum 分毫未动
+       真实跑：判据A×12 · ddp-probe 跨 rank 逐位同 · list_loras=[123] · kl 4.4e-4 · clip_ratio 0.0
 ```
 
-### 3.3 🟡 E25 / E26：喂饱 GPU 的单位是 token，省时间只能靠「少算」
+★ 方法论：**16 轮起训练没定位到的，秒级复现 12 轮定案** —— 单因素全不复现时，
+用「全开组合 + 留一法」找**组合条件**（本例 = state_dict × accum≥2）。
+
+### 3.2 上午那轮的三件大事（详情看各报告，此处只留指针）
 
 ```
-E25 ✅ 「trainer 没喂饱」**被证伪**：micro_batch 1→2 是**负收益**（定长 −1.0% / 变长 −6.3%，
-       mb=4 OOM）；关 gradient_checkpointing 在 mb=1 就 OOM
-       ★ 一条序列已 ~4850 token ⇒ GPU 早就吃饱；变长下 mb=1 等价于完美打包
-E26 ✅ PrefixGrouper 微基准 **3.96×**（三次前向 10.211→2.577 s，显存 +3.6%），
-       等价性 fp32 逐位过（四配置含组 8）
-    🔴 **真实训练集成未完成** —— 16 次尝试 / 13 处接线 / 卡在 Adam dtype（E26 §6.3）
-    ⛔ **端到端吞吐数一个都没有**，3.96× 只在微基准上成立
+⛔⛔ defer 崩塌翻案：是 prompt 截断不是 reward（E20 §7.12）⇒ 主线 R-1 已撤
+✅  E17 KL 定案：砍 KL 省 15.4%、任务分无差异（E17 §9）⚠️ 默认值未改，等多种子
+✅  E25 证伪「trainer 没喂饱」；E26 §7 判据失效七形状（D1/D2 + E1–E5 + 四解药）
 ```
 
-### 3.4 ★★★ 判据失效的**七种形状**（一天集齐，[E26 §7](E26-prefix-grouper.md)）
+### 3.3 ⚠️ 顺手修的三个启动类 bug（都属「默认值/文案指向另一件事」族）
 
 ```
-设计错  D1 太松 ⇒ 为错误的理由通过（"量墙钟"会把"没接上"读成"没收益"）
-        D2 太严 ⇒ 把对的判成错的（bf16 下要求逐位相同；"组大小必须相等"误杀合法情形）
-执行错  E1 读早了（"还没发生"与"不会发生"在日志里一样）
-        E2 读错对象（新跑没起来，读的是旧日志）
-        E3 读到文案（安装横幅里含判据行字符串）
-        E4 覆盖面不足（只挂第一个参数的钩子）
-        E5 打错目标（patch AdamW 而实际是 Adam ⇒ 零迹象）
-★ 四个解药：① 只在**终态**读  ② 配一个**已知必然发生**的对照计数
-           ③ **噪声地板**对照  ④ **一字不变检验**（修完现象完全没变 ⇒ 改错地方了，立刻回头）
+① launch_rl --train-file/--val-file 默认写死 v3（目录已不存在）⇒ 已改成跟 DATA_VERSION 走
+② launch_rl --help 崩溃：一处 help 文案里裸 %（argparse 会做 %-格式化）⇒ 已修
+③ （上午修的）--seed 发不存在的键 val_kwargs.seed ⇒ 启动即死 ⇒ 已删
 ```
-
-### 3.5 ⚠️ 顺手发现并代修的主线阻断 bug
-
-`--seed` 发出的 `actor_rollout_ref.rollout.val_kwargs.seed` **是不存在的键**
-⇒ Hydra 拒绝 ⇒ **launch_rl 100% 启动即死**。已删（`data.seed` 保留）。
-★ **新增的 config 覆盖必须起一次跑才算落地。**
 
 ## 4 · ★ 第一件事
 
@@ -120,7 +95,7 @@ E26 ✅ PrefixGrouper 微基准 **3.96×**（三次前向 10.211→2.577 s，显
 
 ```
 1 🔴 5120 下重测 lr 1e-4          4 卡 ~40 min —— R-1 的前提没了，重测前不许动 reward
-2 🔴 E26 集成：脱 Ray 最小复现     秒级迭代打 dtype（⛔ 别再用"起训练"当调试循环）
+2 🟡 E26 收口：同尺子吞吐 A/B      集成已通（§3.1）；2.12× 要转正 → 之后 B5 任务尺子
 3 🟠 KL 多种子（盯 fabricated_safety_line_cap）→ 过了才改默认值
 4 🟠 token vs sequence 多种子      判据用 defer 而不是总分
 ```
@@ -222,6 +197,15 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
    postprocess、熵传 None 报在 padding.py、dtype 不一致报在 torch 的 Adam。
    ⇒ 有效手段只有两个：**接缝处自己打判据行** · **把问题降维成秒级观测**。
    ⛔ 「看报错位置推根因」今天十三次里错了至少五次。
+24. 🆕🔴🔴 **FSDP1 下绝不能绕过根模块的 forward 去调子模块**（E26 §6.3，脱 Ray 实测）。
+   归约/精度收尾由**根输出张量上的 pre-backward hook** 驱动；损失不流经根输出 ⇒ 整套
+   post-backward 机制静默不跑 ⇒ **梯度可能不跨 rank 归约且不报错**（E21 形状）。
+   更阴的是它有时"能跑对"：根没被 lazy_init 时子单元自封根 —— 而任何一次 state_dict()
+   都会把这个巧合打破。⇒ 判据：三 rank 梯度范数逐位相同（SYNCOPATE_DDP_PROBE=1）。
+25. 🆕 **单因素复现不了 ≠ 复现不了**：E26 那个竞态要「state_dict × ≥2 micro-batch」同时
+   成立才显形。⇒ 先"全因素照抄真实跑"求复现，再**留一法**收敛到最小组合 —— 每轮 30 s。
+26. 🆕 **盯长跑不能只 grep 训练中的信号**：启动即死时所有 pattern 都不出现，"安静"和
+   "还在跑"长得一样（坑 19 的孪生）。⇒ 监视器必须带**进程退出兜底**（今天为此瞎等一轮）。
 
 ## 6 · 三条纪律（这条线的立身之本）
 
@@ -259,8 +243,10 @@ scripts/run_queue_9h.sh + run_queue_retry{2,3,4}.sh 🆕 ★ 会自己往下走�
 探针开关（都在 verl_patches 里）：
   SYNCOPATE_LORA_ADAPTER_SYNC=1  **默认开** · E22 修法①（推 adapter）
   SYNCOPATE_FSDP_DDP_FIX=1       **默认开** · E21 修复（退化网格）
-  SYNCOPATE_PREFIX_GROUPER=1     🆕 **默认关**·E26 打包前向（⚠️ 真实训练集成未完成，见 E26 §6.3；
-                                 里面暂留有 Adam 扫描的诊断代码，解决后要清）
+  SYNCOPATE_PREFIX_GROUPER=1     🆕 **默认关**·E26 打包前向（✅ 集成已通 2026-08-19，E26 §6.3–6.4；
+                                 欠同尺子吞吐 A/B 与 B5，转正前默认保持关）
+scripts/repro_pg_dtype.py       🆕 ★ E26 竞态的脱 Ray 复现（三臂 × 5 因素开关 × 4 探针，单轮 ~30 s；
+                                 也是「FSDP 根旁路 ⇒ 归约竞态」的最小证据 + 修复回归测试）
   SYNCOPATE_SYNC_PAYLOAD=1       每次同步打「张量数/字节/lora_ 个数/盯住层 ‖W‖」+ list_loras()
   SYNCOPATE_OPT_STEP_PROBE=1     **真实**优化器更新次数（不是 fit step / dump 数 / param_version）
   SYNCOPATE_DDP_PROBE=1          三个 rank 的梯度范数（E21 的判据）

@@ -728,8 +728,12 @@ def write_run_purpose(save_path: Path, *, purpose: str, steps: int) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
     parser.add_argument("--model", default="models/Qwen3-0.6B")
-    parser.add_argument("--train-file", default="data/rl/v3/train.parquet")
-    parser.add_argument("--val-file", default="data/rl/v3/val.parquet")
+    # ★ 2026-08-19：默认值跟着 DATA_VERSION 走（单一来源，见 08 §4.0「不该有副本」）。
+    #   此前写死 "v3" —— 目录早已不存在，谁忘了传就 FileNotFoundError（第七形态：
+    #   默认值静默指向另一件事；今天的 e26 冒烟第 2 次启动就死在这上面）。
+    from syncopate.pipeline.split import DATA_VERSION as _DV
+    parser.add_argument("--train-file", default=f"data/rl/{_DV}/train.parquet")
+    parser.add_argument("--val-file", default=f"data/rl/{_DV}/val.parquet")
     parser.add_argument("--save-path", default="checkpoints/grpo/smoke")
     parser.add_argument("--project", default="syncopate")
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
@@ -987,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rollout-is", default="sequence", choices=["token", "sequence"],
                         help="重要性采样的聚合口径。**默认 sequence**（2026-08-19，见源码里的长注释）："
                              "干净基线 120 步实测序列级 ESS 无衰减，而行为维度上它明显更好"
-                             "（该 defer 97% vs 83%）；且序列级的 ESS **会动**，token 级恒 ≈1 "
+                             "（该 defer 97%% vs 83%%）；且序列级的 ESS **会动**，token 级恒 ≈1 "
                              "⇒ 后者等于一个永不报警的警报器。"
                              "⚠️ ESS/N 真的跌破 0.3 时，换成 token 是**逃生口**（06 §2.B）。"
                              "⚠️ 陈旧度条件至今没被跑出来过（partial_ratio 全程 0）⇒ 结论有范围。")

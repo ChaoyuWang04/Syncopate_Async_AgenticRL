@@ -1,7 +1,8 @@
 # E26 · PrefixGrouper：题面只算一次 —— **3.96×**（三次前向）
 
-> 状态：✅ 等价性已过（fp32 逐位）+ 微基准吞吐已测　🔴 **真实训练集成未完成**（§6：13 处接线，卡在优化器 dtype）　⬜ 未过任务尺子
-> ⛔ **端到端吞吐数一个都没有** —— 3.96× 只在微基准上成立
+> 状态：✅ 等价性已过（fp32 逐位）+ 微基准吞吐已测　✅ **真实训练集成已通**（2026-08-19：
+> 根因=绕过根 FSDP ⇒ 归约竞态，§6.3；冒烟四常驻判据全绿，§6.4）　⬜ 同尺子吞吐 A/B　⬜ 未过任务尺子
+> ⚠️ 端到端只有一个方向性数字（step 2.12×，n=1 短跑，§6.4）—— 3.96× 仍只在微基准上成立
 > 尺子 `scripts/probe_prefix_grouper_speed.py` · 等价性 `scripts/check_prefix_grouper_equivalence.py`
 > 补丁 `syncopate/train/verl_patches.py::_patch_prefix_grouper`（`SYNCOPATE_PREFIX_GROUPER=1`，默认关）
 
@@ -88,11 +89,12 @@ flash_attention_2   2D mask 长度 ≠ query 长度 ⇒ 走 _upad_input 变长�
 ## 5 · 还欠什么
 
 ```
-⬜ 在真实训练里跑通（本报告是隔离的微基准：无 FSDP / 无 Ray / 无 DDP）
+✅ 在真实训练里跑通（2026-08-19，§6.3 根因 + §6.4 冒烟）
+⬜ 同尺子吞吐 A/B（§6.4 的 2.12× 是 n=1 短跑，只定方向）
 ⬜ 过 B5 任务尺子（纪律：只报吞吐不报任务精度不算完成）
-⬜ 组大小 ≠ 8、变长 response 下的显存与稳定性
+⬜ 组大小 ≠ 8、变长 response 下的显存与稳定性（冒烟里出现过组 [8] 与孤立混合，未系统测）
 ```
-⚠️ **3.96× 是微基准数，不是端到端数。** 那个「约 2.98×」是外推，不是实测。
+⚠️ **3.96× 是微基准数，不是端到端数。** 「约 2.98×」是外推；实测方向数 2.12×（§6.4，未转正）。
 
 ---
 
@@ -117,7 +119,7 @@ flash_attention_2   2D mask 长度 ≠ query 长度 ⇒ 走 _upad_input 变长�
 | 10 | 熵传 `None`，verl **无条件**对它做 padding | `padding.py` `is_nested` | ✅ 始终带出熵（`FusedLinearForPPO` 本来就算了） |
 | 11 | 旁路 `no_padding_2_padding` **装错进程**（WorkerDict ≠ trainer driver） | 现象一字不变 | ✅ 移到 setup 期 patch 源模块（实测该模块不碰 CUDA） |
 | 12 | verl 聚合只认 **jagged** 格式（稠密 `[bsz,R]` 被 `unbind` 后长度全错） | `assert sequence_offsets[-1]==values.shape[0]` | ✅ **按下游契约产出**：每序列全长向量、log_probs 左移一位放 `[L−R−1, L−1)`；旁路删除 |
-| 13 | 优化器 dtype：`expected BFloat16 … got float` | `torch/optim/adam.py`（离根因最远的一次） | 🔴 **未解**，§6.3 |
+| 13 | 优化器 dtype：`expected BFloat16 … got float` | `torch/optim/adam.py`（离根因最远的一次：真身是**绕过根 FSDP ⇒ 归约竞态**） | ✅ **已解**，§6.3 |
 
 ⇒ 分布：**主线 1 · verl 缺陷 3（#2/#6/#7）· 我们接错 9**。
 ⇒ **数学部分（等价性 / 因果对齐 / 掩码语义 / response-only 投影）全程零改动、零错误。**
@@ -132,7 +134,12 @@ flash_attention_2   2D mask 长度 ≠ query 长度 ⇒ 走 _upad_input 变长�
 下游照单全收继续走，直到某层碰上处理不了的类型/长度/dtype 才炸 —— 中间没有契约检查。
 ⇒ 实测有效的手段只有两个：**接缝处自己打判据行** · **把问题降维成秒级观测**。
 
-### 6.3 🔴 当前卡点：Adam `expected dtype BFloat16 for 'end' but got float`
+### 6.3 ✅ 已解（2026-08-19）：根因是**绕过了根 FSDP 的 forward**，dtype 只是竞态的一种表现
+
+> 复现与全部证据：`scripts/repro_pg_dtype.py`（脱 Ray，单轮 ~30 s；三臂 × 5 因素开关 × 4 个探针）。
+> **16 轮起训练没定位到的，秒级复现 12 轮定案。**
+
+**当时的卡点记录**（保留原文，弯路也是证据）：
 
 ```
 已确认   对照跑（补丁关、同配置）跑通：step 119.43 s / update_actor 59.72 s ⇒ 是我们的路径引入的
@@ -141,9 +148,77 @@ flash_attention_2   2D mask 长度 ≠ query 长度 ⇒ 走 _upad_input 变长�
 诊断三连败  钩子只挂第一个参数（E4 覆盖面）· patch 了 AdamW 而 verl 用 Adam（E5 打错目标）
            · 改对目标后扫描仍 0 行（原因未明，判据A/组构成同期各打 2 次）
 ```
-⇒ **下一步：脱 Ray 最小复现**（`scripts/repro_pg_dtype.py`）—— FSDP+LoRA+我们的前向，
-   秒级迭代，直接打印全部 `(param, grad)` dtype。
-⚠️ 那段 Adam 扫描的诊断代码**已清掉** —— 它从没跑起来过（先打错类：patch 了 AdamW，而 verl 用 Adam；改对之后仍 0 行、原因未明）。⇒ **不留「看起来在监控、其实什么都没做」的死代码**（那正是 D1 型判据的温床）。
+
+**根因（因果链，每一环有探针实测）**：
+
+```
+_pg_forward 直接调 _base_model(model)(...) ⇒ 绕过根 FSDP 模块
+⇒ FSDP1 把 pre-backward hook 注册在**根 forward 的输出张量**上，损失不流经它 ⇒ 永不触发
+⇒ `_post_backward_final_callback` 只由根的 pre-backward 排队 ⇒ 没人排队（探针实测：排队 0 次）
+⇒ 归约（fp32 all-reduce）+ 转回 bf16 全部跑在 `_post_backward_stream` 上，默认流从不等它
+⇒ **optimizer 读到竞态快照**：
+     有时没归约 —— 三 rank 梯度和各不相同（E21 形状的静默错误，**不报错**）
+     有时抓到半途的 fp32 —— Adam `expected BFloat16 for 'end'`（幸运的金丝雀）
+```
+
+**为什么此前「看起来能跑」**：根没被 lazy_init 时，被直接调用的子单元会**各自自封 `_is_root`**、
+各自排队 final callback ⇒ 碰巧正确。而 **adapter 同步在启动时的一次 `state_dict()` 会把真根
+init 掉**、子单元从此不再自封 ⇒ 真实跑里每次更新都在竞态里。
+最小充分条件实测 = `state_dict 一次 × ≥2 个 micro-batch`（正是真实跑的形状）。
+⚠️ **最危险的格子是 `state_dict × 1 个 micro-batch`：不报错、梯度静默不同步。**
+
+**修法**（都在 `_patch_prefix_grouper` 里，三件一起）：
+
+```
+① 前向走**根 FSDP 模块**；CausalLM 的 class forward 临时换回 HF 原版
+   （verl fused 版不透传 kwargs、prefix_grouper 会被吞；HF 原版 logits_to_keep=1 只投影 1 个位置）
+② hidden 用 forward hook 从基座捕获（仍不用 output_hidden_states）
+③ `log_probs += 0×根输出` 的锚 ⇒ 根的 pre-backward 在 backward 一开始就触发
+```
+
+**修复验收（脱 Ray）**：最忠实组合（tie+rmpad+varlen+accum2+statedict、3 rank）下：
+final callback 每次 backward 排队/执行各 1 · 三 rank 梯度和**与健康路径逐位相同**
+（0.08351319283246994）· dtype 全 bf16 · AdamW OK · log_probs sum 分毫未动
+（−1789.591431 —— 修的是接线，没动数学）。真实训练验收见 §6.4。
+
+⚠️ 复现脚本自己也踩过一次「覆盖被顶掉」：补丁闭包的 `_pending` 在第一次 forward_step
+调用时重赋 `pg_forward`，把试验臂的覆盖静默顶回去 ⇒ **前四轮 rootfwd 臂结果全部作废**。
+解法 = 覆盖后加 `_ran` 断言（解药②「对照计数」的又一次兑现）。
+
+### 6.4 ✅ 真实训练冒烟（2026-08-19 12:03，fully_async 3+1，与崩溃跑同配置）
+
+> 日志 `logs/e26/pg_fix_smoke.log` · ckpt 已删（探针短跑），`dispatched.jsonl`/`rollout_dumps` 保留
+
+```
+判据A     [prefix-grouper] 打包前向已生效 ×12（组构成 [8]，真实题面 grouped (1,4181)→投影 248）
+崩溃点    上次必崩的 optimizer step：通过（expected dtype / RuntimeError 0 次）
+梯度同步  ddp-probe：rank0 与 rank2 梯度范数逐位相同（2.448827e-03）—— E21 判据在真实跑复验
+四常驻    ① lora-probe step≥1 list_loras()=[123] ✅ ② 第 2 次同步 504 个 lora_ / 252 MiB ✅
+          ③ rollout_corr/kl 4.42e-4（≈3.4e-4 地板）✅ ④ prompt_length/clip_ratio 0.0 ✅
+```
+
+**第一组端到端数字**（⚠️ n=1 条 timing 行、6 步短跑、非同尺子正式对照 —— 只定方向不定数）：
+
+```
+                 对照（补丁关，08-19 ctrl_off）   本跑（补丁开）      比
+step                    119.43 s                    56.44 s        2.12×
+update_actor             59.72 s                    20.82 s        2.87×
+构成变化      三次前向占步 88.9% → 61.3%；gen 升到 38.2% 成为最大项
+```
+
+⇒ 方向与微基准外推（≈2.98×）一致；**正式吞吐数要等同尺子 A/B**（同数据同步数同 seed 各一跑）。
+
+### 6.5 还欠的两步（验收顺序的 ③④）
+
+```
+⬜ 同尺子吞吐 A/B（补丁开/关 × 同 seed 同步数）—— 上面 2.12× 才能转正
+⬜ B5 任务尺子（≥60 步 + 冻结 EVAL 配对）—— 纪律：只报吞吐不报任务精度不算完成
+```
+
+⚠️ 顺手修掉的两个启动失败（都不是本补丁的问题，但都挡了冒烟）：
+`--ppo-mini-batch-size` 不传时默认 2 被整除守卫拦（行为正确，参数要记得传）；
+`--train-file/--val-file` **默认值写死 v3（目录已不存在）→ 已改成跟 `DATA_VERSION` 走**；
+`launch_rl --help` 崩在一处裸 `%`（argparse 格式化）→ 已修。
 
 ## 7 · ★★★ 判据失效的七种形状（今天一天集齐：2 种设计错 + 5 种执行错）
 

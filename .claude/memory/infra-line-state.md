@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-16T17:09:54.660Z
+  modified: 2026-08-19T12:10:31.203Z
 ---
 
 > ⛔⛔ **2026-08-18：本条里所有「异步 / 陈旧度 / ESS」相关的结论作废** ——
@@ -235,13 +235,31 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
      ⛔ 连带 E19「ref 走 FP8」失效。⚠️ **默认值尚未改**
 ✅ E25 「trainer 没喂饱」证伪   micro_batch 拉高是**负收益**；关 GC 显存不够
      ⇒ 省时间只剩「让它少算」 ⇒ [[trainer-is-compute-bound-not-starved]]
-🟡 E26 PrefixGrouper   微基准 **3.96×** + fp32 逐位等价；**真实集成未通**（13 处接线）
+🟡 E26 PrefixGrouper   微基准 **3.96×** + fp32 逐位等价；~~真实集成未通~~ → ✅ 下午已通（见文末）
      ⇒ [[integration-is-the-work-not-the-math]]
 🔴 代修主线阻断 bug   `val_kwargs.seed` 是不存在的键 ⇒ launch_rl 100% 启动即死
 ```
 
-**队首（`00-INFRA-HANDOFF §5.1`）**：① 5120 下重测 lr 1e-4 → ② E26 脱 Ray 最小复现打 dtype
+**队首（`00-INFRA-HANDOFF §5.1`）**：① 5120 下重测 lr 1e-4 → ② E26 同尺子吞吐 A/B → B5
 → ③ KL 多种子 → ④ token vs sequence 多种子。
 **新增第四条常驻判据**：`prompt_length/clip_ratio` 必须 0.0000。
 **上游第四包**（`docs/upstream/verl-prefix-grouper-not-wired/`）：掩码语义是我们独有的；
 接线部分挂起（#7202 已被维护者关闭）。回信：`INFRA-TO-MAINLINE-2026-08-19b.md`。
+
+## ★★★ 2026-08-19 下午：E26 集成收口 —— Adam dtype 的真身是 FSDP 归约竞态
+
+```
+✅ 根因定案（scripts/repro_pg_dtype.py，脱 Ray 单轮 30 s，12 轮 vs 此前 16 轮起训练无果）：
+   打包前向绕过根 FSDP ⇒ 损失不流经根输出 ⇒ 根 pre-backward 永不触发 ⇒ 归约的
+   final callback 没人排队 ⇒ fp32 all-reduce 挂在没人等的 stream 上 ⇒ optimizer 读竞态快照
+   —— 有时**梯度不跨 rank 归约且不报错**（E21 形状），有时抓到半途 fp32（=那个 Adam 报错）
+★ 显形条件是**组合**：state_dict()一次 × ≥2 micro-batch（单因素全不复现 ⇒ 全抄真实跑 + 留一法）
+★ 「以前能跑」= 根没 lazy_init 时子单元自封根的**巧合**；adapter 同步的 state_dict 打破它
+✅ 修法：前向走根 FSDP（CausalLM forward 临时换回 HF 原版 + logits_to_keep=1）+ hook 捕获
+   hidden + log_probs 加 0×根输出的锚。验收：三 rank 梯度和与健康路径**逐位相同**、
+   log_probs sum 分毫未动；真实冒烟四常驻判据全绿
+🟡 端到端方向数 step 119.43→56.44 s（2.12×）、update_actor 2.87×（n=1 未转正 ⇒ 队首②）
+✅ 顺手修：launch_rl 数据默认值 v3→跟 DATA_VERSION 走 · --help 裸 % 崩溃
+```
+⇒ 教训进 ONBOARDING §5 坑 24–26：**FSDP1 下绕过根 forward = 静默不归约**；
+单因素复现不了先全抄再留一法；盯长跑必须带进程退出兜底。

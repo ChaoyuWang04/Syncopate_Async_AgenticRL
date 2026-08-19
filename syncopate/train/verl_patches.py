@@ -1212,9 +1212,16 @@ def _patch_prefix_grouper() -> None:
     _orig_apply = _mp.apply_monkey_patch
 
     _wired = {"done": False}
+    # ★ 存下 CausalLM 的 **HF 原版 forward**（verl 的 fused-kernels patch 会把它换掉，
+    #   而 fused 版签名是**固定参数、不透传 kwargs** ⇒ `prefix_grouper` 到不了 attention，
+    #   还会对整条 grouped 序列做一次多余的全长投影）。_pg_forward 里临时换回原版调用。
+    _orig_cls_forward: dict = {}
 
     def _apply_with_pg(*args, **kwargs):
         kwargs["use_prefix_grouper"] = True
+        _m = args[0] if args else kwargs.get("model")
+        if _m is not None and type(_m) not in _orig_cls_forward:
+            _orig_cls_forward[type(_m)] = type(_m).forward
         r = _orig_apply(*args, **kwargs)
         # ★ 到这里模型正在构建 ⇒ Ray 早已分好卡 ⇒ 现在才碰重模块是安全的
         if not _wired["done"]:
@@ -1306,11 +1313,49 @@ def _patch_prefix_grouper() -> None:
                     include_prefix_last=1, calculate_entropy=False, entropy_fn=None):
         from verl.utils.experimental.torch_functional import FusedLinearForPPO
 
-        # ★ 直接取基座最后一层，**不用 output_hidden_states**（那会物化全部 36 层 ≈1.7 GB）
-        hidden = _base_model(model)(
-            input_ids=concat_input_ids, attention_mask=attention_mask,
-            position_ids=position_ids, use_cache=False, prefix_grouper=prefix_grouper,
-        )[0]
+        # ★★★ 2026-08-19 修（E26 §6.3 的真正根因，脱 Ray 复现 scripts/repro_pg_dtype.py）：
+        #   前向必须走**根 FSDP 模块**、且损失必须流经**根 forward 的输出**。
+        #
+        #   此前这里直接调 `_base_model(model)(...)` 绕过根 ⇒ FSDP1 的 pre-backward hook
+        #   （注册在根输出张量上）永不触发 ⇒ `_post_backward_final_callback` 没人排队 ⇒
+        #   归约(fp32 all-reduce)+转回 bf16 全部挂在 `_post_backward_stream` 上**没有人等**
+        #   ⇒ optimizer 读到竞态快照：有时没归约（E21 形状的静默错误！三 rank 各学各的），
+        #   有时抓到半途的 fp32（Adam `expected BFloat16 for 'end'` —— 幸运的金丝雀）。
+        #   「以前能跑」纯属意外：根没被 lazy_init 时子单元各自自封根；而 adapter 同步
+        #   在启动时做的一次 state_dict() 会把真根 init 掉，此后每一步都在竞态里。
+        #
+        #   做法：
+        #   ① 临时把 CausalLM 的 class forward 换回 HF 原版（verl fused 版不透传 kwargs，
+        #      prefix_grouper 会被吞掉；HF 原版还支持 logits_to_keep=1 ⇒ lm_head 只投影
+        #      1 个位置，不物化全量 logits）
+        #   ② hidden 用 forward hook 从基座捕获（仍不用 output_hidden_states）
+        #   ③ 给 log_probs 加一个 0×根输出 的锚，保证根的 pre-backward 在 backward 一开始
+        #      就触发（判据：repro 探针「final排队/执行」每次 backward 各 +1，
+        #      三 rank 梯度和与健康路径**逐位相同**）
+        _causal = None
+        for _m in model.modules():
+            if type(_m) in _orig_cls_forward:
+                _causal = _m
+                break
+        _captured = []
+        _h = _base_model(model).register_forward_hook(
+            lambda _mod, _i, _o: _captured.append(_o[0] if isinstance(_o, tuple) else _o.last_hidden_state))
+        _cls, _swapped = (type(_causal), type(_causal).forward) if _causal is not None else (None, None)
+        try:
+            if _cls is not None:
+                _cls.forward = _orig_cls_forward[_cls]
+            out = model(input_ids=concat_input_ids, attention_mask=attention_mask,
+                        position_ids=position_ids, use_cache=False,
+                        prefix_grouper=prefix_grouper, logits_to_keep=1, return_dict=True)
+        finally:
+            if _cls is not None:
+                _cls.forward = _swapped
+            _h.remove()
+        if not _captured:
+            raise RuntimeError("[prefix-grouper] 根前向跑了但基座 hook 没捕获到 hidden —— 模块层级变了？")
+        hidden = _captured[0]
+        # 锚：0×根输出。把损失接到根 forward 的输出张量上，唯一作用是触发根的 pre-backward。
+        _anchor = out.logits.float().sum() * 0.0
         _, _, suffix_h, suffix_mask_raw = prefix_grouper.split_output(
             hidden, include_prefix_last=include_prefix_last)
         completion_right = prefix_grouper.convert_padding(
@@ -1326,7 +1371,7 @@ def _patch_prefix_grouper() -> None:
             input_ids=completion_right.reshape(B * T),
             temperature=temperature,
         )
-        log_probs = log_probs.view(B, T)
+        log_probs = log_probs.view(B, T) + _anchor
         # ⚠️ **始终把熵带出去**：verl 的 `_compute_old_log_prob` 会无条件地对它调
         #   `no_padding_2_padding(entropy, ...)`，传 None 进去就是
         #   `AttributeError: 'NoneType' object has no attribute 'is_nested'`
@@ -1383,19 +1428,14 @@ def _patch_prefix_grouper() -> None:
                 device_name=get_device_name(),
                 param_dtype=getattr(self, "_autocast_dtype", torch.bfloat16),
             )
-            # ⚠️ **dtype 要和标准路径一致**：`FusedLinearForPPO` 内部升到 float32，
-            #   而 verl 标准 rmpad 路径返回的是 bf16。不对齐的话梯度是 float32，
-            #   最后炸在 **优化器**里：
-            #       RuntimeError: expected dtype c10::BFloat16 for `end` but got dtype float
-            #   —— 报在 torch/optim/adam.py，离根因最远的一次。
-            # ⛔ 撤回：曾把 log_probs 转成 bf16 —— **方向是反的**。
-            #    `FusedLinearForPPO` 第 48 行有 `assert token_log_probs.dtype == torch.float32`
-            #    ⇒ float32 才是它的契约，熵才是 orig_dtype(bf16)。
-            #    而那个 Adam 报错在转之前就存在 ⇒ 不是这里的问题。
-            # ⛔ 这里曾放过一段 Adam 扫描的诊断代码（找 param/grad dtype 不一致），
-            #    但它**从没跑起来过**：先打错类（AdamW，实际是 Adam），改对之后仍 0 行、
-            #    原因未明。⇒ 已清掉，避免留下"看起来在监控、其实什么都没做"的死代码。
-            #    ⇒ 正确的下一步是**脱 Ray 最小复现**（E26 §6.3），不是继续在真实训练里塞探针。
+            # ✅ 2026-08-19 已解：那个 Adam `expected BFloat16 for 'end' got float` 的根因
+            #    **不是 dtype 转换**，是 `_pg_forward` 绕过了根 FSDP forward ⇒ 归约与
+            #    cast-back 挂在没人等的 post-backward stream 上（竞态，见 _pg_forward 顶部
+            #    注释与 scripts/repro_pg_dtype.py）。dtype 报错只是竞态的一种表现；
+            #    更危险的表现是**梯度静默不跨 rank 归约**（E21 形状）且不报错。
+            # ⛔ 历史弯路留档：曾把 log_probs 转 bf16（方向反了，FusedLinearForPPO 契约就是
+            #    fp32）、曾 patch AdamW 扫 dtype（verl 用的类经 lr_scheduler 包装，且问题
+            #    本就不在 optimizer）。都对现象「一字不变」⇒ 印证解药④。
             # ★ 还原成 micro_batch 原来的行顺序
             log_probs = log_probs.index_select(0, _inv)
             if entropy is not None:
