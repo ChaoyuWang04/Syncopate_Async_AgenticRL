@@ -599,3 +599,34 @@ issue 作为「下游实证」引用过去。
 
 ⛔ **对外动作要人来点头**：本节只做归属分析与草稿，**不代表已经提交**。
 提 issue 是对外发布，需要 Chaoyu 明确同意（而且 §13.4 的 A16 没做完之前不该提）。
+
+---
+
+## 14 · 2026-08-19 · 提交包③收口：FSDP2 实测 + A17 端到端（三跑一败一成）
+
+> 材料与英文正文在 **`docs/upstream/fsdp-shard-alignment/`**；本节只记数与教训。
+
+**① FSDP2 也中招（从 [推断] 升级为实测）**：真实 Qwen3-4B 层 + `fully_shard(world=3)`，
+捕获真实 `all_gather_into_tensor` —— per-rank **67,319,300 B（%16=4）**，预测=实测逐字节吻合；
+错位钉在 4 个 1-D 参数（2×layernorm %16=12、q/k_norm %16=6；2-D 权重按行切天然对齐）。
+该尺寸 bf16 all_gather **2.15 → 27.03 GB/s = 12.56×（+12 B）**。
+产物 `_audit/infra/e18_fsdp2_alignment.json` · `scripts/probe_fsdp2_alignment.py`。
+
+**② A17 走了三跑**（教训比数字值钱）：
+```
+v1  分片时 pad（monkeypatch _get_unpadded_shard）   🔴 首次反向崩：梯度簿记按原始 numel 另算
+                                                    （81921÷3=27307 vs 27308）——层错了
+v2  构造端 diff                                     🔴 白跑：收尾 padding 块被 aligned_numel>0
+                                                    的门罩着，而 verl 这条 engine 路径
+                                                    use_orig_params: False ⇒ 代码根本不执行
+                                                    ★ 判据行 0 条当场识别（没有判据行=没生效）
+v3  构造端 diff + 双臂都开 use_orig_params=True      ✅ update_actor 100.0→27.8 s（3.60×）·
+                                                    ref 41.6→6.1（6.85×）· olp 44.6→9.2（4.84×）·
+                                                    gen ~1×（对照组自洽）· 判据行 541 vs 0
+```
+⇒ 修法定稿：**`_flat_param.py:737/:853` 的收尾 padding 除数 `world_size` →
+`world_size × (16 // itemsize)`**（总 numel 自身对齐 ⇒ 全部下游路径一致）。
+⇒ `use_orig_params=False` 路径连"补到 world 整除"都没有，上游修法要一并覆盖（写进了 issue）。
+
+**③ 顺带的观测**：`use_orig_params=True` 的段内 8 元素对齐**并不能**救分片边界
+（v3 基线 100.0 s 与 =False 基线 98.5 s 同量级 —— 边界对齐由 `总numel % 24` 决定，与段内对齐无关）。

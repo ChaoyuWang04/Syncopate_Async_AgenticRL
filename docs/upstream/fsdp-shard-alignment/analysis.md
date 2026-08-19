@@ -178,17 +178,28 @@ ZeRO-3 + NCCL_PROTO=LL128（绕开）     update_actor 14.40 s   1.81×   ← 3.
 
 ## 6 · 建议的修法（PyTorch 侧）
 
-**FSDP1** —— `torch/distributed/fsdp/_flat_param.py`，`FlatParamHandle._get_shard` / `_get_unpadded_shard`：
-现在只把 flat parameter 补到 `world_size` 的倍数。建议改成补到
-**`world_size × (16 // itemsize)`** 的倍数：
+**FSDP1** —— ⛔ **2026-08-19 更正：修的层换了（原提案证伪，保留示错）。**
+原提案是在 `_get_shard` / `_get_unpadded_shard`（**分片时**）pad —— **实测会崩**：
+梯度簿记走另一条路按原始 numel 均分（81921÷3=27307 恰好整除），与被 pad 过的初始化分片
+（27308）差 1 个元素，第一次反向就 `assigning a gradient of size '[27307]' to a tensor of
+size '[27308]'`。**运行时在分片函数里 pad，改不全所有算尺寸的地方。**
+
+✅ **正确的层是构造端** —— `_init_flat_param_and_metadata` 里**本来就有**
+「补到 world_size 整除」的收尾 padding（自带注释 *"to avoid a copy for the post-backward
+reduce-scatter"*），把除数换掉即可，总 numel 自身对齐后所有下游路径自然一致：
 
 ```python
-# 目前：每 rank numel = ceil(numel / world_size)，只保证相等
-# 建议：让每 rank 的 numel 是 (16 // itemsize) 的倍数
-elems_per_16B = max(1, 16 // tensor.element_size())      # bf16/fp16 → 8，fp32 → 4
-align        = world_size * elems_per_16B
-padded_numel = math.ceil(numel / align) * align
+# _flat_param.py:737（孪生站点 :853 同改）
+align        = self.world_size * max(1, 16 // _get_dtype_size(dtype))   # bf16→24, fp32→12 (world=3)
+numel_to_pad = align - (total_numel % align)
+if numel_to_pad > 0 and numel_to_pad < align:
+    ...                                        # 原有的 padding tensor 机制原样复用
 ```
+
+⚠️ 该收尾 padding 块被 `aligned_numel > 0` 的门罩着 = **只在 `use_orig_params=True`
+构造路径上存在**；`=False` 的路径连"补到 world 整除"都没有（分片时才对末 rank 补齐）
+⇒ 那条路要修得把同样的收尾 padding 加进去。（A17-v2 就是被这道门挡住白跑了一轮 ——
+verl 这条 engine 路径实测 `use_orig_params: False`。）
 
 **FSDP2** —— `torch/distributed/fsdp/_fully_shard/_fsdp_common.py::_get_dim0_padded_size`
 同样只补到 `dim0_factor`（= world_size）的倍数，问题同形。
@@ -206,8 +217,19 @@ padded_numel = math.ceil(numel / align) * align
 2. 现场：真实 FSDP 训练里 99.9% 的字节踩在上面（§4）
 3. 修复：**在真实那个尺寸上**补 4 字节，恢复 12.2×（§4）
 
-**缺的是第 4 段**：在 FSDP 真实路径上打这个 padding 补丁，跑一次端到端，
-给出「3 卡 ZeRO-3 的 `update_actor` 从 47.94 s 降到 X」。
+~~缺的是第 4 段~~ ✅ **第 4 段已补（2026-08-19，A17-v3）**：构造端 diff 打进 torch 源码树，
+colocate 3 卡 ZeRO-3 双臂（都 `use_orig_params=True` + 强制 Simple，唯一变量 = padding 除数）：
+
+```
+update_actor   100.0 → 27.8 s   3.60×      判据行 [A17-src] 541 条 vs 0 条
+ref 前向        41.6 →  6.1 s   6.85×      （纯前向最接近微基准的 12×；update_actor 有算力 Amdahl）
+old_log_prob    44.6 →  9.2 s   4.84×
+gen（无 FSDP）   16.4 → 18.5 s   ~1×        对照组自洽
+双臂 exit 0 · rewards 同量级 · 跑完 torch 已还原 stock
+```
+
+⚠️ 与 §4 的 47.94/14.40 **不同尺** —— 那对是旧预算 + `use_orig_params=False`；
+这对是新预算 + `=True`。两对各自同尺内可比，跨对不可比。
 ⇒ 本仓库排成 **A17**。**不做也能提**（前三段已经互相独立且都可复现），
 但补上之后 issue 会强很多 —— 从「这里有个悬崖」变成「**改这一行，端到端快 N 倍**」。
 

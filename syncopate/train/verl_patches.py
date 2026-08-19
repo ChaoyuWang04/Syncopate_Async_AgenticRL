@@ -494,6 +494,17 @@ def _patch_nvtx_timers_or_rebind() -> None:
 #      （`numel_to_pad` 就是干这个的）⇒ 语义上安全；
 #   ② 但它**改变了 flat parameter 的尺寸**，而尺寸在别处也被算过
 #      ⇒ **必须用「grad_norm / loss 与未打补丁的跑对得上」当判据**，不能只看变快了。
+#
+# ⛔⛔ 2026-08-19 实测：**上面②那句担心兑现了 —— 这一层是错的层，别再用这个补丁。**
+#   A17 双臂第一跑：aligned 臂在**第一次反向**就炸 ——
+#     `attempting to assign a gradient of size '[27307]' to a tensor of size '[27308]'`
+#   根因：本补丁只改了 `_get_unpadded_shard`（初始化分片走它 ⇒ 27308），
+#   而梯度分片的尺寸由另一条路按**原始** numel 均分（81921÷3=27307，恰好整除不触发 pad）
+#   ⇒ 两处各算各的，差 1 个元素。**运行时在分片函数里 pad，改不全所有算尺寸的地方。**
+#   ✅ 正确的层：**flat param 构造端**（`_flat_param.py:737/:853` 那两处孪生的
+#   「补到 world 整除」，把除数换成 `world_size × (16 // itemsize)`）——
+#   总 numel 自身对齐后，所有下游路径自然一致。已以源码 diff 形式验证（A17-v2），
+#   这也正是拟提给上游的那一行。见 `docs/upstream/fsdp-shard-alignment/`。
 def _patch_fsdp_shard_alignment() -> None:
     import torch.nn.functional as F
     from torch.distributed.fsdp import _flat_param as fp

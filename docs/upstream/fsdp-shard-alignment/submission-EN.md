@@ -115,10 +115,20 @@ for per_bytes in (67_287_212, 67_287_216):          # FSDP1's real chunk, then +
 
 Measured (3× RTX 5090, PCIe, no P2P, NCCL 2.27.5, default protocol):
 `% 16 = 12` → 1.1 GB/s; `% 16 = 0` → 13.4 GB/s. The cliff tracks `% 16 == 0`
-exactly (`% 128` is irrelevant; 16/32/48/… are all fast). End-to-end, 3-GPU
-ZeRO-3 `update_actor` on this machine goes 47.9 s (default Simple, misaligned)
-→ 14.4 s with `NCCL_PROTO=LL128` (which sidesteps the 16B path at the cost of
-−30% all_reduce / −41% broadcast) 〔A17: → X s with shard padding alone〕.
+exactly (`% 128` is irrelevant; 16/32/48/… are all fast).
+
+End-to-end on the same machine (3-GPU ZeRO-3; two independent same-ruler pairs,
+do not compare across them — configs differ):
+
+```
+LL128 sidestep        update_actor 47.9 s -> 14.4 s
+                      (NCCL_PROTO=LL128 dodges the 16B path, but costs
+                       -30% all_reduce / -41% broadcast elsewhere)
+shard padding alone   update_actor     100.0 -> 27.8 s   (3.6x)
+(this proposal)       ref fwd           41.6 ->  6.1 s   (6.9x)
+                      old_log_prob      44.6 ->  9.2 s   (4.8x)
+                      rollout generation (no FSDP collectives): unchanged
+```
 
 ## Proposed fix
 
@@ -134,11 +144,25 @@ parameter" semantics).
   total) and recovers 12.56×. We are happy to send a PR if this direction is
   acceptable (the padded size flows into DTensor metadata / copy-out views, so
   we would like a maintainer's read on the preferred plumbing first).
-- **FSDP1** (`_get_unpadded_shard`): pad the flat tensor to
-  `world_size × (16 // itemsize)` elements before chunking. We have run exactly
-  this as a runtime patch in real training 〔A17: numbers〕. (We understand
-  FSDP1 is in maintenance mode; reporting for completeness since it is the
-  default backend of downstream frameworks such as verl.)
+- **FSDP1** (`_flat_param.py::_init_flat_param_and_metadata`): the construction
+  path already appends end padding to make the flat parameter divisible by
+  `world_size` (its own comment: *"to avoid a copy for the post-backward
+  reduce-scatter"*). Changing that divisor to `world_size × (16 // itemsize)`
+  makes every rank's shard 16-byte aligned through the exact same mechanism.
+  Validated in real training with only this diff (numbers above; the padding
+  amounts to +4..+6 elements per flat parameter).
+  Two details worth recording:
+  - that end-padding block is gated on the `use_orig_params=True` construction
+    path; the `use_orig_params=False` path performs no construction-time end
+    padding at all and would need the same treatment;
+  - padding at *shard* time instead (`_get_unpadded_shard`) is **not**
+    sufficient — we tried it first, and gradient bookkeeping derives shard
+    sizes independently, crashing on the first backward with
+    `attempting to assign a gradient of size '[27307]' to a tensor of size
+    '[27308]'`. The flat parameter's own numel has to carry the alignment.
+
+  (We understand FSDP1 is in maintenance mode; reporting for completeness since
+  it is the default backend of downstream frameworks such as verl.)
 
 ## Environment
 
@@ -189,7 +213,10 @@ padded yet:
 ## 3 · 提交时的注意事项
 
 - [ ] PyTorch issue 先发，拿到链接后填进 NCCL 评论的 `<link>`
-- [ ] 〔A17〕两处回填（端到端数字：ZeRO-3 update_actor Simple 基线 vs +对齐补丁）
+- [x] 〔A17〕已回填（2026-08-19，v3 双臂 use_orig_params=True，唯一变量=构造端 padding 除数）：
+      update_actor 100.0→27.8 s（3.6×）· ref 41.6→6.1 s（6.9×）· olp 44.6→9.2 s（4.8×）·
+      gen 不变（对照组自洽）· 判据行 541 条 vs 0 条 · 双臂 exit 0、rewards 同量级
+      ⚠️ v1（分片时 pad）已证伪：梯度簿记另算尺寸，首次反向 27307 vs 27308 崩 —— 教训写进了正文
 - [ ] FSDP2 修法 PR 明确写"先要 maintainer 对 plumbing 的意见再发"——padded size 牵动
       DTensor 元数据与 copy-out 视图，不宜自作主张
 - [ ] 与包①②不同：这条**不影响我们自己的生产路径**（我们已定 DDP 不分片），
