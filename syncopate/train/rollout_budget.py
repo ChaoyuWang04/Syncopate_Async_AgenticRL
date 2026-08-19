@@ -26,11 +26,40 @@
 
 from __future__ import annotations
 
+import os
+
+# ── thinking 开关（E27 探针，2026-08-19）──────────────────────────────────
+#
+# ★ 为什么开关放在**契约模块**：开 thinking 同时动两个契约量（模板 kwarg + response
+#   预算），按「这个值应该和那边一致 ⇒ 这里根本不该有第二份」的纪律，两处都从这里取。
+#
+# ★ 默认必须是 False（= 现行为，逐字节不变）：全管线共用同一份脚本，开关只给探针用。
+#   ⛔ 训练路径禁止开（launch_rl 启动即拦）：SFT 是 think-off 模板练的，
+#   开 think 会让「增量拼接 vs 整段渲染」逐 token 不相等（rollout_loop.py:50 有全文，
+#   tests/train 有测试守着）⇒ think-on 训练要等带思考的 SFT 数据，不是拨个开关的事。
+#
+# ★ 预算为什么是 8192：rollout 循环是**增量拼 token、从不重渲染**（rollout_loop.py:239）
+#   ⇒ 历史轮的 <think> 会留在上下文里并计入 response 预算。
+#   上界估算：中位 4 个 assistant 轮 × Qwen3 单轮思考 ~0.5–1.5k + 动作/终答 ~0.3k
+#   + 工具返回 ~0.6k ⇒ ~7k，取 8192 含余量。
+#   ⚠️ think-on 跑完必查 truncation_reason="tokens" 的比例 —— 截断的思考连答案都
+#   没有（E20 §7.12 那类翻案的同族），预算不够宁可加大重跑。
+THINK_ON = os.environ.get("SYNCOPATE_THINK", "0") == "1"
+
+# chat 模板的 enable_thinking —— rollout_loop.CHAT_TEMPLATE_KWARGS 从这里取
+ENABLE_THINKING = THINK_ON
+
 # 首轮 prompt 超过这个长度就左截断（不是"整条轨迹的上限"）
 MAX_PROMPT_LENGTH = 5120
 
 # 一条轨迹里**模型生成 + 工具返回**加起来的 token 预算
-MAX_RESPONSE_LENGTH = 2048
+MAX_RESPONSE_LENGTH = 8192 if THINK_ON else 2048
+
+if THINK_ON:
+    # 判据行：think 模式必须显式可见，静默生效 = 下一个「机制在但没接上」
+    print(f"[think-mode] SYNCOPATE_THINK=1 ⇒ enable_thinking=True · "
+          f"MAX_RESPONSE_LENGTH 2048→{MAX_RESPONSE_LENGTH}（仅评测探针 E27；训练路径会拦）",
+          flush=True)
 
 # ⇒ launch_rl 会算 max_model_len = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH = 7168
 #   （`launch_rl.py:31` 的注释里算过：7168 × 144 KB ≈ 0.98 GB KV cache，可接受）
@@ -65,4 +94,5 @@ SAMPLING_TOP_K = -1          # -1 = 不截断
 __all__ = [
     "MAX_PROMPT_LENGTH", "MAX_RESPONSE_LENGTH",
     "SAMPLING_TEMPERATURE", "SAMPLING_TOP_P", "SAMPLING_TOP_K",
+    "THINK_ON", "ENABLE_THINKING",
 ]

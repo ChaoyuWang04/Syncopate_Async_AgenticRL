@@ -51,7 +51,11 @@ from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
 # 多轮累积的预算：最长的模板（GEO）max_steps=14，实测每步约 140 token
 #（模型输出 + 工具返回），留一倍余量。
-MAX_TURN_ACCUMULATION = 4096
+# 多轮累积余量：response 预算全部用满 + 2048 的安全边（工具返回/结束符等）。
+# ⚠️ 写成推导式而不是常量（2026-08-19）：think 模式下 response 预算会变（2048→8192），
+#   这里若还是写死 4096，engine 的 max_model_len 就装不下 —— 又是「两处各写各的」。
+#   默认（think-off）时 2048+2048=4096，与旧值逐字节相同。
+MAX_TURN_ACCUMULATION = MAX_RESPONSE_LENGTH + 2048
 
 ROOT = Path(__file__).resolve().parents[2]
 

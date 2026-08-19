@@ -111,6 +111,8 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 
 | **E23** 🆕 | [采样截尾与 IS](E23-sampling-truncation-and-is.md) | 答主线 §10.4：**训练侧绝不能对齐到 `top_p=0.95/top_k=20`**。verl 的 rollout 报 `processed_logprobs`（截尾后），而 trainer 侧的截尾器**被注释掉了**（`torch_functional.py:672`，还留着 TODO）⇒ 开截尾就是两个分布族，每 token 系统性偏 `Z`，序列级 `Z^694`。⇒ 反过来把**评测**对齐到训练 | **B** | ✅ **源码实证已答** | — | ⬜ 验证探针（可并进 R0-a） |
 
+| **E27** 🆕 | [thinking 三臂探针](E27-thinking-probe.md) | rollout 短 = 模板显式关 thinking（继承老师包）+ SFT 短答案 + 任务饱和。三臂：think-off 裸基座（★兼任修复后**永久基线**）/ think-on 裸基座 / think-off 新 SFT。开关 `SYNCOPATE_THINK=1`（默认关=现行为逐字节不变；训练路径拦截；CPU 判据全过） | **B** | ⬜ **等主线新 SFT adapter** | — | 🔴 eval 三跑 |
+
 > ★★★ **想一次看懂这条线是怎么断又怎么接上的 → [`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)**
 > —— 不是实验报告，是把「现象 → 误判 → 根因 → 为什么框架自带的办法不行 → 我们改了什么 → 结果」讲一遍。
 

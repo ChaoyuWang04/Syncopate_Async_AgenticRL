@@ -45,9 +45,11 @@ ASSISTANT_TURN_END = "<|im_end|>"
 # ★ 2026-08-18：这个值挪进了 `rollout_budget.py`，因为**训练和评测必须共用同一份**
 #   （此前评测硬编码 2048 而训练传 1536 —— 两边跑在不同的输入分布上）。
 #   这里保留同名 re-export，下游的 import 一个字都不用改。
-from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH  # noqa: E402,F401
+from syncopate.train.rollout_budget import (  # noqa: E402,F401
+    ENABLE_THINKING, MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
+)
 
-# ★ 显式关掉 thinking，SFT / RL / gold 回放三处必须完全一致。
+# ★ 默认显式关掉 thinking，SFT / RL / gold 回放三处必须完全一致。
 #
 # 老师包里 SFT 侧硬编码 enable_thinking=False，RL 侧**从不传**（走模板默认 = 允许
 # thinking），两阶段不一致（sft-truth-report T10）。这不只是"浪费 token"的问题：
@@ -59,7 +61,11 @@ from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGT
 #
 # 也就是说，开着 thinking 的话 SFT 学到的序列和 RL 跑出来的序列天生对不齐，
 # 而且不会有任何报错。tests/train 里有一条测试专门守着这件事。
-CHAT_TEMPLATE_KWARGS: dict[str, Any] = {"enable_thinking": False}
+#
+# ★ 2026-08-19（E27）：值改从契约模块取 —— `SYNCOPATE_THINK=1` 时为 True，
+#   **仅供评测探针**（预算随之 2048→8192，见 rollout_budget.py 的开关注释）；
+#   默认（不设环境变量）与旧行为逐字节相同；训练路径由 launch_rl 启动即拦。
+CHAT_TEMPLATE_KWARGS: dict[str, Any] = {"enable_thinking": ENABLE_THINKING}
 
 
 @dataclass

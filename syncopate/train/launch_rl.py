@@ -1007,6 +1007,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
 
+    # ★ think 开关只给评测探针（E27），训练路径启动即拦（最早能判的地方）。
+    #   理由：SFT 是 enable_thinking=False 模板练的，开 think 会让「增量拼接 vs
+    #   整段渲染」逐 token 不相等（rollout_loop.py:50 全文）⇒ 两阶段分布对不齐且不报错。
+    #   think-on 的训练要等带思考的 SFT 数据，不是拨个开关的事。
+    if os.environ.get("SYNCOPATE_THINK", "0") == "1":
+        raise SystemExit(
+            "🔴 SYNCOPATE_THINK=1 只允许用于评测探针（E27，scripts/run_e27_think_probe.sh）。\n"
+            "   训练路径禁止开 thinking：SFT 是 think-off 模板练的，开了两阶段分布对不齐\n"
+            "   （rollout_loop.py:50 有全文与测试）。请去掉该环境变量再起训练。")
+
     # ★ 候选跑的**最少**步数。⚠️ 它是**下限不是目标** ——
     #   真正的停止条件是「零梯度率不再创新高」（scripts/pool_readout.py）。
     #   [依据] e17a 跑 60 步时零梯度率仍在创新高（15%→52%），且 RL 桶只覆盖 22.7%；
