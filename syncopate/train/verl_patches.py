@@ -974,6 +974,19 @@ def merge_lora_into(full: dict, lora: dict) -> dict:
     return full
 
 
+def assert_loaded_matches(after: dict, expect: dict) -> int:
+    """E29 数值判据（E22 §7.1「送到了≠送对了」同款）：load 之后**逐位**比回 ckpt。
+    比不上就炸——加载了错的权重继续训比崩溃贵得多。返回校验的键数。"""
+    import torch
+
+    bad = [k for k in expect
+           if k not in after or not torch.equal(after[k].detach().cpu(), expect[k].cpu())]
+    if bad:
+        raise RuntimeError(f"[ckpt-lora] 🔴 数值校验失败：{len(bad)}/{len(expect)} 个 lora 键"
+                           f" load 后与 ckpt 不一致（如 {bad[:3]}）—— 拒绝继续")
+    return len(expect)
+
+
 def _patch_lora_only_ckpt() -> None:
     """★ E29（2026-08-20）：LoRA 训练下 ckpt 只存可训练部分。
 
@@ -1023,7 +1036,14 @@ def _patch_lora_only_ckpt() -> None:
                 full = merge_lora_into(self.model.state_dict(), sd)
                 print(f"[ckpt-lora] 检测到 lora-only ckpt ⇒ 合成加载（更新 {len(sd)} 键）",
                       flush=True)
-                return orig_load_fn(full, *la, **lkw)
+                ret = orig_load_fn(full, *la, **lkw)
+                # ★ 数值判据：load 完把内存里的 lora 键逐位比回 ckpt（仍在同一 FSDP ctx 内）。
+                #   只在 resume 时发生，代价一次 state_dict()；不一致 = 硬失败。
+                after = {k: v for k, v in self.model.state_dict().items() if k in sd}
+                n = assert_loaded_matches(after, sd)
+                print(f"[ckpt-lora] ✅ 数值校验：{n}/{len(sd)} 个 lora 键 load 后与 ckpt 逐位相同",
+                      flush=True)
+                return ret
             return orig_load_fn(sd, *la, **lkw)   # 旧全量 ckpt 原样加载，向后兼容
 
         self.model.load_state_dict = merged

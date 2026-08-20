@@ -55,6 +55,18 @@ def test_merge_rejects_unknown_keys() -> None:
         merge_lora_into(_sd(lora=False), {"model.layers.9.lora_A.weight": torch.ones(1)})
 
 
+def test_loaded_verification_bitwise() -> None:
+    """数值判据：逐位相同才放行；差一个 ULP 也要炸（E22 §7.1：送到了≠送对了）。"""
+    from syncopate.train.verl_patches import assert_loaded_matches
+
+    expect = filter_lora_state(_sd())
+    assert assert_loaded_matches({k: v.clone() for k, v in expect.items()}, expect) == 2
+    tampered = {k: v.clone() for k, v in expect.items()}
+    next(iter(tampered.values())).add_(1e-7)
+    with pytest.raises(RuntimeError, match="数值校验失败"):
+        assert_loaded_matches(tampered, expect)
+
+
 def test_patch_installs_wrappers_idempotently() -> None:
     """补丁装上后类方法被替换、幂等标记在位；重复安装不套娃。"""
     from verl.utils.checkpoint import fsdp_checkpoint_manager as M
