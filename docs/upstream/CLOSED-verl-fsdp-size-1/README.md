@@ -1,12 +1,26 @@
-# 提交包 · verl `fsdp_size=1`
+# 提交包 · verl `fsdp_size=1` 静默不同步梯度（E21）
 
-> **状态：`OPEN` —— 已提交，等 CI / review**（2026-08-20）
-> issue [#7493](https://github.com/verl-project/verl/issues/7493) · PR [#7494](https://github.com/verl-project/verl/pull/7494)
-> CLA ✅ 已签 · CI ✅ 已在飞书群申请 · 分支 `fix/fsdp-size-1-degenerate-mesh-grad-sync` @ `a130ede`
-> ⇒ 合入后把目录改名为 `MERGED-`；被拒则改 `CLOSED-` 并写清理由（见 [`../README.md`](../README.md) §1） 静默不同步梯度（E21）
-
-> **状态：材料齐备，等 Chaoyu 点头后提交。** 目标仓库 **verl-project/verl**（已迁库，别用 volcengine 旧名）。
-> 顺序：先 issue（拿编号）→ PR 填 `Fixes #<n>` → （可选）去 pytorch#154888 评论补证据 + 链接。
+> ## 🔴 **状态：`CLOSED` —— 被维护者打 `wontfix` 关闭，未合并**（2026-08-20）
+>
+> ```
+> 09:22  issue #7493 提交
+> 09:47  PR   #7494 提交，CLA 已签
+> 10:06  维护者 wuxibin89 打 `wontfix` 标签 → 关闭 PR，同时关闭 issue
+>        ⚠️ **全程 0 条评论，没有给出任何理由**
+> ```
+>
+> ⚠️ **改动没有进 main**（`merge_commit_sha` 只是 GitHub 算的试合并结果，不是落地；
+> 已核对 `origin/main` 上 `get_sharding_strategy` 那三行原样未变，测试文件也不在）。
+>
+> **同一个维护者、同一种处置**：包④要提的 #7202（PrefixGrouper 复活）也是被他关的，
+> 那次至少留了一句"我们在探索 MAGI"。⇒ 见 [`../README.md`](../README.md) §6「被 wontfix 之后」。
+>
+> **可能的理由（未经证实，等对方回复）**：① FSDP1 在退场，任何 FSDP1 修复一律不收
+> （`NO_SHARD` 本身已被 PyTorch 标废弃）② 认为 `fsdp_size=1` 不是受支持配置
+> ③ 批量清理。⇒ **答案会决定包③（也是 FSDP1）怎么定位；包②不受此影响。**
+>
+> ★ **材料本身没有作废**：证据链、复现、测试、验证全部成立，我们本地的修复照常在跑。
+> 若日后 FSDP1 仍在维护、或对方改主意，这个包可以原样复用。
 
 ## 一句话
 
