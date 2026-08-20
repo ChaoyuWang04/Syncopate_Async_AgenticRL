@@ -71,8 +71,9 @@ gradient synchronization). It adds a 2-rank regression test under
 tests/special_distributed/ (registered in run_all.sh). Thanks!
 ```
 
-Slack 邀请链接：https://join.slack.com/t/verl-project/shared_invite/zt-3855yhg8g-CTkqXu~hKojPCmo7k_yXTQ
-（进不去可用飞书群：https://applink.larkoffice.com/client/chat/chatter/add_by_link?link_token=772jd4f1-cd91-441e-a820-498c6614126a ）
+⚠️ **实测：Slack 进不去** —— 它限定邮箱域名（anyscale.com / bytedance.com / together.ai）。
+⇒ **走飞书群**：https://applink.larkoffice.com/client/chat/chatter/add_by_link?link_token=772jd4f1-cd91-441e-a820-498c6614126a
+⇒ 留言正文见 [`3-ci-request-feishu.md`](3-ci-request-feishu.md)（正式版/短版/英文版三选一）
 
 ## 第 7 步 · 可选：给 PyTorch 那条补一刀（5 分钟）
 
