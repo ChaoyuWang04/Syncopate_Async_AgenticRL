@@ -15,9 +15,18 @@
 > **同一个维护者、同一种处置**：包④要提的 #7202（PrefixGrouper 复活）也是被他关的，
 > 那次至少留了一句"我们在探索 MAGI"。⇒ 见 [`../README.md`](../README.md) §6「被 wontfix 之后」。
 >
-> **可能的理由（未经证实，等对方回复）**：① FSDP1 在退场，任何 FSDP1 修复一律不收
-> （`NO_SHARD` 本身已被 PyTorch 标废弃）② 认为 `fsdp_size=1` 不是受支持配置
-> ③ 批量清理。⇒ **答案会决定包③（也是 FSDP1）怎么定位；包②不受此影响。**
+> ✅ **理由已找到**（review comment，挂在我们改的那行 diff 上 —— 所以查 issue comments 看不到）：
+>
+> > **fsdp_size=1 is a rare case, actually I don't think it's a expected size.
+> > Since pytorch not planned to fix it in FSDP1, we don't fallback it either.**　—— wuxibin89
+>
+> ⇒ 三层意思：① 不认为 `fsdp_size=1` 是受支持的值；② 他读到了我们的核心论据；
+> ③ **但把它反过来用了** —— 我们说"上游不修 ⇒ 框架层是唯一能兜住的"，
+> 他说"上游都不修 ⇒ 我们也不接"。同一个事实，两个方向。
+> ⚠️ 他没有触及 issue 里的另一半主张（「要么修，要么**响亮报错**，最差的是静默」）。
+>
+> **决定（Chaoyu 2026-08-20）：不再跟进。** `fsdp_size=1` 本身确实不是常见设置，这是根本。
+> 不提"硬报错"的替代 PR，不追问，**这条线到此为止**。
 >
 > ★ **材料本身没有作废**：证据链、复现、测试、验证全部成立，我们本地的修复照常在跑。
 > 若日后 FSDP1 仍在维护、或对方改主意，这个包可以原样复用。

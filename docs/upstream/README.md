@@ -26,7 +26,7 @@ PARKED-<主题>    我们主动决定不提（例如影响面太窄），写清�
 
 | 包 | 目标 | 状态 |
 |---|---|---|
-| `CLOSED-verl-fsdp-size-1` | verl | 🔴 issue [#7493](https://github.com/verl-project/verl/issues/7493) + PR [#7494](https://github.com/verl-project/verl/pull/7494) **被打 `wontfix` 关闭，零解释**（2026-08-20，维护者 wuxibin89）。材料未作废，见该包 README |
+| `CLOSED-verl-fsdp-size-1` | verl | 🔴 issue [#7493](https://github.com/verl-project/verl/issues/7493) + PR [#7494](https://github.com/verl-project/verl/pull/7494) **被打 `wontfix` 关闭**（2026-08-20）。理由见该包 README（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
 | `READY-verl-lora-adapter-sync` | verl | 源码树实测通过，待提交 |
 | `READY-fsdp-shard-alignment` | PyTorch + NCCL | A17 端到端 3.6× 已回填，待提交 |
 | `READY-verl-prefix-grouper-mask` | verl | 掩码 bug 主打，待提交 |
@@ -195,6 +195,10 @@ not_planned**；包④差点以"从未接上"提交，实际是**重构回归、
 
 问法：**给对方台阶、提供更小的替代方案、明说"哪个答案我都能接受"**。
 不要辩论、不要重复已经写过的论证。范本见 `CLOSED-verl-fsdp-size-1/README.md` 里的草稿。
+
+⚠️ **先把评论查全再下结论**：包① 那次我查了 issue comments 说"零解释"，
+其实理由在 **review comment**（挂在 diff 行上）里。三个端点都要查：
+`issues/<n>/comments` · `pulls/<n>/reviews` · **`pulls/<n>/comments`**。
 
 ★ 关键是问出**是哪一类拒绝**：
 - 「这个子系统不再维护」⇒ 同子系统的其它包要重新定位（包③ 也是 FSDP1，直接受影响）
