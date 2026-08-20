@@ -13,6 +13,21 @@
 `lora.merge=False` 是**默认值**、任何 disaggregated recipe 都用非 `naive` 后端 ⇒
 **触发它不需要任何非常规配置**，这句话已放在 issue/PR 最前面。
 
+## 修法为什么是这个形状（提交时被问到就答这个）
+
+```
+零 wire 改动     不新增序列化任何东西 ⇒ named_tensors 的后端（nccl/nixl/mooncake/kimi）全覆盖
+自描述判别       adapter 推送 100% 是 lora_ 张量、基座推送 0 个 ⇒ peek 第一个名字即可，两侧零协调
+照抄上游语义     base_sync_done 初始化 = "dummy" not in load_format（与 colocate 同款）
+                 ⇒ 真实权重加载时第一次同步就只推 adapter，8.4 GB 基座一次都不用推
+三类不受影响     全参 / merge=True / dummy 首推基座 —— 载荷里没有 lora_ ⇒ 走今天的原路
+delta_sharded    peek 守在 wire_format=="named_tensors" 上 ⇒ delta 引擎自管的路不碰
+```
+
+★ **上游自己留了面包屑**：`engine_workers.py` 里那句注释
+*"base_sync_done is unused in merge-only mode but **kept for Phase 2 adapter path**"*
+—— 他们规划过这个第二阶段，只是没写。⇒ PR 的定位是**完成你们自己规划的 Phase 2**。
+
 发现来源 [`../../infra_exp/E22-lora-never-synced.md`](../../infra_exp/E22-lora-never-synced.md) ·
 提交件 [`3-submission.md`](3-submission.md) · 补丁与测试见本目录
 
