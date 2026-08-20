@@ -55,9 +55,12 @@ adapter 提取                  ✅                ✅ 504 张量 · 跨 rank �
 判据行                        无（预期）        [ckpt-lora] 过滤行 2 步 × 2 rank 全出现
 生产外推（3 rank + save-freq 25，cand 口径）：单跑写盘 108 GB → ~9 GB；
   吞吐收益 ~0.5%（save 本占跑 0.6%，见 §6）；滚动瘦身/prune 链路可退役（存的直接就是终态）
-续跑（--resume auto，合成加载路径）：✅ [ckpt-lora] 合成加载（更新 504 键）× 双 rank ·
-  Loaded model/optimizer 全过 · global_step 2→3→4 接续训练 · step 4 再次过滤存档
-  （logs/e29_ckpt_resume.log；param_version 1→2→3 正确接续）
+续跑（--resume auto，合成加载路径，共两轮实跑）：
+  ✅ 第 1 轮（无数值探针，logs/e29_ckpt_resume.log）：合成加载×双 rank · optimizer 接续 ·
+     global_step 2→4 训完 · 再次过滤存档
+  ✅ 第 2 轮（带数值探针，logs/e29v_resume2.log）：**逐位校验 504/504 × 双 rank** ·
+     RNG/lr_scheduler 一并接续 · 训完 16 步
+  ⚠️ 期间一次失败（e29v_resume）与本补丁无关，见 §7
 ```
 
 ## 5 · 结论
@@ -78,7 +81,15 @@ LoRA-only 存档成立：**价值主体是字节与链路简化**（写盘 12×�
 ## 7 · 踩的坑
 
 - vLLM 在正常收尾时打 "Engine core died unexpectedly" + Traceback——**拆机噪声不是训练失败**，
-  判据要看 trainer 步数走没走完（两跑都走完 2/2）。
+  判据要看 trainer 步数走没走完。
+- ★ **首次权重同步的偶发引擎死亡再现一例**（e29v_resume，2026-08-20 09:34）：数值校验通过后、
+  首次同步广播 8.4 GB 基座的窗口里，EngineCore 无声死亡（无 traceback、KV 余量 15 GB、
+  主机内存 434 GB 空闲、cgroup 上限 483 GB——OOM 假设两次被证伪），两个同步对端卡死在
+  `update_weights` 的 NCCL 集合里 17 min。**同命令复跑通过**（当日同路径 5/6 存活）⇒
+  归档为已知偶发（P4 家族：rollout 卡首次同步余量贴边），与 E29 存档路径正交。
+  留观：若频率上来，先量首次同步瞬时显存峰值再动手。
+- 排查时差点误杀主线 GPU0 的常驻 vLLM 端点（`VLLM::EngineCore` 30 GB）——**清残留必须先按
+  gpu_uuid 归卡再按 PID 杀**，共存机器上 pkill 式清理是事故预备役。
 - 冒烟 save 7.9 s vs 生产 8.8 s（27 GB vs 18 GB）不成比例 ⇒ save 里有固定开销分量，
   外推别用线性。
 
