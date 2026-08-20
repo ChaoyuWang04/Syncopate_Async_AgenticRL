@@ -81,8 +81,10 @@
             ESS 中位 0.92/最低 0.816 · rollout_corr/kl 中位 4e-4 在地板 · abort=0
 ✅ 默认值   **PG 开（mb 联动 8）· KL 关**已切库默认（08-20，上一行的证据垫底）；
             B5/KL 多种子/token-seq 多种子/「步数太少」全部由 candidate 兜底结案或撤销
-⬜ 欠的     CoT（thinking）SFT/RL 训练支持（01 §1 队首）——E27 红利路径；
-            陈旧度/同步暂停两题停放，复活条件都挂在 CoT 之后
+✅ IO/工具   E29 ckpt 只存 LoRA（save 9.5×·写盘 12×·逐位校验常驻）；E14 批1：
+            vLLM 忙仅 35%、微间隙 32.4s＞计算 29.1s ⇒ enforce_eager/CUDA graph 最大单点
+⬜ 欠的     E14 批2（vLLM graph 探针·trainer 乒乓定位·compile 微基准）· CoT 训练支持；
+            陈旧度闸门放宽实验已由 Chaoyu 08-20 下午重启（接力赛问题）
 完成度     ⚠️ 08-20 换标：A=框架/异步（原 B）· B=算子/硬件（原 A）——
             Track A：诊断完 + before→after（B12/E26）+ 候选闭环；Track B：落地一条半
 ```

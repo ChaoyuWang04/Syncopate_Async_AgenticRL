@@ -280,6 +280,23 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ```
 
 
+## ★★ 2026-08-20（下午）：E29 定案 + E14 第一批定稿
+
+```
+✅ E29 ckpt 只存 LoRA：save 7.91→0.83s(9.5×)·ckpt 12×·续跑合成加载+逐位校验(504/504)常驻；
+   默认开；上游第5包文档已备（verl-lora-only-checkpoint）
+✅ E14 批1 定稿：vLLM 侧（完整数据,三/四采互证 33/35%）84.2s 忙仅 29.1s——
+   ★ 10-100µs 微间隙 ×79.7万=32.4s **超过计算本身** ⇒ enforce_eager/CUDA graph=最大单点机会；
+   另 >10ms 等待 17.7s=接力赛（流水线深度/闸门）。trainer 侧「update_actor 内大洞+
+   streamSync×144 乒乓」低信心待 torch profiler 复核
+⛔ 仪器三翻车（全靠"物理不可能"抓出）：nsys 窗口错位×2（启动段/尾巴段——nsys 拖慢启动
+   ~2min、去 osrt 又提速一倍,窗口必须事后用日志时间戳四点验证）+
+   nsys 对 Ray trainer 进程事件截断不可修（flush-interval 无效）⇒ trainer 侧禁用 nsys
+★ 心智模型五层已写给 Chaoyu（L0 重叠成立性→L1 步构成→L2 CPU-GPU 协同→L3 kernel 间→L4 kernel 内,
+   每层各有工具与判据;上层病不治,下层优化被等待淹没）
+★ 主线两端点（GPU0 B-4 + GPU1 OPD 老师）已按 Chaoyu 指令 12:47 关闭让卡
+```
+
 ## ★★ 2026-08-20（晚）：Track 换标 + JD 对齐重写
 
 ```
