@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syncopate · 投放 Agent 控制台</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #171d24; --panel2: #1d242d; --border: #2a333e;
+    --text: #d8dee6; --dim: #8a96a3; --accent: #4c9be8; --ok: #3fb950;
+    --warn: #d29922; --bad: #f85149; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+           background: var(--panel); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
+  header .dot.ok { background: var(--ok); } header .dot.bad { background: var(--bad); }
+  header .spacer { flex: 1; }
+  input, select, textarea, button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit; }
+  textarea { width: 100%; resize: vertical; min-height: 72px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff;
+                   font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px;
+         max-width: 1200px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 16px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--dim); font-weight: 600;
+             text-transform: uppercase; letter-spacing: .04em; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row > * { flex: 1; }
+  label { font-size: 12px; color: var(--dim); display: block; margin-bottom: 3px; }
+  #runs { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .run { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+         cursor: pointer; font-size: 12.5px; }
+  .run:hover, .run.sel { border-color: var(--accent); }
+  .run .rid { font-family: var(--mono); color: var(--dim); font-size: 11px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; }
+  .badge.running { background: #1c3a5e; color: #79b8ff; }
+  .badge.succeeded { background: #1d3a24; color: #56d364; }
+  .badge.failed, .badge.cancelled { background: #4b1e1e; color: #ff8182; }
+  .badge.waiting_for_user { background: #4a3a12; color: #e3b341; }
+  #log { font-family: var(--mono); font-size: 12px; background: var(--bg);
+         border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+         max-height: 420px; overflow-y: auto; white-space: pre-wrap; }
+  #log .k { color: var(--accent); }
+  #log .err { color: var(--bad); }
+  #answer { background: #14261a; border: 1px solid #2ea04366; border-radius: 8px;
+            padding: 12px 14px; margin-top: 10px; display: none; }
+  #approval { background: #322710; border: 1px solid #d2992266; border-radius: 8px;
+              padding: 12px 14px; margin-top: 10px; display: none; }
+  #approval pre { margin: 6px 0; font-size: 12px; white-space: pre-wrap; }
+  footer { text-align: center; color: var(--dim); font-size: 12px; padding: 8px 0 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot" id="health"></div>
+  <h1>Syncopate · 投放 Agent 控制台</h1>
+  <span id="model" style="color:var(--dim);font-size:12px"></span>
+  <div class="spacer"></div>
+  <label style="margin:0">org token&nbsp;
+    <input id="token" size="16" value="dev-token-acme" style="width:150px">
+  </label>
+</header>
+<main>
+  <section class="card">
+    <h2>新任务</h2>
+    <label>你想让 agent 做什么</label>
+    <textarea id="msg">查一下 CMP_1 昨天的花费和转化，给我一句话结论</textarea>
+    <div class="row" style="margin-top:10px">
+      <div><label>意图</label>
+        <select id="intent">
+          <option value="I01">I01 · 查指标</option>
+          <option value="I07">I07 · 归因分析</option>
+          <option value="I09">I09 · 扩量/调预算</option>
+          <option value="I11">I11 · 素材建议</option>
+        </select></div>
+      <div><label>自动化档位</label>
+        <select id="tier">
+          <option value="C" selected>C · 写动作要人批</option>
+          <option value="B">B · 半自动（灰测默认会拦）</option>
+          <option value="A">A · 全自动（灰测默认会拦）</option>
+          <option value="D">D · 只看不做</option>
+        </select></div>
+    </div>
+    <button class="primary" id="go" style="width:100%">提交任务</button>
+    <div id="runs"></div>
+    <div style="margin-top:12px;color:var(--dim);font-size:12px" id="usage"></div>
+  </section>
+  <section class="card">
+    <h2>执行过程 <span id="cur" style="font-family:var(--mono);text-transform:none"></span></h2>
+    <div id="log">（提交一个任务，这里实时显示 agent 的每一步）</div>
+    <div id="approval">
+      <b>⏸ 等你审批</b>：agent 提议执行 <span id="apr-action"></span>
+      <pre id="apr-params"></pre>
+      <div style="color:var(--dim);font-size:12px" id="apr-why"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" onclick="decide('approved')">批准</button>
+        <button onclick="decide('rejected')" style="border-color:var(--bad);color:var(--bad)">拒绝</button>
+      </div>
+    </div>
+    <div id="answer"><b>✅ 结论</b><div id="answer-body" style="margin-top:6px"></div></div>
+  </section>
+</main>
+<footer>请求经带 token 的网关进入 · org 由 Bearer token 决定 · 事件流 = run_events 逐条回放</footer>
+<script>
+const $ = id => document.getElementById(id);
+const hdrs = () => ({ "Authorization": "Bearer " + $("token").value,
+                      "Content-Type": "application/json" });
+let current = null;          // 正在看的 run_id
+let streams = {};            // run_id -> AbortController
+
+async function health() {
+  try {
+    const h = await (await fetch("healthz")).json();
+    $("health").className = "dot " + (h.status === "ok" ? "ok" : "bad");
+  } catch { $("health").className = "dot bad"; }
+}
+async function usage() {
+  try {
+    const u = await (await fetch("usage", { headers: hdrs() })).json();
+    $("usage").textContent =
+      `今日：${u.runs} 个任务 · in ${u.tokens_in} / out ${u.tokens_out} tokens`;
+  } catch {}
+}
+
+function addRunCard(rid, msg) {
+  const el = document.createElement("div");
+  el.className = "run"; el.id = "run-" + rid;
+  el.innerHTML = `<div>${msg.slice(0, 40)}</div>
+    <div class="rid">${rid} <span class="badge running" id="st-${rid}">running</span></div>`;
+  el.onclick = () => select(rid);
+  $("runs").prepend(el);
+}
+function setStatus(rid, st) {
+  const b = $("st-" + rid);
+  if (b) { b.textContent = st; b.className = "badge " + st; }
+}
+function logLine(html, cls) {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  d.innerHTML = html;
+  $("log").appendChild(d); $("log").scrollTop = 1e9;
+}
+
+async function submit() {
+  $("go").disabled = true;
+  try {
+    const body = { user_message: $("msg").value, intent: $("intent").value,
+                   automation_tier: $("tier").value };
+    const r = await fetch("runs", { method: "POST", headers: {
+      ...hdrs(), "Idempotency-Key": "ui-" + crypto.randomUUID() },
+      body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text());
+    const run = await r.json();
+    addRunCard(run.run_id, body.user_message);
+    select(run.run_id);
+    stream(run.run_id, 0);
+  } catch (e) { alert("提交失败：" + e.message); }
+  $("go").disabled = false;
+}
+
+function select(rid) {
+  current = rid;
+  document.querySelectorAll(".run").forEach(e => e.classList.remove("sel"));
+  const card = $("run-" + rid); if (card) card.classList.add("sel");
+  $("cur").textContent = rid;
+  $("log").textContent = ""; $("answer").style.display = "none";
+  $("approval").style.display = "none";
+  stream(rid, 0);             // 重看历史：SSE 从头回放（seq 补发就是干这个的）
+}
+
+// fetch 版 SSE（EventSource 不能带 Authorization 头）；断线自动带 Last-Event-ID 重连
+async function stream(rid, after) {
+  if (streams[rid]) streams[rid].abort();
+  const ctl = new AbortController(); streams[rid] = ctl;
+  let last = after;
+  try {
+    const resp = await fetch(`runs/${rid}/events`, {
+      headers: { ...hdrs(), "Last-Event-ID": String(after) }, signal: ctl.signal });
+    const rd = resp.body.getReader(); const dec = new TextDecoder();
+    let buf = "", ev = "", data = "";
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (line.startsWith("id: ")) last = parseInt(line.slice(4));
+        else if (line.startsWith("event: ")) ev = line.slice(7);
+        else if (line.startsWith("data: ")) data = line.slice(6);
+        else if (line === "" && ev) { if (rid === current) render(rid, ev, data); ev = ""; }
+      }
+    }
+  } catch (e) {
+    if (!ctl.signal.aborted) {          // 真断线：2s 后带 Last-Event-ID 续传
+      setTimeout(() => stream(rid, last), 2000); return;
+    }
+  }
+}
+
+function render(rid, ev, dataStr) {
+  let d = {}; try { d = JSON.parse(dataStr); } catch {}
+  const t = new Date().toLocaleTimeString();
+  if (ev === "tool.result")
+    logLine(`${t}  <span class="k">${d.tool}</span> ${d.ok ? "✓" : "✗ " + (d.error || "")}`,
+            d.ok ? "" : "err");
+  else if (ev === "retrieval.result")
+    logLine(`${t}  <span class="k">${d.tool}</span> ${d.status}（${d.hits} 条 · ${d.latency_ms}ms）`);
+  else if (ev === "run.degraded")
+    logLine(`${t}  ⚠ 降级：${d.reason}`, "err");
+  else logLine(`${t}  ${ev}`);
+
+  if (ev === "run.succeeded") { setStatus(rid, "succeeded"); showAnswer(d); usage(); }
+  else if (ev === "run.failed") { setStatus(rid, "failed"); usage(); }
+  else if (ev === "run.cancelled") { setStatus(rid, "cancelled"); usage(); }
+  else if (ev === "run.waiting_for_user") { setStatus(rid, "waiting_for_user"); showApproval(rid); }
+}
+
+function showAnswer(d) {
+  const body = d.answer ? d.answer : d;
+  $("answer-body").innerHTML =
+    `<div style="color:var(--dim);font-size:12px">behavior = ${d.behavior || "?"}</div>` +
+    `<div style="margin-top:4px">${Object.entries(body)
+       .map(([k, v]) => `<b>${k}</b>：${typeof v === "object" ? JSON.stringify(v) : v}`)
+       .join("<br>")}</div>`;
+  $("answer").style.display = "block";
+}
+
+async function showApproval(rid) {
+  const cases = await (await fetch("approvals", { headers: hdrs() })).json();
+  const c = cases.find(x => x.run_id === rid); if (!c) return;
+  $("approval").dataset.ref = c.case_ref;
+  $("apr-action").textContent = c.action_type;
+  $("apr-params").textContent = JSON.stringify(c.proposed_params, null, 2);
+  $("apr-why").textContent = "触发原因：" + (c.trigger_reason || "-") +
+                             "　·　agent 的理由：" + (c.rationale || "-");
+  $("approval").style.display = "block";
+}
+
+async function decide(decision) {
+  const ref = $("approval").dataset.ref; if (!ref) return;
+  const r = await fetch("approvals/" + ref, { method: "POST", headers: hdrs(),
+    body: JSON.stringify({ decision, reviewer_id: "console" }) });
+  if (!r.ok) { alert("裁决失败：" + await r.text()); return; }
+  $("approval").style.display = "none";
+  logLine(`—— 人工裁决：${decision === "approved" ? "批准" : "拒绝"}，恢复执行 ——`);
+  // run 回队列重跑；事件流会从断点继续推
+}
+
+$("go").onclick = submit;
+(async () => {
+  await health(); await usage();
+  try {   // 判据行：模型端点在不在（走同源代理没法直查 vLLM，用 healthz 兜底显示）
+    $("model").textContent = "runtime ok · 事件实时";
+  } catch {}
+  setInterval(health, 10000); setInterval(usage, 15000);
+})();
+</script>
+</body>
+</html>

@@ -22,10 +22,11 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from pathlib import Path
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from syncopate.runtime.db import Database, create_run, resume_after_approval
@@ -136,6 +137,12 @@ def create_app(db: Database | None = None) -> FastAPI:
         if app.state.db is not None:
             await app.state.db.close()
             app.state.db = None
+
+    # ---- 控制台页面（静态壳，不鉴权 —— 数据接口各自带 org 鉴权；
+    #      对公网的门在 Caddy 边界的 token，见 09 §0）----
+    @app.get("/ui", include_in_schema=False)
+    async def ui() -> FileResponse:
+        return FileResponse(Path(__file__).parent / "ui.html", media_type="text/html")
 
     # ---- 健康检查（不鉴权，压测场景②要靠它判断服务活没活）----
     @app.get("/healthz")

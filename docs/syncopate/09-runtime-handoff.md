@@ -27,6 +27,21 @@ CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-na
   --max-lora-rank 32 --max-model-len 7168 --port 8100    # 基线：scripts/measure_tpot.py
 ```
 
+**怎么访问（08-20 起）**：网页控制台在 `GET /ui`（提交任务 · 实时事件流 · 审批 ·
+结论卡片，单文件 `syncopate/runtime/ui.html`，无构建步骤）。对外走 Caddy 认证边界
+（`/etc/portal.yaml`：外部 8265 → 内部 8000，token 三选一：`?token=` / Bearer / cookie）：
+
+```bash
+echo "http://$PUBLIC_IPADDR:$VAST_TCP_PORT_8265/ui?token=$OPEN_BUTTON_TOKEN"   # 浏览器打开这个
+# 或不暴露公网：本机 ssh -p <VAST_TCP_PORT_22> -L 8000:127.0.0.1:8000 root@<IP>
+#              然后开 http://localhost:8000/ui（免 Vast token）
+```
+
+⚠️ 两层鉴权是**两回事**：Caddy 的 token 管"谁能碰到这台机器的服务"；
+应用层 `Authorization: Bearer dev-token-*` 管"你是哪个 org"（页面右上角填）。
+浏览器打开 `?token=` 后 Caddy 下发 cookie，Authorization 头留给 org 鉴权用 ——
+这也是页面用 fetch 流而不用 EventSource 的原因（后者带不了自定义头）。
+
 ⚠️ **worker 必须 `--org-id` 限定再起常驻** —— 队列是全局的，全局 worker 会把
 测试套件的 run 抢走（08-20 实测：2 条测试红，杀掉 worker 即绿，C-1 同一课）。
 ⚠️ 此前 worker **没有进程入口**（只在测试里被实例化过），「起服务」只写了 uvicorn ——
