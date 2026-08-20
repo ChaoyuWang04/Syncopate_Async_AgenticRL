@@ -13,8 +13,8 @@
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
 | **1** | 🆕 **ckpt IO 优化**：save_checkpoint 实测占步 **19.5%**（verl 给 LoRA 训练存全量 state_dict，97% 是冻结基座）→ LoRA-only / 异步保存 | infra | ~半天 | 字节 C「存储和IO」+ DeepSeek G「CPU/IO 优化」；下次长跑直接快 ~15%，顺手填〔Z〕 |
-| **2** | **A19（3 行）+ 装 bitsandbytes → A2 MoE 三摆法** | infra | ~1 天 | 「异构/量化/EP」三词齐中；Track B（算子线）简历 MoE 段整条悬空，是最大的洞 |
-| **3** | 🆕 **torch.compile 探针**（update_actor 微基准 A/B 起步，赢了再进整跑；输赢都写归因） | infra | ~半天 · 1 卡 | 字节 C 加分明写「Torch.Compile/Triton/TVM」+ DeepSeek G；当前完全空白的一格 |
+| **2** | 🆕 **执行层优化工具箱**（E14/A18 合体；Chaoyu 08-20 立意：**用真实负载学会「什么时候该用什么工具」**）：nsys 重拆解（PG 后步构成已变）+ 空档 22–25% 归因（A18）→ 逐工具 A/B：torch.compile（计算图/算子融合）→ CUDA graph → 其余按归因结果定；产出「工具 × 适用条件」边界表 | infra | 分批 ~2–3 天 | 字节 C 加分明写「编译技术」+ DeepSeek G；输赢都写归因（否定结论也是产出） |
+| **3** | 🆕 **FP8 找新消费者（软硬结合）**：原消费者 ref 随砍 KL 消失；评估 update_actor / old_log_prob 前向走 FP8（E19 数值对拍已过、真实形状 1.70–2.22×），任务配对闸把关 | infra | ~1 天 | DeepSeek H「距上限」+ 字节「低精度」；5090 原生 FP8 吞吐不该白放着（Chaoyu 08-20） |
 | **4** | **A3 · sm_120 能力探底收尾**：Triton 低精度静默退化复现 + FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%；并入决定 08-20） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项 |
 | **5** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#4 并行推进**；before 基线已备：24/25 达标 + 单流 TPOT/TTFT，`11 §5`）：SLO 画像 → prefix cache/KV 池行为 → 批调度 → 多 LoRA 热切换（E22 修法的推理侧兑现） | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
 | **6** | **量化推理 A/B × 任务级配对回归**：先 FP8 KV cache（`--kv-cache-dtype` 旗子已备）；再 W4A16 服务侧 | infra | ~半天 | 推理 E②「模型量化」+ 训练 C「低精度」；配对闸让"量化不掉精度"有证据链 |
@@ -47,8 +47,7 @@
 
 | 任务 | 状态 |
 |---|---|
-| A19 · `launch_rl` 只在 colocate 下 pop `PYTORCH_CUDA_ALLOC_CONF`（3 行，gate 住 A2） | 🔴 |
-| A2 · MoE 三摆法（Qwen3-30B-A3B 已下好；⚠️ bitsandbytes 未装） | 被 A19 gate |
+| 🆕 **MoE 线**（A19 3 行修复 → A2 三摆法；Qwen3-30B-A3B 已下好，⚠️ bitsandbytes 未装）：Chaoyu 08-20 降级——**优先级低于 CoT**，独立推进、不 gate 也不被 gate | 🟠 排后 |
 | A3 · E16 sm_120 硬手艺（FP8 第一枪已完 1.9–2.2×；Triton 退化/FP4 PTX 未做） | 🟠 |
 | A17 · 对齐补丁端到端（上次钩子没挂白跑） | 🔴 可重跑 |
 | 上游四包 issue/PR（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 | ✅ **已移交 upstream 同事（08-20 提交中）**；本窗口只做证据支援（E 报告/复现脚本随叫随到），提交编号回来后记入 NARRATIVE 底账 |
