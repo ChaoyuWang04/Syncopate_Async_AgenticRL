@@ -8,17 +8,19 @@
 
 ---
 
-## 1 · 队首（按这个顺序；#1–#5 为 JD 对齐组，靶心见 NARRATIVE §JD）
+## 1 · 队首（按这个顺序；训练家族组 #1–#4 → 推理家族组 #5–#7；靶心见 NARRATIVE §1）
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🆕 **B-4 推理服务真压测 + 优化**（与主线共建；vLLM 端点已常驻 GPU0）：并发/延迟 SLO 画像 → prefix cache 命中与 KV 池行为 → 批调度参数 → 多 LoRA 版本热切换（E22 修法的推理侧兑现）；产出优化前后对照 | infra+主线 | 就地（GPU0 已占） | JD-A①「在线推理服务」正面命中；主线本来就欠「真压测」，一件事双向记账 |
-| **2** | 🆕 **量化推理 A/B × 任务级配对回归**：先 FP8 KV cache（`--kv-cache-dtype` 旗子已备，launch_rl 注释明写"开了必须配 EVAL 128 配对"）；再 W4A16 服务侧 | infra | ~半天 | JD-A②「模型量化」；我们独有的冻结评测配对闸让"量化不掉精度"有证据链，多数人只报吞吐 |
-| **3** | **A19（3 行）+ 装 bitsandbytes → A2 MoE 三摆法** | infra | ~1 天 | JD「异构/量化/EP」三词齐中；Track B（算子线）简历 MoE 段整条悬空，是最大的洞 |
-| **4** | 🆕 **PD 分离 go/no-go 探针**：我们负载 prompt 占 88%（prefill 重），在无 P2P 拓扑上验 vLLM PD 分离是否成立（KV 传输走主机内存的代价 vs prefill/decode 干扰的收益） | infra | 30 min 探针 | JD-B②核心词；成立再立项，不成立则"实测否决+成立范围"也是结果 |
-| **5** | **A3 · sm_120 能力探底收尾**（Triton 低精度静默退化复现 + FP4 inline PTX） | infra | ~1 周 | JD 硬性项「GPU 编程」+ 加分项「GPU 性能分析」唯一的硬手艺载体 |
-| **6** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产带思考的 SFT 数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线队首；也是陈旧度/同步暂停两题的复活条件 |
-| **7** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
+| **1** | 🆕 **ckpt IO 优化**：save_checkpoint 实测占步 **19.5%**（verl 给 LoRA 训练存全量 state_dict，97% 是冻结基座）→ LoRA-only / 异步保存 | infra | ~半天 | 字节 C「存储和IO」+ DeepSeek G「CPU/IO 优化」；下次长跑直接快 ~15%，顺手填〔Z〕 |
+| **2** | **A19（3 行）+ 装 bitsandbytes → A2 MoE 三摆法** | infra | ~1 天 | 「异构/量化/EP」三词齐中；Track B（算子线）简历 MoE 段整条悬空，是最大的洞 |
+| **3** | 🆕 **torch.compile 探针**（update_actor 微基准 A/B 起步，赢了再进整跑；输赢都写归因） | infra | ~半天 · 1 卡 | 字节 C 加分明写「Torch.Compile/Triton/TVM」+ DeepSeek G；当前完全空白的一格 |
+| **4** | **A3 · sm_120 能力探底收尾**：Triton 低精度静默退化复现 + FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%；并入决定 08-20） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项 |
+| **5** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#4 并行推进**；before 基线已备：24/25 达标 + 单流 TPOT/TTFT，`11 §5`）：SLO 画像 → prefix cache/KV 池行为 → 批调度 → 多 LoRA 热切换（E22 修法的推理侧兑现） | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
+| **6** | **量化推理 A/B × 任务级配对回归**：先 FP8 KV cache（`--kv-cache-dtype` 旗子已备）；再 W4A16 服务侧 | infra | ~半天 | 推理 E②「模型量化」+ 训练 C「低精度」；配对闸让"量化不掉精度"有证据链 |
+| **7** | **PD 分离 go/no-go 探针**：负载 prompt 占 88%（prefill 重），在无 P2P 拓扑上验 vLLM PD 分离成不成立 | infra | 30 min 探针 | 推理 F②核心词；不成立则"实测否决+成立范围"也是结果 |
+| **8** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线；也是陈旧度/同步暂停的复活条件（复活后补 Track A 研究章节） |
+| **9** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
 
 
 ## 2 · 接下来（正确性收尾）
@@ -49,7 +51,7 @@
 | A2 · MoE 三摆法（Qwen3-30B-A3B 已下好；⚠️ bitsandbytes 未装） | 被 A19 gate |
 | A3 · E16 sm_120 硬手艺（FP8 第一枪已完 1.9–2.2×；Triton 退化/FP4 PTX 未做） | 🟠 |
 | A17 · 对齐补丁端到端（上次钩子没挂白跑） | 🔴 可重跑 |
-| 上游四包 issue/PR（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 | ⚠️ **都等 Chaoyu 点头** |
+| 上游四包 issue/PR（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 | ✅ **已移交 upstream 同事（08-20 提交中）**；本窗口只做证据支援（E 报告/复现脚本随叫随到），提交编号回来后记入 NARRATIVE 底账 |
 | 🔵 lr 1e-4 @5120 上限基线（已降级，脚本 `scripts/run_e20h_lr1e4_5120.sh` 备好） | 想测随时跑，不挡人 |
 
 ## 5 · 管线验证状态（引用前查这张，别重新论证）
