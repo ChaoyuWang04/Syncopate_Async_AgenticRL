@@ -1095,7 +1095,8 @@ def _patch_torch_prof() -> None:
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                      with_stack=True) as prof:
             out = orig(self, *a, **kw)
-        outdir = ROOT / "logs" / "torchprof"
+        from pathlib import Path
+        outdir = Path(__file__).resolve().parents[2] / "logs" / "torchprof"
         outdir.mkdir(parents=True, exist_ok=True)
         trace = outdir / f"update_actor_call{target}.json"
         prof.export_chrome_trace(str(trace))
