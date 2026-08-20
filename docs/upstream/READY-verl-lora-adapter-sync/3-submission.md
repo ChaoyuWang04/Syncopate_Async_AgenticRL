@@ -62,9 +62,7 @@ GPU 4	Type    : NVIDIA GeForce RTX 5090
 GPU 4	Memory  : 31.84 GB
 ```
 
-Originally observed on verl **0.8.0** in production (3 trainer + 1 rollout GPU, `fully_async`,
-NCCL checkpoint engine, Qwen3-4B + LoRA r32). The two code paths involved are byte-identical
-between 0.8.0 and the `main` checkout above.
+Originally observed on verl **0.8.0** in production (3 trainer + 1 rollout GPU, `fully_async`, NCCL checkpoint engine, Qwen3-4B + LoRA r32). The two code paths involved are byte-identical between 0.8.0 and the `main` checkout above.
 
 ---
 
@@ -85,18 +83,13 @@ between 0.8.0 and the `main` checkout above.
 ## What happens
 
 **This is the default path for async LoRA RL — no unusual flags are involved:**
-`model.lora.merge=False` is the default, and every disaggregated recipe sets a non-`naive`
-checkpoint-engine backend. Anyone running LoRA with `fully_async` / `one_step_off` is affected.
+`model.lora.merge=False` is the default, and every disaggregated recipe sets a non-`naive` checkpoint-engine backend. Anyone running LoRA with `fully_async` / `one_step_off` is affected.
 
-With LoRA (`model.lora.merge=False`, the default) and a disaggregated trainer/rollout
-deployment (`rollout.checkpoint_engine.backend != "naive"`, i.e. the async RL recipes),
+With LoRA (`model.lora.merge=False`, the default) and a disaggregated trainer/rollout deployment (`rollout.checkpoint_engine.backend != "naive"`, i.e. the async RL recipes),
 **every weight sync pushes the unmodified frozen base model. The LoRA adapter is never
 transferred.** The rollout engine samples from the initial policy for the entire run.
 
-Training completes normally — loss falls, rewards move, `grad_norm` / entropy / ESS all look
-plausible, no warning is emitted. The RL loop is silently severed: the policy gradient is
-computed for the current policy while all data forever comes from the initial one, and the
-mismatch grows monotonically with training.
+Training completes normally — loss falls, rewards move, `grad_norm` / entropy / ESS all look plausible, no warning is emitted. The RL loop is silently severed: the policy gradient is computed for the current policy while all data forever comes from the initial one, and the mismatch grows monotonically with training.
 
 The colocated path (`backend: naive`) is correct. Same config, different mode.
 
@@ -111,8 +104,7 @@ actor_rollout_ref.rollout.checkpoint_engine.backend: nccl    # any non-"naive" b
 
 ## Root cause
 
-The disaggregated branch runs only half of the two-phase LoRA sync protocol, and discards the
-signal that would tell the receiving side an adapter exists:
+The disaggregated branch runs only half of the two-phase LoRA sync protocol, and discards the signal that would tell the receiving side an adapter exists:
 
 ```python
 # verl/workers/engine_workers.py
@@ -124,19 +116,12 @@ if effective_mode != "naive":
 
 1. `get_per_tensor_param()` defaults to `base_sync_done=False` — the "push the base first" half.
 2. With LoRA + `merge=False` that lands in `collect_lora_params(base_sync_done=False)`
-   (`verl/utils/fsdp_utils.py`), which **explicitly skips every `lora_` tensor** and returns the
-   frozen base, renamed by `replace_lora_wrapper` to `...base_layer.weight` form — precisely so
-   that a LoRA-enabled vLLM accepts it. That rename is why the failure is silent: the push
+(`verl/utils/fsdp_utils.py`), which **explicitly skips every `lora_` tensor** and returns the frozen base, renamed by `replace_lora_wrapper` to `...base_layer.weight` form — precisely so that a LoRA-enabled vLLM accepts it. That rename is why the failure is silent: the push
    *succeeds*.
 3. The protocol expects a follow-up call with `base_sync_done=True` (push the adapter). The
-   colocated branch does exactly that two-call dance. The disaggregated branch returns after the
-   first half — every time.
+colocated branch does exactly that two-call dance. The disaggregated branch returns after the first half — every time.
 4. Downstream, `CheckpointEngineWorker.update_weights(self, global_steps=None)`
-   (`verl/checkpoint_engine/base.py`) has no parameter to receive `peft_config` anyway, while
-   everything *below* it already supports adapters:
-   `server_adapter.update_weights(..., peft_config=...)` → `update_weights_from_ipc` →
-   `TensorLoRARequest(lora_tensors=...)` + `add_lora` — the exact machinery the colocated path
-   exercises on every sync.
+(`verl/checkpoint_engine/base.py`) has no parameter to receive `peft_config` anyway, while everything *below* it already supports adapters: `server_adapter.update_weights(..., peft_config=...)` → `update_weights_from_ipc` → `TensorLoRARequest(lora_tensors=...)` + `add_lora` — the exact machinery the colocated path exercises on every sync.
 
 The code itself flags this as known-incomplete: the flag initialization carries the comment
 *"base_sync_done is unused in merge-only mode but **kept for Phase 2 adapter path**"*
@@ -153,8 +138,7 @@ The code itself flags this as known-incomplete: the flag initialization carries 
 | `base_sync_done=True` (what colocated also runs) | 28 | 0.2 MiB | **28** |
 
 **Real training** (verl 0.8.0, Qwen3-4B + LoRA r32, 3 trainer + 1 rollout GPU, `fully_async`;
-probe at `NCCLCheckpointEngine.send_weights`, streaming, no behavior change). Four independent
-runs, two syncs each:
+probe at `NCCLCheckpointEngine.send_weights`, streaming, no behavior change). Four independent runs, two syncs each:
 
 ```
 every sync:  399 tensors / 8,414.1 MiB / 0 of them lora_
@@ -163,14 +147,10 @@ watched layer  model.layers.0.self_attn.q_proj.base_layer.weight
   on-disk initial model  = 75.377708   (bit-identical)
 ```
 
-A policy being trained cannot push bit-identical weights on every sync — the payload is the
-frozen initial model. Meanwhile the vLLM server runs with `--enable_lora` and an initialized
-`PunicaWrapperGPU`: **`list_loras()` stays `[]` for the whole run.** The adapter slot exists
-and is never filled.
+A policy being trained cannot push bit-identical weights on every sync — the payload is the frozen initial model. Meanwhile the vLLM server runs with `--enable_lora` and an initialized `PunicaWrapperGPU`: **`list_loras()` stays `[]` for the whole run.** The adapter slot exists and is never filled.
 
 **The failure masquerades as staleness**, which is what makes it expensive in practice — all of
-these "look like" async-RL staleness while actually measuring a policy pinned at the initial
-checkpoint (we spent two months on that wrong trail):
+these "look like" async-RL staleness while actually measuring a policy pinned at the initial checkpoint (we spent two months on that wrong trail):
 
 | observation | looks like | actually is |
 |---|---|---|
@@ -181,11 +161,7 @@ checkpoint (we spent two months on that wrong trail):
 
 ## Why `model.lora.merge=True` is not a good workaround
 
-Mechanically it works (the pushed weights then change with training). But the merge is performed
-in bf16, and an RL-scale LoRA delta (||dW||/||W|| ~ 0.05%) falls into bf16 rounding: on a fixed
-probe set, merging shifts per-token logprobs by a **median of 1.7e-2 — about 50% of the
-adapter's own effect, and ~50x the vLLM/FSDP numerical floor**. It also keeps paying the
-full-model transfer cost (8.4 GB per sync) for a 252 MiB adapter.
+Mechanically it works (the pushed weights then change with training). But the merge is performed in bf16, and an RL-scale LoRA delta (||dW||/||W|| ~ 0.05%) falls into bf16 rounding: on a fixed probe set, merging shifts per-token logprobs by a **median of 1.7e-2 — about 50% of the adapter's own effect, and ~50x the vLLM/FSDP numerical floor**. It also keeps paying the full-model transfer cost (8.4 GB per sync) for a 252 MiB adapter.
 
 ---
 
@@ -193,23 +169,18 @@ full-model transfer cost (8.4 GB per sync) for a 252 MiB adapter.
 
 > 整段复制
 
-A weight sync should deliver **the policy the trainer currently holds**. With LoRA and
-`merge=False` that means the adapter has to reach the rollout engine; today the rollout engine
-receives the frozen base on every sync, so the sampling policy never changes.
+A weight sync should deliver **the policy the trainer currently holds**. With LoRA and `merge=False` that means the adapter has to reach the rollout engine; today the rollout engine receives the frozen base on every sync, so the sampling policy never changes.
 
 Concretely, the expectation is either of:
 
 1. **the adapter gets synced** (our preference), or
 2. **verl fails loudly** if this combination is not meant to be supported.
 
-Silently pushing a base-only payload is the worst of the three: it severs the RL loop while
-every metric keeps looking healthy, and the resulting symptoms are indistinguishable from
-ordinary staleness.
+Silently pushing a base-only payload is the worst of the three: it severs the RL loop while every metric keeps looking healthy, and the resulting symptoms are indistinguishable from ordinary staleness.
 
 Related history: #2048 (closed) recorded that async + LoRA used to raise an explicit error;
 #3654's fix brought the combination into the support surface — where it now fails silently
-instead. A silent wrong-weights sync is strictly worse than the old error: the error cost one
-launch, this costs entire training runs. #7287 / #3907 fixed adapter-sync defects on the
+instead. A silent wrong-weights sync is strictly worse than the old error: the error cost one launch, this costs entire training runs. #7287 / #3907 fixed adapter-sync defects on the
 *colocated* SGLang/vLLM paths; the disaggregated checkpoint-engine path is the remaining gap.
 
 ### Proposed fix (PR to follow)
@@ -217,19 +188,11 @@ launch, this costs entire training runs. #7287 / #3907 fixed adapter-sync defect
 Two small, wire-compatible changes; no protocol or backend changes:
 
 1. **Trainer side** (`engine_workers.py`): run the same two-phase protocol as the colocated
-   branch — initialize `base_sync_done` from `"dummy" not in rollout.load_format` (with real
-   weights loaded the rollout engine never needs a base push at all), collect with it, and flip
-   it once the engine returns a `peft_config`.
+branch — initialize `base_sync_done` from `"dummy" not in rollout.load_format` (with real weights loaded the rollout engine never needs a base push at all), collect with it, and flip it once the engine returns a `peft_config`.
 2. **Rollout side** (`checkpoint_engine/base.py`): adapter pushes are self-describing — they
-   consist *only* of `lora_` tensors, while base / full / merged pushes contain none. Peek at
-   the first tensor name (the stream is re-chained, nothing is consumed twice); if it is an
-   adapter push, rebuild the minimal `peft_config` dict from the worker's own `model_config`
-   (vLLM's `PEFTHelper.from_dict` needs only `r` / `lora_alpha` / `target_modules`) and forward
-   `peft_config` + `base_sync_done=True`. This covers every checkpoint-engine backend speaking
-   the named-tensors wire format and leaves the delta engines untouched.
+consist *only* of `lora_` tensors, while base / full / merged pushes contain none. Peek at the first tensor name (the stream is re-chained, nothing is consumed twice); if it is an adapter push, rebuild the minimal `peft_config` dict from the worker's own `model_config` (vLLM's `PEFTHelper.from_dict` needs only `r` / `lora_alpha` / `target_modules`) and forward `peft_config` + `base_sync_done=True`. This covers every checkpoint-engine backend speaking the named-tensors wire format and leaves the delta engines untouched.
 
-Measured with exactly this fix applied to the source tree (no monkeypatching), same setup as
-above, 3 syncs:
+Measured with exactly this fix applied to the source tree (no monkeypatching), same setup as above, 3 syncs:
 
 ```
 payload            every sync: 252 MiB, 504/504 tensors lora_ -- the 8,414 MiB frozen-base
@@ -240,17 +203,11 @@ rollout_corr/kl    6.4e-05 / 2.9e-04 -- at the numerical floor
                    (broken baseline at the same point in training: 3e-3 and climbing)
 ```
 
-Longer runs with the functionally equivalent patch (60 steps + an independent 12-step rerun):
-`list_loras()` `[]` -> `[<id>]`; kl mean 3.9e-3 -> 8e-4 across 15 sync periods; end-to-end
-logprob agreement at the engine floor (~3-6e-4, i.e. scaling / module targeting / tensor
-contents all verified, not just transfer); `param_sync` 6.25 s -> 0.97 s (6.4x).
+Longer runs with the functionally equivalent patch (60 steps + an independent 12-step rerun): `list_loras()` `[]` -> `[<id>]`; kl mean 3.9e-3 -> 8e-4 across 15 sync periods; end-to-end logprob agreement at the engine floor (~3-6e-4, i.e. scaling / module targeting / tensor contents all verified, not just transfer); `param_sync` 6.25 s -> 0.97 s (6.4x).
 
 ### Also worth considering
 
-A defensive invariant, independent of this fix: after every sync, compare one layer's norm
-between trainer and rollout (two scalars). "The thing pushed is not the thing held" — in any
-backend — should be a hard failure, not something users discover by diffing checkpoints two
-months later.
+A defensive invariant, independent of this fix: after every sync, compare one layer's norm between trainer and rollout (two scalars). "The thing pushed is not the thing held" — in any backend — should be a hard failure, not something users discover by diffing checkpoints two months later.
 
 **Workarounds** until then: use `backend: naive` (colocated, unaffected), or accept the bf16
 merge cost with `model.lora.merge=True`.
@@ -268,18 +225,9 @@ merge cost with `model.lora.merge=True`.
 
 Fixes #<ISSUE>.
 
-This is the default path for async LoRA RL: `model.lora.merge=False` is the default and every
-disaggregated recipe uses a non-`naive` checkpoint-engine backend. In that configuration, every
-weight sync pushed the unmodified frozen base model and never transferred the adapter — the rollout engine kept sampling from the initial
-policy for the whole run, silently (evidence and impact in the issue).
+This is the default path for async LoRA RL: `model.lora.merge=False` is the default and every disaggregated recipe uses a non-`naive` checkpoint-engine backend. In that configuration, every weight sync pushed the unmodified frozen base model and never transferred the adapter — the rollout engine kept sampling from the initial policy for the whole run, silently (evidence and impact in the issue).
 
-The disaggregated branch called `get_per_tensor_param()` with its defaults, pinning
-`base_sync_done=False`. For a LoRA model that lands in `collect_lora_params(base_sync_done=False)`,
-which skips every `lora_` tensor and returns the frozen base renamed to `...base_layer.weight` — a
-payload a LoRA-enabled engine happily accepts, which is why nothing ever failed. The colocated
-branch already runs both phases (base, then adapters); only the disaggregated one stopped after
-the first half. Downstream, `CheckpointEngineWorker.update_weights` had no parameter to pass
-`peft_config` on, even though the server adapters below it already support adapter loads.
+The disaggregated branch called `get_per_tensor_param()` with its defaults, pinning `base_sync_done=False`. For a LoRA model that lands in `collect_lora_params(base_sync_done=False)`, which skips every `lora_` tensor and returns the frozen base renamed to `...base_layer.weight` — a payload a LoRA-enabled engine happily accepts, which is why nothing ever failed. The colocated branch already runs both phases (base, then adapters); only the disaggregated one stopped after the first half. Downstream, `CheckpointEngineWorker.update_weights` had no parameter to pass `peft_config` on, even though the server adapters below it already support adapter loads.
 
 ### Checklist Before Starting
 
@@ -288,8 +236,7 @@ the first half. Downstream, `CheckpointEngineWorker.update_weights` had no param
 
 ### Test
 
-`tests/checkpoint_engine/test_disaggregated_lora_sync_on_cpu.py` — 7 CPU tests (no GPU, no Ray),
-picked up automatically by `cpu_unit_tests.yml` (`tests/**/test_*_on_cpu.py`).
+`tests/checkpoint_engine/test_disaggregated_lora_sync_on_cpu.py` — 7 CPU tests (no GPU, no Ray), picked up automatically by `cpu_unit_tests.yml` (`tests/**/test_*_on_cpu.py`).
 
 ```
 before this PR:  3 failed, 4 passed
@@ -302,22 +249,16 @@ before this PR:  3 failed, 4 passed
 after this PR:   7 passed
 ```
 
-The four that already pass before the change are the no-regression cases (base pushes,
-full fine-tuning, delta wire format, and the flag staying put without a `peft_config`) — they
-guard the paths this PR must leave alone. The tests build a real `CheckpointEngineWorker` via
-`object.__new__` rather than a hand-wired stub, so the failures above land on behavioral
-assertions rather than on a missing helper.
+The four that already pass before the change are the no-regression cases (base pushes, full fine-tuning, delta wire format, and the flag staying put without a `peft_config`) — they guard the paths this PR must leave alone. The tests build a real `CheckpointEngineWorker` via `object.__new__` rather than a hand-wired stub, so the failures above land on behavioral assertions rather than on a missing helper.
 
-Additionally validated outside CI, with exactly this diff applied to the source tree (verl 0.8.0,
-Qwen3-4B + LoRA r32, 3 trainer + 1 rollout GPU, `fully_async`, NCCL backend, 3 syncs):
+Additionally validated outside CI, with exactly this diff applied to the source tree (verl 0.8.0, Qwen3-4B + LoRA r32, 3 trainer + 1 rollout GPU, `fully_async`, NCCL backend, 3 syncs):
 
 - payload per sync: 8,414 MiB (frozen base, 0 `lora_` tensors) → **252 MiB, 504/504 `lora_`
-  tensors**; the base push never occurs at all, since `load_format` is real
+tensors**; the base push never occurs at all, since `load_format` is real
 - `rollout_corr/kl` at the numerical floor (6.4e-05 / 2.9e-04) instead of climbing (3e-3 and
-  rising at the same point in training) — i.e. the rollout policy now tracks the trainer policy
+rising at the same point in training) — i.e. the rollout policy now tracks the trainer policy
 - longer runs with the functionally equivalent patch (60 steps + an independent 12-step rerun):
-  `list_loras()` `[]` → `[<id>]`, end-to-end logprob agreement at the engine floor (~3-6e-4, so
-  scaling / module targeting / tensor contents are verified, not just transfer), `param_sync`
+`list_loras()` `[]` → `[<id>]`, end-to-end logprob agreement at the engine floor (~3-6e-4, so scaling / module targeting / tensor contents are verified, not just transfer), `param_sync`
   6.25 s → 0.97 s (6.4x)
 
 ### API and Usage Example
@@ -331,35 +272,22 @@ actor_rollout_ref.model.lora.merge=False \
 actor_rollout_ref.rollout.checkpoint_engine.backend=nccl
 ```
 
-Behavior is keyed off what the engine actually returns, so full-parameter training,
-`model.lora.merge=True` and base pushes are byte-for-byte unaffected: their payloads contain no
-`lora_` tensor, so they take today's exact path.
+Behavior is keyed off what the engine actually returns, so full-parameter training, `model.lora.merge=True` and base pushes are byte-for-byte unaffected: their payloads contain no `lora_` tensor, so they take today's exact path.
 
 ### Design & Code Changes
 
 - `verl/workers/engine_workers.py` — the disaggregated branch now runs the same two-phase
-  protocol as the colocated branch below it: `base_sync_done` initialized from
-  `"dummy" not in rollout.load_format` (with real weights loaded, no base push is needed at all —
-  the first sync is already adapter-only), collection called with it, flag flipped once the
-  engine returns a `peft_config`.
+protocol as the colocated branch below it: `base_sync_done` initialized from `"dummy" not in rollout.load_format` (with real weights loaded, no base push is needed at all — the first sync is already adapter-only), collection called with it, flag flipped once the engine returns a `peft_config`.
 - `verl/checkpoint_engine/base.py` — `CheckpointEngineWorker.update_weights` peeks at the first
-  tensor name (stream re-chained, nothing consumed twice): adapter pushes consist only of `lora_`
-  tensors, so they are self-describing. For an adapter push it rebuilds the minimal `peft_config`
-  dict from its own `model_config` and forwards `peft_config` + `base_sync_done=True` to the
-  server adapter, which already supports them (`update_weights_from_ipc` → `TensorLoRARequest` +
-  `add_lora`).
+tensor name (stream re-chained, nothing consumed twice): adapter pushes consist only of `lora_` tensors, so they are self-describing. For an adapter push it rebuilds the minimal `peft_config` dict from its own `model_config` and forwards `peft_config` + `base_sync_done=True` to the server adapter, which already supports them (`update_weights_from_ipc` → `TensorLoRARequest` + `add_lora`).
 - `tests/checkpoint_engine/test_disaggregated_lora_sync_on_cpu.py` — new CPU regression tests.
 
 Why this shape:
 
 - **No wire change**: nothing new is serialized, so every backend speaking the named-tensors wire
-  format is covered (nccl / nixl / mooncake / kimi all go through this worker). The peek is
-  guarded on `wire_format == "named_tensors"`; `delta_sharded` owns its own sync state machine
-  and is untouched.
+format is covered (nccl / nixl / mooncake / kimi all go through this worker). The peek is guarded on `wire_format == "named_tensors"`; `delta_sharded` owns its own sync state machine and is untouched.
 - `peft_config` is rebuilt worker-side from `model_config` (both processes are constructed from
-  the same config) rather than serialized across the wire; vLLM's `PEFTHelper.from_dict` requires
-  only `r` / `lora_alpha` / `target_modules`. Field-level equality with the trainer-side config
-  was verified explicitly (r=32 / alpha=64 / scaling=2.0 on both sides).
+the same config) rather than serialized across the wire; vLLM's `PEFTHelper.from_dict` requires only `r` / `lora_alpha` / `target_modules`. Field-level equality with the trainer-side config was verified explicitly (r=32 / alpha=64 / scaling=2.0 on both sides).
 
 ### Checklist Before Submitting
 
@@ -379,15 +307,9 @@ Why this shape:
 
 大家好，我提交了一个 disaggregated 模式下 LoRA 权重同步的修复：用 LoRA（`lora.merge=False`，
 **默认值**）且 `checkpoint_engine.backend != "naive"`（即各种异步 recipe）时，每次权重同步推给
-rollout 的都是**未经修改的冻结基座**，adapter 一个字节都没推过去 —— rollout 全程用起点策略采样，
-而训练看起来完全正常（loss 会降、指标正常、无任何告警）。根因是 disaggregated 分支只跑了两段式
-协议的前半段（`get_per_tensor_param()` 用默认参数 ⇒ `base_sync_done=False` ⇒ 只收集基座、跳过
-所有 `lora_` 张量），colocate 分支是对的。现在让 disaggregated 走同样的两段式协议，并让 rollout
-侧从载荷自身判别 adapter 推送（只含 `lora_` 张量）后透传 `peft_config`；补了 7 条 CPU 回归测试
-（修复前 3 条红在行为断言上）。
+rollout 的都是**未经修改的冻结基座**，adapter 一个字节都没推过去 —— rollout 全程用起点策略采样， 而训练看起来完全正常（loss 会降、指标正常、无任何告警）。根因是 disaggregated 分支只跑了两段式 协议的前半段（`get_per_tensor_param()` 用默认参数 ⇒ `base_sync_done=False` ⇒ 只收集基座、跳过 所有 `lora_` 张量），colocate 分支是对的。现在让 disaggregated 走同样的两段式协议，并让 rollout 侧从载荷自身判别 adapter 推送（只含 `lora_` 张量）后透传 `peft_config`；补了 7 条 CPU 回归测试 （修复前 3 条红在行为断言上）。
 
-Issue： https://github.com/verl-project/verl/issues/<ISSUE>
-PR： https://github.com/verl-project/verl/pull/<PR>
+Issue： https://github.com/verl-project/verl/issues/<ISSUE> PR： https://github.com/verl-project/verl/pull/<PR>
 
 麻烦帮忙触发一下 CI，谢谢！
 

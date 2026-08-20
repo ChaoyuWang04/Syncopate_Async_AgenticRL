@@ -62,20 +62,14 @@ PrefixGrouper uses `suffix_mask` to decide **which tokens exist**:
 
 ```python
 # prefix_grouper/__init__.py
-suffix_lens = suffix_mask.sum(dim=1)      # length of each suffix
-suffix_mask.nonzero(as_tuple=False)       # which positions get gathered into the packed input
+suffix_lens = suffix_mask.sum(dim=1)      # length of each suffix suffix_mask.nonzero(as_tuple=False)       # which positions get gathered into the packed input
 ```
 
 verl passes `response_mask`:
 
 ```python
 # verl/trainer/ppo/prefix_grouper_utils.py  (identical on 0.8.0 and main)
-prefix_grouper = PrefixGrouper.from_ungrouped_masks(
-    prefix_mask=prefix_ids.ne(pad_token_id),
-    suffix_mask=response_mask,            # <-- gradient mask, not existence mask
-    ...)
-concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask,
-                                               responses, response_mask)
+prefix_grouper = PrefixGrouper.from_ungrouped_masks( prefix_mask=prefix_ids.ne(pad_token_id), suffix_mask=response_mask,            # <-- gradient mask, not existence mask ...) concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask, responses, response_mask)
 ```
 
 In single-turn RLVR the two masks coincide, so nothing is visibly wrong. In
@@ -84,16 +78,13 @@ customization:
 
 ```python
 # verl/experimental/agent_loop/tool_agent_loop.py
-agent_data.response_mask += [1] * len(response_ids)   # model-generated  -> gradient
-agent_data.response_mask += [0] * len(response_ids)   # tool observation -> no gradient
+agent_data.response_mask += [1] * len(response_ids)   # model-generated  -> gradient agent_data.response_mask += [0] * len(response_ids)   # tool observation -> no gradient
 ```
 
 Minimal demonstration (16 tokens, CPU-only; full script attached):
 
 ```
-packed with existence mask : [[1,2,3,4, 10,11,12,13,14,15, 20,21,22,23,24,25]]
-packed with response_mask  : [[1,2,3,4, 10,11,      14,15, 20,21,      24,25]]
-tokens dropped from input  : [12,13,22,23]   <-- the tool observations
+packed with existence mask : [[1,2,3,4, 10,11,12,13,14,15, 20,21,22,23,24,25]] packed with response_mask  : [[1,2,3,4, 10,11,      14,15, 20,21,      24,25]] tokens dropped from input  : [12,13,22,23]   <-- the tool observations
 ```
 
 The failure mode is the worst kind: no crash, no shape mismatch, no warning —
@@ -169,8 +160,7 @@ gradient mask; warn while use_prefix_grouper is inert
 +    concat_input_ids = prefix_grouper.concat_input(prefix_ids, prefix_mask, responses, response_exist_mask)
 ```
 
-（`forward_micro_batch_with_prefix_grouper` 已经把 `response_mask` 单独传给损失
-（`completion_mask=response_mask`）——语义分离之后它恰好就是对的，无需改。）
+（`forward_micro_batch_with_prefix_grouper` 已经把 `response_mask` 单独传给损失 （`completion_mask=response_mask`）——语义分离之后它恰好就是对的，无需改。）
 
 **Diff ②（死开关警告，`verl/workers/config/actor.py::ActorConfig.__post_init__`）：**
 
