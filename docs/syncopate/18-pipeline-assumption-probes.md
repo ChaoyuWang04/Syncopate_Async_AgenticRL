@@ -60,11 +60,11 @@
 | **P1** | 「merge 之后的模型 = SFT + RL 的 LoRA」 | 🔴 **不成立**，见 §3 |
 | **P2** | 「ckpt 的三个 rank 是同一份副本，取哪个都行」 | 🔴 **不成立**（E21），且已交付到产物，见 §4 |
 | **P3** | 「瘦身只是省空间，不丢信息」 | 🟠 **不成立**，见 §5 |
-| **P4** | 「每次更新看到 6 条**不同**的题 × 8 采样」 | 🟡 107/110 步成立，3 步只有 4–5 条不同题（§6） |
+| **P4** | 「每次更新看到 6 条**不同**的题 × 8 采样」 | 🟡→✅ **2026-08-19 结构性修掉**：根因是采样批/训练批**边界错位**（不是有放回）；采样器现在排除上一批 ⇒ 任何 ≤ 批宽的窗口无重复；dump 已带 `case_id`，新跑零容忍（§12） |
 | **P5** | 「4 片并行评测合并后 = 冻结 EVAL 全集，不漏不重」 | ✅ 343/343，重复 0、漏 0、多 0（三份审计都查了） |
 | **P6** | 「配对比较真的按 case_id 配对」 | ✅ `compare.py:93` 取 `set(a) & set(b)` 交集，三份审计 case 集完全一致 |
 | **P7** | 「SFT 的 val 桶与 train 桶不重叠」 | ✅ case 级交集 = 0 …… ⚠️ **但模板家族 100% 重合**（§7） |
-| **P8** | 「rollout 的 logprob 全部来自引擎，没有占位值」 | ✅ `logprob_coverage` 全样本 = 1.0000 |
+| **P8** | 「rollout 的 logprob 全部来自引擎，没有占位值」 | ✅→🟡 **降级**（infra 在 8 个干净跑复查，`01-TASKS §5`）：多数跑有 2–4/2880 条 < 1.0（最低 0.9932）⇒ 「全样本=1.0000」**不再成立**，别再当已验证引用；~0.1% 的占位值会污染那几条的 IS 权重，归因**无人认领** |
 
 ---
 
@@ -197,6 +197,11 @@ full.unlink()
 ⇒ **动作**：给 `Pool` 加一条断言「同一批次内不重复抽同一 case」，或显式接受并记一行日志。
 成本：几行。
 
+> ⛔ **归因更正（2026-08-19，读码后）**：上面「有放回」是错的 —— `Pool.sample`
+> 单次调用一直是无放回的。重复来自**相邻两次调用之间**可以抽到同一条，
+> 而消费方（DataLoader/rollouter）切 batch 的边界与采样调用的边界**不保证对齐**，
+> 错位时一个训练 batch 横跨两次调用。修法与现状见 §2 P4 行与 `main_ppo_pool.py`。
+
 ---
 
 ## 7 · ✅ P5–P8 的边界（合格，但有两条要写下来）
@@ -209,7 +214,7 @@ full.unlink()
 - **P7 SFT 桶泄漏**：case 级交集 = **0**（L1/L2 门禁有效）。
   ⚠️ **但 val 的 21 个模板家族 100% 出现在 train 里**，而全库只有 160 种句式
   ⇒ **`val_loss` 在这份数据上基本不含信息**（v13 e2 降到 **0.0110**，v11 当年是 0.111）。
-  这不是泄漏 bug，是**尺子失效** ⇒ 选 ckpt 一律按决策位熵 + 有梯度格子，别看 val_loss（`14 §1-②`）。
+  这不是泄漏 bug，是**尺子失效** ⇒ 选 ckpt 一律按决策位熵 + 有梯度格子，别看 val_loss（`06` H1-②）。
 
 ---
 
@@ -219,13 +224,13 @@ full.unlink()
 
 | # | 前提（从没验过） | 判据 | 成本 |
 |---|---|---|---|
-| **Q1** | 🔴 **权重同步之后，vLLM 里的权重 == trainer 里的权重** | 同步后各取同一层的范数，两边比；相对差应 < 1e-3。<br>★ **这是 E21 的同族**：中间隔着 CheckpointEngine 的 bucket 推送，我们只验过"没 OOM" | 训练里加 10 行探针 |
-| **Q2** | 🔴 **评测走 vLLM LoRA，训练走合并权重，两条路径等价** | 同一 prompt、同一 ckpt，`base+peft adapter` 的 logprob vs `合并权重` 的 logprob，逐 token 比。<br>★ 若不等价，**所有 RL 评测都系统性偏**，而且和 E20 的 `log_ppl_diff` 地板混在一起分不开 | 1 卡 · 10 分钟 |
-| **Q3** | 🔴 **E20 的 `log_ppl_diff` 增长来自陈旧度** | **按 rank 分别打 `log_ppl_diff`**。E21 下 rank1/2 的 π_old 已经偏离被推给 vLLM 的 rank_0 ⇒ 若 rank0 ≈ 地板、rank1/2 明显更大，**E20 §3「229/230 来自陈旧度」要重写** | 1 行 print |
-| **Q4** | 🟠 **失败注入对同一 case 的 8 次 rollout 是确定性的** | 同组 8 条轨迹，注入的失败类型必须一致（`00 §8-13`：GRPO 下随机注入会污染 advantage）。现在**没有任何守卫** | dump 里加字段 |
-| Q5 | 🟠 SFT 与 RL 看到的 token 序列同构（整段渲染 vs 增量拼接） | 取同一 case，SFT parquet 的 `input_ids` 与 `run_rollout` 回放 gold 的拼接结果逐 token 比 | CPU · 30 分钟 |
-| Q6 | 🟠 `response_mask=1` 只落在模型生成的 token 上，工具返回一律 0 | 从 `segments` 重建 mask，与训练用的 mask 逐位比 | CPU |
-| Q7 | 🟠 RL parquet 的 prompt 与冻结 EVAL 渲染同源、且无截断 | 逐 case 比对渲染结果；`prompt_truncated_tokens` 必须恒为 0 | CPU |
+| **Q1** | 🔴 **权重同步之后，vLLM 里的权重 == trainer 里的权重** | ✅ **已闭环**（E22 修复时验过：`list_loras()`、两侧 scaling、`log_ppl_diff` 回地板） | — |
+| **Q2** | 🔴 **评测走 vLLM LoRA，训练走合并权重，两条路径等价** | ✅ **infra 已做**（G-2，`01 §5`） | — |
+| **Q3** | 🔴 **E20 的 `log_ppl_diff` 增长来自陈旧度** | ✅ 被 E22 整体解释（rollout 策略恒为 π₀），E20 已重写 | — |
+| **Q4** | 🟠 **失败注入对同一 case 的 8 次 rollout 是确定性的** | ✅ **2026-08-19 守卫已接**：每条 rollout 把剧本指纹 `failures_fp` 写进 dump（`verl_agent_loop.failures_fingerprint`），检查器按 case 聚合断言集合大小=1（`--only rollout`）。首批 480 条 rollout 已验过：指纹唯一 | 已落地 |
+| Q5 | 🟠 SFT 与 RL 看到的 token 序列同构（整段渲染 vs 增量拼接） | ✅ **探针已落地**：`scripts/probe_sft_rl_consistency.py`（parquet vs 当前回放逐 token 比）。⚠️ 首跑就抓到 §12 那个真问题 | CPU · 抽样分钟级 |
+| Q6 | 🟠 `response_mask=1` 只落在模型生成的 token 上，工具返回一律 0 | ✅ **同一探针覆盖**：mask==1 的 token 必须 == gold 各步文本（+每轮 `<\|im_end\|>`）的分词拼接。完整样本上全过 | 同上 |
+| Q7 | 🟠 RL parquet 的 prompt 与冻结 EVAL 渲染同源、且无截断 | ✅ **进常驻检查器**（`--only data`）：逐条 hash 同源 + 按**运行时同一条路径**（messages+tools）分词 ≤ 5120。v13 实测最长 **4654**（⚠️ 余量只剩 466） | 已落地 |
 | Q8 | 🟡 `--rollout-n 8` 真的产生 8 条**不同**的轨迹 | 已有旁证（组内 std 0.258、79% 有 ≥2 种工具序列），但没有断言 | 几行 |
 | Q9 | 🟡 优化器状态在断点续跑后被正确恢复 | 存 → 载 → 逐张量比 | CPU |
 
@@ -241,7 +246,8 @@ A1  launch_rl 启动时：若 --model 目录里有 lora_adapter/ ⇒ 报错（§
 A2  merge 产出后：assert ‖W_merged − W_base‖ > 0                      （§3.3）
 A3  任何"读一个 rank 就代表全部"的地方：先比两个 rank，不同就报错
     —— 现存三处：rl_ckpt_to_adapter.py(已有✅) / rl_ckpt_drift.py(❌) / prune_rl_ckpts.py(❌)
-A4  Pool 每批次：assert 没有重复 case                                  （§6）
+A4  Pool 每批次：assert 没有重复 case         ✅ 2026-08-19 已落地（且升级成
+    结构性保证：排除上一批 ⇒ 边界错位也不可能重复；断言仍在，实现改了断言不动）
 A5  eval 审计写盘时：assert case 集合 == split 的 eval_cases          （已有 --expect ✅，
     但只查了条数，没查集合；改成集合比对）
 ```
@@ -259,7 +265,7 @@ A5  eval 审计写盘时：assert case 集合 == split 的 eval_cases          �
 |---|---|
 | `16-m7b` 的全部评测数字 | 组合是对的（§3.1），但那份 LoRA 是 **rank_0 的 1/3**（§4）⇒ **幅度要重测** |
 | `16 §6` 写的「models/…-rl-v13-s110/（已合并）」 | 🔴 **错的**，要改；否则下一轮 RL 会静默丢掉整轮（§3.2） |
-| `17-rl-learning-blocked` §3 的位移算术 | 位移是 rank_0 一份的位移 ⇒ 「lr 占 10×、次数占 1.9×」的**排序**不变，**倍数要重算** |
+| ~~17~~ §3 的位移算术（17 已归档） | 位移是 rank_0 一份的位移 ⇒ 「lr 占 10×、次数占 1.9×」的**排序**不变，**倍数要重算** |
 | `00-START §1` 的 v13 三桶数字 | 过期（343 不是 278），以 `data/splits/v13` 为准 |
 | 历史 ckpt 能否事后修复 | ❌ `global_step_5..25` 的 rank1/2 已删（§5），只有 `global_step_27` 完整 |
 
@@ -345,3 +351,40 @@ RL rollout（vLLM）                          单卡、TP=1                    �
 ⇒ **整条管线里只有一个地方会得 E21 这种病，就是 RL 的 trainer。**
 ⇒ 但这不等于其它环节安全 —— 它们的风险是**另一种形状**（"多个副本/分片事后合并"），
 即 eval 的 4 片合并与 ckpt 的多 rank 合并。**两者都已加判据。**
+
+---
+
+## 12 · 🔴 2026-08-19 · Q5 探针首跑抓到：131/503 条 SFT 样本**没有终答**
+
+**发现路径**：给 Q5/Q6 写探针（`scripts/probe_sft_rl_consistency.py`）→ 首跑 6 条
+就有 4 条「监督 token ≠ 期望」→ 按纪律先怀疑探针 → 解剖 BUD_0014：
+9 个 gold 步只有 8 个监督段，**缺的正是终答**（parquet 是回放的严格前缀）。
+
+**根因**：`build_dataset.build()` 造 SFT 数据时只传了两个长度，
+`max_assistant_turns` 落在 `RolloutConfig` 的**默认值 8** 上 ——
+而这些 case 自己的 `max_steps` 是 10/12/14（RL 侧从 `extra_info` 读的就是它）。
+gold 需要 >8 个 assistant 轮的样本，回放在第 8 轮被掐断，
+`build_sft_row` 不看 `truncated`，**无声写盘**。
+
+```
+波及   v13 SFT train 110/419 · val 21/84 —— 合计 131/503（26%）
+形状   模型在这些题上学到的是「调满 8 次工具，然后停」——终答从没被教过
+       ⚠️ 与 A-5「GEO 类卡死（在里面打转）」的行为形状一致，重训后值得对一下
+族谱   与 RL prompt 截断（E20 §7.12 翻案）、SFT --max-length 静默切片（同日抓到，
+       未发作）同族：**预算/上限没从契约派生 + 截断不报错不计数**——同一天第三例
+```
+
+**已落地的修法**（都在发生点，不靠调用方记得检查）：
+
+```
+✅ build_dataset：轮数上限逐 case 取 case.max_steps（与 RL 侧同源）
+✅ sft_replay.build_sft_sample：gold 回放 truncated ⇒ 直接 raise（终答缺失不可能静默）
+✅ 检查器新判据（--only data）：每条 SFT 样本最后一个监督段必须含终答 JSON
+✅ 同日同族：sft.py 删掉 --max-length，上限从 rollout_budget 推，超长硬报错
+```
+
+**⬜ 待办：v13 SFT parquet 要重建**（CPU 分钟级，`build_dataset` 修复后重跑即可）。
+⚠️ 在重建之前，**任何用 v13 SFT 数据的重训都会把「26% 的题不教结论」再训一遍**；
+检查器的 data 组会一直红到重建为止 —— 那不是误报。
+⚠️ 波及历史结论：v13 的 SFT/RL 全部跑在这份缺终答的数据上；
+`21` 号清单那些「待重测」的数字**又多了一个作废理由**（不改变「待重测」的状态）。

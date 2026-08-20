@@ -69,7 +69,7 @@ infra 线看 **`docs/infra_exp/00-START.md`**（08-19 重组：00 导航/守则 
 
 ## 已定决策（别重新讨论）
 
-- verl 不换；**DDP 必选**（`--fsdp-size 1`，首步 FULL_SHARD×3 慢 5.97×）；FA2 默认；dynamic_bsz 默认 True
+- verl 不换；**DDP 必选**（`--fsdp-size 1`）；FA2 默认；~~dynamic_bsz 默认 True~~ ⛔E25 已翻案：**默认 False**（mb=1 等价完美打包，见 launch_rl 注释）
 - 🆕 **MoE 用 `Qwen3-30B-A3B-Instruct-2507`**（已下 57 GB）。~~GLM-4.7-Flash~~ 的
   `Glm4MoeLiteForCausalLM` **当前栈不支持**（要 transformers 5.0rc）——
   ★ **「day-0 支持」必须落到 `architectures` 字段验证，不能引用新闻稿。**

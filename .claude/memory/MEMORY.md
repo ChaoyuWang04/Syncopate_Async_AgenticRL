@@ -24,3 +24,4 @@
 - [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 14 处修复后端到端 **2.31×**（微基准兑现 70%）；★ 第 14 处=绕过根 FSDP 的归约竞态（静默不同步）；报错位置几乎总在别人家里
 - [行为异常先查输入](behavior-collapse-check-input-first.md) — ★ defer 崩塌是 **prompt 被截断**，不是 reward 教的；夜跑那条归因已翻案
 - [截断家族一天三例](budget-truncation-family.md) — ★v13 SFT 26% 样本没终答（轮数上限默认 8，已修已重建）；预算必须从契约派生、截断必须报错或计数；RL prompt 余量只剩 466
+- [正确系统第一条 RL 曲线](first-clean-rl-curve.md) — 峰值 200 步过训回落;★cap 单调恶化+总分涨=reward 盲区显影法;并列点按 cap 干净度选

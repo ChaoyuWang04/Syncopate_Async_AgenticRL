@@ -74,7 +74,7 @@ kl_loss_coef 0.001 × actor/kl_loss 0.0155 = 1.55e-5
 > ⇒ **reward 只决定方向不决定距离**。
 > ⇒ 由此还推出一条 2026-08-18 补的：**位移是"输入"不是"产出"** ——
 > 拉 lr / 加次数**必然**得到更大位移，那是算术不是证据；
-> 判据必须是任务级尺子（`docs/infra_exp/MAINLINE-HANDOFF-2026-08-18.md §5`）。
+> 判据必须是任务级尺子（`00-START` 守则⑥；原信已删）。
 >
 > 全表见 `docs/syncopate/21-invalidated-numbers.md`。
 

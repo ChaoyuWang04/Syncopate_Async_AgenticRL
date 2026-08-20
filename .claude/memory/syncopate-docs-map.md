@@ -5,14 +5,14 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-19T13:59:20.565Z
+  modified: 2026-08-19T14:09:15.833Z
 ---
 
 ```
 docs/focus-migration-2026-08.md           ★ 焦点怎么定下来的（唯一记录迁移历史处）
 docs/syncopate/00-START.md              ★ 先读：现在在哪 / 下一步 / 已定的决策 / 反复栽的坑
 docs/syncopate/08-machine-and-environment.md  怎么搭环境、怎么跑命令、参数为什么是那个值
-docs/syncopate/06-rl-run-protocol.md      ★ 训练协议与健康度：停机/完成判据 · H 部分=原 14
+docs/syncopate/06-rl-run-protocol.md      ★ 训练协议：**§1 训练前自查清单（每次必过）** · 停机/完成判据 · H 部分=原 14
                                           （指标红线/选点；首跑预期段已抽到 archive）
 docs/syncopate/07-toolbox-and-runtime-design.md  沙盒设计（§1.1 已缩成指针，RAG 细节去 10）
 docs/syncopate/09-runtime-handoff.md      ★ M9 Runtime 交接（真服务；PG 起法见 08）
@@ -66,6 +66,10 @@ docs/archive/                             📦 归档：历史记录，**不是�
 - **环境配置类内容不进交接文档**，单独放 08。
 - 设计文档里**推翻的预期不删**，就地写「原猜想 / 实测 / 推翻后 / 教训」四段 ——
   记录"上机之前我们以为会怎样"本身就是价值的一半。
+- ★★ **更新即改写，不是追加**（守则⑪，Chaoyu 2026-08-19，两线通用）：
+  动笔前先通读那份；新内容并入已有章节（错了就地改、过时删或归档）；
+  追加只对登记型表格合法且**办完要删行**；更新完行数不该默认变大；
+  新开文档前先问能不能进现有的某一份。
 
 **infra 线的三层分工（2026-08-14 改组）**：
 `E 编号是身份、永不重排`（别的文档引用「E02 的结论」）；`track 是叠加的索引视图`。

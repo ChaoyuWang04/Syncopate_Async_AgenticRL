@@ -315,14 +315,18 @@ budget 组的第②条         🟡→🔴：那句「这是修复**之前**的�
 python -m syncopate.train.sft --model models/Qwen3-4B \
   --train-file data/sft/v11/train.parquet --val-file data/sft/v11/val.parquet \
   --out checkpoints/sft/v11 --epochs 2 --batch-size 1 --grad-accum 4 \
-  --lr 1e-4 --warmup-ratio 0.1 --lora-rank 32 --max-length 6144
+  --lr 1e-4 --warmup-ratio 0.1 --lora-rank 32
 ```
 
 实测：单卡 **412 s/epoch**，显存峰值 12.0 GB（稀疏投影已上线，只对被监督的位置做
 lm_head+CE —— 本项目监督占比只有 3.8–4.9%）。
 
 ⚠️ **别改 `--batch-size`**：实测 bs=1 反而最快，而且改了要同步改 `--grad-accum`。
-⚠️ v11 最长序列 5806 token < 6144，不会截断。**换数据版本要重新量。**
+⚠️ 2026-08-19 起**没有 `--max-length` 这个参数了**：长度上限从 `rollout_budget.py`
+推（prompt 5120 + response 2048 = 7168），超长样本**硬报错**而不是静默截断。
+此前是 `--max-length` 默认 4096 + 静默切片 —— v13 数据 92.6% 超 4096，
+实跑靠手传 6656 侥幸躲过，而本文旧版示范命令写的 6144 会无声截掉 46 条。
+判据：`check_pipeline_invariants --only contract`（源码 + 数据两头都查）。
 
 ### 4.0.1 🔴 nsys 不要包住 RL 长跑（2026-08-17 用一次报废的跑换来的）
 

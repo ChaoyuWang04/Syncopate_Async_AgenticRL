@@ -5,11 +5,20 @@
 >
 > ```
 > docs/syncopate/00-START.md    主线：现在在哪 / 下一步
-> docs/syncopate/20-...queue.md   主线：执行顺序的唯一来源
+> docs/syncopate/01-TASKS.md    主线：执行顺序的唯一来源（曾用号 20，已退役）
 > docs/syncopate/21-...numbers.md ⛔ 哪些数字不能引用
 > docs/syncopate/08-...environment.md  环境与命令
-> docs/infra_exp/00-INFRA-HANDOFF.md   infra 线
+> docs/infra_exp/00-START.md   infra 线
 > ```
+>
+> 🆕 2026-08-19 压缩令新进三份（存活结论已蒸馏进 `22 §H`，未闭合项捞进 `01-TASKS`）：
+> `02-credit-assignment`（判定"做了没用"，切入点应是 caps 归因）·
+> `17-rl-learning-blocked`（活的部分已各归其位；⚠️ §6.7"占位 logprob 已排除"后被推翻，见 18 §2 P8）·
+> `19-2026-08-18-postmortem`（共同形状已成 00-START 守则）
+
+> 🆕 2026-08-19 infra 侧重组进一份：
+> `E12-weight-sync`（核心谜题随前提消失——以为推 132 MB 实推 8.4 GB；
+> 现值 param_sync 0.97 s/0.8%，见 infra_exp/E22 §6.4；作废登记在 infra_exp/02-DECISIONS §4）
 
 ## 为什么要有这个目录（2026-08-18）
 

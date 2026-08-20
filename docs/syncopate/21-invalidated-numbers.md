@@ -55,7 +55,7 @@
 | **B6** | **合并模型丢了 36% 的 SFT 增量**（bf16 存不下小增量） | 「合并模型」与「基座+adapter」不等价 ⇒ B3 的成因 | `18 §3.3` |
 | **B7** | **导出的 adapter 只是 rank_0 一份** | 所有基于 `models/Qwen3-4B-rl-v13-s110/lora_adapter` 的评测 | `18 §4` |
 
-★ **B2 一次性解释了四个此前解释不了的观测**（见 `../infra_exp/MAINLINE-HANDOFF-2026-08-18.md §11.3`）：
+★ **B2 一次性解释了四个此前解释不了的观测**（详见 `../infra_exp/E22-lora-never-synced.md`；原信已删）：
 ESS 是累计位移的函数 · 固定 k 下 `kl` 涨 36 倍 · 陈旧度阈值扫描不动 ESS · `log_ppl_diff` 230×。
 
 ---

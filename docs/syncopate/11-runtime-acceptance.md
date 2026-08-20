@@ -264,7 +264,7 @@ runtime 把不在 `WRITE_TOOLS` 里的工具**一律当读工具**：不校验�
 | R5.4 | 长任务不阻塞其他任务 | ⛔ | `Worker.run_once` 严格串行，一个 worker 一次一条。480s 工具会**堵死整条队列**。且 `claim_run` 是**全局 FIFO，不按 org 隔离** ⇒ 单 org 刷爆会饿死其他 org（压测场景⑤） |
 | R5.5 | 飞轮接口有写入路径 | 🟡 | 回路 2 的 `modified_params` ✅（`POST /approvals/{case_ref}`）；回路 3 的 `outcome_checked_at`/`outcome_result` ⛔ **除 schema.sql 外无任何代码引用**（设计里归 M12，属预留，不算欠债） |
 | R5.6 | Outbox + 队列（§36） | ⛔ | 全仓 0 处。当前是"直接写库 + worker 轮询" |
-| R5.7 | RAG 服务（§36） | ✅ **2026-08-17 已建** | `syncopate/runtime/retrieval.py` + PG 两张表 + `scripts/ingest_corpus.py`。**三态契约**（查到 / 查不到 / 查不了）· 生效期与取代关系精确计算 · 多租户作用域 · 11 条测试。⇒ 压测场景④有被测对象了、`retrieval_empty` 有生产者了、§19 的检索 P95 可量了（实测 3ms）。设计见 **`12-rag-runtime-design.md`** |
+| R5.7 | RAG 服务（§36） | ✅ **2026-08-17 已建** | `syncopate/runtime/retrieval.py` + PG 两张表 + `scripts/ingest_corpus.py`。**三态契约**（查到 / 查不到 / 查不了）· 生效期与取代关系精确计算 · 多租户作用域 · 11 条测试。⇒ 压测场景④有被测对象了、`retrieval_empty` 有生产者了、§19 的检索 P95 可量了（实测 3ms）。设计见 **`10-rag-retrieval.md` R 部分**（原 12 号已并入） |
 | R5.8 | 模型服务 + LoRA 热加载（§36） | ⛔ | 无。**`model_calls` 表建了但没有写入路径** ⇒ §19 的 TTFT/TPOT 和「单任务 token 成本」量不了（`usage_records` 里的 token 数是 worker **硬编码**的 800/120） |
 | R5.9 | 按意图的延迟可观测 | 🟡 | `agent_runs` 有 `intent` + `created_at`/`updated_at`，端到端 P50/P95/P99 **算得出来**；但没有查询/落库，且分不出排队时间与执行时间 |
 
