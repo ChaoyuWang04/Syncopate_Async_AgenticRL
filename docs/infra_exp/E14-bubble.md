@@ -9,8 +9,8 @@
 | **Track / 兑现物** | B-④ 执行层工具箱；JD：字节 C「编译技术」· DeepSeek G |
 | **需求从哪来** | E01 §4.6：计算时段内 GPU 仍有 22–25% 空档，成因未归属（A18）；Chaoyu 08-20 立意「用真实负载学会什么时候该用什么工具」 |
 | **问题** | 空档是什么构成的？compile / CUDA graph / 算子融合各自的适用条件是什么？ |
-| **答案（第一批）** | 空档**不是发令开销**：trainer 的空全在**大洞**（>10ms 档占 8.7/9.0s，最大单洞 2.65s），且 **85% 落在 update_actor 内部**——洞内 CPU 在做同步乒乓（单洞 `cudaStreamSynchronize`×144 / 1.76s）。rollout 侧相反：**微空隙**（10–100µs 档 2.0s，7.9 万 kernel）= 发令开销真实存在。⚠️ **首采窗口错位待复核**（§7-窗口）：三采（e14_anatomy2，真稳态中段窗）复核后此卡片再定稿 |
-| **信心** | 低-中：**首采窗落在跑的尾巴**（末 1–2 步+最终存档+善后生成+拆机），洞归因可能被最终存档的 D2H 同步污染；2+1 冒烟拓扑。三采复核中 |
+| **答案（第一批定稿）** | **rollout/vLLM 侧（四采完整数据 ✅）**：84.2s 里忙仅 29.1s（35%）；**10–100µs 微间隙 ×796,689 个、合计 32.4s——比计算本身（29.1s）还多**；另有 >10ms 等待 17.7s（等下一批）。⇒ eager 模式的发令/调度开销是生成端头号损失，enforce_eager/CUDA graph 探针升格为**最大单点机会**。**trainer 侧**：大洞非微隙 + 洞内 sync 乒乓（首采观察），但 nsys 对 Ray trainer 进程存在**不可修复的事件截断**（三采/四采两次实锤，flush-interval 无效）⇒ 按预立判据放弃 nsys 路线，trainer 侧交给 torch profiler（第二批①，本来就要用它带栈定位 sync 调用点） |
+| **信心** | vLLM 侧高（完整性判据 ✅ + 三/四采互证 33%/35%）；trainer 侧低（仪器截断，结论待 torch profiler 复核） |
 | **推翻了什么** | 无（E01「卡是满的」已在 §4.6 自我修正过，本次是给那 22–25% 定性） |
 | **下一步** | 第二批：① 定位 144 个 sync 的调用点（torch profiler 带栈/py-spy）② vLLM 关 enforce_eager 探针 ③ compile 微基准 |
 
@@ -37,6 +37,18 @@ analyze_nsys_step.py（阶段归属 + gap_analysis）→ 补两个 sqlite 查询
 ① 每个 >10ms 大洞与 NVTX 阶段区间求交归属；② 最大洞窗口内的 CUDA runtime / OSRT API 聚合。
 
 ## 4 · 数据
+
+### 4.0 四采定稿（3+1 生产拓扑 · `--trace=cuda,nvtx --cuda-flush-interval 100` · 完整性判据执行）
+
+```
+vLLM::Worker（完整 ✅，1,351,931 kernels）  跨度 84.2s · 忙 29.1s（35%）
+  微间隙 10–100µs   ×796,689   合计 32.40s   ← 头号损失，超过计算本身
+  <10µs             ×474,145   合计  0.46s
+  1–10ms            ×  1,263   合计  3.71s
+  >10ms             ×     24   合计 17.67s   ← 等下一批（供给/流水线）
+trainer 三 rank：两个 20s 处截断、一个 67s 处截断（NVTX 显示训练仍在步进）
+  ⇒ flush-interval 未修复 Ray trainer 进程的事件丢失 ⇒ 按预立判据弃 nsys，转 torch profiler
+```
 
 ```
 按进程忙占比（窗内）  trainer-A 45.4% · trainer-B 71.9% · vLLM 42.1%
