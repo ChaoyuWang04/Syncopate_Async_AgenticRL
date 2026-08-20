@@ -37,9 +37,13 @@ from syncopate.runtime.db import (Database, conversation_exists, create_conversa
 # --------------------------------------------------------------------------
 
 # ⚠️ 只是开发期占位。真上线换 OIDC/JWT —— 但换的是这个函数，不是路由签名。
+# ★ org_demo 是**给真人用的**（网页控制台/常驻 worker 挂它）；acme/globex 归测试。
+#   分开是结构性的：常驻 worker 消费 org_acme 会抢走测试的 run（C-1 同族，
+#   2026-08-20 SSE 测试就是这么被污染的——回放里多出 worker 真跑出来的事件）。
 _DEV_TOKENS: dict[str, str] = {
     "dev-token-acme": "org_acme",
     "dev-token-globex": "org_globex",
+    "dev-token-demo": "org_demo",
 }
 
 
