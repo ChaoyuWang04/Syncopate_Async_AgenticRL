@@ -280,6 +280,24 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ```
 
 
+## ★★★ 2026-08-20（傍晚）：E14 批2 全线出数——graph/闸门/乒乓三案
+
+```
+✅ Test A · vLLM CUDA graph（--enforce-eager False 旗子已加）：同尺子 12.84→11.89 s/gstep
+   （−7.4%），gen 等待 −33%；训练侧持平受控。晋级默认欠精度闸
+⛔ Test B · 闸门放宽（sync16×staleness0.5）：吞吐 −24%、gen 28%→0.6% 接力赛消灭，
+   但**精度闸拦下**——同 64 步 −0.030(t=−4.3)，★该 defer 92→64（−28pt 破红线）,
+   伤集中判断类（FRESH −0.21/CLAR/CONF）；执行类反受益（BUD +0.05）
+   ⇒ ★ 三层判据层层加狠：微观仪表(ESS 0.84)说没事→总分说小事→行为判据说大事
+✅ R2 剂量曲线开张：两点（0→0.874 · sync16/0.5→0.844）；甜点扫描+等时臂夜跑中
+✅ 乒乓元凶名单（torch-prof+栈对齐，912 sync/2.17s 每 update_actor）：
+   ①AdamW step 张量 GPU 读回 ×1008（adam.py:544 _get_value）②PG 库 repeat_interleave
+   缺 output_size ×584 ③自家 _to_jagged .item() ×96 ④verl padding ~150
+   ⇒ 修理三件套已置队首（01 §1-1），每处独立 A/B
+★ torch-prof 探针（SYNCOPATE_TORCH_PROF=N）+ 栈对齐脚本是本日新武器：
+   nsys 答不了"谁调的"（对 Ray trainer 还丢事件），torch-prof 进程内记账直接指到行
+```
+
 ## ★★ 2026-08-20（下午）：E29 定案 + E14 第一批定稿
 
 ```

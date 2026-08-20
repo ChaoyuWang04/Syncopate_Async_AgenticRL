@@ -12,7 +12,8 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | **执行层优化工具箱**（E14/A18 合体；Chaoyu 08-20 立意：**用真实负载学会「什么时候该用什么工具」**）：nsys 重拆解（PG 后步构成已变）+ 空档 22–25% 归因（A18）→ 逐工具 A/B：torch.compile（计算图/算子融合）→ CUDA graph → 其余按归因结果定；产出「工具 × 适用条件」边界表 | infra | 分批 ~2–3 天 | 字节 C 加分明写「编译技术」+ DeepSeek G；输赢都写归因（否定结论也是产出） |
+| **1** | 🔴 **乒乓三件套修理**（E14 §4.7 名单，Chaoyu 08-20 置顶）：① AdamW step 张量 GPU 读回 ×1008（查 verl 优化器构造，step 留 CPU/走 fused）② PG 库 `repeat_interleave` 缺 `output_size` ×584 ③ 自家 `_to_jagged` 逐个 `.item()` ×96。**每处独立 A/B**（timing + torch-prof 账本前后对比），三处全修后全量测速 | infra | ~半天（含 A/B） | 912 次 sync/2.17s 每 update_actor（≈8% update_actor）；洞收窄的间接收益另计 |
+| **1.5** | **E14 工具箱余项**：compile 微基准（elementwise 27–31%）· CUDA graph 精度闸（enforce_eager=False 晋级默认前）· 边界表定稿 | infra | ~1 天 | 字节 C「编译技术」+ DeepSeek G |
 | **2** | **FP8 找新消费者（软硬结合）**：原消费者 ref 随砍 KL 消失；评估 update_actor / old_log_prob 前向走 FP8（E19 数值对拍已过、真实形状 1.70–2.22×），任务配对闸把关 | infra | ~1 天 | DeepSeek H「距上限」+ 字节「低精度」；5090 原生 FP8 吞吐不该白放着（Chaoyu 08-20） |
 | **3** | **A3 · sm_120 能力探底收尾**：Triton 低精度静默退化复现 + FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%；并入决定 08-20） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项 |
 | **4** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#3 并行**；before 基线已备：24/25 + TPOT/TTFT，`11 §5`）。优化面口径已定（Chaoyu 08-20，按预期收益序）：批调度/chunked prefill → prefix cache×gpu_util 余量 → FP8 KV（并 #5 一次跑）→ 多 LoRA 热切换；投机解码仅探针级 | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
