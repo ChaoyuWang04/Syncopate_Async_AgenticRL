@@ -27,14 +27,16 @@ CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-na
   --max-lora-rank 32 --max-model-len 7168 --port 8100    # 基线：scripts/measure_tpot.py
 ```
 
-**怎么访问（08-20 起）**：网页控制台在 `GET /ui`（提交任务 · 实时事件流 · 审批 ·
-结论卡片，单文件 `syncopate/runtime/ui.html`，无构建步骤）。对外走 Caddy 认证边界
-（`/etc/portal.yaml`：外部 8265 → 内部 8000，token 三选一：`?token=` / Bearer / cookie）：
+**怎么访问（08-20 起）**：**聊天前端在 `/app`**（F-2：assistant-ui + Vite，源码
+`frontend/`，构建产物 `frontend/dist` 由 API 条件挂载——不进 git，重建见下）；
+工程师控制台在 `GET /ui`（单文件 `syncopate/runtime/ui.html`，无构建步骤，留作备用面板）。
+对外同走 Caddy 认证边界（`/etc/portal.yaml`：外部 8265 → 内部 8000）：
 
 ```bash
-echo "http://$PUBLIC_IPADDR:$VAST_TCP_PORT_8265/ui?token=$OPEN_BUTTON_TOKEN"   # 浏览器打开这个
+echo "http://$PUBLIC_IPADDR:$VAST_TCP_PORT_8265/app/?token=$OPEN_BUTTON_TOKEN"  # 聊天界面
+# 前端重建（dist 是派生产物）：. /opt/nvm/nvm.sh && cd frontend && npm ci && npm run build
 # 或不暴露公网：本机 ssh -p <VAST_TCP_PORT_22> -L 8000:127.0.0.1:8000 root@<IP>
-#              然后开 http://localhost:8000/ui（免 Vast token）
+#              然后开 http://localhost:8000/app/（免 Vast token）
 ```
 
 ⚠️ 两层鉴权是**两回事**：Caddy 的 token 管"谁能碰到这台机器的服务"；

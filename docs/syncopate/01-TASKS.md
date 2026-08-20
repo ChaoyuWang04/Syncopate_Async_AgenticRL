@@ -37,10 +37,10 @@ B · 把它跑给用户用              runtime   ✅ 端到端已通（08-20）
 
 | # | 条目 | 谁在打 | 状态 |
 |---|---|---|---|
-| **F-1** | **conversation 门面（后端）**：`conversations` 表 + `runs.conversation_id` + `POST /conversations/{cid}/messages`（一条消息 = 一个 run）；⚠️ **automation_tier 在此改必填**（顺手关掉 09 §4.6.4 那条缺口——新入口必填，旧 `/runs` 不动） | 主线 | ⬜ |
-| **F-2** | **assistant-ui 前端**（`frontend/`，React + Node 构建，前后端彻底分离）：custom backend 适配器（我们的 run/SSE 协议 → 消息流）· 工具步骤气泡 · **审批卡片**（human-in-the-loop）· behavior 渲染（defer/clarify/reject 长得不一样） | 主线 | ⬜ |
-| **F-3** | 部署接线：构建产物挂到 Caddy token 边界后面；`09 §0` 访问段更新 | 主线 | ⬜ |
-| **F-4** | 验收：同一会话里 消息→步骤流→审批→结论→**再来一条消息** 全链真跑；SSE 断线续传在真浏览器里过 | 主线 | ⬜ |
+| **F-1** | **conversation 门面（后端）**：`conversations` 表 + `runs.conversation_id` + `POST /conversations/{cid}/messages`（一条消息 = 一个 run）；⚠️ **automation_tier 在此改必填**（顺手关掉 09 §4.6.4 那条缺口——新入口必填，旧 `/runs` 不动） | 主线 | ✅ **已落地（08-20）**：9 条测试（越权/必填/幂等/回放序）；真模型会话全链实测过；⚠️ 顺手修掉测试污染——真人租户 `org_demo` 与测试租户结构隔离（C-1 同族） |
+| **F-2** | **assistant-ui 前端**（`frontend/`，Vite+React+TS+Tailwind） | 主线 | ✅ **已落地（08-20）**：`@assistant-ui/react` 0.15.15 · `useExternalStoreRuntime`（消息状态归我方：历史回放/审批中断恢复/多路 SSE 归约）· 手解 SSE 带 Last-Event-ID 重连（Node 冒烟过）· behavior 差异渲染 + 审批卡。构建零报错，dist 468K（JS gzip 135K）。⚠️ dist/node_modules 不进 git，重建命令在 `09 §0` |
+| **F-3** | 部署接线 | 主线 | ✅ **已落地（08-20）**：无空闲外部端口 ⇒ dist 由 API 条件挂载 `/app`（不存在则跳过，测试不受影响），与 API 同源共用 8265 边界；`09 §0` 已更新 |
+| **F-4** | 验收：同一会话里 消息→步骤流→审批→结论→**再来一条消息** 全链真跑；SSE 断线续传在真浏览器里过 | 主线 + Chaoyu | 🟡 API 级全链已过（F-1 实测）+ 组件 SSR 冒烟已过；**真浏览器点验待 Chaoyu**（正在用就是验收） |
 
 ⚠️ clarify 的用户回复在 v14 之前按"新任务"处理（上下文进 prompt = 训练分布问题，`22 §I-2`）。
 

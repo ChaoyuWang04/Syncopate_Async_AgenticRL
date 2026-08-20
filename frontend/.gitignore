@@ -1,0 +1,4 @@
+# 派生产物不进库（重建：. /opt/nvm/nvm.sh && npm ci && npm run build，见 docs/syncopate/09 §0）
+node_modules/
+dist/
+*.tsbuildinfo

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
-  modified: 2026-08-16T17:19:11.386Z
+  modified: 2026-08-20T03:41:46.081Z
 ---
 
 **「我建了一个机制，然后假设它会自动生效。」** 这是 Syncopate 反复栽的同一个形状，
@@ -171,6 +171,20 @@ M9 符合性审计（`docs/syncopate/11-runtime-acceptance.md`）：`automation_
    前六种形态是"机制没接上"，这一种是**接上了、但接到了另一根线上**。
 
 ★ 配套：给错宁可报错。`eval_parallel.sh` 的基座改成 `${MODEL:?...}` 必填。
+
+---
+
+## ★★ 2026-08-20 第八形态：**测试全绿，但系统作为"服务"从没被起过**
+
+runtime 195 条测试全绿、40 条验收判据核过 —— 但**第一次真的起进程跑 HTTP**
+（2026-08-20）当场发现三件：① worker 没有进程入口（队列永远没有消费者）；
+② `agent_loop` 写好带测试、worker 却还跑写死的三步计划；③ cancelled 各退出路径
+不发终态 SSE 事件 ⇒ 客户端永远挂着（195 条进程内测试测不到"流不关"）。
+
+⇒ **进程内测试验的是函数，不是部署形状**：入口、进程边界、连接生命周期
+这些只在"真的把它起起来"时存在。⇒ 判据：每个服务组件问一句
+「它的 main 在哪、谁真的起过它」。冒烟驱动 `scripts/runtime_smoke.py` 就是这次补的
+（固定 query 集 + SSE 跟流带死线 —— 驱动器自己没有死线时，被它测的挂死 bug 会把它一起挂死）。
 
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
 [[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]] [[observed-needs-an-owner]]

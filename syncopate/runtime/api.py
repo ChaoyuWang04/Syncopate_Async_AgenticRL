@@ -185,6 +185,14 @@ def create_app(db: Database | None = None) -> FastAPI:
     async def ui() -> FileResponse:
         return FileResponse(Path(__file__).parent / "ui.html", media_type="text/html")
 
+    # ---- F-2/F-3 · chatbox 前端（assistant-ui 构建产物，挂 /app）----
+    # ★ 条件挂载：dist 不存在（没构建过/CI 环境）时静默跳过，不影响 API 与测试。
+    #   没有空闲外部端口 ⇒ 前端与 API 同源共用 8265 的 Caddy 边界（09 §0）。
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if dist.is_dir():
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/app", StaticFiles(directory=dist, html=True), name="app")
+
     # ---- 健康检查（不鉴权，压测场景②要靠它判断服务活没活）----
     @app.get("/healthz")
     async def healthz(db: DB) -> dict[str, str]:
