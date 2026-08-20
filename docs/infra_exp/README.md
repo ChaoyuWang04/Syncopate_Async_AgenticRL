@@ -117,6 +117,8 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 
 | **E27** 🆕 | [thinking 三臂探针](E27-thinking-probe.md) | thinking 净效果 **−0.057**（t=−4.9）：REJ/FRESH ↑、FAIL/ATTR/CHAT ↓（想多了会越界，acted_when_should_not 0→14）；★ **有梯度格子 170→233、卡死 109→60** —— 不涨均分但打开 RL 探索空间。SFT 完胜（+0.347/+0.404）。开关 `SYNCOPATE_THINK=1` 默认关；A 臂 = 永久基线 `_audit/e27_base_off.json`。红利路径 = 带思考的 SFT 数据，不是拨开关 | **A** | ✅ **完成** | — | ⬜（若立项 thinking-SFT 另开实验） |
 
+| **E29** 🆕 | [ckpt 只存 LoRA](E29-ckpt-lora-only.md) | verl 对 LoRA 训练无条件全量落盘（27 GB/次，97% 冻结基座）⇒ save 端按 lora_ 键过滤 + load 端合成加载：save **7.91→0.83 s（9.5×）**、ckpt **12×**、续跑/adapter 链路全验。⛔ §6：动机数字「占步 19.5%」被自己复核翻案（解析器稀疏键假象，实为 0.6%，解析器已修）⇒ 价值主体=字节与高频存档解锁 | **A** | ✅ **完成** | — | 素材待交 upstream（第 5 包候选） |
+
 > ★★★ **想一次看懂这条线是怎么断又怎么接上的 → [`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)**
 > —— 不是实验报告，是把「现象 → 误判 → 根因 → 为什么框架自带的办法不行 → 我们改了什么 → 结果」讲一遍。
 

@@ -47,6 +47,7 @@
 | 🔴 `_patch_prefix_grouper`（默认关） | E26：打包前向走根 FSDP + hook 捕获 hidden + 0×根输出锚 | `repro_pg_dtype.py` + 判据A/组构成 |
 | `ddp_save_to_cpu` 加 `if requires_grad` | E13：old_log_prob/ref 比值 1.94→1.07（≈8.5 s/步） | 3 条测试 |
 | launch_rl 启动守卫 | mini_batch×rollout_n 整除检查（列可用值 [3,6,9,12,15]）· lora-merge 拦截 · 数据默认值跟 DATA_VERSION | 都在最早能判的地方炸 |
+| 🆕 `_patch_lora_only_ckpt`（默认开，E29） | LoRA 下 ckpt 只存可训练部分：save 7.91→0.83 s（9.5×）、ckpt 18→1.5 GB；load 端合成加载；全参自动回退全量 | 5 条单测 + [ckpt-lora] 判据行 + 续跑实跑 |
 | 探针族（verl_patches） | SYNCOPATE_SYNC_PAYLOAD / OPT_STEP_PROBE / DDP_PROBE / SYNC_TIMING | 绑不上就报红，不打结论 |
 | NVTX 阶段标注（`--nvtx`） | verl `marked_timer` 有名无实，补齐后 nsys 才能按阶段归属 | — |
 
