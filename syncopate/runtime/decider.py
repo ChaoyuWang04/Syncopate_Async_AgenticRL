@@ -89,6 +89,19 @@ INTENT_MENUS: dict[str, list[str]] = {
 }
 DEFAULT_MENU = _MENU_BUD
 
+# ★★ 2026-08-20（Chaoyu）：**默认给全量 30 个工具，让模型自己选**，不做意图路由。
+#
+# 为什么以前不能：全量 prompt 7625 tok > 旧上限 7168 —— 是**预算**挡着，不是设计选择。
+# 上限抬到 14336 之后账算得开（实测）：
+#     全量工具 7625 + 历史 6×400 + 生成 2048 = 12073 < 14336
+# ⚠️ 代价是**训练分布外**：训练 case 的菜单是 12–16 个工具，模型没见过 30 个的形状。
+#   ⇒ 探针 `probe_full_menu.py` 量格式保持与选工具准确性；不合格就把
+#     SYNCOPATE_TOOL_MENU=intent 打回按意图裁剪（INTENT_MENUS 因此保留不删）。
+# ⚠️ 概括版（只给名字+首句，1049 tok）**不是选项**：不给参数 schema，
+#   模型不知道怎么填参数 ⇒ 换来一堆 validation_failed。省的那点 token 靠
+#   prefix cache 本来就免了（实测命中率 98.7%）。
+FULL_MENU_MODE = os.environ.get("SYNCOPATE_TOOL_MENU", "full") != "intent"
+
 
 class VllmDecider:
     """调 vLLM /v1/completions 的 Decider。一个实例服务一个 worker 进程。"""
@@ -108,7 +121,8 @@ class VllmDecider:
         import syncopate.domains.adcampaign  # noqa: F401  （注册工具的副作用导入）
         from syncopate.core.tool_registry import REGISTRY
         self._registry = REGISTRY
-        self.tools = REGISTRY.menu(DEFAULT_MENU)   # 判据行用（工具数）
+        # 判据行用（启动时打出来的工具数 —— 没这行就不知道到底给了模型几个工具）
+        self.tools = REGISTRY.menu(None if FULL_MENU_MODE else DEFAULT_MENU)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -170,7 +184,9 @@ class VllmDecider:
     async def decide(self, *, user_message: str,
                      history: list[dict[str, Any]]) -> Proposal:
         from syncopate.runtime.agent_loop import MODEL_USAGE, PRIOR_TURNS, RUN_INTENT
-        menu = INTENT_MENUS.get(RUN_INTENT.get() or "", DEFAULT_MENU)
+        # 默认全量（模型自己选）；SYNCOPATE_TOOL_MENU=intent 时退回按意图裁剪
+        menu = None if FULL_MENU_MODE else INTENT_MENUS.get(RUN_INTENT.get() or "",
+                                                            DEFAULT_MENU)
         tools = self._registry.menu(menu)
         messages = self._messages(user_message, history, PRIOR_TURNS.get())
         prompt: str = self.tokenizer.apply_chat_template(

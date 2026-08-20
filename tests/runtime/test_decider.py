@@ -82,8 +82,10 @@ def test_long_prior_answer_is_truncated_and_marked():
     assert msgs[1]["content"].endswith("…（已截断）")
 
 
-def test_intent_menus_are_training_shaped():
-    """菜单是训练 case 的众数（12–16 个工具），绝不该膨胀回全量 30。"""
+def test_intent_menus_stay_training_shaped_as_fallback():
+    """★ 默认已改全量 30（模型自选，探针 probe_full_menu 全绿）；
+    但 INTENT_MENUS 作为**打回路径**保留（SYNCOPATE_TOOL_MENU=intent），
+    它必须一直保持训练形状（12–16 个），否则打回时打回到一个没验过的分布。"""
     for intent, menu in INTENT_MENUS.items():
         assert 10 <= len(menu) <= 18, f"{intent} 菜单 {len(menu)} 个，偏离训练分布"
         assert len(set(menu)) == len(menu)
