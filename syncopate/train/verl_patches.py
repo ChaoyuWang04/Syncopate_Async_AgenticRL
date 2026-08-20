@@ -393,6 +393,9 @@ def setup_worker() -> None:
                               _patch_vllm_lora_probe)
     if os.environ.get("SYNCOPATE_PREFIX_GROUPER") == "1":
         _patch_prefix_grouper()
+        # ★ E14 §4.7-②：PG 的 repeat_interleave 免同步修理（默认开，=0 做 A/B 对照）
+        if os.environ.get("SYNCOPATE_FIX_PG_RI", "1") == "1":
+            _defer_until_imported("prefix_grouper", _fix_pg_repeat_interleave)
     if os.environ.get("SYNCOPATE_FSDP_ALIGN") == "1":
         _defer_until_imported("torch.distributed.fsdp._flat_param", _patch_fsdp_shard_alignment)
 
@@ -1062,6 +1065,36 @@ def _patch_lora_only_ckpt() -> None:
           "判据：save 时打 [ckpt-lora] 过滤行；resume 时打合成加载行", flush=True)
 
 
+def _fix_pg_repeat_interleave() -> None:
+    """★ E14 §4.7-②（SYNCOPATE_FIX_PG_RI，默认开）：PG 库 `batch_repeat_cat` 的
+    `repeat_interleave(tensor)` 不带 `output_size` ⇒ 每次调用都要同步问 GPU 输出多大
+    （实测 ×584/update_actor）。call site 恒为 cat_dim=1（沿序列拼接）⇒ 重复后的
+    prefix 行数必须等于 `suffix.shape[0]`——**尺寸在 CPU 侧免费可得**。
+    cat_dim=0 时该推导不成立，回退原路径（宁慢不错）。
+    ⚠️ `from .utils import` 的第二个绑定名一起换（NVTX 补丁的同款教训）。"""
+    import prefix_grouper
+    from prefix_grouper import utils as pg_utils
+
+    if getattr(pg_utils, "_syncopate_ri_fix", False):
+        return
+    import torch
+    orig = pg_utils.batch_repeat_cat
+
+    def fixed(prefix, suffix, cat_dim, num_samples):
+        if cat_dim == 0:
+            return orig(prefix, suffix, cat_dim, num_samples)
+        return torch.cat(
+            [prefix.repeat_interleave(num_samples.to(prefix.device), dim=0,
+                                      output_size=suffix.shape[0]),
+             suffix], dim=cat_dim)
+
+    pg_utils.batch_repeat_cat = fixed
+    prefix_grouper.batch_repeat_cat = fixed
+    pg_utils._syncopate_ri_fix = True
+    print("[verl-patch] E14-② PG repeat_interleave 已补 output_size（免同步取尺寸，×584→0）",
+          flush=True)
+
+
 def _patch_torch_prof() -> None:
     """★ E14 批2-①（探针，默认关）：torch profiler 抓 update_actor 的同步乒乓调用点。
 
@@ -1632,14 +1665,23 @@ def _patch_prefix_grouper() -> None:
             _P = micro_batch["prompts"].shape[1]
             _plen = _am[:, :_P].sum(1)
             _rlen = _am[:, _P:].sum(1)
+            # ★ E14 §4.7-③ 乒乓修理（SYNCOPATE_FIX_JAGGED，默认开）：原写法逐行 .item()
+            #   = 每 micro-batch ~32 次强制同步（全 update_actor ×96）。长度一次性 .tolist()
+            #   —— 2 次同步替代 ~32 次，数值语义逐位不变（同样的整数，换个搬法）。
+            if os.environ.get("SYNCOPATE_FIX_JAGGED", "1") == "1":
+                _plen_c, _rlen_c = _plen.tolist(), _rlen.tolist()
+            else:
+                _plen_c, _rlen_c = None, None      # A/B 对照：走旧逐行 .item() 路径
 
             def _to_jagged(x):
                 if x is None:
                     return None
                 _outs = []
                 for _i in range(x.shape[0]):
-                    _L = int(_plen[_i].item() + _rlen[_i].item())
-                    _R = int(_rlen[_i].item())
+                    if _plen_c is not None:
+                        _L = int(_plen_c[_i] + _rlen_c[_i]); _R = int(_rlen_c[_i])
+                    else:
+                        _L = int(_plen[_i].item() + _rlen[_i].item()); _R = int(_rlen[_i].item())
                     _v = x.new_zeros(_L)
                     if _R > 0:
                         _v[_L - _R - 1:_L - 1] = x[_i, :_R]

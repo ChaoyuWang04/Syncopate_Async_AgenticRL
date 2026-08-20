@@ -116,19 +116,21 @@ R2 剂量曲线开张（两点已落），开放问题：
 
 ```
 总账：cudaStreamSynchronize ×912 = 2.17 s CPU 罚站 · .item() ×1917 · 拷贝 ×9403
-×1008  torch/optim/adam.py:544 _multi_tensor_adam → optimizer.py:92 _get_value → .item()
-       ← **AdamW 优化器本身**：step 计数张量在 GPU 上，每参数组逐个 .item() 读回
+按【真实同步数】排（判据 = 该栈同时出现 cudaStreamSynchronize 行）：
 ×584   prefix_grouper/utils:4 batch_repeat_cat → repeat_interleave(tensor)
-       ← **PG 依赖库**：repeat_interleave 传张量 repeats 必须同步取输出尺寸
-       （PyTorch 已知坑，解法=传 output_size= 参数）
-×96    syncopate/train/verl_patches.py:1636 _to_jagged → .item()   ← 我们自己的 PG 补丁
-×100   verl padding no_padding_2_padding / F.pad（GPU 标量当尺寸用）
-×48    verl tensordict index_select
+       ← PG 依赖库：repeat_interleave 传张量 repeats 必须同步取输出尺寸
+       （解法 = output_size=suffix.shape[0]，cat_dim=1 下零同步可得）→ **修理②已落**
+×100   verl padding no_padding_2_padding / F.pad（GPU 标量当尺寸）→ 候补④（上游，~0.24s）
+×96    syncopate/train/verl_patches.py:1636 _to_jagged 逐行 .item() → **修理③已落**
+×132   杂项未归属
+⛔ **Adam 无罪释放**（差点为不存在的问题动刀，E11 分母教训同款）：
+   ×1008 的 adam _get_value .item() 是 **CPU 张量**读取（torch 原生 AdamW 无
+   fused/capturable 时 step 住 CPU），不产生 GPU 同步——账本上它没有配对的
+   Synchronize 行，1008 次合计仅 4.4ms。**按 _local_scalar_dense 计数排凶手会冤枉它，
+   必须按"同栈 Synchronize"配对判罪。**
 ```
-修法菜单（各自可 A/B）：① Adam step 张量留 CPU 或走 fused 路径（查 verl 的优化器构造）；
-② PG 的 repeat_interleave 补 output_size（组尺寸我们在 CPU 本来就有）；
-③ _to_jagged 预取长度列表。预估直接收益 ~2.2s/update_actor（≈8% update_actor、~4% 端到端），
-同步消失后 GPU 洞收窄的间接收益另计。
+修理开关：`SYNCOPATE_FIX_PG_RI` ②·`SYNCOPATE_FIX_JAGGED` ③（默认开，=0 对照）；
+A/B 四臂（off/③/②/②③）各带 torch-prof 账本对拍 + 全修后 64 步测速——夜跑 phase2。
 
 ## 5 · 工具判决（第一批后的边界表雏形）
 
