@@ -356,3 +356,16 @@ SFT 完胜（A vs C +0.347）⇒ 吃 thinking 红利的路径 = 带思考的 SFT
 fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常驻观察
 开关：SYNCOPATE_THINK=1 只许评测（launch_rl 拦训练）；预算 on=5120/8192
 ```
+
+## ★★★ 2026-08-20（夜）：E14/R2 夜跑闭环——当日同尺子 12.84→9.23 s/gstep（−28%）
+
+```
+✅ R2 五臂扫描：①杀接力赛的是**同步频率**非阈值（s16/0.1: 9.57·陈旧仅7%·质量双净=晋级候选）
+   ②defer 剂量完全不单调（−33/−58/−3/−28）= 64步单种子刀锋态,方差主导,臂对臂因果无效
+   ③★等时论证成立：s16/0.5×80步 = +0.008 无差异·defer 净·vs SFT +0.171 全场最高
+✅ 乒乓修理 A/B 阶梯逐级命中预测：912→820(③jagged)→328(②PG-RI)→236(both)；
+   ⛔ Adam 无罪（CPU 张量 .item() 不同步——判罪要按同栈 Synchronize 配对,不按 scalar 计数）
+✅ 全开终值：fixes+graph @ s16/0.1 = **9.23 s/gstep**（update_actor 6.47·gen 3.3%）
+欠：s16/0.1 多种子 → 切默认；graph 精度闸；compile 微基准
+工具沉淀：run_e14_sweep/phase2 编排脚本（门禁→训→评→比全自动）+ torch-prof 探针 + 栈对齐
+```

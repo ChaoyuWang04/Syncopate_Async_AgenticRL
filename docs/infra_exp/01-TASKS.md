@@ -12,14 +12,12 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🔴 **乒乓三件套修理**（E14 §4.7 名单，Chaoyu 08-20 置顶）：① AdamW step 张量 GPU 读回 ×1008（查 verl 优化器构造，step 留 CPU/走 fused）② PG 库 `repeat_interleave` 缺 `output_size` ×584 ③ 自家 `_to_jagged` 逐个 `.item()` ×96。**每处独立 A/B**（timing + torch-prof 账本前后对比），三处全修后全量测速 | infra | ~半天（含 A/B） | 912 次 sync/2.17s 每 update_actor（≈8% update_actor）；洞收窄的间接收益另计 |
-| **1.5** | **E14 工具箱余项**：compile 微基准（elementwise 27–31%）· CUDA graph 精度闸（enforce_eager=False 晋级默认前）· 边界表定稿 | infra | ~1 天 | 字节 C「编译技术」+ DeepSeek G |
+| **1** | 🔴 **E14/R2 收官三件**：① s16/0.1 **多种子复核**（晋级默认最后一关；defer 单种子刀锋态已证）② CUDA graph 正式精度闸 ③ compile 微基准 + 边界表定稿（R2 五臂扫描与等时论证已完，结论 E14 §4.8/4.9） | infra | ~半天 | 夜跑终值 9.23 s/gstep（−28%）的三个组件里两个待正式晋级手续 |
 | **2** | **FP8 找新消费者（软硬结合）**：原消费者 ref 随砍 KL 消失；评估 update_actor / old_log_prob 前向走 FP8（E19 数值对拍已过、真实形状 1.70–2.22×），任务配对闸把关 | infra | ~1 天 | DeepSeek H「距上限」+ 字节「低精度」；5090 原生 FP8 吞吐不该白放着（Chaoyu 08-20） |
 | **3** | **A3 · sm_120 能力探底收尾**：Triton 低精度静默退化复现 + FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%；并入决定 08-20） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项 |
 | **4** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#3 并行**；before 基线已备：24/25 + TPOT/TTFT，`11 §5`）。优化面口径已定（Chaoyu 08-20，按预期收益序）：批调度/chunked prefill → prefix cache×gpu_util 余量 → FP8 KV（并 #5 一次跑）→ 多 LoRA 热切换；投机解码仅探针级 | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
 | **5** | **量化推理 A/B × 任务级配对回归**：先 FP8 KV cache（`--kv-cache-dtype` 旗子已备）；再 W4A16 服务侧 | infra | ~半天 | 推理 E②「模型量化」+ 训练 C「低精度」；配对闸让"量化不掉精度"有证据链 |
 | **6** | **PD 分离 go/no-go 探针**：prefill 重（88%）但 prefix cache 命中 97% ⇒ 可能是 PD 的反例。判据已定（Chaoyu 08-20）：分离 vs 单实例的 TTFT/TPOT 差值必须与 KV 传输耗时（走主机内存）**对上账**，成立与否都写成立范围 | infra | 30 min 探针 | 推理 F②核心词；实测否决也是结果 |
-| **6.5** | 🆕 **R2 · 陈旧度剂量曲线**（08-20 复活，由闸门实验兑现剂量条件）：已有两点（剂量0→0.874 · sync16/0.5→0.844，−0.030 显著）；补 ① 中间剂量臂 sync8/0.25 ② **等时对比臂**（闸门臂多跑的步数能否补回质量——每墙钟秒粗算反高 7%，需实测） | infra | 每臂 ~15min 训 + ~15min 评 | 异步线研究问题本体；E14 Test B 晋级与否由它裁决 |
 | **7** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线；同步暂停题的复活条件 |
 | **8** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
 
