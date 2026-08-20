@@ -1,4 +1,4 @@
-# 提交件 · PyTorch issue + NCCL #413 重开评论（英文，可直接粘贴）
+# 提交件 · PyTorch issue + NCCL #413 评论（可直接粘贴）
 
 > 状态：**草稿完成，等 Chaoyu 过目后提交**（2026-08-19）。
 > 中文分析与证据链 → [`analysis.md`](analysis.md)。

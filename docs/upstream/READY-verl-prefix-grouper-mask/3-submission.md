@@ -1,4 +1,7 @@
-# 提交件 · Prefix Grouper 线（英文，GitHub 可直接粘贴）
+# 提交件 · issue + PR + 两条评论（可直接粘贴）
+
+> ⚠️ **提交前还要做**：建分支、把掩码修复与死开关警告落成 diff、按 verl 约定写测试并实跑负例。
+> 本文只是正文；代码尚未备好（与包②不同）。
 
 > 状态：**按"掩码 bug 主打"定位重写完成（2026-08-19），等 Chaoyu 过目后提交。**
 > 中文分析与考古 → [`analysis.md`](analysis.md)。零 GPU 复现 → [`repro_prefix_grouper_wiring.py`](repro_prefix_grouper_wiring.py)。

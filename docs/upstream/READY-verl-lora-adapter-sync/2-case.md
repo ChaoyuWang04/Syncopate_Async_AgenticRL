@@ -1,8 +1,22 @@
-# 上游 issue 草稿 · verl：disaggregated 模式下 **LoRA adapter 从不被同步给 rollout**
+# Case · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
-> 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
-> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E22-lora-never-synced.md`](../infra_exp/E22-lora-never-synced.md)
-> 同族：[`OPEN-verl-fsdp-size-1/analysis.md`](OPEN-verl-fsdp-size-1/analysis.md)（同一天、同一形状：**配置意图正确，静默走进错误分支**）
+```
+状态    READY —— 提交件成稿、分支已推，等 Chaoyu 提交
+目标    verl-project/verl（bug report + PR）
+分支    /workspace/_upstream/verl → fix/disaggregated-lora-adapter-sync @ bba0c45
+        基于 main 9326156 · DCO 已签 · 已推到 ChaoyuWang04/verl
+验证    测试 修前 3 failed（红在行为断言）→ 修后 7 passed · pre-commit 14 钩子全过
+        源码树实测 3 次同步全 adapter（252 MiB）、基座 0 次、kl 贴地板（6.4e-05 / 2.9e-04）
+```
+
+⚠️ **定位要点**：包①（`fsdp_size=1`）被维护者以 **"rare case"** 驳回。本条相反 ——
+`lora.merge=False` 是**默认值**、任何 disaggregated recipe 都用非 `naive` 后端 ⇒
+**触发它不需要任何非常规配置**，这句话已放在 issue/PR 最前面。
+
+发现来源 [`../../infra_exp/E22-lora-never-synced.md`](../../infra_exp/E22-lora-never-synced.md) ·
+提交件 [`3-submission.md`](3-submission.md) · 补丁与测试见本目录
+
+---
 
 ---
 

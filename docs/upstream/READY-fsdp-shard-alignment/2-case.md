@@ -1,4 +1,20 @@
-# 上游 issue 草稿 · FSDP 分片不做 16 字节对齐 ⇒ NCCL all_gather 掉 12×
+# Case · FSDP 分片不做 16 字节对齐 ⇒ NCCL all_gather 掉 12×（E18 / A17）
+
+```
+状态    READY —— 提交件成稿，等 Chaoyu 提交
+目标    ① pytorch/pytorch 提 issue（修法**主推 FSDP2**，活代码）
+        ② NVIDIA/nccl 在 #413 下**评论请求重开**（不提新 issue —— 2020 年维护者已确认并把
+           修法指派给调用方："padding is a solution that would always work well"）
+验证    微基准 FSDP1 12.2× / FSDP2 12.56×（+12 B 恢复）· A17 端到端 update_actor 3.6× / ref 6.9×
+风险    🟡 FSDP1 那半可能被以「维护模式」驳回（包①正是这样被关的）
+        ⇒ 已把修法重心放在 FSDP2；FSDP1 只作「顺带一提」
+影响    ⚠️ 这条**不影响我们自己的训练**（生产路径已定 DDP 不分片）——纯社区贡献件，优先级最低
+```
+
+发现来源 [`../../infra_exp/E18-rank3-allgather-collapse.md`](../../infra_exp/E18-rank3-allgather-collapse.md) ·
+提交件 [`3-submission.md`](3-submission.md)
+
+---
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
 > 归属：这是一条**独立的线**（不属于 Track A/B 的兑现物，但由 E18 的调查产出）

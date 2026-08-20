@@ -19,51 +19,66 @@ CLOSED-<主题>    被拒/被关，**不删**：写清为什么被拒，下次�
 PARKED-<主题>    我们主动决定不提（例如影响面太窄），写清判断依据
 ```
 
-改状态就 `git mv` 改前缀，**同时**把包内 README 第一行的状态句改掉，两处必须一致。
+改状态就 `git mv` 改前缀，**同时**改 `2-case.md` 顶部状态块，两处必须一致。
 ⚠️ 改名后跑一次 `grep -rn "<旧名>" docs/` 把交叉引用补上。
 
 **当前**（2026-08-20）：
 
 | 包 | 目标 | 状态 |
 |---|---|---|
-| `CLOSED-verl-fsdp-size-1` | verl | 🔴 issue [#7493](https://github.com/verl-project/verl/issues/7493) + PR [#7494](https://github.com/verl-project/verl/pull/7494) **被打 `wontfix` 关闭**（2026-08-20）。理由见该包 README（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
-| `READY-verl-lora-adapter-sync` | verl | 源码树实测通过，待提交 |
-| `READY-fsdp-shard-alignment` | PyTorch + NCCL | A17 端到端 3.6× 已回填，待提交 |
-| `READY-verl-prefix-grouper-mask` | verl | 掩码 bug 主打，待提交 |
-| `DRAFT-verl-lora-only-checkpoint` | verl | 待 Claude 考据（feature PR，非 bug） |
+| `CLOSED-verl-fsdp-size-1` | verl | 🔴 [#7493](https://github.com/verl-project/verl/issues/7493)/[#7494](https://github.com/verl-project/verl/pull/7494) 被 `wontfix` 关闭（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
+| `READY-verl-lora-adapter-sync` | verl | 分支已推、提交件成稿，**等提交** |
+| `READY-verl-prefix-grouper-mask` | verl | 正文成稿；⚠️ 分支/测试尚未备 |
+| `READY-fsdp-shard-alignment` | PyTorch + NCCL | 正文成稿；优先级最低（不影响我们自己的训练） |
+| `DRAFT-verl-lora-only-checkpoint` | verl | 待上游考据（feature PR，非 bug） |
 
----
+## 2 · 每个包**只有三份文档**（不许再加层级）
 
-## 2 · 一个「合格的待提交包」必须有什么
+```
+<STATUS>-<主题>/
+  1-finding.md      infra 负责人写的原始发现（模板见 §3）
+                    ⚠️ 若发现已完整记在 ../../infra_exp/E*.md 里，**可以没有这份**，
+                       由 2-case.md 顶部引用即可 —— 不要为了凑结构写一份摘要
+  2-case.md      ★ case tracker：**状态块在最顶**，往下是背景调查 + 证据链 + 解决方案
+  3-submission.md   issue + PR（+ CI 申请话术）**合成一份**，可直接粘贴
+  <其它产物>        patch / 复现脚本 / 测试 —— 平铺在同级，随意，不用管
+```
 
-`READY-` 之前，下面每一项都要在：
+⛔ **不许再建子文件夹**（曾经有过 `READY-TO-PASTE/`，已取消）。
+⛔ **不许再多一份 README/analysis/submission 三件套** —— 那是同一件事写三遍。
 
-| 文件 | 内容 | 判据 |
-|---|---|---|
-| `README.md` | 状态句 · 一句话结论 · 文件清单 · 证据指针 · 提交前清单 | 别人不看别的文件也知道这是什么 |
-| `analysis.md` | 中文证据链：触发条件 / 根因（**带行号和版本**）/ 后果 / 修法论证 / 被否决的方案 | 推翻过的想法**就地留着示错**，不删 |
-| `submission-EN.md` | 上游要粘贴的英文正文（issue + PR，**按对方模板分好节**） | 复制即可用，无占位符残留 |
-| `*.patch` 或分支 | 可直接 `git apply` / 已推的分支 | 基于上游 **main**，非我们的旧版本 |
-| 复现脚本 | 依赖越少越好（纯 PyTorch > 依赖 verl > 依赖我们的仓库） | **与 issue 里内联的那份逐字相同** |
-| 测试 | 按上游的测试约定写（目录/风格/注册方式） | **实弹验证过修前红、修后绿** |
+### 2.1 `2-case.md` 的开头必须能一眼看懂
 
-### 2.1 提交前自检（每一条都要能指出证据，不能靠印象）
+顶部固定一个状态块，**打开文件第一屏就知道这个 case 是怎么回事**：
+
+```
+状态    DRAFT / READY / OPEN / MERGED / CLOSED / PARKED —— 一句话说清现在卡在哪
+目标    哪个仓库、什么类型（bug report / feature PR）
+分支    本地分支路径 @ sha（基于上游哪个 commit、DCO 签没签、推没推）
+issue/PR 编号与链接（还没提就写"未提交"）
+验证    测试修前/修后各是什么 · pre-commit 过没过 · 端到端实测数字
+```
+
+**被拒 / 被关的，理由写在同一个块里**（原话引用 + 谁 + 什么时候 + 我们的决定），
+例如 `CLOSED-verl-fsdp-size-1/2-case.md`。⇒ 以后回头查，看开头就够。
+
+### 2.2 提交前自检（每条都要指得出证据，不能靠印象）
 
 ```
 □ 上游考据：搜过 issue+PR（贴查询链接与命中数）· 确认 main 上问题仍在（源码逐字核对）
 □ 有没有人修过：有没有被关掉的同类 PR？为什么被关？我们的定位要不要跟着换
-□ 声明审计：正文里每个数字都能指到"哪次跑、哪个产物文件"；推断句必须标 [推断]
+□ 声明审计：正文里每个数字都能指到"哪次跑、哪个产物"；推断句必须标 [推断]
 □ 判据验负例：测试在修复前**确实红**，且红在**行为**上（不是只红在配置断言上）
 □ 按对方模板逐条执行：不是照抄章节标题，是**真的把每一步做掉**（见 §4）
 □ 内部信息扫描：无我们的路径、实验代号、邮箱、内部文档名
 ```
 
----
-
-## 3 · 给 infra 负责人的模板（写完直接建 `DRAFT-<主题>/README.md`）
+## 3 · 给 infra 负责人的模板（写完直接建 `DRAFT-<主题>/1-finding.md`）
 
 > 目标：让 Claude 能**不问你问题**就接着做考据和成稿。
 > 原则：**能贴实测就别写形容词**；不确定的地方**明写"未验证"**比含糊过去有用得多。
+>
+> 下面整块是**模板正文**（连同里面的 `##` 一起复制，它们是 `1-finding.md` 的章节，不是本文的）。
 
 ```markdown
 # 提交包 · <一句话标题>（E<编号>）
