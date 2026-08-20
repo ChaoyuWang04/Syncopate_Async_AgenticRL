@@ -1,6 +1,10 @@
 # 提交包 · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
-> **状态：`READY` —— 材料齐备（源码树验证 ✅ 2026-08-19），等 Chaoyu 点头后提交。** 目标 **verl-project/verl**。
+> **状态：`READY` —— 提交件已按 verl 模板成稿、分支已备好，等 Chaoyu 点头后提交。**（2026-08-20）
+> 分支 `/workspace/_upstream/verl` → `fix/disaggregated-lora-adapter-sync` @ `bba0c45`（基于 main `9326156`，带 DCO 签名）
+> 测试 `tests/checkpoint_engine/test_disaggregated_lora_sync_on_cpu.py`：**修前 3 failed / 4 passed（红在行为断言）→ 修后 7 passed**
+> pre-commit **14 钩子全过** · CPU CI 自动收（`tests/**/test_*_on_cpu.py`）
+> 提交件 → [`READY-TO-PASTE/`](READY-TO-PASTE/)：`1-issue-BUGREPORT-FORM.md`（五字段） · `2-pr.md`（六节） 目标 **verl-project/verl**。
 > 与包①（[`../OPEN-verl-fsdp-size-1/`](../OPEN-verl-fsdp-size-1/)）同批提交：同一天发现、同一形状 ——
 > **配置意图正确，静默走进错误分支，所有指标正常**。
 
