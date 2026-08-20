@@ -5,7 +5,7 @@
 
 ★ 为什么要脚本而不是在网页上拖：**面板是判据的一部分**。
 手拖的面板换个人、换台机器就没了，而"该看哪几条线、红线在哪"是要跟着仓库走的。
-这份脚本和 `docs/syncopate/14-sft-health-metrics.md` 是同一件事的两种形态 ——
+这份脚本和 `docs/syncopate/06-rl-run-protocol.md H 部分` 是同一件事的两种形态 ——
 文档说为什么，脚本让它出现在屏幕上。
 
 ⚠️ 面板只负责**把该看的摆出来**，不负责判定。红线的具体数值在文档里，
@@ -96,10 +96,18 @@ RL_SECTIONS = [
                  ["rollout_corr/rollout_is_ratio_fraction_low",
                   "rollout_corr/rollout_is_ratio_fraction_high"]),
             line("grad_norm（跳两个数量级立即停）", ["actor/grad_norm"]),
+            # ★★★ P 族 · 输入完整性（2026-08-19 第四条常驻判据）：
+            #   3584 那次 100% 截断翻掉了一整条归因链（defer 崩塌 ≠ reward 教的）。
+            #   rl_guard 非零即停机；这里是它的曲线版。v13 实测余量只剩 466 token。
+            line("★ prompt 截断率（必须恒 0.0000，非零守卫停机）",
+                 ["prompt_length/clip_ratio"]),
             # ⚠️ 长度上涨可能是学会推理，也可能是刷长度然后被 max_len 砍掉 ——
             #   后者的 reward 是假的。**必须和截断率一起看**，单看均值分不出来。
-            line("response_length + 截断率（单看长度分不出是推理还是刷长度）",
-                 ["response_length/mean", "syncopate/truncated"]),
+            #   response 侧截断 7–12% 是预算内的正常行为（三种成因见 P1-3），
+            #   要盯的是**突然上台阶**，不是绝对值。
+            line("response_length + response 截断率（分不出推理还是刷长度）",
+                 ["response_length/mean", "response_length/clip_ratio",
+                  "syncopate/truncated"]),
         ],
         is_open=True,
     ),
@@ -135,11 +143,21 @@ RL_SECTIONS = [
         is_open=True,
     ),
     ws.Section(
-        name="④ 动态分池是否真的在起作用",
+        name="④ 动态分池 + 行为读数（都由 rl_report 补报）",
         panels=[
-            line("零梯度组占比（分池应压住它）", ["syncopate/zero_grad_group_ratio"]),
+            line("零梯度组占比（分池应压住它；连续 3 窗口不创新高 = 完成判据）",
+                 ["syncopate/zero_grad_group_ratio"]),
+            # ★★ 覆盖率不到平台期就停 = 提前收工（e17a 实测 60 步只盖 22.7%）
+            line("★ 池覆盖率（累计不同题 / 采样器够得着的池）", ["syncopate/pool_coverage"]),
             line("每步不同 prompt 数", ["syncopate/groups"]),
             line("轨迹步数均值（短任务被降权后应上升）", ["syncopate/num_steps"]),
+            # ★ D 族的曲线版：看**连零**，不看水平（率分不开好坏）。
+            #   连零 ≥25 步守卫会停机；曲线上贴着 0 走就是塌陷前兆。
+            line("★ defer / reject 条数（连零 ≥25 停机，D 族）",
+                 ["syncopate/defer_count", "syncopate/reject_count"]),
+            # ★ P8 的尾巴：占位 logprob 只有 ~0.1%，**均值看不见，看最小值**
+            line("logprob_coverage（min 掉离 1.0 = 占位值混进 IS）",
+                 ["syncopate/logprob_coverage", "syncopate/logprob_coverage_min"]),
         ],
     ),
     ws.Section(
@@ -178,7 +196,7 @@ def main() -> int:
         print("SFT 面板:", build("Syncopate · SFT 健康度", SFT_SECTIONS))
     if args.only in (None, "rl"):
         print("RL  面板:", build("Syncopate · RL 停止条件", RL_SECTIONS))
-    print("\n⚠️ 红线的具体数值在 docs/syncopate/14-sft-health-metrics.md —— "
+    print("\n⚠️ 红线的具体数值在 docs/syncopate/06-rl-run-protocol.md H 部分 —— "
           "面板只负责把该看的摆出来，不负责判定。")
     return 0
 

@@ -192,12 +192,26 @@ def build(
         # 480 秒真 sleep，不关掉的话构造 6 条数据要干等 8 分钟（我第一次就这么卡住了）。
         # 延迟是 RL 计时实验的属性，不是数据的属性——两者必须分开。
         registry.latency_scale = 0.0
-        config = RolloutConfig(max_prompt_length=max_length, max_response_length=max_length)
+
+        # ★★ 轮数上限必须逐 case 取 `case.max_steps`，和 RL 侧（verl_agent_loop
+        #    从 extra_info.max_assistant_turns 读的就是它）同源。
+        #
+        # 🔴 2026-08-19 抓到：这里原来只传两个长度，`max_assistant_turns` 落在
+        #    RolloutConfig 的默认值 8 上 —— 而 v13 有 131/503 条（26%）的 gold
+        #    需要 >8 个 assistant 轮 ⇒ 回放在第 8 轮被掐断，**最终结论从没进过
+        #    训练数据**，且 build_sft_row 不看 truncated，无声写盘。
+        #    模型在这些 case 上学到的是「调满 8 次工具然后停」——
+        #    与「GEO 类卡死（在里面打转）」的行为形状一致。
+        # ⇒ 修法：轮数跟 case 走；外加 sft_replay 里的硬断言（gold 回放不许截断）。
+        def _config_for(bundle: CaseBundle) -> RolloutConfig:
+            return RolloutConfig(max_assistant_turns=bundle.case.max_steps,
+                                 max_prompt_length=max_length,
+                                 max_response_length=max_length)
 
         async def _all() -> list[dict[str, Any]]:
             return [
                 await build_sft_row(bundle, tokenizer, registry, index,
-                                    split_of(index, val_every), config)
+                                    split_of(index, val_every), _config_for(bundle))
                 for index, bundle in enumerate(bundles)
             ]
 

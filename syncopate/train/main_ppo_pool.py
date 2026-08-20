@@ -125,7 +125,8 @@ class DynamicPoolSampler:
         self.dispatch_log = Path(log) if log else None
         self._step = 0
         print(f"[pool] 动态分池启用：{len(self.case_ids)} 条 case，"
-              f"batch={self.batch_size}，反馈来源={self.dispatch_log}", flush=True)
+              f"batch={self.batch_size}，反馈来源={self.dispatch_log}，"
+              f"去重=批内无放回+排除上一批（P4 判据）", flush=True)
 
     def __len__(self) -> int:
         return len(self.case_ids)
@@ -133,13 +134,30 @@ class DynamicPoolSampler:
     def __iter__(self):
         self.epoch += 1
         emitted = 0
+        # ★ 排除窗口 = 上一批的 case。单批无放回 + 排掉上一批 ⇒ 流里两条相同 id
+        #   至少隔一整批 ⇒ 消费方无论怎么切 batch（边界错位也一样），
+        #   一个 ≤ batch_size 的训练 batch 里都不可能出现重复题。
+        #   P4 实测过 3/110 步重复（13.jsonl 一步里同一条题出现 3 组）——
+        #   根因就是「采样批」和「训练批」的边界不保证对齐。
+        prev_batch: list[str] = []
         while emitted < len(self.case_ids):
             if self.dispatch_log:
                 self.pool.ingest(self.dispatch_log, self._step)
             batch = self.pool.sample(self.batch_size, step=self._step,
-                                     seed=self.seed * 100003 + self._step)
+                                     seed=self.seed * 100003 + self._step,
+                                     exclude=prev_batch)
             if not batch:
                 break
+            # 当场报警（守则②：假设写成断言）。sample 的实现保证了这两条，
+            # 但保证是否还在，要由消费它的地方喊 —— 实现改了断言不动。
+            if len(set(batch)) != len(batch):
+                raise RuntimeError(f"[pool] 同一批内抽到重复 case：{batch} —— "
+                                   "GRPO 组内比较的前提被破坏，拒绝继续")
+            dup = set(batch) & set(prev_batch)
+            if dup and len(self.case_ids) > 2 * self.batch_size:
+                raise RuntimeError(f"[pool] 相邻两批出现重复 case：{sorted(dup)} —— "
+                                   "排除窗口失效，训练批可能混入重复题")
+            prev_batch = batch
             if self._step % 10 == 0:
                 snap = self.pool.snapshot(self._step)
                 print(f"[pool] step={self._step} {snap}", flush=True)
@@ -191,9 +209,14 @@ def install_sampler_patch() -> None:
     def patched(data_config, dataset):
         if os.environ.get("SYNCOPATE_POOL", "1") != "1":
             return original(data_config, dataset)
+        # ★ 批宽（= P4 去重窗口宽）优先读 launch_rl 传来的 fit 批宽。
+        #   ⚠️ 2026-08-19 抓到：fully_async 下 verl 强制 data.train_batch_size=0
+        #   ⇒ 旧写法窗口退化成 1，「排除上一批」保护的只有上一条 —— 名存实亡。
+        batch = int(os.environ.get("SYNCOPATE_POOL_BATCH") or 0) \
+            or int(data_config.train_batch_size or 0) or 1
         return DynamicPoolSampler(
             dataset,
-            batch_size=int(data_config.train_batch_size),
+            batch_size=batch,
             seed=int(data_config.get("seed") or 0),
         )
 

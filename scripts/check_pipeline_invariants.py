@@ -228,8 +228,10 @@ _HIST = __import__("re").compile(
     r"此前|原(写法|猜想|版|值|来|文)|旧(版|值|口径|的|文档)|改成|已改|已接上|作废|⛔"
     r"|推翻|教训|留作|留在这里|过期|重写|修复前|核心叙事|不是当前|定格|快照|历史")
 
-OPERATIONAL_DOCS = ["docs/syncopate", "docs/infra_exp/00-INFRA-HANDOFF.md",
-                    "docs/infra_exp/ONBOARDING.md"]
+# ⚠️ infra 2026-08-19 改组：ONBOARDING/00-INFRA-HANDOFF → 00-START/01-TASKS/02-DECISIONS。
+#    路径不存在时会被静默跳过（`p.exists()`）—— 所以改名必须跟着改这里，否则扫描范围悄悄缩水。
+OPERATIONAL_DOCS = ["docs/syncopate", "docs/infra_exp/00-START.md",
+                    "docs/infra_exp/01-TASKS.md", "docs/infra_exp/02-DECISIONS.md"]
 
 
 @check("docfacts", "★ 操作文档里不许留**未标注**的陈旧断言")
@@ -390,8 +392,13 @@ def _train_eval_budget_match(log):
         hard = _re.findall(r"max_response_length=(\d+)", src)
         # ⚠️ 只查采样参数的**字面量赋值**；注释里引用旧值（0.95/20）是刻意保留的历史记录
         hard += [m for m in _re.findall(r"^\s+top_[pk]=([\d.]+)[,\s]", src, _re.M)]
+        # ★ 2026-08-19 补：**单轮生成上限**也是契约的一部分（E23「评测跟训练」）。
+        #   256 的字面量默认曾让 base 评测截断率 0.203、E27 B 臂整跑作废。
+        hard += [m for m in _re.findall(r"max_new_tokens\s*=\s*(\d+)\b", src)
+                 if m not in ("0",)]
         if hard:
             log(f"  🔴 {rel} 里还有硬编码的长度/采样常量：{hard}")
+            log("     ⇒ 单轮上限/长度一律从 rollout_budget 推（MAX_RESPONSE_LENGTH）")
             ok = False
     # ② 最近一次真跑用的值（overrides.yaml 是"上次到底怎么跑通的"唯一可信来源）
     ovs = sorted((ROOT / "outputs").glob("*/*/.hydra/overrides.yaml"),
@@ -484,6 +491,49 @@ def _no_script_overrides_contract(log):
             f"没有一处显式传契约参数")
     if waived:
         log(f"  ℹ️ {len(waived)} 处已显式声明覆盖（留痕，不算违反）：{', '.join(waived)}")
+    return ok
+
+
+@check("contract", "★ SFT 的长度上限必须来自 rollout 契约，且当前版本数据一条都不超")
+def _sft_length_is_contractual(log):
+    """🔴 2026-08-19 抓到（虚惊但三个隐患都真）：sft.py 曾是 `--max-length` 默认 4096
+    + 静默 `[:max_length]` 切片，而 v13 数据 92.6% 超过 4096 —— 实跑靠手传 6656
+    侥幸躲过，`08` 文档示范命令的 6144 会无声截掉 46 条。
+    与 RL 侧 prompt 截断（defer 崩塌归因翻案）同族：截掉的没人看见、没人计数。
+
+    判据两半：① 源码里不许再出现独立的长度参数（守则⑨：该一致的值这里就不该有）
+              ② 当前 DATA_VERSION 的 SFT parquet 一条都不许超过契约预算
+    """
+    ok = True
+    # ① 源码扫描。⚠️ 只查 add_argument 调用 —— 第一版查裸字符串 "--max-length"，
+    #    把注释里的历史记录也扫进来当场误伤（守则③：判据太宽会制造假警报）。
+    src = (ROOT / "syncopate/train/sft.py").read_text(encoding="utf-8")
+    if 'add_argument("--max-length"' in src:
+        log("  🔴 sft.py 又长出了 --max-length 参数 —— 长度上限只能从 rollout_budget 推")
+        ok = False
+    if "SFT_MAX_LENGTH = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH" not in src:
+        log("  🔴 sft.py 里找不到 SFT_MAX_LENGTH = prompt + response 的契约推导")
+        ok = False
+    if ok:
+        log("  ✅ sft.py 的长度上限来自 rollout_budget（无独立参数、无静默切片）")
+    # ② 数据层
+    from syncopate.pipeline.split import DATA_VERSION
+    from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
+    budget = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH
+    import pyarrow.parquet as pq
+    for name in ("train", "val"):
+        p = ROOT / f"data/sft/{DATA_VERSION}/{name}.parquet"
+        if not p.exists():
+            log(f"  ⏭ {p.relative_to(ROOT)} 不存在")
+            continue
+        lens = [len(x) for x in pq.read_table(p, columns=["input_ids"])["input_ids"].to_pylist()]
+        over = sum(1 for n in lens if n > budget)
+        if over:
+            log(f"  🔴 {p.relative_to(ROOT)}: {over}/{len(lens)} 条超过预算 {budget}"
+                f"（最长 {max(lens)}）—— sft.py 会硬报错拒绝启动，先修数据或契约")
+            ok = False
+        else:
+            log(f"  ✅ {p.relative_to(ROOT)}: {len(lens)} 条全部 ≤ {budget}（最长 {max(lens)}）")
     return ok
 
 
@@ -654,6 +704,13 @@ def _paired_audits_same_base(log):
 
 @check("rollout", "每次更新的 GRPO 组：题目不重复、每组恰好 rollout_n 条")
 def _grpo_groups_wellformed(log):
+    """⚠️ 口径更正（2026-08-19）：重复的根因不是「有放回抽样」——`Pool.sample`
+    一直是无放回的；重复来自**采样批与训练批的边界错位**（两次独立调用之间可重复）。
+    已在采样器层结构性修掉（排除上一批 ⇒ 任何 ≤ 批宽的窗口无重复）。
+
+    ⇒ 判据分两档：带 `case_id` 的 dump（修复后的新仪器）**零容忍**；
+      旧 dump（没有 case_id）保留 10% 的历史容差 —— 那些跑已经跑完，红了也没有行动。
+    """
     import collections
     files = sorted(glob.glob(str(ROOT / "checkpoints/grpo/*/rollout_dumps/*.jsonl")))
     if not files:
@@ -664,17 +721,187 @@ def _grpo_groups_wellformed(log):
         by_run[Path(f).parents[1].name].append(f)
     ok = True
     for run, fs in sorted(by_run.items()):
-        bad = 0
+        bad, instrumented = 0, False
         for f in fs:
-            g = collections.Counter(hash(json.loads(l)["input"]) for l in open(f))
+            rows = [json.loads(l) for l in open(f)]
+            if rows and "case_id" in rows[0]:
+                instrumented = True
+                g = collections.Counter(r["case_id"] for r in rows)
+            else:
+                g = collections.Counter(hash(r["input"]) for r in rows)
             if len(set(g.values())) != 1:
                 bad += 1
         rate = bad / max(1, len(fs))
-        if rate > 0.10:
+        if instrumented and bad:
+            log(f"  🔴 {run}: {bad}/{len(fs)} 步有重复题 —— 修复后的跑**零容忍**"
+                "（排除窗口失效了，去查 DynamicPoolSampler）")
+            ok = False
+        elif rate > 0.10:
             log(f"  🔴 {run}: {bad}/{len(fs)} 步（{rate:.0%}）同一条题被抽了不止一次")
             ok = False
         elif bad:
-            log(f"  🟡 {run}: {bad}/{len(fs)} 步（{rate:.0%}）—— 动态分池有放回抽样，低于 10% 视作正常")
+            log(f"  🟡 {run}: {bad}/{len(fs)} 步（{rate:.0%}）—— 修复前的历史跑"
+                "（采样批/训练批边界错位），低于 10% 容忍")
+    return ok
+
+
+@check("rollout", "同一条 case 的所有 rollout 必须吃同一份失败注入剧本（Q4）")
+def _failure_injection_deterministic(log):
+    """`22 §13`：失败注入必须确定性、由 case 声明 —— GRPO 是组内比较，
+    同组吃到不同剧本，reward 差异分不清「策略不同」还是「运气不同」。
+    机制上剧本存在 bundle、匹配无随机源 ⇒ 应当恒同；此前**没有任何守卫**。
+
+    判据：dump 里同一 case_id 的 failures_fp 集合大小必须为 1（两个东西应当相同）。
+    """
+    import collections
+    files = sorted(glob.glob(str(ROOT / "checkpoints/grpo/*/rollout_dumps/*.jsonl")))
+    fp_by_case: dict[str, set] = collections.defaultdict(set)
+    n_rows = 0
+    for f in files:
+        for line in open(f):
+            row = json.loads(line)
+            if "failures_fp" in row and "case_id" in row:
+                fp_by_case[row["case_id"]].add(row["failures_fp"])
+                n_rows += 1
+    if not fp_by_case:
+        log("  ⏭ 还没有带 failures_fp 的 dump（2026-08-19 新仪器）——"
+            "下一次 RL 跑会自动落数据，这条随之生效")
+        return True
+    bad = {cid: fps for cid, fps in fp_by_case.items() if len(fps) != 1}
+    if bad:
+        for cid, fps in sorted(bad.items())[:5]:
+            log(f"  🔴 {cid}: 出现 {len(fps)} 份不同的失败剧本指纹 {sorted(fps)}")
+        log(f"     共 {len(bad)} 条 case 违反 —— 失败注入不再确定性，advantage 被污染")
+        return False
+    log(f"  ✅ {len(fp_by_case)} 条 case / {n_rows} 条 rollout：每条 case 的剧本指纹唯一")
+    return True
+
+
+# ── 组 data：训练数据与渲染器同源、且在预算之内 ────────────────────────────
+
+@check("data", "★ RL parquet 的 prompt 必须与渲染器同源、且零截断（Q7）")
+def _rl_prompts_same_source_and_fit(log):
+    """Q7（`18 §8`）：「RL 看到的题面 = 现在的渲染器渲出来的题面，且一个 token 不截」。
+
+    这正是 defer 崩塌归因翻案那次事故的数据侧探针：3584 预算下 prompt 100% 被左截断，
+    「调查先于任何结论（含拒绝）」整段消失（存活 0/659），模型训练时看不见"可以拒绝"。
+
+    判据两半（都是「两个东西应当相同」）：
+      ① 每行的 prompt_trace_hash == 用当前渲染器重渲的 hash（同源，抓渲染器漂移）
+      ② 每行 prompt 按**运行时的同一条路径**分词后 ≤ MAX_PROMPT_LENGTH（零截断）
+
+    ⚠️ ②必须带 tools 一起渲：运行时是 `apply_chat_template(messages, tools=...)`，
+      工具 spec 占 ~2.7k token。第一版没带 tools，量出"最长 1471"——而实测真实
+      prompt 是 4170–4210。**量的不是运行时那条路径 = 量错了对象**（守则形状）。
+    """
+    from syncopate.core.schemas import CaseBundle
+    from syncopate.domains.adcampaign import build_domain
+    from syncopate.pipeline.split import DATA_VERSION
+    from syncopate.prompts import stable_hash
+    from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH
+    from syncopate.train.rollout_loop import CHAT_TEMPLATE_KWARGS, build_messages
+
+    import pandas as pd
+    ok = True
+    tok = None
+    registry = build_domain().registry
+    tok_dir = ROOT / "models/Qwen3-4B"
+    if tok_dir.exists():
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(str(tok_dir))
+    else:
+        log("  ⏭ models/Qwen3-4B 不在本机 ⇒ 只验同源，跳过分词长度那半")
+
+    for name in ("train", "val"):
+        p = ROOT / f"data/rl/{DATA_VERSION}/{name}.parquet"
+        if not p.exists():
+            log(f"  ⏭ {p.relative_to(ROOT)} 不存在")
+            continue
+        frame = pd.read_parquet(p)
+        drift, missing, over, max_len = [], 0, [], 0
+        for _, row in frame.iterrows():
+            extra = row["extra_info"]
+            batch_dir = Path(extra["batch_dir"])
+            if not batch_dir.exists():
+                missing += 1
+                continue
+            bundle = CaseBundle.read(batch_dir, extra["case_id"])
+            prompt = build_messages(bundle, bundle.case.tool_menu)
+            if stable_hash(prompt)[:16] != extra["prompt_trace_hash"]:
+                drift.append(extra["case_id"])
+            if tok is not None:
+                # ★ 与 rollout_loop.run_rollout 同一条渲染路径（messages + tools）
+                tools = registry.menu(bundle.case.tool_menu)
+                n = len(tok.apply_chat_template(prompt, tools=tools,
+                                                add_generation_prompt=True, tokenize=True,
+                                                **CHAT_TEMPLATE_KWARGS))
+                max_len = max(max_len, n)
+                if n > MAX_PROMPT_LENGTH:
+                    over.append((extra["case_id"], n))
+        tag = str(p.relative_to(ROOT))
+        if missing:
+            log(f"  ⏭ {tag}: {missing} 条的 batch_dir 不在本机，跳过")
+        if drift:
+            log(f"  🔴 {tag}: {len(drift)} 条与当前渲染器**渲出不同的 prompt**"
+                f"（前 5：{drift[:5]}）—— 数据是旧渲染器的产物，重建或钉住版本")
+            ok = False
+        else:
+            log(f"  ✅ {tag}: {len(frame) - missing} 条 prompt 与当前渲染器同源")
+        if over:
+            log(f"  🔴 {tag}: {len(over)} 条分词后超过 MAX_PROMPT_LENGTH="
+                f"{MAX_PROMPT_LENGTH}（最长 {max(n for _, n in over)}）—— 会被截断")
+            ok = False
+        elif tok is not None:
+            log(f"  ✅ {tag}: 分词后最长 {max_len} ≤ {MAX_PROMPT_LENGTH}，零截断")
+    return ok
+
+
+@check("data", "★ 每条 SFT 样本的监督段必须以终答收尾（gold 回放完整走完）")
+def _sft_samples_end_with_final_answer(log):
+    """🔴 2026-08-19 抓到：build_dataset 造 SFT 数据时轮数上限落在默认 8
+    （没跟 case.max_steps），v13 有 131/503 条 gold 回放在第 8 轮被无声掐断
+    ⇒ **最终结论从没进过训练数据**，模型学到的是「调满 8 次工具然后停」。
+
+    判据：最后一个 loss_mask==1 的连续段，解码后必须是终答
+    （render_final_answer 的 ```json {"behavior": ...}``` 块）。
+    构造侧已加硬断言（sft_replay），这条守数据侧 —— 两头都看着。
+    """
+    from syncopate.pipeline.split import DATA_VERSION
+    tok_dir = ROOT / "models/Qwen3-4B"
+    if not tok_dir.exists():
+        log("  ⏭ models/Qwen3-4B 不在本机（要它的 tokenizer 解码）")
+        return True
+    from transformers import AutoTokenizer
+    import pandas as pd
+    tok = AutoTokenizer.from_pretrained(str(tok_dir))
+    ok = True
+    for name in ("train", "val"):
+        p = ROOT / f"data/sft/{DATA_VERSION}/{name}.parquet"
+        if not p.exists():
+            log(f"  ⏭ {p.relative_to(ROOT)} 不存在")
+            continue
+        frame = pd.read_parquet(p, columns=["case_id", "input_ids", "loss_mask"])
+        bad = []
+        for _, row in frame.iterrows():
+            ids, mask = list(row["input_ids"]), list(row["loss_mask"])
+            # 最后一个 mask==1 的连续段
+            end = max((i for i, m in enumerate(mask) if m == 1), default=-1)
+            if end < 0:
+                bad.append(row["case_id"])
+                continue
+            start = end
+            while start > 0 and mask[start - 1] == 1:
+                start -= 1
+            tail = tok.decode(ids[start:end + 1])
+            if '"behavior"' not in tail:
+                bad.append(row["case_id"])
+        if bad:
+            log(f"  🔴 {p.relative_to(ROOT)}: {len(bad)}/{len(frame)} 条的监督段"
+                f"**不以终答收尾**（前 5：{bad[:5]}）—— gold 回放被掐断，"
+                "模型在这些题上从没被教过下结论 ⇒ 数据要重建")
+            ok = False
+        else:
+            log(f"  ✅ {p.relative_to(ROOT)}: {len(frame)} 条全部以终答收尾")
     return ok
 
 

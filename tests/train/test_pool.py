@@ -110,6 +110,39 @@ def test_sample_handles_k_larger_than_pool():
     assert sorted(pool.sample(k=10, step=1, seed=1)) == ["a", "b"]
 
 
+def test_sample_excludes_previous_batch():
+    """★ P4 判据（2026-08-19）：重复不是来自「有放回」——单次调用一直无放回——
+    而是**相邻两次调用**可以抽到同一条，消费方切 batch 的边界又不保证对齐。
+    排掉上一批后，流里两条相同 id 至少隔一整批 ⇒ 任何 ≤ 批宽的窗口无重复。"""
+    pool = Pool([f"C_{i}" for i in range(30)])
+    prev: list[str] = []
+    for step in range(50):
+        batch = pool.sample(k=6, step=step, seed=step, exclude=prev)
+        assert not (set(batch) & set(prev)), f"step {step}: 相邻两批出现重复 {batch}"
+        prev = batch
+
+
+def test_sample_exclude_falls_back_when_pool_too_small():
+    """池子快抽干时回退为允许重复上一批 —— 宁可分布稍偏，不能让训练拿不满一批。"""
+    pool = Pool(["a", "b", "c"])
+    batch = pool.sample(k=3, step=1, seed=1, exclude=["a", "b", "c"])
+    assert sorted(batch) == ["a", "b", "c"]
+
+
+def test_sample_zero_weight_degenerate_pops_matching_index():
+    """⚠️ 原实现权重全零时 pop 的 id 和权重不是同一个下标，两张表会错位。
+    全零权重下抽满 k 条、且无重复，就说明两表没有错位。"""
+    pool = Pool([f"C_{i}" for i in range(8)])
+    import syncopate.train.pool as pool_mod
+    orig = pool_mod.weight_of
+    pool_mod.weight_of = lambda state, step: 0.0
+    try:
+        picked = pool.sample(k=8, step=1, seed=1)
+    finally:
+        pool_mod.weight_of = orig
+    assert len(picked) == len(set(picked)) == 8
+
+
 def test_saturated_cases_are_sampled_less_often_in_aggregate():
     """端到端：一半题饱和、一半有梯度，长期抽样里有梯度的那半必须占多数。"""
     pool = Pool([f"S_{i}" for i in range(10)] + [f"G_{i}" for i in range(10)])

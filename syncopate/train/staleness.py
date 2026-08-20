@@ -103,10 +103,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch", default="data/batches/v3")
     parser.add_argument("--split-dir", default="data/splits/v3")
     parser.add_argument("--limit", type=int, default=16)
-    parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument("--max-new-tokens", type=int, default=None,
+                        help="默认 = MAX_RESPONSE_LENGTH（契约推导，同 eval_local）")
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
+    if args.max_new_tokens is None:
+        from syncopate.train.rollout_budget import MAX_RESPONSE_LENGTH
+        args.max_new_tokens = MAX_RESPONSE_LENGTH
 
     domain = build_domain()
     domain.registry.latency_scale = 0.0

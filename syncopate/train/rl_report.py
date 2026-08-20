@@ -25,11 +25,27 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import re
 import statistics
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# 终答行为。⚠️ 取**最后一个**匹配：一条轨迹多步，终答那步才是它的行为
+# （与 scripts/defer_watch.py 同一条口径 —— 两处都改时要一起改）。
+_BEHAVIOR = re.compile(r'"behavior"\s*:\s*"(\w+)"')
+
+
+def _case_of(row: dict[str, Any]) -> str | None:
+    """一行 dump 的 case_id。
+
+    ⚠️ 两个来源，**fully_async 下只有后者**：`gts`（verl 从 reward_model.ground_truth
+    带出，colocate 有、async 恒 null）· `case_id`（2026-08-19 起 reward_extra_info 自带）。
+    此前只认 gts ⇒ 异步跑上零梯度率/组指标/漂移**全部静默算不出来**（空得毫无声息）。
+    """
+    v = row.get("gts") or row.get("case_id")
+    return str(v) if v else None
 
 
 def weight_shift_per_ckpt(ckpt_root: Path, base: Path) -> dict[int, float]:
@@ -92,8 +108,9 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, float]:
     # ★ 分母是「这一步有多少个不同的 prompt」，不是 rollout 数。
     groups: dict[str, list[float]] = {}
     for row in rows:
-        if "case_id" in row and "reward" in row:
-            groups.setdefault(row["case_id"], []).append(row["reward"])
+        cid = _case_of(row)
+        if cid and "reward" in row:
+            groups.setdefault(cid, []).append(row["reward"])
     sized = [v for v in groups.values() if len(v) > 1]
     if sized:
         zero = sum(1 for v in sized if statistics.pstdev(v) < 1e-6)
@@ -113,12 +130,28 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, float]:
     if walls:
         out["syncopate/wall_seconds_max"] = max(walls)
         out["syncopate/head_of_line_ratio"] = max(walls) / (statistics.mean(walls) or 1.0)
+
+    # ★ D 族的可视化：每步终答里 defer / reject 的**条数**（不是率 —— 率分不开好坏，
+    #   「持续为零」才分得开；曲线上连零一眼可见，正是 defer_watch 停机判据的图形版）。
+    behav = collections.Counter()
+    for row in rows:
+        found = _BEHAVIOR.findall(row.get("output", "") or "")
+        if found:
+            behav[found[-1]] += 1
+    out["syncopate/defer_count"] = behav.get("defer", 0)
+    out["syncopate/reject_count"] = behav.get("reject", 0)
+
+    # ★ P8 的尾巴要看得见最坏值：占位 logprob 只有 ~0.1%，均值上看不出来
+    covs = [r["logprob_coverage"] for r in rows if "logprob_coverage" in r]
+    if covs:
+        out["syncopate/logprob_coverage_min"] = min(covs)
     return out
 
 
 def template_mix(rows: list[dict[str, Any]]) -> dict[str, float]:
-    """这一步**实际训练到**的任务类型构成。gts 里存的是 case_id。"""
-    counts = collections.Counter(r["gts"].split("_")[0] for r in rows if isinstance(r.get("gts"), str))
+    """这一步**实际训练到**的任务类型构成（case_id 前缀 = 模板）。"""
+    counts = collections.Counter(
+        cid.split("_")[0] for cid in (_case_of(r) for r in rows) if cid)
     total = sum(counts.values()) or 1
     return {f"mix_trained/{k}": v / total for k, v in counts.items()}
 
@@ -152,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="agent loop 的下发日志（算分布漂移用），默认 <run_dir>/dispatched.jsonl")
     parser.add_argument("--wandb-run", default=None, help="给了就补报到这个 run id")
     parser.add_argument("--wandb-project", default="syncopate")
+    parser.add_argument("--total-cases", type=int, default=None,
+                        help="池覆盖率的分母（默认自动取当前 DATA_VERSION 的 RL 桶大小）")
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
 
@@ -166,6 +201,37 @@ def main(argv: list[str] | None = None) -> int:
     disp = dispatched_mix(log_path, limit=trained_total)
 
     per_step = {step: {**aggregate(rows), **template_mix(rows)} for step, rows in steps.items()}
+
+    # ★★ 池覆盖率（累计不同 case / RL 桶总数）—— 「完成判据」的另一半可视化：
+    #   e17a 实测 60 步只覆盖 22.7%、56% 的题只被抽到一次 ⇒ 曲线不到平台期就停 = 提前收工。
+    #   分母默认取当前 DATA_VERSION 的 RL 桶（**桶总数**，不是 train.parquet 行数 ——
+    #   两者差着 val 那一份，pool_readout 用的也是桶总数）。
+    total_cases = args.total_cases
+    if total_cases is None:
+        # ★ 分母优先取**采样器真正够得着的池**（pool_state.json = train.parquet 的 659），
+        #   而不是 RL 桶总数（824）—— val 那 165 条采样器根本抽不到（test_freq=-1 从不验证），
+        #   用 824 做分母，覆盖率永远到不了 100%，「平台期」的语义就错了。
+        #   ⚠️ 这 20% 的差值本身是一笔登记在案的浪费（01-TASKS C-6）。
+        state = run_dir / "pool_state.json"
+        if state.exists():
+            try:
+                total_cases = len(json.loads(state.read_text())["states"])
+            except Exception:
+                total_cases = None
+        if total_cases is None:
+            try:
+                from syncopate.pipeline.split import DATA_VERSION, load_bucket
+                total_cases = len(load_bucket(ROOT / f"data/splits/{DATA_VERSION}", "rl"))
+            except Exception:
+                total_cases = None
+    seen_cases: set[str] = set()
+    for step in sorted(per_step):
+        for row in steps[step]:
+            cid = _case_of(row)
+            if cid:
+                seen_cases.add(cid)
+        if total_cases:
+            per_step[step]["syncopate/pool_coverage"] = len(seen_cases) / total_cases
 
     # ★★★ 漂移必须**累计对累计**，不能拿单步的训练分布去比累计的下发分布。
     #
@@ -195,6 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     last = per_step[max(per_step)]
     caps = {k.split("/", 2)[-1]: v for k, v in last.items() if k.startswith("syncopate/cap/") and v}
     print(f"\n末步 cap 命中率: {({k: round(v, 2) for k, v in sorted(caps.items())}) or '无'}")
+    if total_cases and seen_cases:
+        print(f"池覆盖率: {len(seen_cases)}/{total_cases} = {len(seen_cases)/total_cases:.1%}"
+              "（不到平台期就停 = 提前收工，见 06 §2.0）")
+    elif not seen_cases:
+        print("⚠️ dump 里没有 case_id/gts（2026-08-19 之前的异步跑）——"
+              "零梯度率/组指标/覆盖率这几条算不出来，不是没问题是量不了")
     if drift_total is not None:
         verdict = "✅ 与 sync 的 barrier 一致" if drift_total < 0.02 else "⚠️ 训练分布已偏离下发分布"
         print(f"分布漂移(累计对累计, total variation): {drift_total:.3f}   {verdict}")

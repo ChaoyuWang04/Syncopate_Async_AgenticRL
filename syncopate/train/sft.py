@@ -28,7 +28,19 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
+
 ROOT = Path(__file__).resolve().parents[2]
+
+# ★★ SFT 的长度上限不是独立参数，是 rollout 契约的推论：
+#    一条 SFT 样本 = prompt + 整条 gold 轨迹 ⇒ 上限就是 RL 侧的 max_model_len。
+#
+# ⚠️ 这里原来是 `--max-length`（默认 4096）+ 静默 `[:max_length]` 切片。
+#    v13 实测 92.6%（388/419）的样本超过 4096 —— 实跑靠手传 6656 侥幸躲过，
+#    而 `08` 文档示范命令写的 6144 会无声截掉 46 条。和 RL 侧 prompt 截断
+#    （defer 崩塌归因翻案那次）是同一个病：**模型看不见被砍掉的部分，且无人计数**。
+# ⇒ 修法与守则⑨一致：值只有一份（rollout_budget），超长**硬报错**而不是静默切。
+SFT_MAX_LENGTH = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH
 
 # 重定向到文件时 Python 会缓冲 stdout，长训练看不到实时进度。
 # 训练脚本的打印量很小，无脑 flush 没有代价。
@@ -36,16 +48,33 @@ print = functools.partial(builtins.print, flush=True)  # noqa: A001
 
 
 class PretokenizedDataset(Dataset):
-    """直接吃 parquet 里的 input_ids / loss_mask，不做任何再分词。"""
+    """直接吃 parquet 里的 input_ids / loss_mask，不做任何再分词。
+
+    ★ 超过长度预算的样本**硬报错**，不静默截断：
+    截掉的是轨迹的**结尾**（最终结论那段），而 loss 恰恰集中在那里 ——
+    静默截断 = 教模型「做到一半就停」，且没有任何报警。
+    数据超长说明造数据和训练的契约不一致，该修的是数据或契约，不是切样本。
+    """
 
     def __init__(self, path: Path, max_length: int, group_key: str | None = None) -> None:
         import pandas as pd
 
         frame = pd.read_parquet(path)
+        over = [(row["case_id"], len(row["input_ids"]))
+                for _, row in frame.iterrows() if len(row["input_ids"]) > max_length]
+        if over:
+            worst = max(length for _, length in over)
+            raise SystemExit(
+                f"🔴 {path} 里有 {len(over)}/{len(frame)} 条样本超过长度预算 "
+                f"{max_length}（最长 {worst}）。\n"
+                f"   静默截断会把轨迹结尾（最终结论）砍掉 —— 拒绝启动。\n"
+                f"   预算来源：rollout_budget.py 的 MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH。\n"
+                f"   超长样本（前 5 条）：{[cid for cid, _ in over[:5]]}"
+            )
         self.rows = [
             {
-                "input_ids": list(row["input_ids"])[:max_length],
-                "loss_mask": list(row["loss_mask"])[:max_length],
+                "input_ids": list(row["input_ids"]),
+                "loss_mask": list(row["loss_mask"]),
                 "case_id": row["case_id"],
                 "group": str(row[group_key]) if group_key and group_key in frame.columns else "all",
             }
@@ -133,41 +162,6 @@ def token_losses(model, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, t
     logits = lm_head(sel_hidden).float()                        # [N, 151936]
     losses = torch.nn.functional.cross_entropy(logits, sel_labels, reduction="none")
     return losses, rows
-
-
-def token_balanced_weights(rows: list[dict[str, Any]]) -> tuple[list[float], dict[str, Any]]:
-    """★ 按 **token 数** 而不是样本数做类别均衡。
-
-    这是上一轮实测出来的问题：clarify / reject 各占 8.7% 的**样本**，
-    但只占 1.4% 的**监督 token**——因为它们的 gold 是"零个工具调用 + 一句 JSON"，
-    每条只有 32 个 token，而 tool_call 类有 200+。
-
-    决定梯度的是 token 不是样本，所以按样本均衡是不够的。这里让每个类别的
-    **期望 token 贡献**相等：权重 ∝ 1 / (该类总 token 数)。
-
-    实测后果（v2，未均衡）：SFT 把 reject 从基座的 0.308 直接打到 0.000，
-    behavior_mismatch 命中率 100%——模型学到的是"无脑调工具"。
-    """
-    by_group: dict[str, list[int]] = {}
-    for index, row in enumerate(rows):
-        by_group.setdefault(row["group"], []).append(index)
-    group_tokens = {
-        g: sum(sum(rows[i]["loss_mask"]) for i in idx) for g, idx in by_group.items()
-    }
-    total = sum(group_tokens.values())
-    weights = [0.0] * len(rows)
-    for group, idx in by_group.items():
-        # 该组每条样本的权重：让本组的期望 token 贡献 = 总量 / 组数
-        share = total / (len(group_tokens) * max(1, group_tokens[group]))
-        for i in idx:
-            weights[i] = share * sum(rows[i]["loss_mask"])
-    report = {
-        "groups": {g: {"samples": len(idx), "tokens": group_tokens[g],
-                       "token_share_before": round(group_tokens[g] / total, 4),
-                       "token_share_after": round(1 / len(group_tokens), 4)}
-                   for g, idx in by_group.items()},
-    }
-    return weights, report
 
 
 def build_model(model_path: str, lora_rank: int, lora_alpha: int, dtype: torch.dtype):
@@ -288,30 +282,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--warmup-ratio", type=float, default=0.03)
     parser.add_argument("--lora-rank", type=int, default=32)
     parser.add_argument("--lora-alpha", type=int, default=64)
-    parser.add_argument("--max-length", type=int, default=4096)
+    # ⚠️ 刻意没有 --max-length：长度上限是契约的推论（SFT_MAX_LENGTH，见文件头），
+    #    守则⑨「凡是"这个值应该和那边一致"的地方，这里根本不该有这个值」。
     parser.add_argument("--eval-every", type=int, default=1, help="每 N 个 epoch 评一次")
-    parser.add_argument("--balance-by", default=None,
-                        help="按该列做 token 加权采样，如 behavior。不给则不均衡")
+    # ⚠️ 刻意没有采样均衡开关（Chaoyu 2026-08-19 拆除）：要调分布就调**数据本身**
+    #    （分桶层已有 behavior 保底饱和），训练器不做二次加权。
     # ★ 默认开 wandb，和 `launch_rl.py` 对齐（那边 --logger 默认就是 console,wandb）。
     # 之前默认是 None，结果 v8 那轮 SFT 整轮没有任何上报 —— 曲线只剩一个人肉 tail 的日志文件。
     # 训练脚本的默认值必须是「跑完就有记录」，要关得显式说。
     parser.add_argument("--wandb-project", default="syncopate")
     parser.add_argument("--no-wandb", action="store_true", help="显式关掉上报（调试/跑测试用）")
-    # ★★ 2026-08-18：epoch 粒度的选择集太粗。实测 v13：
-    #   e1 有梯度 222 / 饱和 96 / 决策位熵 0.158（91.7% 的位置已近乎确定）
-    #   e2 有梯度 154 / 饱和 155 / 熵 0.062
-    #   **一个 epoch 之内有梯度格子掉 31%** ⇒ 这条曲线在这一段非常陡，
-    #   而「step 0 → e1」这 105 步**一个采样点都没有**。
-    #   而 GRPO 的梯度完全来自组内方差 ⇒ **起点的熵直接决定了有多少东西可学**。
-    #   ⚠️ M6 那条「零梯度<30% 与 多样性≥70% 互斥」是在**4 个整 epoch 点**上得的，
-    #     曲线这么陡的地方用这么粗的采样判"互斥"，很可能只是没采到中间。
-    #   ⇒ **默认就开**（不是可选项）：默认空等于又一个"记得传这个参数"的手动步骤，
-    #     而手动步骤一定会被忘 —— 本项目第一失效形状。同「wandb 默认开，要关得显式」。
-    #     代价 3 个点 × 126 MB = 378 MB，相对 300 G 盘是 0.1%；清理路径已内建。
-    parser.add_argument("--save-fractions", default="0.125,0.25,0.375",
-                        help="在训练总步数的这些比例处额外存点（**默认开**，覆盖 0→e1 那段"
-                             "此前完全没有采样点的陡区）。设成空串关掉。"
-                             "★ 这些是**临时选点产物**，选完就删（跑完会打印清理命令）")
+    # ★★ 选点定式（Chaoyu 2026-08-19，依据 v13r2 五点一次性验证，全程见 22 §H）：
+    #   **e1 是默认起点，<1 epoch 的打点彻底废除** —— 0.25 遍格式都没学会
+    #   （parse_err 0.50/条），0.5/0.75 遍在熵、格子、行为上全面被 e1 压制。
+    #   以后若要再选，测 **1–2 epoch 之间**的三个点（默认 1.25/1.5/1.75 遍，
+    #   即总步数的 0.625/0.75/0.875，epochs=2 时）。
+    #   ⚠️ 落在第 1 个 epoch 之前的打点会被**硬过滤**（不是靠默认值挡）。
+    parser.add_argument("--save-fractions", default="0.625,0.75,0.875",
+                        help="在训练总步数的这些比例处额外存点（epochs=2 时 = 1.25/1.5/1.75 遍）。"
+                             "设成空串关掉。⚠️ 落在 epoch1 之前的点会被过滤掉（选点定式，22 §H）。"
+                             "★ 临时选点产物，选完就删（跑完会打印清理命令）")
     parser.add_argument("--profile-steps", type=int, default=0,
                         help="H0 观测仪：抓 N 个 micro-step 的 torch.profiler 时间线后自动收工"
                              "（0=关）。纯观测不改训练语义，trace 拖进 ui.perfetto.dev 看")
@@ -330,23 +320,16 @@ def main(argv: list[str] | None = None) -> int:
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
 
-    train_set = PretokenizedDataset(ROOT / args.train_file, args.max_length, args.balance_by)
-    val_set = PretokenizedDataset(ROOT / args.val_file, args.max_length, args.balance_by)
+    # ★ 判据行：长度预算的来源必须在启动日志里可见（没有这行 = 没走契约）
+    print(f"[契约] SFT 长度上限 = {SFT_MAX_LENGTH}"
+          f"（rollout_budget: prompt {MAX_PROMPT_LENGTH} + response {MAX_RESPONSE_LENGTH}）；"
+          f"超长样本会硬报错，不会静默截断")
+    # group_key 只用于**按组报 val loss**（某一类被牺牲要看得见），与采样无关
+    train_set = PretokenizedDataset(ROOT / args.train_file, SFT_MAX_LENGTH, "behavior")
+    val_set = PretokenizedDataset(ROOT / args.val_file, SFT_MAX_LENGTH, "behavior")
     collate_fn = lambda batch: collate(batch, pad_id)  # noqa: E731
 
-    sampler = None
-    balance_report: dict[str, Any] = {}
-    if args.balance_by:
-        from torch.utils.data import WeightedRandomSampler
-
-        weights, balance_report = token_balanced_weights(train_set.rows)
-        sampler = WeightedRandomSampler(weights, num_samples=len(train_set), replacement=True)
-        print(f"[均衡] 按 {args.balance_by} 的 token 加权采样")
-        for group, stat in sorted(balance_report["groups"].items()):
-            print(f"       {group:<10} 样本 {stat['samples']:>3}  token 占比 "
-                  f"{stat['token_share_before']:>6.1%} -> {stat['token_share_after']:>6.1%}")
-    train_loader = DataLoader(train_set, batch_size=args.batch_size,
-                              shuffle=sampler is None, sampler=sampler,
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                               collate_fn=collate_fn, drop_last=False)
 
     model, _ = build_model(model_path, args.lora_rank, args.lora_alpha, dtype)
@@ -384,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:
         run = wandb.init(project=args.wandb_project,
                          name=args.wandb_run or f"sft-{Path(args.out).name}",
                          job_type="sft",
-                         config={**vars(args), "trainable": trainable_summary(model),
-                                 "balance": balance_report})
+                         config={**vars(args), "max_length": SFT_MAX_LENGTH,
+                                 "trainable": trainable_summary(model)})
         # ★ 让 W&B 自己把面板分区（train/ val/ health/ perf/ 各一块），
         #   并给关键量定 summary 口径 —— 否则 summary 默认取"最后一个值"，
         #   而我们要看的是**最小 val loss** 和**最大位移**。
@@ -467,6 +450,13 @@ def main(argv: list[str] | None = None) -> int:
     #      看起来"少存了一个点"，而那是最容易被读成 bug 的那种静默偏移。
     sel_fracs = [float(x) for x in args.save_fractions.split(",") if x.strip()]
     sel_steps = {max(1, round(f * total_steps)): f for f in sel_fracs}
+    # ★ 选点定式（22 §H）：<1 epoch 的打点**硬过滤**，传了也不存 —— 0.25 遍连格式都
+    #   没学会，那些点只会浪费评测预算、诱惑人去选（v13r2 五点验证的实测结论）。
+    dropped = {s: f for s, f in sel_steps.items() if s < steps_per_epoch}
+    if dropped:
+        sel_steps = {s: f for s, f in sel_steps.items() if s >= steps_per_epoch}
+        print(f"[选点] ⛔ 过滤掉 epoch1 之前的打点 {sorted(dropped)}"
+              f"（选点定式：<1 epoch 不再采样，见 22 §H）")
     if sel_steps:
         print(f"[选点] 将在 step {sorted(sel_steps)} 额外存点"
               f"（总步数 {total_steps}）—— **临时产物，选完就删**")
@@ -563,7 +553,8 @@ def main(argv: list[str] | None = None) -> int:
     model.save_pretrained(out_dir)          # LoRA 只存 adapter，几十 MB
     tokenizer.save_pretrained(out_dir)
     (out_dir / "training_history.json").write_text(
-        json.dumps({"args": vars(args), "history": history}, ensure_ascii=False, indent=1),
+        json.dumps({"args": {**vars(args), "max_length": SFT_MAX_LENGTH},
+                    "history": history}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     print(f"[OK] adapter -> {out_dir}")
     sel_dirs = sorted(out_dir.glob("sel_f*"))

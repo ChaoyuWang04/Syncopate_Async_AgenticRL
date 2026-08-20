@@ -38,56 +38,78 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_resid: float = 0.5) -> None:
-    """判据：合并后的权重 − 基座权重 ≈ adapter 的 ΔW_eff。
+    """判据：合并后的权重 − 基座权重 ≈ adapter 的 ΔW_eff，**按全部被适配层加权**。
 
     量两件事（**必须分开看**）：
         保真残差 = ‖kept − Δ‖ / ‖Δ‖      ← 判据。方向对不对
         幅度比   = ‖kept‖ / ‖Δ‖          ← 参考。只看它会得出错误的安心结论
-    """
-    import glob as _glob
 
-    import torch
+    ⚠️ 判据口径改过一次（2026-08-19，v13r2 首次开火时抓到的）：
+    第一版只探**一个**层（safetensors 排序里的第一个 lora_A），而那恰好是全模型
+    252 层里残差**最差**的一层（layers.0.mlp.down_proj，Δ 只占 0.21% ⇒ 残差 0.58）；
+    同一份 adapter 的**全局加权残差是 0.307**，比被接受的先例（老 v13-e1 标定 0.36，
+    实测任务分代价 −0.025，E24）还好。⇒ 拿最差层代表整体 = 尺子错了不是数据错了
+    （同「位移口径错 33 倍」那次）。门槛 0.5 **不动**，改的是被量的对象：
+    全局加权残差判决，最差 5 层照打出来供人看。
+    ⚠️ 合并后仍要用任务级尺子兜底：merged 审计 vs adapter 审计配对（E24 协议）。
+    """
     from safetensors import safe_open
 
     cfg = json.loads(Path(adapter_path, "adapter_config.json").read_text())
     scale = cfg["lora_alpha"] / cfg["r"]
-    files = sorted(_glob.glob(str(Path(adapter_path) / "*.safetensors")))
+    files = sorted(Path(adapter_path).glob("*.safetensors"))
     if not files:
         print("[合并] ⚠️ adapter 不是 safetensors，跳过合并校验")
         return
-    sd = merged_model.state_dict()
-    with safe_open(files[0], framework="pt") as fh:
-        ka = next((k for k in sorted(fh.keys()) if k.endswith("lora_A.weight")), None)
-        if ka is None:
-            print("[合并] ⚠️ adapter 里没有 lora_A，跳过合并校验")
-            return
-        A = fh.get_tensor(ka).float()
-        B = fh.get_tensor(ka.replace("lora_A", "lora_B")).float()
-    delta = scale * (B @ A)
-    name = ka.replace("base_model.model.", "").replace(".lora_A.weight", ".weight")
-    if name not in sd:
-        print(f"[合并] ⚠️ 权重里找不到 {name}，跳过合并校验")
+    ab: dict[str, torch.Tensor] = {}
+    for f in files:
+        with safe_open(f, framework="pt") as fh:
+            for k in fh.keys():
+                if "lora_A" in k or "lora_B" in k:
+                    ab[k] = fh.get_tensor(k)
+    stems = sorted({k.split(".lora_A")[0] for k in ab if ".lora_A" in k})
+    if not stems:
+        print("[合并] ⚠️ adapter 里没有 lora_A，跳过合并校验")
         return
-    merged_w = sd[name].float().cpu()
-    base_w = None
+    sd = merged_model.state_dict()
+    base_idx: dict[str, Path] = {}
     for f in sorted(Path(base_path).glob("*.safetensors")):
         with safe_open(f, framework="pt") as fh:
-            if name in fh.keys():
-                base_w = fh.get_tensor(name).float()
-                break
-    if base_w is None:
-        print(f"[合并] ⚠️ 基座里找不到 {name}，跳过合并校验")
-        return
-    kept = merged_w - base_w
-    if kept.norm().item() == 0.0:
-        raise SystemExit(f"🔴 合并后 {name} 与基座**逐位相同** ⇒ 增量根本没进权重。")
-    resid = ((kept - delta).norm() / delta.norm()).item()
-    mag = (kept.norm() / delta.norm()).item()
-    rel = (delta.norm() / base_w.norm()).item()
-    print(f"[合并] 校验 {name}: Δ 占基座 {rel * 100:.4f}% · 保真残差 {resid:.2f} · 幅度比 {mag:.2f}")
-    if resid > max_resid:
+            for k in fh.keys():
+                base_idx[k] = f
+
+    per_layer: list[tuple[float, float, str]] = []   # (resid, ‖Δ‖, name)
+    err2 = d2 = kept2 = 0.0
+    for stem in stems:
+        name = stem.replace("base_model.model.", "") + ".weight"
+        if name not in sd or name not in base_idx:
+            continue
+        A = ab[stem + ".lora_A.weight"].float()
+        B = ab[stem + ".lora_B.weight"].float()
+        delta = scale * (B @ A)
+        with safe_open(base_idx[name], framework="pt") as fh:
+            base_w = fh.get_tensor(name).float()
+        kept = sd[name].float().cpu() - base_w
+        if kept.norm().item() == 0.0:
+            raise SystemExit(f"🔴 合并后 {name} 与基座**逐位相同** ⇒ 增量根本没进权重。")
+        dn = delta.norm().item()
+        resid = ((kept - delta).norm() / delta.norm()).item()
+        per_layer.append((resid, dn, name))
+        err2 += (resid ** 2) * (dn ** 2)
+        d2 += dn ** 2
+        kept2 += kept.norm().item() ** 2
+
+    global_resid = (err2 / d2) ** 0.5
+    mag = (kept2 / d2) ** 0.5
+    worst = sorted(per_layer, reverse=True)[:5]
+    print(f"[合并] 校验 {len(per_layer)} 个被适配层: 全局加权残差 {global_resid:.3f} · "
+          f"幅度比 {mag:.2f} · 超 {max_resid} 的层 {sum(1 for r, _, _ in per_layer if r > max_resid)} 个")
+    print("       最差 5 层: " + " · ".join(f"{n.split('.weight')[0].split('model.')[-1]} {r:.2f}"
+                                            for r, _, n in worst))
+    if global_resid > max_resid:
         raise SystemExit(
-            f"🔴 保真残差 {resid:.2f} > {max_resid} ⇒ 增量太小，被 bf16 存储的舍入噪声淹没了。\n"
+            f"🔴 全局加权保真残差 {global_resid:.3f} > {max_resid} ⇒ 增量太小，"
+            "被 bf16 存储的舍入噪声淹没了。\n"
             "   **不要合并这一级的增量**，保持 adapter 形态；\n"
             "   （RL 一轮的增量典型是 0.05% 量级，残差 ~0.87 —— 见 docs/syncopate/18 §3.3）"
         )

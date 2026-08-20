@@ -367,7 +367,9 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"trainer.logger=[{args.logger}]",
         f"trainer.n_gpus_per_node={args.trainer_gpus}",
         "trainer.nnodes=1",
-        "trainer.total_epochs=1",
+        # ⚠️ fully_async 分支会按 rollout_steps 重算 epochs —— 这里只给其余模式发基础值，
+        #   不发两份让 hydra last-wins（重复覆写 = 读配置的人要靠顺序猜谁赢）。
+        *( ["trainer.total_epochs=1"] if args.mode != "fully_async" else [] ),
         f"trainer.total_training_steps={args.steps}",
         # ★ 冒烟时 -1（不存）没问题，正式跑必须存 —— 否则两件事都做不了：
         #   1. 跑完没有 ckpt 可以在冻结 EVAL 上重评，等于白跑
@@ -772,9 +774,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--purpose", default="probe", choices=["probe", "candidate"],
                         help="probe=实验（不受约束）· candidate=上线候选（受最少步数 + 完成判据约束）")
     parser.add_argument("--rollout-n", type=int, default=8, help="GRPO 组大小")
-    parser.add_argument("--train-batch-size", type=int, default=2)
+    parser.add_argument("--train-batch-size", type=int, default=6)   # 与 mini_batch 同批宽（fully_async 下 verl 强制 0，见 §data 处注释）
     parser.add_argument("--val-batch-size", type=int, default=2)
-    parser.add_argument("--ppo-mini-batch-size", type=int, default=2)
+    # ★ 2026-08-19 默认 2 → 6：2×8=16 不能被 3 卡整除，默认起手就被起跑断言拦。
+    #   6×8=48 是守卫 A4（≥24 条）标定的标准批；E20 更新次数实验要小批就显式传。
+    parser.add_argument("--ppo-mini-batch-size", type=int, default=6)
     parser.add_argument("--micro-batch-size", type=int, default=1,
                         help="每次前向算几条**序列**（不是几个题目）。★ **1 是实测最优，别拉高**："
                              "E25 实测 1→2 在定长上慢 1.0%%、变长上慢 6.3%%，且多花 4.2 GB 显存，"
@@ -784,7 +788,10 @@ def main(argv: list[str] | None = None) -> int:
     #   显式传别的值是允许的，但 check_pipeline_invariants 会把不一致标红。
     parser.add_argument("--max-prompt-length", type=int, default=BUDGET_PROMPT)
     parser.add_argument("--max-response-length", type=int, default=BUDGET_RESPONSE)
-    parser.add_argument("--max-turns", type=int, default=8)
+    # ⚠️ verl 的 multi_turn.max_assistant_turns 我们的自定义 loop **不消费**（真上限 =
+    #   每 case 的 max_steps，10/12/14，经 extra_info 进 RolloutConfig；实跑最大 12 步）。
+    #   写成全库上限 14：防止这行"看着像上限"误导排查，也防未来 verl 启用时把长链切了。
+    parser.add_argument("--max-turns", type=int, default=14)
     parser.add_argument("--agent-workers", type=int, default=1)
     parser.add_argument("--rollout-gpu-util", type=float, default=None,
                         help="vLLM 的显存份额。★ 它是**占总显存的比例**，而且必须把 vLLM "
@@ -880,7 +887,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="FSDP 持有参数的精度。LoRA 下 98.4%% 的参数冻结，"
                              "fp32 主权重是纯浪费（4B 要 16GB，实测直接把 vLLM 挤死）")
     parser.add_argument("--lora-rank", type=int, default=0, help="0 = 全参；4B 必须给 32")
-    parser.add_argument("--lr", default="1e-6")
+    # ★ 2026-08-19 默认 1e-6 → 3e-5：1e-6 是 M7 时代的遗留 —— 位移 0.0093% = 白训。
+    #   协议 A-3 的标准值就是 3e-5（r1_seqis / +0.137 那批跑全是它）。默认值必须是对的兜底。
+    parser.add_argument("--lr", default="3e-5")
     parser.add_argument("--remove-padding", default="True", choices=["True", "False"],
                         help="抠掉 pad token 再算（5120→~4200）。2026-08-13 晚起本机已装真"
                              "flash-attn 2.8.3（预编译轮子，sm_120 kernel 验证过），垫片已退役")
@@ -1053,6 +1062,10 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_POOL_STATE"] = str(
         Path(args.pool_state) if args.pool_state else ROOT / args.save_path / "pool_state.json")
     env["SYNCOPATE_POOL"] = "0" if args.no_pool else "1"
+    # ★ 采样器的批宽（= 去重窗口宽）。⚠️ 不能让它读 data.train_batch_size ——
+    #   fully_async 下 verl 强制那个值为 0 ⇒ 窗口退化成 1，P4 的结构性去重名存实亡
+    #   （e26ab 实跑 batch=1，零重复纯靠 659 条大池子的运气）。fit 批宽 = mini_batch。
+    env["SYNCOPATE_POOL_BATCH"] = str(args.ppo_mini_batch_size)
     if args.nvtx:
         env["SYNCOPATE_NVTX"] = "1"
         print("[rl] NVTX 阶段标注已开 —— 判据是两侧各一行 `[verl-patch] NVTX 阶段标注 ✓`"

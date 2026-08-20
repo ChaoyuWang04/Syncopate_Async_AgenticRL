@@ -179,17 +179,30 @@ class Pool:
 
     # ---- 采样 ----
 
-    def sample(self, k: int, step: int, seed: int) -> list[str]:
+    def sample(self, k: int, step: int, seed: int,
+               exclude: Iterable[str] = ()) -> list[str]:
         """按权重**无放回**抽 k 条。
 
         ⚠️ 必须无放回：同一 batch 里出现两条相同的 case，GRPO 会把它们当成
         两个独立的组，而它们的 advantage 是相关的 —— 组内比较的前提被破坏了。
 
+        ★ `exclude`：还要避开的 case（调用方传**上一批**的 id）。
+        单次调用无放回挡不住「相邻两次调用抽到同一条」——而消费方
+        （DataLoader / rollouter）切 batch 的边界和我们调用的边界**不保证对齐**，
+        错位时一个训练 batch 会横跨两次调用 ⇒ P4 实测 3/110 步出现重复题。
+        排掉上一批后，流里两条相同 id 至少隔一整批 ⇒ 任何 ≤ 批宽的连续窗口
+        都不可能有重复 —— **结构性保证，不依赖对齐**。
+        ⚠️ 池子快抽干时（可用 < k）回退为允许重复上一批 —— 宁可分布稍偏，
+        不能让训练拿不满一批而挂起。回退时由调用方的判据负责喊。
+
         ⚠️ 必须可复现：seed 由 step 决定，不用全局随机源。
         「RL 里任何跨 rollout 的随机性都是污染」这条纪律在这里同样适用 ——
         断点续跑时必须能重放出同一个 batch。
         """
-        ids = sorted(self.states)
+        banned = set(exclude)
+        ids = [cid for cid in sorted(self.states) if cid not in banned]
+        if len(ids) < k:                     # 池子太小：回退，保证能出一整批
+            ids = sorted(self.states)
         weights = [weight_of(self.states[cid], step) for cid in ids]
         rng = random.Random(seed)
         chosen: list[str] = []
@@ -197,8 +210,11 @@ class Pool:
         for _ in range(min(k, len(pool_ids))):
             total = sum(pool_w)
             if total <= 0:
-                chosen.append(pool_ids.pop(rng.randrange(len(pool_ids))))
-                pool_w.pop(0)
+                # 权重全为 0 的退化情形：均匀抽一条。
+                # ⚠️ 原写法 pop 的 id 和 pop 的权重不是同一个下标 —— 两张表会错位。
+                i = rng.randrange(len(pool_ids))
+                chosen.append(pool_ids.pop(i))
+                pool_w.pop(i)
                 continue
             pick = rng.random() * total
             acc = 0.0

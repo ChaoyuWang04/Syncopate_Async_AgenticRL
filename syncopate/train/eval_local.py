@@ -485,10 +485,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="只跑第 I 片（0-indexed）共 N 片，如 --shard 0/4")
     parser.add_argument("--per-class", type=int, default=4, help="每个 signal_class 取几条")
     parser.add_argument("--split-every", type=int, default=8, help="和 data build 的 val_every 对齐")
-    # 单轮生成上限（vLLM SamplingParams.max_tokens）。默认跟 think 开关走：
-    #   off = 256（单个 JSON 动作 ~30–90 token，256 是老默认，逐字节不变）
-    #   on  = 2048（单轮思考 0.5–1.5k + 动作 + 余量；256 会把每一轮思考拦腰砍断——
-    #        E27 B 臂第一跑就是这么作废的，2026-08-19）
+    # 单轮生成上限（vLLM SamplingParams.max_tokens）。
+    # ★ 2026-08-19 起默认 = MAX_RESPONSE_LENGTH（契约推导，E23「评测跟训练」）：
+    #   训练侧单轮可用满剩余预算（至多 2048/think 8192），评测卡低值就是两个分布 ——
+    #   SFT 类模型轮短（≤~100 tok）伤不到，但 base/崩塌型的长轮会被拦腰砍
+    #   （base 实测截断率 0.203、E27 B 臂第一跑因 256 作废，2026-08-19 两次撞上）。
+    #   ⚠️ 旧默认 256 的历史审计仍可比（它们的截断率 ≤0.9%），但**跨代配对要看
+    #   审计头部的 max_new_tokens 字段**（本次起记录，e27 双胞胎 label 分不清的教训）。
     parser.add_argument("--max-new-tokens", type=int, default=None,
                         help="单轮生成上限；不传则按 SYNCOPATE_THINK 取 256/2048")
     parser.add_argument("--temperature", type=float, default=1.0,
@@ -506,7 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                              "不必为了一个新指标重跑几小时 GPU")
     args = parser.parse_args(argv)
     if args.max_new_tokens is None:
-        args.max_new_tokens = 2048 if THINK_ON else 256
+        args.max_new_tokens = MAX_RESPONSE_LENGTH   # 预算本身已随 THINK_ON 切换（2048/8192）
 
     if args.from_audit:
         return _rereport(ROOT / args.from_audit, ROOT / args.batch)
@@ -683,6 +686,10 @@ def main(argv: list[str] | None = None) -> int:
                                     "data_version": data_version_of(args.split_dir)
                                     if args.split_dir else None,
                                     "batch": args.batch, "split_dir": args.split_dir,
+                                    # ★ 生成配置进审计头（e27 两臂 label 一模一样分不清的教训）
+                                    "gen": {"max_new_tokens": args.max_new_tokens,
+                                            "temperature": args.temperature,
+                                            "samples_per_case": args.samples_per_case},
                                     "rows": rows}, ensure_ascii=False, indent=1),
                         encoding="utf-8")
         print(f"\n明细 -> {path}")

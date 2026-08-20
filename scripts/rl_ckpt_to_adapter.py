@@ -50,7 +50,10 @@ def main() -> int:
     if n_checked:
         print(f"  ✅ 校验：{n_checked} 个 LoRA 张量在 rank_0 / rank_1 上逐位相同（DDP 副本）")
 
-    tm = sorted({k.split(".")[-4] for k in lora if k.endswith("lora_A.weight")})
+    # ★ target_modules 必须是**叶子层名**（q_proj 等），不是容器名（self_attn/mlp）。
+    #   [-4] 取到的是容器 ⇒ PEFT 按模块名注入时会撞上 self_attn 里的 RMSNorm 直接报错
+    #   （vLLM 按张量名装载所以从没暴露——2026-08-20 熵探针第一次走 PEFT 路径才炸）。
+    tm = sorted({k.split(".")[-3] for k in lora if k.endswith("lora_A.weight")})
     cfg = {"task_type": "CAUSAL_LM", "peft_type": "LORA", "auto_mapping": None,
            "base_model_name_or_path": None, "revision": None, "inference_mode": False,
            "r": meta["r"], "lora_alpha": meta["lora_alpha"], "lora_dropout": 0.0,

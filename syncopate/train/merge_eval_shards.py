@@ -49,7 +49,11 @@ def main() -> int:
     rows.sort(key=lambda r: r["case_id"])
     label = labels[0] if labels else ""
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"label": label, "rows": rows},
+    # ★ 透传分片头部的 meta —— 此前只留 label+rows，data_version/gen 在合并时被静默丢掉，
+    #   选点工具因此打出「没记数据版本」（机制在 eval_local 建了、在这里断了）。
+    meta = {k: payload[k] for k in ("data_version", "batch", "split_dir", "gen")
+            if payload.get(k) is not None}
+    args.out.write_text(json.dumps({"label": label, **meta, "rows": rows},
                                    ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[merge] {len(files)} 片 · {len(rows)} 条 case -> {args.out}")
 

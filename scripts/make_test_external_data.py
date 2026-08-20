@@ -111,6 +111,12 @@ def write_excel(rows: list[dict], path: Path, week: str = CURRENT_WEEK) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
+    # ★ 钉死内嵌时间戳（2026-08-19 影子重建抓到的）：openpyxl 默认把「现在」写进
+    #   docProps/core.xml ⇒ 同样的内容每次重跑字节都不同，「逐字节可复现」在 xlsx
+    #   这一环静默断掉。产物的一切都必须由输入决定，时钟不是输入。
+    from datetime import datetime
+    workbook.properties.created = datetime(2026, 1, 1)
+    workbook.properties.modified = datetime(2026, 1, 1)
     sheet = workbook.active
     sheet.title = f"safety_lines_{week}"
     headers = list(rows[0])

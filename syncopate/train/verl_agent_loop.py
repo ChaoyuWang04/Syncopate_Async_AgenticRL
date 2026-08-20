@@ -190,7 +190,23 @@ def score(bundle: CaseBundle, output: RolloutOutput, domain) -> ScoreResult:
     )
 
 
-def reward_extra_info(result: ScoreResult, output: RolloutOutput) -> dict[str, Any]:
+def failures_fingerprint(bundle: CaseBundle) -> str:
+    """这条 case 的失败注入剧本的稳定指纹。
+
+    ★ Q4 判据（`18 §8` / `22 §13`）：失败注入必须**由 case 声明、确定性**——
+    GRPO 是组内比较，同组 8 条 rollout 若吃到不同的失败剧本，
+    reward 差异就分不清是「策略不同」还是「运气不同」，advantage 被污染。
+    机制上剧本存在 bundle 里、匹配无随机源 ⇒ 应当恒同；但「应当」要能被验：
+    每条 rollout 把指纹带进 dump，事后按 case 聚合，**集合大小必须是 1**。
+    """
+    import hashlib
+
+    payload = json.dumps(bundle.env.failures, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def reward_extra_info(result: ScoreResult, output: RolloutOutput,
+                      bundle: CaseBundle) -> dict[str, Any]:
     """回给 verl 的诊断字段。
 
     必须是 numpy-stackable 的标量或短列表——复杂结构（cap_steps 的嵌套 dict、
@@ -199,6 +215,12 @@ def reward_extra_info(result: ScoreResult, output: RolloutOutput) -> dict[str, A
     metrics = output.metrics
     hit = {h.name for h in result.cap_hits}
     return {
+        # ★ 2026-08-19：case_id 进 dump。此前 rollout dump 里没有它（gts 恒 null），
+        #   后果记录在案：defer_watch 拿不到双向拆分、infra 复查 P4 组结构
+        #   「不假装测了」直接搁置。这一个字段解卡两件事。
+        "case_id": bundle.case_id,
+        # ★ Q4 守卫：同一 case 的所有 rollout，这个指纹必须相同（见 failures_fingerprint）
+        "failures_fp": failures_fingerprint(bundle),
         "reward": result.reward,
         "raw_reward": result.raw_reward,
         **{f"subscore/{k}": v for k, v in result.subscores.items()},
@@ -391,5 +413,6 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             reward_score=result.reward,
             num_turns=output.num_turns,
             metrics=AgentLoopMetrics(),
-            extra_fields={"reward_extra_info": reward_extra_info(result, output), **version_fields},
+            extra_fields={"reward_extra_info": reward_extra_info(result, output, bundle),
+                          **version_fields},
         )

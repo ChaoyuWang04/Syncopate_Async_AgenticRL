@@ -108,6 +108,16 @@ async def build_sft_sample(
         config=config or RolloutConfig(),
         rollout_id="gold", run_id="sft",
     )
+    # ★ gold 回放**不许截断**——被截掉的一定是轨迹结尾（终答那段），
+    #   而那正是最该学的。v13 实测 131/503 条因轮数上限用了默认 8（< case.max_steps）
+    #   被无声掐断，最终结论从没进过训练数据。判据写在发生点，不靠调用方记得检查。
+    if output.trajectory.truncated:
+        raise ValueError(
+            f"{bundle.case_id}: gold 回放被截断（原因 {output.trajectory.truncation_reason}，"
+            f"需要 {len(bundle.gold.actions) + 1} 个 assistant 轮，"
+            f"上限 {(config or RolloutConfig()).max_assistant_turns}）——"
+            "SFT 样本必须是完整轨迹；轮数上限应取 case.max_steps（见 build_dataset）"
+        )
     return SFTSample(
         case_id=bundle.case_id,
         input_ids=output.prompt_ids + output.response_ids,
