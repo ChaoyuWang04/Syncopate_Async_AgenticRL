@@ -13,7 +13,7 @@ This PR selects `NO_SHARD` explicitly when the shard dim is degenerate. The mesh
 
 ### Checklist Before Starting
 
-- [x] Search for similar PRs. Paste at least one query link here: https://github.com/verl-project/verl/issues?q=fsdp_size+HYBRID_SHARD (no prior report; #2478 is the same warning with a different, benign cause)
+- [x] Search for similar PRs. Paste at least one query link here: [`is:pr fsdp_size`](https://github.com/verl-project/verl/pulls?q=is%3Apr+fsdp_size) (34 hits, none about degenerate-mesh gradient sync), [`is:pr HYBRID_SHARD`](https://github.com/verl-project/verl/pulls?q=is%3Apr+HYBRID_SHARD) (0 hits). Closest existing issue is #2478 — same FSDP warning, different and benign cause (world size genuinely 1).
 - [x] Format the PR title as `[{modules}] {type}: {description}`
 
 ### Test
@@ -57,8 +57,8 @@ Note: FSDP1's `NO_SHARD` emits a deprecation `FutureWarning` pointing to DDP; wi
 ### Checklist Before Submitting
 
 - [x] Read the Contribute Guide.
-- [x] Apply pre-commit checks (`ruff` / `ruff-format` clean on the changed files).
-- [ ] Add / Update the documentation. (No user-facing doc change: `fsdp_size=1` already documented as "do not shard"; this makes the behavior match.)
+- [x] Apply pre-commit checks — `pre-commit run` on the changed files: all 14 hooks pass (ruff, ruff-format, mypy, autogen-trainer-cfg, license, docstrings, naming, test-structure, device-API, DataProto, compile-all).
+- [ ] Add / Update the documentation — not needed: `fsdp_size` appears in `docs/examples/config.rst` only as a config listing (`fsdp_size: -1`) with no prose contradicting this fix, and `docs/advance/ppo_lora.rst` uses `fsdp_size=8`, which is unaffected. This PR makes the runtime behavior match the documented meaning of `fsdp_size=1`.
 - [x] Add unit or end-to-end test(s) to the CI workflow.
 - [ ] Once your PR is ready for CI, send a message in the `ci-request` channel.
 - [x] Not related to the `recipe` submodule.
