@@ -1,4 +1,6 @@
-# 提交包 · verl `fsdp_size=1` 静默不同步梯度（E21）
+# 提交包 · verl `fsdp_size=1`
+
+> ✅ **issue 已提交：[verl#7493](https://github.com/verl-project/verl/issues/7493)**（2026-08-20）。下一步：fork → push → 开 PR。 静默不同步梯度（E21）
 
 > **状态：材料齐备，等 Chaoyu 点头后提交。** 目标仓库 **verl-project/verl**（已迁库，别用 volcengine 旧名）。
 > 顺序：先 issue（拿编号）→ PR 填 `Fixes #<n>` → （可选）去 pytorch#154888 评论补证据 + 链接。

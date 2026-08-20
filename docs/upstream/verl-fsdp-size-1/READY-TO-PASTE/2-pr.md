@@ -1,11 +1,11 @@
 标题（复制这一行；CI 会检查这个格式）：
 [fsdp] fix: fsdp_size=1 silently disables gradient synchronization
 
---- 正文从下一行开始，全选复制；⚠️ 提交前把 <ISSUE> 换成第 1 步拿到的 issue 编号 ---
+--- 正文从下一行开始，全选复制（issue 编号 #7493 已填好，无需再改） ---
 
 ### What does this PR do?
 
-Fixes #<ISSUE>.
+Fixes #7493.
 
 `create_device_mesh(world_size, fsdp_size=1)` builds a `(world_size, 1)` mesh whose shard dim is degenerate. `get_sharding_strategy` selected `HYBRID_SHARD` for it, which FSDP1 clamps to `NO_SHARD` (the shard group holds a single rank) **while still reducing gradients over that size-1 shard group**. The replicate-dim ranks therefore never synchronize: every rank trains its own copy of the model, with no error and plausible metrics. PyTorch acknowledged this FSDP1 behavior as a bug and closed it as `not_planned` (FSDP1 is in maintenance mode): [pytorch/pytorch#154888](https://github.com/pytorch/pytorch/issues/154888).
 

@@ -8,6 +8,13 @@
 
 ---
 
+## 第 1 步 ✅ 已完成（2026-08-20）
+
+issue = **https://github.com/verl-project/verl/issues/7493**
+（标题/五字段/代码块/实测数字均已核对无误，`bug` 标签自动生效）
+
+<details><summary>原步骤（留档）</summary>
+
 ## 第 1 步 · 先提 issue（拿编号，2 分钟）
 
 1. 打开 https://github.com/verl-project/verl/issues/new/choose → 选 **Bug report**
@@ -18,6 +25,8 @@
    - 标题用：`[BUG][FSDP1] fsdp_size=1 on multiple GPUs silently disables gradient synchronization`
    - `1-issue.md` 保留作**整篇版**（万一改用 Blank issue 就贴它）
 3. 提交后**记下编号**（形如 `#7501`），下一步要用
+
+</details>
 
 ## 第 2 步 · Fork 仓库（30 秒）
 
@@ -44,8 +53,7 @@ https://github.com/settings/tokens → Generate new token (classic) → 勾 `rep
 1. 推完之后 GitHub 会在 fork 页面顶部显示 **Compare & pull request**，点它
    （或直接开 https://github.com/verl-project/verl/compare ）
 2. base 选 `verl-project/verl` 的 `main`，compare 选你刚推的分支
-3. 标题与正文：复制 `2-pr.md`
-   ⚠️ **正文里的 `<ISSUE>` 要替换成第 1 步拿到的编号**（只有一处，在开头 `Fixes #<ISSUE>`）
+3. 标题与正文：复制 `2-pr.md`（**issue 编号 #7493 已填好，不用再改**）
 4. 提交
 
 ## 第 5 步 · 签 CLA（1 分钟，PR 开完才会出现）
