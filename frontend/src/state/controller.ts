@@ -181,7 +181,10 @@ export function useChatController(): ChatController {
           switch (ev.event) {
             case 'run.started': {
               const attempt = typeof d['attempt'] === 'number' ? d['attempt'] : 1
-              const tier = typeof d['automation_tier'] === 'string' ? d['automation_tier'] : '?'
+              // ★ 2026-08-20：档位改由**动作**推导（tier_policy）⇒ run 上通常没有声明值，
+              //   这里此前显示「档位 ?」（我改推导时留下的）。没有声明就不提档位 ——
+              //   真正的档位判定会在**审批卡**上带理由显示（那才是它有意义的地方）。
+              const tier = typeof d['automation_tier'] === 'string' ? d['automation_tier'] : null
               dispatch({ type: 'patch', id: itemId, patch: { status: 'running' } })
               dispatch({
                 type: 'step',
@@ -190,7 +193,9 @@ export function useChatController(): ChatController {
                   key: stepKey,
                   kind: 'info',
                   ok: true,
-                  text: `开始执行（第 ${attempt} 次尝试 · 档位 ${tier}）`,
+                  text: tier
+                    ? `开始执行（第 ${attempt} 次尝试 · 声明档位 ${tier}）`
+                    : `开始执行（第 ${attempt} 次尝试）`,
                 },
               })
               break

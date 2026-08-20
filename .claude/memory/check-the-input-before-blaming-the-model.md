@@ -1,8 +1,11 @@
 ---
 name: check-the-input-before-blaming-the-model
-description: "把「模型行为变差」归因给 reward/超参之前，先看输入有没有被截断。2026-08-19：一整套「reward 在教不拒绝」的分析，量的是 prompt 100% 被砍"
-metadata:
+description: 把「模型行为变差」归因给 reward/超参之前，先看输入有没有被截断。2026-08-19：一整套「reward 在教不拒绝」的分析，量的是 prompt 100% 被砍
+metadata: 
+  node_type: memory
   type: feedback
+  originSessionId: cbea48bd-a641-5bde-ac01-9f5eee26406f
+  modified: 2026-08-20T11:54:45.017Z
 ---
 
 **任何"模型行为变差"的归因，第一步先查输入有没有被截断。** `clip_ratio` 一个数就能挡住一整条错误的归因链。
@@ -43,4 +46,34 @@ prompt 完整之后，那些"症状"**全部反号**：该 defer 97%→**100%**�
 
 ⇒ 一般化：**回溯分类之前，先确认你用的那条阈值/那个输入，是不是这次真正生效的那个。**
 
-相关：[[project-mechanism-not-wired]] · [[feedback-measure-dont-infer]] · [[blank-thresholds-are-not-passes]]
+---
+
+## ★★★ 2026-08-20：同一天里这条规矩兑现了**四次**（真人试用 runtime）
+
+Chaoyu 人工试用后的观感是「模型能力差」——一串 `no_data` / `policy_not_found` /
+`安全线缺货` / `无可执行 campaign`。**四条全部不是模型的问题**：
+
+```
+① 真人租户的参考表**一条数据都没有**   安全线/预算政策/行业基准/记忆 对 org_demo 全是 0
+   （全库那 70 条属于测试临时 org）      ⇒ 它查不到，于是如实说查不到
+② NUMERIC→Decimal 不能 JSON 序列化     记账写 JSONB 抛错 → 收口按 tool_crashed 兜住
+   （日期列同理）                       ⇒ **模型收到"这个工具暂时不可用"**，于是如实说查不到
+③ status 过滤大小写敏感                工具 spec 写「如 active」（小写），实现要 ACTIVE
+                                        ⇒ 照 spec 填参数的模型永远查不到
+④ answer_fields 只有一个"任务结论"格子   ⇒ 它填机器标签（no_change/executed）
+                                        **不是不会说人话，是没给它说话的地方**
+```
+
+★ ②③ 特别毒：**测试全绿**（工具账本 30/30、224 条测试、压测 24/25），因为
+**每个测试都自己造数据**，从没有判据问过"真实租户手里有什么"、
+"这个观测能不能被渲染给模型"。
+
+★★ ④ 是新形状，值得单独记（见 [[contract-shapes-behavior]]）：
+前三条是"环境坏了"，第四条是**我们的要求就是这么写的** —— 模型学到位了，
+只是我们要求错了。
+
+⇒ **加一条前置检查**：判断"模型笨"之前，先问
+`它到底看到了什么？`（输入）+ `它拿回了什么？`（观测）+ `我们让它填的是什么表？`（契约）。
+
+相关：[[project-mechanism-not-wired]] · [[feedback-measure-dont-infer]] ·
+[[blank-thresholds-are-not-passes]] · [[contract-shapes-behavior]]

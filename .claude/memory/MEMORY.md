@@ -6,7 +6,7 @@
 - [infra 线状态与决策](infra-line-state.md) — verl+Qwen3-30B-A3B 已定（~~GLM-4.7-Flash~~ 栈不支持）；**fully_async 已打通**；入口 docs/infra_exp/00-START.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错；★第八形态 = 测试全绿但服务**从没被真的起过**（入口/流关闭只在实跑存在）
-- [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★第三条：判据太宽会**为错误的理由通过**（xfail 会把它一起吞掉）
+- [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★判据太宽会**为错误的理由通过**；★★08-20 一天写空三次 ⇒ 固定动作：**撤掉修复确认判据会红**
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
 - [两个基石级 bug（2026-08-18）](two-foundational-bugs-2026-08-18.md) — ★ 梯度没跨 rank 同步 · 权重从没推给 rollout；**所有 RL 结论作废**，登记在 docs/syncopate/21
 - [RL 的位移 ∝ lr×√N，不是 reward](rl-step-size-is-lr-times-steps.md) — ~~两堵墙~~已翻案；★Chaoyu 08-19：解法是**加步数**（≤1 epoch 是主因），lr 1e-4 只是可选上限基线
@@ -18,10 +18,11 @@
 - [静默降级：LoRA 从没推给 rollout](silent-degradation-weight-sync.md) — 异步 RL 的策略两个月没变过；★「验了耗时 ≠ 验了内容」，且它制造了一整套自洽的错误解释
 - [trainer 是活重不是没喂饱](trainer-is-compute-bound-not-starved.md) — ★ 喂饱 GPU 的单位是 **token 不是序列条数**（三次验证：E25 · mb8 仅+3.8% · PG 下 mb16 反慢 5.7%）；PG 生产配置=mb8
 - [训推分离是显存逼的](disaggregation-is-a-memory-decision.md) — 配比与业界相反的**完整解释已齐**（负载形状：题面重×8×10N vs prefix cache 98.7%）；E26 后 gen 12%→26%，陈旧度剂量条件首次具备
-- [归因之前先看输入被没被截断](check-the-input-before-blaming-the-model.md) — ★ 一整套「reward 在教不拒绝」的分析作废，量的是 prompt 100% 被砍；`clip_ratio` 一个数能挡住整条错误归因链
+- [归因之前先看输入被没被截断](check-the-input-before-blaming-the-model.md) — ★ 一整套「reward 在教不拒绝」的分析作废；★★08-20 同一天兑现**四次**（空库/Decimal崩/大小写/契约）：看起来全是"模型笨"
 - [挡晋级不挡起跑](gate-the-promotion-not-the-run.md) — 要挡的是"把没做完的当成做完的"，不是"不许做短的"；这样不会变成另一条线的路障
 - [登记 ≠ 实现](registered-is-not-implemented.md) — WRITE_TOOLS 填了 8 个、实现只有 2 个；登记表是最像"证据"的东西
 - [接线才是工作量，不是数学](integration-is-the-work-not-the-math.md) — 14 处修复后端到端 **2.31×**（微基准兑现 70%）；★ 第 14 处=绕过根 FSDP 的归约竞态（静默不同步）；报错位置几乎总在别人家里
 - [行为异常先查输入](behavior-collapse-check-input-first.md) — ★ defer 崩塌是 **prompt 被截断**，不是 reward 教的；夜跑那条归因已翻案
 - [截断家族一天三例](budget-truncation-family.md) — ★v13 SFT 26% 样本没终答（轮数上限默认 8，已修已重建）；预算必须从契约派生、截断必须报错或计数；RL prompt 余量只剩 466
 - [正确系统第一条 RL 曲线](first-clean-rl-curve.md) — 峰值 200 步过训回落;★cap 单调恶化+总分涨=reward 盲区显影法;并列点按 cap 干净度选
+- [模型填的是我们给的那张表](contract-shapes-behavior.md) — answer_fields 一格 ⇒ 机器标签；改契约 5 分钟拿回一半人话；★但**只要人话会把办事能力换走**（实测）
