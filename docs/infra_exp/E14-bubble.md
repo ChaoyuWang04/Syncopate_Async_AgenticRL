@@ -112,6 +112,24 @@ R2 剂量曲线开张（两点已落），开放问题：
 ① 中间剂量（sync 8 / staleness 0.25）找质量无损点；
 ② **等时对比**——每墙钟秒学习量粗算 +7%，但 defer 崩塌未必是"多跑几步"能补的，等时臂见分晓。
 
+## 4.7 第二批 · 乒乓元凶名单（torch-prof + 栈对齐，单次 update_actor，rank 0）
+
+```
+总账：cudaStreamSynchronize ×912 = 2.17 s CPU 罚站 · .item() ×1917 · 拷贝 ×9403
+×1008  torch/optim/adam.py:544 _multi_tensor_adam → optimizer.py:92 _get_value → .item()
+       ← **AdamW 优化器本身**：step 计数张量在 GPU 上，每参数组逐个 .item() 读回
+×584   prefix_grouper/utils:4 batch_repeat_cat → repeat_interleave(tensor)
+       ← **PG 依赖库**：repeat_interleave 传张量 repeats 必须同步取输出尺寸
+       （PyTorch 已知坑，解法=传 output_size= 参数）
+×96    syncopate/train/verl_patches.py:1636 _to_jagged → .item()   ← 我们自己的 PG 补丁
+×100   verl padding no_padding_2_padding / F.pad（GPU 标量当尺寸用）
+×48    verl tensordict index_select
+```
+修法菜单（各自可 A/B）：① Adam step 张量留 CPU 或走 fused 路径（查 verl 的优化器构造）；
+② PG 的 repeat_interleave 补 output_size（组尺寸我们在 CPU 本来就有）；
+③ _to_jagged 预取长度列表。预估直接收益 ~2.2s/update_actor（≈8% update_actor、~4% 端到端），
+同步消失后 GPU 洞收窄的间接收益另计。
+
 ## 5 · 工具判决（第一批后的边界表雏形）
 
 | 工具 | 判决 | 依据 |
