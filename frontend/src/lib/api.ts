@@ -85,7 +85,7 @@ export const api = {
 
   sendMessage(
     cid: string,
-    body: { user_message: string; intent: string; automation_tier: string },
+    body: { user_message: string; intent?: string; automation_tier?: string },
   ): Promise<SendMessageResponse> {
     return request<SendMessageResponse>(`/conversations/${encodeURIComponent(cid)}/messages`, {
       method: 'POST',

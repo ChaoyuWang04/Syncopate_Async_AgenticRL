@@ -14,7 +14,7 @@ import uuid
 
 import pytest
 
-from syncopate.runtime.db import Database, create_run
+from syncopate.runtime.db import Database, create_run, resume_after_approval
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers
 from syncopate.runtime.platform import TIMEOUT_MESSAGE, FakeAdPlatform, FaultPlan
 from syncopate.runtime.tools import derive_idempotency_key
@@ -286,14 +286,26 @@ def test_daily_cost_cap_degrades_before_touching_the_platform() -> None:
 
 
 def test_audit_records_param_source() -> None:
-    """★ `param_source` 是防注入的证据：这个金额是用户要的还是工具返回里读来的。"""
+    """★ `param_source` 是防注入的证据：这个金额是用户要的还是工具返回里读来的。
+
+    ⚠️ 2026-08-20：档位改由动作推导后，写动作先停审批 ⇒ 这条要走**批准后**那一跑
+    （第一跑开单停下，裁决完 run 回队列，第二跑 `skip_triggers` 才到得了写）。
+    """
     async def go(db):
         org = _org()
         await _drain(db)
         await create_run(db, org_id=org, run_id="r", user_message="x")
         w = Worker(db, FakeAdPlatform(),
                    WorkerConfig(daily_cost_cap_micros=10 ** 9, amount_threshold=10 ** 9))
-        await w.run_once()
+        await w.run_once()                       # 第一跑：停在审批
+        async with db.tx() as conn:
+            ref = await conn.fetchval(
+                "SELECT case_ref FROM approval_cases WHERE org_id=$1 AND run_id='r'", org)
+            await conn.execute(
+                "UPDATE approval_cases SET status='approved', reviewer_id='t' "
+                "WHERE org_id=$1 AND case_ref=$2", org, ref)
+        await resume_after_approval(db, org_id=org, run_id="r")
+        await w.run_once()                       # 第二跑：已裁决 ⇒ 执行写
         async with db.tx() as conn:
             return await conn.fetch(
                 "SELECT action, param_source FROM audit_logs WHERE org_id=$1", org)

@@ -104,6 +104,10 @@ class ApprovalView(BaseModel):
     rationale: str | None = None
     trigger_reason: str | None = None
     status: str
+    # ★ `evidence` 一直在落库却从没出过接口（"有生产者没消费者"）——
+    #   而设计原话是「人看的是证据不是结论」。档位判定理由就在里面
+    #   （tier / tier_reason），审批卡要显示"为什么判成这一档"。
+    evidence: dict[str, Any] | None = None
 
 
 class UsageView(BaseModel):
@@ -133,13 +137,21 @@ class ConversationView(BaseModel):
 class MessageCreate(BaseModel):
     """会话里发一条消息 = 建一个挂在会话上的 run。
 
-    ★ `automation_tier` 在这个**新入口必填**（09 §4.6.4 的缺口在此关掉：
-      旧 /runs 不动以免破坏现有调用方，新入口不留"没声明"这种状态）。
+    ⚠️ 2026-08-20 起 `automation_tier` 与 `intent` **都不再需要调用方给**：
+
+      intent            工具菜单改成全量 30 个，模型自己选（`decider.FULL_MENU_MODE`）
+                        ⇒ 这个字段只剩标注/统计用途
+      automation_tier   档位由**动作本身**推导（`tier_policy.derive_tier`）
+                        ⇒ 给了也只能**往严了拉**（org 说"这条只许看" = D），
+                          放松是结构上做不到的（`more_cautious`）
+
+    ★ 09 §4.6.4 那条"应当必填"的缺口就此**换了个解法关闭**：不是逼人填，
+      而是让这个值有一个**不依赖任何人填写**的来源。
     """
 
     user_message: str = Field(min_length=1, max_length=4000)
     intent: str | None = None
-    automation_tier: str = Field(pattern="^[ABCD]$")
+    automation_tier: str | None = Field(default=None, pattern="^[ABCD]$")
 
 
 class MessageView(BaseModel):
@@ -252,7 +264,7 @@ def create_app(db: Database | None = None) -> FastAPI:
         async with db.tx() as conn:
             rows = await conn.fetch(
                 "SELECT case_ref,run_id,action_type,proposed_params,rationale,"
-                "trigger_reason,status FROM approval_cases "
+                "trigger_reason,status,evidence FROM approval_cases "
                 "WHERE org_id=$1 AND status=$2 ORDER BY created_at", org_id, status_filter)
         return [ApprovalView(**dict(r)) for r in rows]
 
@@ -267,7 +279,7 @@ def create_app(db: Database | None = None) -> FastAPI:
                    SET status=$3, reviewer_id=$4, reviewed_at=now(), modified_params=$5
                  WHERE org_id=$1 AND case_ref=$2 AND status='pending'
                 RETURNING case_ref,run_id,action_type,proposed_params,rationale,
-                          trigger_reason,status
+                          trigger_reason,status,evidence
                 """, org_id, case_ref, body.decision, body.reviewer_id, body.modified_params)
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "审批单不存在或已处理")

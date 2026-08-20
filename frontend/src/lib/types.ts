@@ -48,6 +48,8 @@ export interface ApprovalCase {
   rationale: string
   trigger_reason: string
   status: string
+  // 档位判定的证据（tier / tier_reason / triggers）—— 人看的是证据不是结论
+  evidence?: { tier?: string; tier_reason?: string; triggers?: string[] } | null
 }
 
 // ---------------- 前端视图模型 ----------------

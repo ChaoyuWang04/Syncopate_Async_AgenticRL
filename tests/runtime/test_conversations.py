@@ -105,12 +105,18 @@ def test_listing_only_shows_own_conversations(client) -> None:
 
 # ── automation_tier 必填（09 §4.6.4 的缺口在新入口关掉）─────────────────────
 
-def test_message_requires_automation_tier(client) -> None:
+def test_message_does_not_require_a_declared_tier(client) -> None:
+    """★ 2026-08-20 改判：档位**不再要调用方填**（`22 §I` 后续，Chaoyu）。
+
+    09 §4.6.4 的「automation_tier 应当必填」换了个解法关闭：不是逼人填，
+    而是让它有一个不依赖任何人填写的来源 —— `tier_policy.derive_tier`
+    从「动作是什么」推导。给了也只能往严了拉（more_cautious）。
+    """
     cid = _conv(client)
     r = client.post(f"/conversations/{cid}/messages",
                     json={"user_message": "查一下指标", "intent": "I01"},
                     headers=ACME)
-    assert r.status_code == 422        # 没声明档位 ⇒ 拒收，不再有"没声明"这种状态
+    assert r.status_code == 201
 
 
 def test_message_rejects_invalid_tier(client) -> None:

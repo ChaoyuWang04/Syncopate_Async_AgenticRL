@@ -19,12 +19,12 @@ bash scripts/pg_bootstrap.sh                            # 起库（幂等，一�
 python -m pytest tests/runtime/ -q                      # 195 条
 uvicorn syncopate.runtime.api:app --port 8000           # 起 API
 SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
-python -m syncopate.runtime.worker --org-id org_acme    # 起 worker（不设 URL = 假计划）
+python -m syncopate.runtime.worker --org-id org_demo    # 起 worker（不设 URL = 假计划）
 python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
 # B-4 模型端点（单卡）：
 CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-name sft-base \
   --enable-lora --lora-modules candidate=checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25 \
-  --max-lora-rank 32 --max-model-len 7168 --port 8100    # 基线：scripts/measure_tpot.py
+  --max-lora-rank 32 --max-model-len 14336 --port 8100   # 部署侧上限，见 decider.py
 ```
 
 **怎么访问（08-20 起）**：**聊天前端在 `/app`**（F-2：assistant-ui + Vite，源码
@@ -44,8 +44,8 @@ echo "http://$PUBLIC_IPADDR:$VAST_TCP_PORT_8265/app/?token=$OPEN_BUTTON_TOKEN"  
 浏览器打开 `?token=` 后 Caddy 下发 cookie，Authorization 头留给 org 鉴权用 ——
 这也是页面用 fetch 流而不用 EventSource 的原因（后者带不了自定义头）。
 
-⚠️ **worker 必须 `--org-id` 限定再起常驻** —— 队列是全局的，全局 worker 会把
-测试套件的 run 抢走（08-20 实测：2 条测试红，杀掉 worker 即绿，C-1 同一课）。
+⚠️ **worker 必须 `--org-id org_demo` 起常驻** —— 队列是全局的，且 `org_acme`/`globex`
+归测试套件：常驻 worker 消费它们会把测试的 run 抢走真跑（08-20 实测两次，C-1 同一课）。
 ⚠️ 此前 worker **没有进程入口**（只在测试里被实例化过），「起服务」只写了 uvicorn ——
 队列等于永远没有消费者。08-20 补 `__main__` 入口时一并发现
 `agent_loop` 也从没接进 worker（B-4 接线时修）。
@@ -650,15 +650,25 @@ worker 自己的编排，两条路要过同一道闸（同权限闸那条）。
 ⇒ `halt_reason` 写进事件流（`run.degraded`），**关闭是一个可追溯的动作**，
 重新打开时能按它把受影响的 run 找出来。
 
-### 4.6.4 ⬜ 一条记下来的缺口：`automation_tier` 应当**必填**
+### 4.6.4 ✅ 已关闭（换了个解法）：`automation_tier` 不再需要任何人填
 
-现在建 run 时它可以是 `NULL`，而"没声明"这个状态本身就是个坑：
-按 A 算 = 默认全自动；按"全挡"算 = 灰测还没开始就把系统关了。
-⇒ 当前折中是**按 `C`（要人点头）算**，并把它写在 `ReleaseState.allows` 的注释里。
-⇒ **真正的解是让它在建 run 时必填** —— 那样就没有"没声明"这种状态了。
-⚠️ 别用默认值把这个缺口盖住。
+**2026-08-20 关闭（Chaoyu 质疑「档位不该由人强制选」）**：解法不是"逼人填"，
+而是**让这个值有一个不依赖任何人填写的来源** —— `syncopate/runtime/tier_policy.py`
+从「**动作是什么**」推导（读免闸 · 写要人点头 · 大额永不自动 · 升级通道免闸）。
 
-★ 顺带记一次自己的错：这条我第一版映射到 `D`，而 D 是自主度**最低**的一档
+```
+以前   建 run 时声明 A/B/C/D（没声明就按 C 算，前端一个下拉框）
+现在   derive_tier(工具, 参数) → 档位 + 判定理由（理由进审批单的 evidence）
+       声明值仍可给，但 more_cautious() 保证它**只能往严了拉**
+```
+
+⚠️ **模型不能自我授权**（§27.2「假设模型已被策反」）：刻意不给它"声明敏感度"
+的字段 —— 它的升级通道是调 `approval.create_case`（训过的），**降级通道结构上不存在**。
+⚠️ 为什么训练教过还要这层：六点曲线实测，同一模型多训 300 步
+`missing_safety_line_cap` 4→**60** 而总分还在涨 —— **reward 没罚到的地方 RL 就会去住**。
+训练给能力（统计），闸门给保证（绝对）；写动作不可逆，一次就够。全文见 `tier_policy` docstring。
+
+★ 顺带记一次自己的错：`allows(None)` 第一版映射到 `D`，而 D 是自主度**最低**的一档
 ⇒ 判断恒为 True ⇒ **全部放行**，而文档串写着"按最严处理" ——
 **代码和文档说的是反的**，是自己写的测试当场炸出来的。
 

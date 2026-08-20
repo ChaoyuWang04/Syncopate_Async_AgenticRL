@@ -99,7 +99,7 @@ export interface ChatController {
   refreshConversations: () => Promise<void>
   selectConversation: (cid: string) => Promise<void>
   newConversation: () => Promise<void>
-  send: (text: string, intent: string, tier: string) => Promise<void>
+  send: (text: string) => Promise<void>
   decide: (itemId: string, decision: 'approved' | 'rejected') => Promise<void>
 }
 
@@ -349,7 +349,7 @@ export function useChatController(): ChatController {
   }, [refreshConversations, selectConversation])
 
   const send = useCallback(
-    async (text: string, intent: string, tier: string) => {
+    async (text: string) => {
       const cid = state.activeCid
       if (!cid) return
       const userItem: ChatItem = {
@@ -358,8 +358,6 @@ export function useChatController(): ChatController {
         runId: null,
         text,
         status: 'succeeded',
-        intent,
-        tier,
         steps: [],
       }
       const asstItem: ChatItem = {
@@ -372,11 +370,9 @@ export function useChatController(): ChatController {
       }
       dispatch({ type: 'append', items: [userItem, asstItem] })
       try {
-        const res = await api.sendMessage(cid, {
-          user_message: text,
-          intent,
-          automation_tier: tier,
-        })
+        // ★ 意图与档位都不再由前端给：菜单是全量 30 个（模型自选），
+        //   档位由动作推导（tier_policy）—— 后端两个字段都已改成可选。
+        const res = await api.sendMessage(cid, { user_message: text })
         dispatch({ type: 'patch', id: userItem.id, patch: { runId: res.run_id } })
         dispatch({ type: 'patch', id: asstItem.id, patch: { runId: res.run_id, status: 'running' } })
         openStream(asstItem.id, res.run_id)

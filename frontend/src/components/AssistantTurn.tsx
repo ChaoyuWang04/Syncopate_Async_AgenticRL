@@ -159,6 +159,17 @@ function ApprovalCard({
             <div className="text-xs font-medium text-slate-500">触发原因</div>
             <div className="whitespace-pre-wrap text-sm text-slate-800">{a.trigger_reason}</div>
           </div>
+          {a.evidence?.tier_reason && (
+            <div>
+              {/* ★ 档位不再由人选，而是由动作推导 ⇒ 界面要如实说明"为什么判成这一档" */}
+              <div className="text-xs font-medium text-slate-500">
+                档位判定{a.evidence.tier ? `（${a.evidence.tier} 档）` : ''}
+              </div>
+              <div className="whitespace-pre-wrap text-sm text-slate-800">
+                {a.evidence.tier_reason}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 pt-1">
             <button
               type="button"

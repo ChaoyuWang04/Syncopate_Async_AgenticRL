@@ -254,8 +254,12 @@ def test_tool_implementation_crash_becomes_an_observation_not_run_death():
 # ── 审计 ────────────────────────────────────────────────────────────────
 
 def test_writes_are_audited_with_the_declared_param_source():
+    """⚠️ 2026-08-20 起走**已裁决**路径才到得了执行：档位改由动作推导之后，
+    不可逆写动作一律先要人点头（灰测默认档 C 的定义，release.py docstring 原话）。
+    `skip_triggers=True` 就是 worker 在"人已裁决"时设的那个开关。"""
     gate, rec = _gate(bindings={"campaign.update_budget": ToolBinding(_noop)},
                       tools=_FakeTools(ok=True))
+    gate.skip_triggers = True
     _run(gate.invoke(tool="campaign.update_budget",
                      arguments={"campaign_id": "CMP_7", "new_budget": 5,
                      "client_request_id": "r1"},
@@ -283,6 +287,7 @@ def test_permission_denied_is_audited_not_swallowed():
 
     gate, rec = _gate(bindings={"campaign.update_budget": ToolBinding(_noop)},
                       tools=_Denying())
+    gate.skip_triggers = True        # 同上：权限闸在审批之后，要先过得了审批这一关
     out = _run(gate.invoke(tool="campaign.update_budget",
                            arguments={"campaign_id": "C", "new_budget": 1,
                                       "client_request_id": "r1"},

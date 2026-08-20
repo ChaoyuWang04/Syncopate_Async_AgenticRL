@@ -35,6 +35,7 @@ from typing import Any, Awaitable, Callable, Literal
 from syncopate.runtime.db import Database
 from syncopate.runtime.gateway import DecisionContext, Trigger, evaluate_triggers, open_approval_case
 from syncopate.runtime.release import current_state
+from syncopate.runtime.tier_policy import derive_tier, more_cautious
 from syncopate.runtime.tools import PermissionDenied, ToolRuntime, WRITE_TOOLS
 
 # 一次 run 最多允许模型走多少步。
@@ -216,20 +217,53 @@ class ActionGate:
 
         is_write = tool in WRITE_TOOLS
 
+        # ── ②.6 档位推导（2026-08-20）：**档位是动作的属性** ───────────────
+        # ★ 此前档位由调用方在建 run 时声明（用户在 UI 上选 A/B/C/D）——
+        #   那既是糟糕的 UX，也是错误的归属：敏感度取决于**动作是什么**，
+        #   不取决于谁调的。⇒ `tier_policy.derive_tier` 从工具+参数推导。
+        # ★ 声明值仍然有效，但只能**往严了拉**（org 说"这条 run 只许看" = D）：
+        #   `more_cautious` 是"能升不能降"的唯一实现处。
+        # ⚠️ 模型没有降级接口 —— 它的升级通道是调 `approval.create_case`（训过的），
+        #   刻意不给它"声明敏感度"的字段（见 tier_policy 模块 docstring）。
+        decision = derive_tier(tool, arguments)
+        effective_tier = more_cautious(decision.tier, ctx.automation_tier)
+
+        # ── ②.7 D 档：这件事不该由 agent 发起 ────────────────────────────
+        # ★ 拒的是**这个动作**不是整条 run（run 级 D 仍由 worker 在入口拒）——
+        #   动作级拒绝会作为观测回到模型，它可以改用 `approval.create_case`
+        #   把事情交给人。**把硬性终止变成可恢复的观测**，同「失败要回到模型」那条。
+        if is_write and effective_tier == "D":
+            reason = (decision.reason if decision.tier == "D"
+                      else f"调用方声明 automation_tier=D（{decision.reason}）")
+            await self._audit(self.db, org_id=self.org_id, run_id=self.run_id,
+                              action="tier_d_refused", object_key=_object_key(arguments),
+                              param_source=param_source, detail={"tool": tool,
+                                                                 "reason": reason})
+            await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
+                             kind="run.degraded",
+                             payload={"reason": "tier_d_never_automated",
+                                      "tool": tool, "detail": reason})
+            return GateOutcome(
+                status="failed",
+                observation={"error": f"tier_d_never_automated: {reason}；"
+                                      "如需推进，请用 approval.create_case 交给人"},
+                error="tier_d_never_automated")
+
         # ── ②.8 灰测闸门（B-7）—— **比审批更外层**────────────────────────
         # ★ 顺序有理由：审批是"停下来问人"，灰测闸门是"这一档现在根本不许自动做"。
         #   后者该先判 —— 已经关掉了还去开审批单，等于给人送一堆没意义的单子。
         # ⚠️ 只管**写动作**：读不改世界，灰测期间照样要能查
         #   （同成本闸那条：降级的意义是降级，不是失明）。
-        if tool in WRITE_TOOLS:
+        if is_write and decision.tier is not None:
             rel = current_state()
-            if not rel.allows(ctx.automation_tier):
+            if not rel.allows(effective_tier):
                 await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
                                  kind="run.degraded",
                                  payload={"reason": "release_gate",
                                           "halted": rel.halted,
                                           "max_tier": rel.max_tier,
-                                          "tier": ctx.automation_tier,
+                                          "tier": effective_tier,
+                                          "tier_reason": decision.reason,
                                           # ★ 关闭要**可追溯**：重新打开时按它找回受影响的 run
                                           "halt_reason": rel.halt_reason})
                 return GateOutcome(
@@ -250,15 +284,25 @@ class ActionGate:
         # ⚠️ 放在真正执行**之前**：审批的意义是"先停下再问人"，
         #   执行完再问就只剩记账了。
         if is_write and not self.skip_triggers:
-            triggers = evaluate_triggers(
-                ctx, **({"amount_threshold": self.amount_threshold}
-                        if self.amount_threshold is not None else {}))
+            # ★ 档位触发器按**推导出来的**档位判，不按声明值
+            #   （声明值可能压根没有 —— 这正是这次改动的目的：用户不用选）。
+            #   做法是临时把 effective 塞进 ctx：gateway 是纯函数，
+            #   判据的输入必须显式，不能让它去猜（"判据要写在两个东西应当相同的地方"）。
+            declared = ctx.automation_tier
+            ctx.automation_tier = effective_tier
+            try:
+                triggers = evaluate_triggers(
+                    ctx, **({"amount_threshold": self.amount_threshold}
+                            if self.amount_threshold is not None else {}))
+            finally:
+                ctx.automation_tier = declared
             if triggers:
                 case_ref = await open_approval_case(
                     self.db, org_id=self.org_id, run_id=self.run_id, action_type=tool,
                     proposed_params=dict(arguments),
                     rationale=rationale or f"agent 提议执行 {tool}",
-                    evidence={"triggers": [t.reason for t in triggers]},
+                    evidence={"triggers": [t.reason for t in triggers],
+                              "tier": effective_tier, "tier_reason": decision.reason},
                     triggers=triggers)
                 await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
                                  kind="run.waiting_for_user",

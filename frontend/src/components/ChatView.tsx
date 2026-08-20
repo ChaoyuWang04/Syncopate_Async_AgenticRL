@@ -1,6 +1,6 @@
 // 主聊天区：assistant-ui（@assistant-ui/react）的 ExternalStoreRuntime 接自家 controller，
 // Thread/Composer 用无样式 primitives + Tailwind 自排版。
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   AssistantRuntimeProvider,
   ComposerPrimitive,
@@ -11,7 +11,6 @@ import {
 } from '@assistant-ui/react'
 import type { ChatController } from '../state/controller'
 import type { ChatItem } from '../lib/types'
-import { INTENT_OPTIONS, TIER_OPTIONS } from '../lib/types'
 import { AssistantTurn } from './AssistantTurn'
 import { UserBubble } from './UserBubble'
 
@@ -34,23 +33,13 @@ function appendMessageText(m: AppendMessage): string {
 export function ChatView({ controller }: { controller: ChatController }) {
   const { items, activeCid, busy, send, decide } = controller
 
-  const [intent, setIntent] = useState<string>(INTENT_OPTIONS[0].value)
-  const [tier, setTier] = useState<string>('C')
-  // onNew 的闭包要读到最新选择，走 ref（effect 同步，事件总在渲染后发生）
-  const intentRef = useRef(intent)
-  const tierRef = useRef(tier)
-  useEffect(() => {
-    intentRef.current = intent
-    tierRef.current = tier
-  }, [intent, tier])
-
   const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
 
   const onNew = useCallback(
     async (m: AppendMessage) => {
       const text = appendMessageText(m)
       if (!text) return
-      await send(text, intentRef.current, tierRef.current)
+      await send(text)   // 意图/档位都不再由前端决定（见下方注释）
     },
     [send],
   )
@@ -95,35 +84,11 @@ export function ChatView({ controller }: { controller: ChatController }) {
 
         <div className="border-t border-slate-200 bg-white px-6 py-3">
           <div className="mx-auto max-w-3xl">
+            {/* ★ 2026-08-20：意图与档位两个下拉框已删除。
+                意图 —— 工具菜单改成全量 30 个，模型自己选（探针 probe_full_menu 全绿）
+                档位 —— 由动作本身推导（tier_policy），只能被往严了拉，不由人选
+                ⇒ 用户界面只剩"说人话"这一件事。 */}
             <div className="mb-2 flex items-center gap-3 text-xs text-slate-500">
-              <label className="flex items-center gap-1.5">
-                意图
-                <select
-                  value={intent}
-                  onChange={(e) => setIntent(e.target.value)}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  {INTENT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-1.5">
-                档位
-                <select
-                  value={tier}
-                  onChange={(e) => setTier(e.target.value)}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  {TIER_OPTIONS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
               {busy && <span className="text-amber-600">当前运行未结束，发送已禁用…</span>}
               {!activeCid && <span>请先选择或新建会话</span>}
             </div>
