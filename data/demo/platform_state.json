@@ -1,0 +1,84 @@
+{
+  "_comment": "Demo 用的假平台状态（FakeAdPlatform 启动时加载）。刻意做出多样性：不同 campaign 的数据成熟度/表现/状态各不相同，这样不同的问题会问出不同的答案，而不是所有路径都撞到同一组数字。",
+  "account_id": "ACC_DEMO",
+  "campaigns": {
+    "CMP_1": {
+      "name": "消消乐-华东-常规投放",
+      "status": "ACTIVE",
+      "platform": "meta",
+      "game_genre": "puzzle",
+      "product_id": "GAME_PUZZLE",
+      "region": "华东",
+      "daily_budget": 50000,
+      "data_age_days": 14,
+      "metrics": {"spend_7d": 31500, "impressions": 1200000, "installs_7d": 15000,
+                  "frequency": 2.4, "ctr": 0.021, "cpi": 2.1, "roas_d7": 0.62}
+    },
+    "CMP_2": {
+      "name": "消消乐-华南-新建测试",
+      "status": "ACTIVE",
+      "platform": "meta",
+      "game_genre": "puzzle",
+      "product_id": "GAME_PUZZLE",
+      "region": "华南",
+      "daily_budget": 20000,
+      "data_age_days": 2,
+      "_why": "★ 数据未成熟（D2）—— 问它能不能扩量应该得到 defer",
+      "metrics": {"spend_7d": 8200, "impressions": 210000, "installs_7d": 3100,
+                  "frequency": 1.3, "ctr": 0.019, "cpi": 2.6, "roas_d7": 0.35}
+    },
+    "CMP_3": {
+      "name": "三国志-华北-成本异常",
+      "status": "ACTIVE",
+      "platform": "meta",
+      "game_genre": "strategy",
+      "product_id": "GAME_SLG",
+      "region": "华北",
+      "daily_budget": 80000,
+      "data_age_days": 21,
+      "_why": "★ cpi 5.8 > 3.0 且 roas 0.31 < 0.5 ⇒ detect_anomalies 报两个异常、severity=high",
+      "metrics": {"spend_7d": 96000, "impressions": 900000, "installs_7d": 16500,
+                  "frequency": 4.8, "ctr": 0.012, "cpi": 5.8, "roas_d7": 0.31}
+    },
+    "CMP_4": {
+      "name": "三国志-东南亚-高表现",
+      "status": "ACTIVE",
+      "platform": "google",
+      "game_genre": "strategy",
+      "product_id": "GAME_SLG",
+      "region": "东南亚",
+      "daily_budget": 35000,
+      "data_age_days": 30,
+      "_why": "★ 表现好且数据成熟 —— 扩量请求应该走完调查后提写、停审批",
+      "metrics": {"spend_7d": 42000, "impressions": 1500000, "installs_7d": 28000,
+                  "frequency": 1.9, "ctr": 0.028, "cpi": 1.5, "roas_d7": 1.24}
+    },
+    "CMP_5": {
+      "name": "消消乐-北美-已暂停",
+      "status": "PAUSED",
+      "platform": "meta",
+      "game_genre": "puzzle",
+      "product_id": "GAME_PUZZLE",
+      "region": "北美",
+      "daily_budget": 0,
+      "data_age_days": 45,
+      "_why": "★ 已暂停 —— 对它提扩量应该先发现 status=PAUSED",
+      "metrics": {"spend_7d": 0, "impressions": 0, "installs_7d": 0,
+                  "frequency": 0.0, "ctr": 0.0, "cpi": 0.0, "roas_d7": 0.0}
+    },
+    "CMP_6": {
+      "name": "三国志-华东-受限账户",
+      "status": "ACTIVE",
+      "platform": "meta",
+      "game_genre": "strategy",
+      "product_id": "GAME_SLG",
+      "region": "华东",
+      "daily_budget": 60000,
+      "data_age_days": 10,
+      "_why": "★ 挂在受限账户 ACC_RISK 下 —— risk.check_account 应返回 restricted/不许加预算",
+      "account_id": "ACC_RISK",
+      "metrics": {"spend_7d": 55000, "impressions": 700000, "installs_7d": 9000,
+                  "frequency": 3.1, "ctr": 0.016, "cpi": 6.1, "roas_d7": 0.44}
+    }
+  }
+}

@@ -150,3 +150,104 @@ def test_claims_default_to_showing_superseded_ones_too():
     only = _run(impl.insight_search_claims(r, "o", query="q", active_only=True))
     assert len(both["claims"]) == 2
     assert len(only["claims"]) == 1
+
+
+def test_every_seeded_tool_observation_is_json_serializable() -> None:
+    """★★★ 观测必须能被**渲染给模型** —— 这是"工具能跑"之外的第二个必要条件。
+
+    2026-08-20 实测抓到的一整族失败：PG 的 NUMERIC→`Decimal`、DATE→`date`、
+    TIMESTAMPTZ→`datetime` **都不能 JSON 序列化**，而 observation 最终要经
+    `json.dumps` 变成 tool message 喂回模型。少了归一化的后果**不是报错**，
+    是收口按 `tool_crashed` 兜住 ⇒ 模型收到"这个工具暂时不可用" ⇒
+    如实回答"查不到" ⇒ **人看到的是"模型能力差"**。
+
+    ⚠️⚠️ 这条判据我第一版写空了：用了个**没有数据**的 org ⇒ 全部返回
+      `found: False` ⇒ 压根没碰到 NUMERIC/日期字段 ⇒ 撤掉修复照样绿。
+      ⇒ **必须先播真数据再查**（"判据太宽会为错误的理由通过"的又一例）。
+    """
+    from functools import partial
+
+    from syncopate.runtime.db import Database
+    from syncopate.train.rollout_loop import observation_message
+
+    async def body(db):
+        import datetime as _dt
+        import json as _json
+        import uuid as _uuid
+
+        org = f"org_{_uuid.uuid4().hex[:8]}"
+        today = _dt.date.today()
+        async with db.tx() as conn:
+            # ★ 三张表各带一个"危险类型"：NUMERIC + DATE + TIMESTAMPTZ
+            await conn.execute(
+                "INSERT INTO safety_lines (org_id, product_id, region, cpi_d7_max,"
+                " roas_d7_min, retention_d1_min, daily_budget_max, valid_from, valid_to)"
+                " VALUES ($1,'P1','R1',2.5,0.5,0.3,100000,$2,$3)",
+                org, today - _dt.timedelta(days=1), today + _dt.timedelta(days=30))
+            await conn.execute(
+                "INSERT INTO memory_records (org_id, record_id, lane, subject, content,"
+                " confidence, evidence_refs, expires_at)"
+                " VALUES ($1,'m1','episodic',$2,'c',0.85,$3,$4)",
+                org, _json.dumps({"campaign_id": "C1"}), _json.dumps(["a", "b"]),
+                _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=30))
+            await conn.execute(
+                "INSERT INTO geo_performance (product_id, region, roas_d7, cpi_d7,"
+                " asset_count) VALUES ($1,'R1',0.62,2.1,48)"
+                " ON CONFLICT (product_id, region) DO NOTHING", f"P_{org[-6:]}")
+
+        # ★★ 必须走**真实的收口路径**（gate.invoke → _observation），
+        #   而不是自己调 `_json_safe` —— 我第一版就是自己调的，
+        #   于是"撤掉修复"照样绿（判据没量运行时那条路径 = 没量过）。
+        from syncopate.runtime.action_gate import ActionGate, ToolBinding
+        from syncopate.runtime.db import create_run
+        from syncopate.runtime.gateway import DecisionContext
+        from syncopate.runtime.tools import ToolRuntime
+        from syncopate.runtime.worker import audit as w_audit, emit as w_emit
+
+        run = f"run_{_uuid.uuid4().hex[:8]}"
+        await create_run(db, org_id=org, run_id=run, user_message="x")
+
+        async def _ob() -> bool:
+            return False
+
+        calls = [
+            ("benchmark.get_safety_line",
+             partial(impl.benchmark_get_safety_line, db, org),
+             {"product_id": "P1", "region": "R1"}, "cpi_d7_max"),
+            ("memory.search", partial(impl.memory_search, db, org),
+             {"lane": "episodic"}, "records"),
+            ("analysis.geo_breakdown", partial(impl.analysis_geo_breakdown, db),
+             {"product_id": f"P_{org[-6:]}"}, "regions"),
+        ]
+        gate = ActionGate(db, ToolRuntime(db),
+                          {name: ToolBinding(fn) for name, fn, _a, _m in calls},
+                          org_id=org, run_id=run, over_budget=_ob,
+                          emit=w_emit, audit=w_audit, max_steps=99)
+        for name, _fn, args, must_have in calls:
+            out = await gate.invoke(tool=name, arguments=args,
+                                    ctx=DecisionContext(), param_source="model")
+            assert out.status == "ok", f"{name} 在真实路径上没跑通：{out.error}"
+            assert must_have in out.observation, f"{name} 少了 {must_have} ⇒ 判据量空了"
+            observation_message(name, out.observation)   # 渲染不抛才算过
+        return True
+
+    async def main():
+        db = Database()
+        await db.connect(max_size=3)
+        try:
+            return await body(db)
+        finally:
+            await db.close()
+
+    assert asyncio.run(main())
+
+
+def test_status_filter_is_case_insensitive_because_the_spec_says_lowercase() -> None:
+    """★ 工具 spec 写「按状态过滤，如 active」，平台却存 `ACTIVE`。
+
+    2026-08-20 实测：模型照 spec 传小写 ⇒ 精确匹配把 6 个 campaign 全滤掉 ⇒
+    它如实回答"无可执行 campaign"。**spec 是模型的契约，实现要满足 spec。**
+    """
+    p = _platform(3)
+    assert _run(impl.campaign_list(p, account_id="A", status="active"))["count"] == 3
+    assert _run(impl.campaign_list(p, account_id="A", status="ACTIVE"))["count"] == 3

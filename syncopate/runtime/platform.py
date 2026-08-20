@@ -161,6 +161,8 @@ class FakeAdPlatform:
     _blocked_until: dict[str, float] = field(default_factory=dict)
     # 账户里的 campaign 记录（分页 / 显式字段用）。key = campaign_id
     campaigns: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # demo 的默认账户（get_metrics 回传，模型据此查风控）
+    account_id: str = "ACC_DEMO"
     # 异步任务：job_id → {status, settle_at, result, error}
     _jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     _job_seq: int = 0
@@ -448,6 +450,30 @@ class FakeAdPlatform:
         return {"change_id": done["change_id"], "status": "pending",
                 "campaign_id": campaign_id}
 
+    @classmethod
+    def from_fixture(cls, path: str = "data/demo/platform_state.json") -> "FakeAdPlatform":
+        """从 fixture 建一个带 demo 数据的假平台。
+
+        ★ 文件缺失 ⇒ **返回空平台并打一行告警**，不静默给默认值：
+          "没有数据"和"有数据"必须能分辨（查不到时模型的正确行为是说查不到，
+          而我们要知道那是环境空的还是模型不会）。
+        """
+        import json as _json
+        import pathlib as _pl
+
+        f = _pl.Path(path)
+        if not f.is_file():
+            print(f"[platform] ⚠️ 未找到 {path} ⇒ 空平台（agent 将查不到任何 campaign）",
+                  flush=True)
+            return cls()
+        state = _json.loads(f.read_text(encoding="utf-8"))
+        campaigns = {k: v for k, v in state.get("campaigns", {}).items()
+                     if not k.startswith("_")}
+        budgets = {k: v.get("daily_budget", 0) for k, v in campaigns.items()}
+        print(f"[platform] 已加载 {len(campaigns)} 个 demo campaign（{path}）", flush=True)
+        return cls(campaigns=campaigns, budgets=budgets,
+                   account_id=state.get("account_id", "ACC_DEMO"))
+
     async def get_freshness(self, *, campaign_id: str) -> dict[str, Any]:
         """数据成熟度。★ **归因延迟是第一性约束**（设计 §0.3）：D7 才知对错，
         D1 数据极易被误当结论。
@@ -457,7 +483,11 @@ class FakeAdPlatform:
         """
         self.calls += 1
         self._charge(READ_POINTS)
-        age = self.faults.data_age_days
+        # ★ 逐 campaign 的数据年龄优先（训练侧每个 case 自己声明 data_age_days，
+        #   runtime 若只有一个全局值，用户说"前天刚上的"也拿不到 immature ——
+        #   B-5 那条：两侧不一致 ⇒ 训练时的最优策略在线上不成立）。
+        row = self.campaigns.get(campaign_id, {})
+        age = row.get("data_age_days", self.faults.data_age_days)
         maturity = "mature" if age >= 7 else ("partial" if age >= 3 else "immature")
         return {"campaign_id": campaign_id, "data_age_days": age, "maturity": maturity,
                 "d7_available": age >= 7}
@@ -472,12 +502,23 @@ class FakeAdPlatform:
         # ⚠️⚠️ 字段名**以沙盒为准**（B-5b 的对照台 2026-08-19 抓到少了 9 个）——
         #   模型是照沙盒训的，按名字取数；少一个不会报错，只会让它**自己编一个**。
         row = self.campaigns.get(campaign_id, {})
+        m = row.get("metrics", {})
+        # ★ product_id / region / account_id 必须返回：模型要拿它们去查安全线、
+        #   查风控、查地域表现。不给的话它只能**编一个**，然后查不到
+        #   （2026-08-20 实测：查不到就一路 no_data，看起来像"模型不会"）。
         return {"campaign_id": campaign_id,
                 "name": row.get("name", campaign_id),
                 "status": row.get("status", "ACTIVE"),
                 "platform": row.get("platform", "meta"),
                 "game_genre": row.get("game_genre", "casual"),
-                "daily_budget": self.budgets.get(campaign_id, 50_000),
-                "spend_7d": 31_500, "impressions": 1_200_000,
-                "installs_7d": 15_000, "frequency": 2.4,
-                "ctr": 0.021, "cpi": 2.1, "roas_d7": 0.42}
+                "product_id": row.get("product_id", "GAME_PUZZLE"),
+                "region": row.get("region", "华东"),
+                "account_id": row.get("account_id", self.account_id),
+                "daily_budget": self.budgets.get(campaign_id, row.get("daily_budget", 50_000)),
+                "spend_7d": m.get("spend_7d", 31_500),
+                "impressions": m.get("impressions", 1_200_000),
+                "installs_7d": m.get("installs_7d", 15_000),
+                "frequency": m.get("frequency", 2.4),
+                "ctr": m.get("ctr", 0.021),
+                "cpi": m.get("cpi", 2.1),
+                "roas_d7": m.get("roas_d7", 0.42)}

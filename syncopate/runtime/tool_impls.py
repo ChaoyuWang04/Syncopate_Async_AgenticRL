@@ -49,7 +49,11 @@ async def campaign_list(platform: FakeAdPlatform, *, account_id: str,
     if status:
         # ⚠️ 过滤在**取回之后**做，所以过滤掉之后这一页可能变空，
         #   但 next_cursor 仍然要给 —— 空页不等于没有下一页。
-        rows = [r for r in rows if r.get("status") == status]
+        # ⚠️ **大小写不敏感**：工具 spec 写的是「按状态过滤，如 active」（小写），
+        #   而平台存的是 `ACTIVE` —— 精确匹配等于让**照着 spec 填参数的模型**
+        #   永远查不到东西（2026-08-20 实测："帮我优化一下" → 无可执行 campaign）。
+        #   ⇒ B-5 那条：spec 是模型的契约，实现必须满足 spec 而不是反过来。
+        rows = [r for r in rows if str(r.get("status", "")).lower() == status.lower()]
     has_next = page["paging"]["has_next"]
     return {"campaigns": rows, "count": len(rows), "has_more": has_next,
             "next_cursor": page["paging"]["cursors"]["after"] if has_next else ""}

@@ -500,7 +500,7 @@ async def _serve(config: WorkerConfig) -> None:
               f"—— agent_loop 驱动", flush=True)
     else:
         print("[decider] 未配置（SYNCOPATE_DECIDER_URL 空）⇒ 写死三步计划", flush=True)
-    worker = Worker(db, FakeAdPlatform(), config, decider=decider)
+    worker = Worker(db, FakeAdPlatform.from_fixture(), config, decider=decider)
     try:
         await worker.serve(stop=stop)
     finally:

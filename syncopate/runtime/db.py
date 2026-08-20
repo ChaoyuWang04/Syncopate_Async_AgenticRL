@@ -41,8 +41,28 @@ class Database:
     async def connect(self, *, min_size: int = 1, max_size: int = 10) -> None:
         async def init(conn: asyncpg.Connection) -> None:
             # 不设的话取出来是 str，业务侧到处 json.loads，早晚漏一处。
-            await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads,
-                                      schema="pg_catalog")
+            # ⚠️ `default=str`：写 JSONB 的值里可能混着 date/datetime/Decimal
+            #   （工具结果直接进 tool_calls.result）—— 少了它就是下面那条 bug 的另一半。
+            await conn.set_type_codec("jsonb",
+                                      encoder=lambda v: json.dumps(v, default=str),
+                                      decoder=json.loads, schema="pg_catalog")
+            # ★★★ NUMERIC → float（2026-08-20 实测抓到，代价很大的一条）
+            #
+            # asyncpg 默认把 NUMERIC 解成 `Decimal`，而 **Decimal 不能 JSON 序列化**。
+            # 后果链：任何返回 NUMERIC 列的工具（安全线 cpi_d7_max、行业基准 p50、
+            # 记忆 confidence、地域 roas、feature lift…）→ 记账写 JSONB 时
+            # `json.dumps` 抛 TypeError → 收口按 `tool_crashed` 处理 →
+            # **模型收到"这个工具暂时不可用"，于是如实回答"查不到"**。
+            #
+            # ⚠️ 它伪装成"模型能力差"：人看到的是一串 no_data / unavailable，
+            #   而真相是半数工具在真实路径上根本跑不通。测试没抓到，因为测试里
+            #   插的数据走的是同一条 Decimal 路径、又极少断言"观测能被渲染给模型"。
+            # ⇒ 判据在 `tests/runtime/test_tool_impls.py::test_..._json_serializable`。
+            #
+            # ★ 为什么在这里改而不是在 30 个工具里各转一次：**该一致的值不该有 30 份副本**。
+            # ⚠️ 精度：钱一律是 INTEGER（微单位），NUMERIC 只用于比率/系数，float 够用。
+            await conn.set_type_codec("numeric", encoder=str, decoder=float,
+                                      schema="pg_catalog", format="text")
         self._pool = await asyncpg.create_pool(self.dsn, min_size=min_size, max_size=max_size,
                                                init=init)
 

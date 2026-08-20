@@ -154,7 +154,7 @@ class ActionGate:
           `observation` 是给**模型**看的。两个消费者，两份数据，别合并。
         """
         if ok:
-            return dict(data or {})
+            return _json_safe(dict(data or {}))
         # ⚠️ 失败也要给模型看见 —— 沙盒里教的"失败之后怎么办"要在线上用得上，
         #   而"重试到成功为止"会让那部分策略变成死代码（`tools.py` 同一条）。
         return {"error": error or "tool_failed"}
@@ -370,6 +370,30 @@ class ActionGate:
             observation=self._observation(tool, ok=outcome.ok, data=outcome.data,
                                           error=outcome.error),
             error=outcome.error, replayed=outcome.replayed)
+
+
+def _json_safe(value: Any) -> Any:
+    """把工具结果转成**能渲染给模型**的形状。
+
+    ★★ 2026-08-20 实测：PG 的 NUMERIC→`Decimal`、DATE→`date`、TIMESTAMPTZ→`datetime`
+      **都不能 JSON 序列化**，而 observation 最终要经 `json.dumps` 变成 tool message。
+      少了这一步的后果不是报错，是**模型收到"这个工具暂时不可用"**
+      （被 tool_crashed 兜住），然后如实回答"查不到" —— 看起来像模型能力差，
+      实际是半数工具在真实路径上跑不通。
+    ⚠️ 转成 `str` 而不是丢弃：日期对模型有意义（安全线的生效期要被读到）。
+    """
+    import datetime as _dt
+    from decimal import Decimal as _Dec
+
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, _Dec):
+        return float(value)
+    if isinstance(value, (_dt.date, _dt.datetime, _dt.time)):
+        return value.isoformat()
+    return value
 
 
 def _missing_required(tool: str, arguments: dict[str, Any]) -> list[str]:

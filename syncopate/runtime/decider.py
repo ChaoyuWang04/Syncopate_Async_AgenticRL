@@ -264,5 +264,32 @@ def build_decider_from_env() -> VllmDecider | None:
         model=os.environ.get("SYNCOPATE_DECIDER_MODEL", "candidate"),
         tokenizer_path=os.environ.get("SYNCOPATE_DECIDER_TOKENIZER",
                                       "models/Qwen3-4B-sft-v13r2-e1"),
-        context={"campaign_id": "CMP_1"},
+        context=_demo_context(),
     )
+
+
+def _demo_context() -> dict[str, Any]:
+    """渲染进 prompt 的「当前投放任务」上下文。
+
+    ★ 训练时 context 是逐 case 的（账户、产品、地域…）；runtime 此前只给了
+      `{"campaign_id": "CMP_1"}` ⇒ 模型**不知道有哪些 campaign、属于哪个账户**，
+      于是查安全线/风控时只能编 product_id、account_id，然后一路查不到
+      （2026-08-20 实测：看起来像"模型不会"，其实是没告诉它去查什么）。
+    ⚠️ 只列**标识**不列指标：指标必须靠工具查（"没有 observation 证明的事实
+      不许写进结论"是训过的纪律，塞进 context 等于替它把调查做了）。
+    """
+    import json as _json
+    import pathlib as _pl
+
+    f = _pl.Path("data/demo/platform_state.json")
+    if not f.is_file():
+        return {"account_id": "ACC_DEMO"}
+    state = _json.loads(f.read_text(encoding="utf-8"))
+    rows = []
+    for cid, c in state.get("campaigns", {}).items():
+        if cid.startswith("_"):
+            continue
+        rows.append(f"{cid}({c.get('name', '')}·产品 {c.get('product_id', '')}"
+                    f"·地域 {c.get('region', '')})")
+    return {"account_id": state.get("account_id", "ACC_DEMO"),
+            "在投 campaign": "；".join(rows)}
