@@ -15,7 +15,7 @@
    Expected behavior），**不能整篇粘贴** ⇒ 用 **[`1-issue-BUGREPORT-FORM.md`](1-issue-BUGREPORT-FORM.md)**，
    它已按字段拆好，逐个复制即可（System Info 已是今天在上游 main `2eaaa8f` 实跑
    `scripts/diagnose.py` 的真实输出）
-   - 标题用：`fsdp_size=1 on multiple GPUs silently disables gradient synchronization`
+   - 标题用：`[BUG][FSDP1] fsdp_size=1 on multiple GPUs silently disables gradient synchronization`
    - `1-issue.md` 保留作**整篇版**（万一改用 Blank issue 就贴它）
 3. 提交后**记下编号**（形如 `#7501`），下一步要用
 

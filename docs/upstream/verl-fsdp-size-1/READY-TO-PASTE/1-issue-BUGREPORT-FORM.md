@@ -1,6 +1,16 @@
 # 包① · GitHub Bug Report 模板逐字段填写指南（2026-08-20）
 
 > ⚠️ 他们的 Bug report 是**结构化模板**，不能整篇粘贴。下面按字段分好，逐个复制。
+>
+> ## 标题（复制这一行）
+>
+> ```
+> [BUG][FSDP1] fsdp_size=1 on multiple GPUs silently disables gradient synchronization
+> ```
+>
+> `[BUG]` + `[FSDP1]` 两个标记都有先例（`[Bug][SFT][FSDP]` / `[BUG] AgentLoopOutput...`）；
+> ★ `[FSDP1]` 尤其值得留 —— **FSDP2 在同一个 mesh 上是对的**，点明版本能提前拦掉
+> 「是不是你配置写错了」这个最常见的误判。`fsdp_size` 必须小写（它是字面 config key）。
 > 带 ✳ 的是必填。System Info 的内容是**今天在上游 main（2eaaa8f）实跑 `scripts/diagnose.py`** 得到的。
 
 ---

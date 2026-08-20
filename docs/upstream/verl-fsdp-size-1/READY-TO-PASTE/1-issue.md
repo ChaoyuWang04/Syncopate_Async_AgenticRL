@@ -1,5 +1,5 @@
 标题（复制这一行）：
-fsdp_size=1 on multiple GPUs silently disables gradient synchronization
+[BUG][FSDP1] fsdp_size=1 on multiple GPUs silently disables gradient synchronization
 
 --- 正文从下一行开始，全选复制 ---
 
