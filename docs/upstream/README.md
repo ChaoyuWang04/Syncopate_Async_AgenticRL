@@ -27,7 +27,7 @@ PARKED-<主题>    我们主动决定不提（例如影响面太窄），写清�
 | 包 | 目标 | 状态 |
 |---|---|---|
 | `CLOSED-verl-fsdp-size-1` | verl | 🔴 [#7493](https://github.com/verl-project/verl/issues/7493)/[#7494](https://github.com/verl-project/verl/pull/7494) 被 `wontfix` 关闭（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
-| `READY-verl-lora-adapter-sync` | verl | 分支已推、提交件成稿，**等提交** |
+| `OPEN-verl-lora-adapter-sync` | verl | [#7495](https://github.com/verl-project/verl/issues/7495) + [#7496](https://github.com/verl-project/verl/pull/7496) 已开，⬜ 待申请 CI |
 | `READY-verl-prefix-grouper-mask` | verl | 正文成稿；⚠️ 分支/测试尚未备 |
 | `READY-fsdp-shard-alignment` | PyTorch + NCCL | 正文成稿；优先级最低（不影响我们自己的训练） |
 | `DRAFT-verl-lora-only-checkpoint` | verl | 待上游考据（feature PR，非 bug） |
@@ -78,6 +78,16 @@ issue/PR 编号与链接（还没提就写"未提交"）
 
 **被拒 / 被关的，理由写在同一个块里**（原话引用 + 谁 + 什么时候 + 我们的决定），
 例如 `CLOSED-verl-fsdp-size-1/2-case.md`。⇒ 以后回头查，看开头就够。
+
+### 2.1.1 ⚠️ 改文档结构时的顺序（2026-08-20 真删错过一次）
+
+```
+① 先生成新文档  ② 验内容（抽查关键串是否都在）  ③ 才允许删旧文档
+```
+反过来就会出事：那次删除跑在生成之前（`cd` 失败但后续命令照跑），旧文件被 `git rm`、
+新文档没生成。**靠 git 恢复了，但如果那些内容当时未提交就真没了。**
+⇒ 另外**合并文档后要拿旧提交逐字比对**：`git show <sha>:<旧文件>` 抽特征行看是否都进了新文档 ——
+包② 那次就是这样查出「修法为什么是这个形状」那张表漏了 13 行。
 
 ### 2.2 提交前自检（每条都要指得出证据，不能靠印象）
 
@@ -198,10 +208,16 @@ not_planned**；包④差点以"从未接上"提交，实际是**重构回归、
               （在我们分支上跑会打出上游不存在的 commit hash）
 2. fork       网页点一次即可；四个包共用同一个 fork（SSH 密钥已绑账号，无需 token）
 3. push       cd /workspace/_upstream/verl && git push fork <branch>
-4. PR         标题 `[{模块}] {类型}: {描述}`（CI 会检查格式）；正文按 PULL_REQUEST_TEMPLATE 六节
+4. PR         标题 `[{模块}] {类型}: {描述}`；正文按 PULL_REQUEST_TEMPLATE 六节
+              ★ **标题与正文提交前先用他们自己的脚本本地验**（几秒，不用等 CI）：
+                `PR_TITLE='<标题>' python3 tests/special_sanity/check_pr_title.py`
+                `PR_TITLE='<标题>' GITHUB_EVENT_PATH=<含 body 的 json> python3 tests/special_sanity/check_pr_description.py`
+                ⚠️ 模块名必须在白名单里（`lora`/`async` **不在**；用 `rollout` / `fully_async` / `fsdp` …），
+                   类型小写。包② 初版标题 `[LoRA][Async]Fix:` 会让 CI 直接红
+              ⚠️ **粘完回读一遍渲染结果**：包② 粘贴时丢了首个小标题和半句话，都是肉眼没看出来的
 5. CLA        PR 开完机器人会留言 → 点链接签（DCO 已由 commit 的 Signed-off-by 满足）
 6. CI         ⚠️ **Slack 进不去**（限 anyscale/bytedance/together.ai 域名）⇒ 走**飞书群**申请
-7. 收尾       把 PR 编号写回包内 README，`git mv` 改前缀 `READY-` → `OPEN-`
+7. 收尾       PR 编号写回 `2-case.md` 顶部状态块，`git mv` 改前缀 `READY-` → `OPEN-`
 ```
 
 ⚠️ **commit 必须带 `-s`**（DCO）；分支基于**上游 main**，不是我们的旧克隆。
@@ -226,7 +242,7 @@ not_planned**；包④差点以"从未接上"提交，实际是**重构回归、
 ### 6.2 零解释的关闭，值得问一句（成本极低，答案影响后续所有包）
 
 问法：**给对方台阶、提供更小的替代方案、明说"哪个答案我都能接受"**。
-不要辩论、不要重复已经写过的论证。范本见 `CLOSED-verl-fsdp-size-1/README.md` 里的草稿。
+不要辩论、不要重复已经写过的论证。范本见 `CLOSED-verl-fsdp-size-1/2-case.md` 顶部。
 
 ⚠️ **先把评论查全再下结论**：包① 那次我查了 issue comments 说"零解释"，
 其实理由在 **review comment**（挂在 diff 行上）里。三个端点都要查：

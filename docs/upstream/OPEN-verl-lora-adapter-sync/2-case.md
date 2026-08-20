@@ -1,12 +1,14 @@
 # Case · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
 ```
-状态    READY —— 提交件成稿、分支已推，等 Chaoyu 提交
-目标    verl-project/verl（bug report + PR）
-分支    /workspace/_upstream/verl → fix/disaggregated-lora-adapter-sync @ bba0c45
-        基于 main 9326156 · DCO 已签 · 已推到 ChaoyuWang04/verl
-验证    测试 修前 3 failed（红在行为断言）→ 修后 7 passed · pre-commit 14 钩子全过
-        源码树实测 3 次同步全 adapter（252 MiB）、基座 0 次、kl 贴地板（6.4e-05 / 2.9e-04）
+状态      OPEN —— 已提交，等 CI / review（2026-08-20）
+issue/PR  #7495 · #7496（标题 [rollout, fully_async] fix: ... 已过 verl 的 check_pr_title）
+分支      ChaoyuWang04/verl → fix/disaggregated-lora-adapter-sync @ bba0c45（基于 main 9326156，DCO 已签）
+待办      ⬜ 飞书群申请 CI（话术见 3-submission.md §③，PR=7496 / ISSUE=7495）
+          ⬜ PR 正文重贴一次：补回 "### What does this PR do?" 标题 + 补全被截断的半句
+             + 去掉硬折行（3-submission.md 已是重排版）
+验证      测试 修前 3 failed（红在行为断言）→ 修后 7 passed · pre-commit 14 钩子全过
+          源码树实测 3 次同步全 adapter（252 MiB）、基座 0 次、kl 贴地板（6.4e-05 / 2.9e-04）
 ```
 
 ⚠️ **定位要点**：包①（`fsdp_size=1`）被维护者以 **"rare case"** 驳回。本条相反 ——
