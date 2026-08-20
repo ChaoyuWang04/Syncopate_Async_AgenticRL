@@ -76,6 +76,7 @@
 ✅ 正确性   E21（梯度不同步）E22（LoRA 没推给 rollout）已修，异步 RL 第一次真正在学
             两个补丁默认开、不许关：SYNCOPATE_FSDP_DDP_FIX · SYNCOPATE_LORA_ADAPTER_SYNC
 ✅ 吞吐     E26 PrefixGrouper：生产现状→PG **端到端 2.31×**；cand 实测 11.33 s/gstep
+            （构成：update_actor 54.3% · gen 23.9% · olp 18.8% · sync 1.8% · save 0.6%）
 ✅ 候选     cand_v13r2_e1（PG+mb8+KL关+seq IS）400 步全绿：候选 RL-100 配对 +0.186（t≈16）
             ESS 中位 0.92/最低 0.816 · rollout_corr/kl 中位 4e-4 在地板 · abort=0
 ✅ 默认值   **PG 开（mb 联动 8）· KL 关**已切库默认（08-20，上一行的证据垫底）；

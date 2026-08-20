@@ -298,14 +298,15 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ```
 ✅ cand_v13r2_e1 事后核查全绿：PG=1+mb8 ✓ · use_kl_loss=False ✓ · seq IS ✓
    ESS(rollout_is_eff_sample_size) 中位 0.92/最低 0.816 · rollout_corr/kl 中位 4e-4 地板
-   步构成：update_actor 54.2% · gen 23.6% · save_checkpoint 19.5%(!) · param_sync 1.8%
+   步构成：update_actor 54.3% · gen 23.9% · olp 18.8% · param_sync 1.8% · save 0.6%
+   ⛔ 曾误报 save 19.5%——解析器对稀疏键（3/100 行）没算出现率，E26「覆盖数」同款坑，
+   解析器已修（share=Σ键/Σstep + 稀疏警告）；E29 价值主体改为字节（108GB→~1GB/跑）
 ✅ launch_rl 默认已切：SYNCOPATE_PREFIX_GROUPER setdefault=1（mb 联动默认 8）· KL 默认 False
 🔄 Chaoyu 裁定撤销/停放：token-seq 多种子（ESS 健康无问题可答）· R2 陈旧度
    （partial_ratio 恒 0 = 条件不存在）· 同步不打断 rollout（轨迹从没被杀 abort=0，
    但 rollouter 每次 sync 暂停-排空-恢复 ×99 次实锤；当前不值钱，大头是 update_actor）
 ⇒ 三者复活条件统一 = CoT 后 rollout 变慢。队首 = CoT SFT/RL 训练支持（01 §1）
-⚠️ save_checkpoint 19.5% 是 candidate 跑特有的新观察（save-freq 25 + 滚动瘦身），
-   下次长跑值得看一眼
+⛔ 「save_checkpoint 19.5%」已翻案（见上）——引用步构成一律用修正后解析器的输出
 ```
 
 ## ★ 2026-08-19 晚：E27 thinking 三臂定案

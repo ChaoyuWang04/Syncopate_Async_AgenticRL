@@ -89,6 +89,12 @@ def summarize(parsed: dict, tail: int | None) -> dict:
 
     out = {}
     total = statistics.median([r["timings"]["step"] for r in rows if "step" in r["timings"]])
+    # ⛔⛔ 2026-08-20 口径修正（E29 复核时抓到，E26「覆盖数没实测」同款坑）：
+    #   share 原来 = 该键出现行的中位 / 每行步长 —— **没算出现率**。
+    #   save_checkpoint 只出现在 3/100 行（save_freq>1 时它就是稀疏的），
+    #   旧口径把 0.6% 的事报成了 19.5%，一条任务的动机数字因此错了一个量级。
+    #   ⇒ share 一律按**总量**算：Σ该键 / Σstep；稀疏键（出现率<100%）在行尾标出来。
+    step_sum = sum(r["timings"]["step"] for r in rows if "step" in r["timings"])
     for k in keys:
         vals = [r["timings"][k] for r in rows if k in r["timings"]]
         if not vals:
@@ -96,11 +102,13 @@ def summarize(parsed: dict, tail: int | None) -> dict:
         med = statistics.median(vals)
         out[k] = {
             "n": len(vals),
+            "occurrence": round(len(vals) / len(rows), 3),
             "median_per_timing_row": round(med, 3),
             "median_per_global_step": round(med / span, 3),
-            "share_of_step": round(med / total, 4) if total else None,
+            "share_of_step": round(sum(vals) / step_sum, 4) if step_sum else None,
         }
 
+    # 三次前向的键每行都在（occurrence=1），中位数口径对它们仍然成立
     triple = sum(out[k]["median_per_timing_row"] for k in TRIPLE_FORWARD if k in out)
     return {
         "n_rows_used": len(rows),
@@ -139,9 +147,11 @@ def main() -> int:
     print(f"  timing 行 {summary['n_rows_used']} 条 · 每行覆盖 {span} 个 global step"
           f"{'' if summary['step_span_uniform'] else '  ⚠️ 覆盖步数不均匀，绝对秒数存疑'}")
     print(f"  {'项':<26}{'每 timing 行':>14}{'每 global step':>16}{'占步':>9}")
-    for k, v in sorted(summary["per_key"].items(), key=lambda kv: -kv[1]["median_per_timing_row"]):
+    for k, v in sorted(summary["per_key"].items(), key=lambda kv: -(kv[1]["share_of_step"] or 0)):
+        sparse = f"  ⚠️ 只出现在 {v['n']} 行（{v['occurrence']:.0%}），中位≠均摊" \
+            if v["occurrence"] < 0.99 else ""
         print(f"  {k:<26}{v['median_per_timing_row']:>14.2f}{v['median_per_global_step']:>16.2f}"
-              f"{(v['share_of_step'] or 0) * 100:>8.1f}%")
+              f"{(v['share_of_step'] or 0) * 100:>8.1f}%{sparse}")
     if summary["triple_forward_share"] is not None:
         print(f"  ⇒ 三次前向（update_actor+old_log_prob+ref）占步 "
               f"{summary['triple_forward_share'] * 100:.1f}%   ← 占空比成因③ / 队列 B12")
