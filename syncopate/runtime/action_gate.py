@@ -281,6 +281,22 @@ class ActionGate:
             return GateOutcome(status="failed",
                                observation={"error": "permission_denied"},
                                error=str(exc))
+        except Exception as exc:                       # noqa: BLE001
+            # ★ 工具**实现**崩了（不是工具返回 error）⇒ 也要变成一次失败观测。
+            #   否则异常一路穿到 run_once 的兜底，整条 run 记 failed ——
+            #   「动作失败不终止循环，由模型决定下一步」在崩溃这条路上就是空话
+            #   （2026-08-20 压测：calendar 的一个 SQL 类型错让 I11 8/8 全灭）。
+            #   审计留全文；给模型的观测只说"这个工具坏了"，别把 SQL 栈喂给它。
+            await self._audit(self.db, org_id=self.org_id, run_id=self.run_id,
+                              action="tool_crashed", object_key=None,
+                              param_source="system",
+                              detail={"tool": tool, "error": str(exc)[:500]})
+            await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
+                             kind="tool.result",
+                             payload={"tool": tool, "ok": False, "error": "tool_crashed"})
+            return GateOutcome(status="failed",
+                               observation={"error": f"tool_crashed: {tool} 暂时不可用"},
+                               error=f"tool_crashed: {exc}")
 
         # ── ⑥.5 副作用状态未知 ⇒ **不是失败，是未知**（任务三）────────────
         # ⚠️ `db.record_tool_call` 命中一条**仍在执行中**的同键记录时返回

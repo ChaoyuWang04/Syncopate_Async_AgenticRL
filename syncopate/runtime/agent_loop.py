@@ -31,10 +31,23 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
+from contextvars import ContextVar
+
 from syncopate.runtime.action_gate import ActionGate, GateOutcome
 from syncopate.runtime.gateway import DecisionContext
 
 Kind = Literal["tool_call", "final"]
+
+# ★ 模型 token 用量的回传通道：worker 在跑一条 run 之前 set 一个 dict，
+#   Decider 每次调用往里累加（tokens_in/tokens_out/calls）。
+#   用 contextvar 而不是 Decider 实例属性：一个 Decider 服务并发 8 条 run，
+#   实例属性会串账（每条 run 一个 asyncio task = 一个 context，天然隔离）。
+MODEL_USAGE: ContextVar[dict[str, int] | None] = ContextVar("MODEL_USAGE", default=None)
+
+# ★ 当前 run 的 intent（I01/I07/I09/I11…）：Decider 按它选**训练同形的工具子菜单**
+#   （训练 case 的菜单是 12–16 个工具，从来没有全量 30 —— 全量塞进 prompt 直接
+#   超 max_model_len，且是模型没见过的分布）。同 MODEL_USAGE 的隔离理由。
+RUN_INTENT: ContextVar[str | None] = ContextVar("RUN_INTENT", default=None)
 
 
 @dataclass(frozen=True)
@@ -117,6 +130,9 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
     """
     ctx = ctx or DecisionContext()
     history = await load_transcript(db, org_id=org_id, run_id=run_id) if resume else []
+    # ⚠️ tool=None 的回灌不过收口、不计步数 ⇒ 连续输出解析不了的东西会无限烧模型。
+    #   步数上限管不到它（那是 gate.invoke 记的），所以这里单独设一条连续失败上限。
+    fumbles = 0
 
     while True:
         proposal = await decider.decide(user_message=user_message, history=history)
@@ -129,10 +145,21 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
                               history=history)
 
         if not proposal.tool:
-            # ⚠️ 模型说要调工具却没给工具名 ⇒ 当成一次失败的观测回给它，**不要猜**
+            # ⚠️ 模型说要调工具却没给工具名 ⇒ 当成一次失败的观测回给它，**不要猜**。
+            # ★ rationale 可携带更准的纠正文本（Decider 用它回灌 parse_error /
+            #   一步多调用的拦截语，P0-2 同法）；没给就落回老文案。
+            fumbles += 1
+            if fumbles > 3:
+                await save_transcript(db, org_id=org_id, run_id=run_id,
+                                      step=gate.step, history=history)
+                return LoopResult(status="failed", error="unparseable_output",
+                                  history=history)
             history.append({"role": "observation",
-                            "observation": {"ok": False, "error": "missing_tool_name"}})
+                            "observation": {"ok": False,
+                                            "error": proposal.rationale
+                                            or "missing_tool_name"}})
             continue
+        fumbles = 0
 
         outcome: GateOutcome = await gate.invoke(
             tool=proposal.tool, arguments=dict(proposal.arguments), ctx=ctx,

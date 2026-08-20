@@ -166,6 +166,19 @@ def test_unknown_anomaly_type_is_not_matched_to_a_near_one():
     with_db(body)
 
 
+def test_seasonal_context_accepts_string_horizon_from_model():
+    """★ 模型给的参数是 JSON 值，数字常以字符串到达（"30" 而不是 30）。
+
+    2026-08-20 压测：`CURRENT_DATE + $3` 收到 unknown 类型直接炸
+    （operator is not unique），I11 8/8 全灭。⇒ 实现必须强转 + SQL 侧 ::int。
+    """
+    async def body(db):
+        out = await impl.calendar_get_seasonal_context(
+            db, region="华东", horizon_days="30")     # ← 字符串，模型的真实形状
+        assert "events" in out                         # 不炸、结构完整
+    with_db(body)
+
+
 def test_missing_risk_record_does_not_mean_cleared():
     """★★★ 查不到风控记录 ⇒ **不能默认放行**。
 

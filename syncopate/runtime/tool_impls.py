@@ -618,13 +618,19 @@ async def benchmark_get_industry_baseline(db, *, platform: str, game_genre: str,
 
 async def calendar_get_seasonal_context(db, *, region: str, event: str | None = None,
                                         horizon_days: int = 30) -> dict[str, Any]:
-    """时令背景。**不判断**你的素材现在该不该投，也**不含**任何投放指标。"""
+    """时令背景。**不判断**你的素材现在该不该投，也**不含**任何投放指标。
+
+    ⚠️ `horizon_days` 必须强转 int：模型从 JSON 里给的可能是 "30"（字符串），
+    asyncpg 会按 unknown 传给 PG ⇒ `date + unknown` 选不出运算符直接炸
+    （2026-08-20 压测 I11 全灭的根因）。SQL 侧再补 ::int 双保险。
+    """
+    horizon_days = int(horizon_days)
     async with db.tx() as conn:
         rows = await conn.fetch(
             "SELECT region, event, event_date, lift_factor, creative_tags "
             "FROM seasonal_events WHERE region=$1 "
             "  AND ($2::text IS NULL OR event=$2) "
-            "  AND event_date BETWEEN CURRENT_DATE - 7 AND CURRENT_DATE + $3 "
+            "  AND event_date BETWEEN CURRENT_DATE - 7 AND CURRENT_DATE + $3::int "
             "ORDER BY event_date", region, event, horizon_days)
     import datetime as _dt
     today = _dt.date.today()

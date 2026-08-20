@@ -225,6 +225,32 @@ def test_failures_are_visible_to_the_model():
     assert out.observation == {"error": "platform_down"}
 
 
+class _CrashingTools:
+    """工具**实现**直接抛异常（不是返回 error）——模拟实现层 bug / 依赖崩溃。"""
+
+    async def call(self, **_kw):                       # noqa: ANN003
+        raise RuntimeError("operator is not unique: date + unknown")
+
+
+def test_tool_implementation_crash_becomes_an_observation_not_run_death():
+    """★ 工具实现崩了也要变成失败观测回给模型，不能带走整条 run。
+
+    2026-08-20 压测实锤：calendar 的一个 SQL 类型错让 I11 8/8 全灭 ——
+    异常一路穿到 run_once 兜底，「动作失败不终止循环」在崩溃这条路上是空话。
+    ⚠️ 给模型的观测不含异常细节（SQL 栈不是模型该学的输入）；全文进审计。
+    """
+    gate, rec = _gate(bindings={"calendar.get_seasonal_context": ToolBinding(_noop)},
+                      tools=_CrashingTools())
+    out = _run(gate.invoke(tool="calendar.get_seasonal_context",
+                           arguments={"region": "华东"},
+                           ctx=DecisionContext(), param_source="model"))
+    assert out.status == "failed"                      # 不是抛异常
+    assert out.observation["error"].startswith("tool_crashed")
+    assert "date + unknown" not in out.observation["error"]   # 细节不给模型
+    assert rec.audits[-1]["action"] == "tool_crashed"
+    assert "date + unknown" in rec.audits[-1]["detail"]["error"]  # 细节进审计
+
+
 # ── 审计 ────────────────────────────────────────────────────────────────
 
 def test_writes_are_audited_with_the_declared_param_source():

@@ -18,7 +18,8 @@ M0–M8 造的是**训练用的东西**（数据、沙盒、判据、模型）�
 bash scripts/pg_bootstrap.sh                            # 起库（幂等，一条命令重建）
 python -m pytest tests/runtime/ -q                      # 195 条
 uvicorn syncopate.runtime.api:app --port 8000           # 起 API
-python -m syncopate.runtime.worker --org-id org_acme    # 起 worker（队列的消费者）
+SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
+python -m syncopate.runtime.worker --org-id org_acme    # 起 worker（不设 URL = 假计划）
 python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
 # B-4 模型端点（单卡）：
 CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-name sft-base \
@@ -124,7 +125,7 @@ M8 把 `no_match` 做成明确的信号位之后，runtime 才拿得到它。
 
 ---
 
-## 4 · 施工中抓到的七个真 bug（都有测试守着）
+## 4 · 施工中抓到的十个真 bug（都有测试守着）
 
 **① 所有按 `run_id` 做键的表作用域都错了。** `run_id` 只在 org 内唯一
 （`agent_runs` 的 UNIQUE 是 `(org_id, run_id)`），而我给 `run_events` /
@@ -156,6 +157,19 @@ before_write / refused / D 档这些路都只 `finish_run` 落库；终态事件
 **自己记得补发**，谁忘了谁挂。⇒ 修法同「审批单和 run 状态同一事务」：终态事件并进
 `finish_run` 同一事务（结构保证），新增 `run.cancelled` 种类（取消 ≠ 失败，
 四种停法要能分辨），api.TERMINAL 与 `db._TERMINAL_EVENT` 两张表必须一致。
+
+**⑧ 模型传的数字参数常是字符串，SQL 直接拿去做日期运算就炸**（2026-08-20 压测，
+I11 8/8 全灭）。`calendar` 的 `CURRENT_DATE + $3` 收到 `"30"` ⇒ PG
+`operator is not unique: date + unknown`。⇒ 实现强转 int + SQL 侧 `::int` 双保险。
+**模型给的 arguments 是 JSON 值，每个数值参数都要按"可能是字符串"处理。**
+
+**⑨ 工具实现崩溃会带走整条 run**（同一轮压测）。异常穿过 ActionGate 直达
+run_once 兜底 ⇒ 「动作失败不终止循环、由模型决定下一步」在崩溃这条路上是空话。
+⇒ gate 捕获实现层异常 → 失败观测 `tool_crashed`（细节进审计，不喂给模型）。
+
+**⑩ `emit` 的 `max(seq)+1` 在并发写同一条 run 时撞唯一键，且把 worker 进程炸死**
+（lease 交接窗口：旧 worker 收尾 × 新 worker 已抢到）。⇒ 冲突瞬时 ⇒ 有界重试；
+`run.started` 的 emit 挪进 run_once 的兜底 try（事件写失败不该带走消费者）。
 
 ## 4.5 · ★★★ M9.4 下半场：生产级 Agent Loop 的设计边界（B-0，2026-08-19）
 
