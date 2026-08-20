@@ -1,0 +1,135 @@
+{
+ "label": "models/Qwen3-4B-sft-v13r2-e1 + checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25",
+ "data_version": "v13",
+ "batch": "data/batches/v13",
+ "split_dir": "data/splits/v13",
+ "positions": 3912,
+ "mean_entropy": 0.0131,
+ "median_entropy": 0.0,
+ "decision_positions": 99,
+ "decision_mean_entropy": 0.0282,
+ "near_deterministic_ratio": 0.966,
+ "mean_top1_prob": 0.9961,
+ "per_case": [
+  {
+   "case_id": "ATTR_0000",
+   "tokens": 136,
+   "mean_entropy": 0.0033
+  },
+  {
+   "case_id": "ATTR_0001",
+   "tokens": 136,
+   "mean_entropy": 0.0035
+  },
+  {
+   "case_id": "ATTR_0002",
+   "tokens": 122,
+   "mean_entropy": 0.0278
+  },
+  {
+   "case_id": "ATTR_0004",
+   "tokens": 125,
+   "mean_entropy": 0.0078
+  },
+  {
+   "case_id": "ATTR_0006",
+   "tokens": 136,
+   "mean_entropy": 0.0033
+  },
+  {
+   "case_id": "ATTR_0007",
+   "tokens": 135,
+   "mean_entropy": 0.0041
+  },
+  {
+   "case_id": "ATTR_0016",
+   "tokens": 123,
+   "mean_entropy": 0.0191
+  },
+  {
+   "case_id": "ATTR_0017",
+   "tokens": 123,
+   "mean_entropy": 0.0268
+  },
+  {
+   "case_id": "ATTR_0018",
+   "tokens": 125,
+   "mean_entropy": 0.0101
+  },
+  {
+   "case_id": "ATTR_0045",
+   "tokens": 123,
+   "mean_entropy": 0.029
+  },
+  {
+   "case_id": "ATTR_0048",
+   "tokens": 136,
+   "mean_entropy": 0.0033
+  },
+  {
+   "case_id": "ATTR_0054",
+   "tokens": 135,
+   "mean_entropy": 0.004
+  },
+  {
+   "case_id": "ATTR_0058",
+   "tokens": 123,
+   "mean_entropy": 0.0165
+  },
+  {
+   "case_id": "ATTR_0060",
+   "tokens": 116,
+   "mean_entropy": 0.0079
+  },
+  {
+   "case_id": "ATTR_0074",
+   "tokens": 125,
+   "mean_entropy": 0.0102
+  },
+  {
+   "case_id": "ATTR_0082",
+   "tokens": 135,
+   "mean_entropy": 0.0042
+  },
+  {
+   "case_id": "ATTR_0090",
+   "tokens": 136,
+   "mean_entropy": 0.0034
+  },
+  {
+   "case_id": "BUD_0000",
+   "tokens": 212,
+   "mean_entropy": 0.0137
+  },
+  {
+   "case_id": "BUD_0001",
+   "tokens": 268,
+   "mean_entropy": 0.0158
+  },
+  {
+   "case_id": "BUD_0002",
+   "tokens": 188,
+   "mean_entropy": 0.0111
+  },
+  {
+   "case_id": "BUD_0003",
+   "tokens": 285,
+   "mean_entropy": 0.0077
+  },
+  {
+   "case_id": "BUD_0004",
+   "tokens": 281,
+   "mean_entropy": 0.0419
+  },
+  {
+   "case_id": "BUD_0006",
+   "tokens": 300,
+   "mean_entropy": 0.0091
+  },
+  {
+   "case_id": "BUD_0007",
+   "tokens": 188,
+   "mean_entropy": 0.0133
+  }
+ ]
+}
