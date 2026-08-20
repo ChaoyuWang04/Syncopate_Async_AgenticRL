@@ -18,8 +18,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime as _dt
+import json
+import os
 from typing import Any
 
 import httpx
@@ -36,6 +37,25 @@ from syncopate.train.rollout_loop import (
 # ⚠️ 这和训练分布有已知偏差（训练里 answer_fields 逐 case 不同）——
 #   B-4 完整版要按 intent 建字段表；先钉住可跑，缺口显式记在这里。
 DEFAULT_ANSWER_FIELDS = [{"key": "summary", "description": "本次任务的结论"}]
+
+# ★★ 部署侧的上下文上限 —— **刻意与训练契约（5120+2048=7168）不同**。
+#
+# `rollout_budget.py` 里写着这一天的条款：「部署一旦硬性要求，就以部署为准，
+# 三方再对齐一次」。多轮对话就是那个硬性要求：单任务 prompt 实测已到 4654
+# （余量仅 466），历史一拼必撞左截断 —— 而 prompt 截断在本项目是元凶级前科
+# （砍掉 system 规则书开头 ⇒ 行为枚举丢失 ⇒ 整轮 RL 白跑 + 一整套错误归因）。
+#
+# 为什么部署侧敢放宽而训练侧不能：训练要同时跑 8 条一组的采样 + 反传激活，
+# 长度直接吃步速；服务侧只有前向，且 KV cache 是**分页按需分配**的，
+# `max_model_len` 只是单序列上限不是预留。账：4B 每 token KV ≈144 KB ⇒
+# 14336 顶格一条 ≈2 GB，KV 池 ~20 GB ⇒ 并发 8 条顶格也放得下。
+# 且 prompt 里 ~4.2k 的 system+工具 schema 是**所有会话共享的 prefix**（cache 命中）。
+# ⚠️ 改这个数必须同时改 vLLM 起服务的 `--max-model-len`（两边必须一致，
+#   起服务命令在 `docs/syncopate/09 §0`）—— 服务端小于这里 = 400 报错。
+RUNTIME_MAX_MODEL_LEN = int(os.environ.get("SYNCOPATE_RUNTIME_MAX_LEN", "14336"))
+
+# 一轮历史最多渲染多少 token 的结论（超了截断并计数——静默砍是禁的）
+PRIOR_ANSWER_BUDGET = 400
 
 # ★ intent → 工具子菜单。**取自 v13 训练 case 的众数菜单**（不是拍的）：
 #   train.parquet → batch_dir/cases/<case_id>.json 的 tool_menu，按家族取 most_common。
@@ -94,8 +114,33 @@ class VllmDecider:
         await self._client.aclose()
 
     # ── 渲染：loop 的 history → 训练同形的 messages ─────────────────────────
+    def _prior_turn_messages(self, turns: list[dict]) -> list[dict[str, Any]]:
+        """把会话里之前几轮渲染成 user/assistant 对。
+
+        ★ 只带**问题 + 结论**，不带那几轮的工具步骤明细：
+          省 token，且模型要的是"上次说了什么"，不是"上次怎么查的"。
+        ⚠️ 这是训练分布外的形状（模型只训过单轮 user）——探针要量的正是它。
+        """
+        out: list[dict[str, Any]] = []
+        for t in turns:
+            out.append({"role": "user", "content": t.get("user_message") or ""})
+            result = t.get("result")
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except ValueError:
+                    result = {"summary": result}
+            answer = (result or {}).get("answer", result or {})
+            text = json.dumps(answer, ensure_ascii=False)
+            ids = self.tokenizer.encode(text, add_special_tokens=False)
+            if len(ids) > PRIOR_ANSWER_BUDGET:
+                text = self.tokenizer.decode(ids[:PRIOR_ANSWER_BUDGET]) + "…（已截断）"
+            out.append({"role": "assistant", "content": text})
+        return out
+
     def _messages(self, user_message: str,
-                  history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                  history: list[dict[str, Any]],
+                  prior: list[dict] | None = None) -> list[dict[str, Any]]:
         system_text = load_prompt("system.txt")
         user_text = render_prompt("step_user.txt", {
             "reference_now": _dt.date.today().isoformat(),
@@ -103,10 +148,12 @@ class VllmDecider:
             "user_message": user_message,
             "answer_fields": self.answer_fields,
         })
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_text},
-            {"role": "user", "content": user_text},
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_text}]
+        # ★ 历史插在 system 之后、本轮任务之前 —— 本轮永远是最后一条 user，
+        #   模型的"当前要办的事"不会被历史挤到中间去。
+        if prior:
+            messages += self._prior_turn_messages(prior)
+        messages.append({"role": "user", "content": user_text})
         last_tool = "system"
         for entry in history:
             role = entry.get("role")
@@ -122,25 +169,28 @@ class VllmDecider:
 
     async def decide(self, *, user_message: str,
                      history: list[dict[str, Any]]) -> Proposal:
-        from syncopate.runtime.agent_loop import MODEL_USAGE, RUN_INTENT
+        from syncopate.runtime.agent_loop import MODEL_USAGE, PRIOR_TURNS, RUN_INTENT
         menu = INTENT_MENUS.get(RUN_INTENT.get() or "", DEFAULT_MENU)
         tools = self._registry.menu(menu)
-        messages = self._messages(user_message, history)
+        messages = self._messages(user_message, history, PRIOR_TURNS.get())
         prompt: str = self.tokenizer.apply_chat_template(
             messages, tools=tools, add_generation_prompt=True,
             tokenize=False, **CHAT_TEMPLATE_KWARGS)
         # 预算：单轮生成上限 = 评测口径（MAX_RESPONSE_LENGTH，G-8 之后 256→2048），
         # 上下文超长按训练同法**左截断**（rollout_loop 同款）——且必须计数，
         # 静默截断是记录在案的整个失效家族（budget-truncation-family）。
+        # ⚠️ 护栏跟着 RUNTIME_MAX_MODEL_LEN 走：上限抬了而这条线不抬，
+        #   历史照样被砍 = 白改（"机制在但没接上"的又一种形状）。
         ids = self.tokenizer.encode(prompt, add_special_tokens=False)
-        ctx_cap = 7168 - 256                       # 至少给生成留 256
+        ctx_cap = RUNTIME_MAX_MODEL_LEN - 256      # 至少给生成留 256
         if len(ids) > ctx_cap:
             ids = ids[-ctx_cap:]
             prompt = self.tokenizer.decode(ids)
             usage_t = MODEL_USAGE.get()
             if usage_t is not None:
                 usage_t["prompt_truncated"] = usage_t.get("prompt_truncated", 0) + 1
-        max_tokens = max(64, min(MAX_RESPONSE_LENGTH, 7168 - len(ids) - 8))
+        max_tokens = max(64, min(MAX_RESPONSE_LENGTH,
+                                 RUNTIME_MAX_MODEL_LEN - len(ids) - 8))
         resp = await self._client.post("/v1/completions", json={
             "model": self.model,
             "prompt": prompt,

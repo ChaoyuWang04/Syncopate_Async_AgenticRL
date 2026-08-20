@@ -89,6 +89,28 @@ async def create_conversation(db: Database, *, org_id: str, conversation_id: str
             conversation_id, org_id, title)
 
 
+async def prior_turns(db: Database, *, org_id: str, conversation_id: str,
+                      before_run_id: str, limit: int = 6) -> list[dict]:
+    """同一会话里**这条 run 之前**已经收尾的轮次（最近 limit 条，按时间正序）。
+
+    ★ 只取有结论的（succeeded）：还在跑的、被取消的没有可复述的内容，
+      塞进去只会让模型看到半截东西。
+    ⚠️ 取 limit 条不是"省事"，是**预算纪律**：历史无上限地长下去必然撞截断，
+      而截断这件事在本项目有前科（budget-truncation-family）。宁可少喂，不可静默砍。
+    """
+    async with db.tx() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT run_id, user_message, result
+              FROM agent_runs
+             WHERE org_id=$1 AND conversation_id=$2 AND run_id <> $3
+               AND status='succeeded' AND result IS NOT NULL
+             ORDER BY created_at DESC
+             LIMIT $4
+            """, org_id, conversation_id, before_run_id, limit)
+    return [dict(r) for r in reversed(rows)]
+
+
 async def conversation_exists(db: Database, *, org_id: str,
                               conversation_id: str) -> bool:
     """★ 越权同 run：`WHERE org_id=` 在 SQL 里挡 —— 别人的会话和不存在的会话不可区分。"""
@@ -189,7 +211,10 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
               FROM claimable c
              WHERE r.id = c.id
             RETURNING r.run_id, r.org_id, r.user_message, r.attempt,
-                      r.intent, r.automation_tier, r.requires_approval
+                      r.intent, r.automation_tier, r.requires_approval,
+                      -- ★ 多轮要它：不在 RETURNING 里 = worker 拿不到 = 历史永远为空
+                      --   （「字段全程有效，只是没有消费者」那条的镜像）
+                      r.conversation_id
             """,
             worker_id, lease_seconds, org_id)
         return dict(row) if row else None

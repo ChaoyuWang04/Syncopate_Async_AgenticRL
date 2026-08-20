@@ -41,6 +41,47 @@ def test_garbage_output_becomes_correction_not_guess():
     assert p.rationale.startswith("parse_error")
 
 
+class _FakeTok:
+    """只做长度/文本的最小 tokenizer（渲染逻辑不需要真分词器）。"""
+
+    def encode(self, text, add_special_tokens=False):        # noqa: ANN001
+        return list(text)
+
+    def decode(self, ids):                                   # noqa: ANN001
+        return "".join(ids)
+
+
+def _decider_shell() -> VllmDecider:
+    """不走 __init__（那会拉真 tokenizer）——只测纯渲染方法。"""
+    d = object.__new__(VllmDecider)
+    d.tokenizer = _FakeTok()
+    return d
+
+
+def test_prior_turns_render_as_user_assistant_pairs():
+    """★ 多轮壳层：历史渲染成 user/assistant 对，本轮永远是最后一条 user。"""
+    turns = [{"user_message": "我是王超宇",
+              "result": {"behavior": "answer", "answer": {"summary": "你好，王超宇"}}}]
+    msgs = _decider_shell()._prior_turn_messages(turns)
+    assert [m["role"] for m in msgs] == ["user", "assistant"]
+    assert msgs[0]["content"] == "我是王超宇"
+    assert "王超宇" in msgs[1]["content"]
+
+
+def test_prior_turn_result_accepts_json_string():
+    """库里 JSONB 读回来可能是 str —— 不能因此把整轮历史丢掉。"""
+    turns = [{"user_message": "查 CMP_1", "result": '{"answer": {"spend": 31500}}'}]
+    msgs = _decider_shell()._prior_turn_messages(turns)
+    assert "31500" in msgs[1]["content"]
+
+
+def test_long_prior_answer_is_truncated_and_marked():
+    """★ 截断必须**可见**（budget-truncation-family：静默砍是禁的）。"""
+    turns = [{"user_message": "q", "result": {"answer": {"x": "长" * 2000}}}]
+    msgs = _decider_shell()._prior_turn_messages(turns)
+    assert msgs[1]["content"].endswith("…（已截断）")
+
+
 def test_intent_menus_are_training_shaped():
     """菜单是训练 case 的众数（12–16 个工具），绝不该膨胀回全量 30。"""
     for intent, menu in INTENT_MENUS.items():

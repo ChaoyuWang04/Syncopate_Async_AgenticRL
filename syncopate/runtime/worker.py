@@ -20,7 +20,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
-from syncopate.runtime.db import Database, approved_action, claim_run, finish_run
+from syncopate.runtime.db import (Database, approved_action, claim_run, finish_run,
+                                  prior_turns)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
 from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
@@ -250,7 +251,8 @@ class Worker:
             await self._execute(org_id=org_id, run_id=run_id,
                                 user_message=claimed["user_message"] or "",
                                 automation_tier=claimed.get("automation_tier"),
-                                intent=claimed.get("intent"))
+                                intent=claimed.get("intent"),
+                                conversation_id=claimed.get("conversation_id"))
         except Exception as exc:                      # noqa: BLE001
             # ★ 兜底：worker 不能因为一条 run 挂掉而停摆（压测场景②）。
             #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
@@ -260,7 +262,8 @@ class Worker:
 
     async def _execute(self, *, org_id: str, run_id: str, user_message: str,
                        automation_tier: str | None = None,
-                       intent: str | None = None) -> None:
+                       intent: str | None = None,
+                       conversation_id: str | None = None) -> None:
         # ---- D 档：永不自动，连审批单都不开 ----
         # ★ §3 的四档里 D 是「不可逆**且**不可验证」（跨账户 / 竞品 / 合规边界 /
         #   账户级预算）。它和 C 档的区别是**性质**不是程度：C 是"要人点头"，
@@ -303,7 +306,8 @@ class Worker:
         if self.decider is not None:
             await self._execute_with_loop(org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
-                                          resumed=decided is not None, intent=intent)
+                                          resumed=decided is not None, intent=intent,
+                                          conversation_id=conversation_id)
             return
 
         # ---- step 0：查政策 ----
@@ -396,21 +400,31 @@ class Worker:
 
     async def _execute_with_loop(self, *, org_id: str, run_id: str,
                                  user_message: str, ctx, resumed: bool,
-                                 intent: str | None = None) -> None:
+                                 intent: str | None = None,
+                                 conversation_id: str | None = None) -> None:
         """B-4：模型驱动的执行路径。横切全在 ActionGate 里，这里只做状态映射。"""
-        from syncopate.runtime.agent_loop import MODEL_USAGE, RUN_INTENT, run_agent_loop
+        from syncopate.runtime.agent_loop import (MODEL_USAGE, PRIOR_TURNS, RUN_INTENT,
+                                                  run_agent_loop)
 
         gate = self._gate(org_id=org_id, run_id=run_id)
         gate.skip_triggers = resumed
         usage: dict[str, int] = {}
         token = MODEL_USAGE.set(usage)
         intent_token = RUN_INTENT.set(intent)
+        # ★ 多轮壳层：同会话之前几轮的问答进 prompt（会话外的 run 没有历史 = 单轮，
+        #   行为与之前逐字节相同）。
+        turns = ([] if not conversation_id else
+                 await prior_turns(self.db, org_id=org_id,
+                                   conversation_id=conversation_id,
+                                   before_run_id=run_id))
+        prior_token = PRIOR_TURNS.set(turns)
         try:
             result = await run_agent_loop(gate, self.decider, db=self.db,
                                           org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
                                           resume=resumed)
         finally:
+            PRIOR_TURNS.reset(prior_token)
             RUN_INTENT.reset(intent_token)
             MODEL_USAGE.reset(token)
             if usage.get("calls"):

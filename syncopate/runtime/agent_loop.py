@@ -49,6 +49,11 @@ MODEL_USAGE: ContextVar[dict[str, int] | None] = ContextVar("MODEL_USAGE", defau
 #   超 max_model_len，且是模型没见过的分布）。同 MODEL_USAGE 的隔离理由。
 RUN_INTENT: ContextVar[str | None] = ContextVar("RUN_INTENT", default=None)
 
+# ★ 同一会话里之前几轮的 (user_message, result)：Decider 把它们渲染进 prompt，
+#   让"第二句话"能指代第一句（2026-08-20 多轮壳层）。同上的隔离理由。
+# ⚠️ 这是**壳层**多轮：拼上下文而已，模型没训过第二轮 user 消息 ⇒ 探针先量格式保持率。
+PRIOR_TURNS: ContextVar[list[dict] | None] = ContextVar("PRIOR_TURNS", default=None)
+
 
 @dataclass(frozen=True)
 class Proposal:
