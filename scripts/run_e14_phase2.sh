@@ -47,5 +47,5 @@ run_ab both 1 1
 # 最终①：修理全开（默认即开）+ CUDA graph，保守 staleness（sync4 精度已证安全）
 run_final allon_s4 --enforce-eager False
 # 最终②：再叠 sweep 甜点候选（质量由 sweep 的 s8_t025 臂评测背书/否决，本跑只测速）
-run_final allon_s8 --enforce-eager False --sync-every 8 --staleness-threshold 0.25
+run_final allon_s16t01 --enforce-eager False --sync-every 16 --staleness-threshold 0.1
 say "🏁 phase2 全部结束——今夜任务闭环"
