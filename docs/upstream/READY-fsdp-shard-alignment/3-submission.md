@@ -80,7 +80,13 @@ row bytes stay aligned, but **1-D parameters poison the group buffer**: for one
 Qwen3-4B decoder layer at world=3, the per-parameter shard bytes are
 
 ```
-self_attn.q_norm.weight            [128]    86 B   % 16 = 6 self_attn.k_norm.weight            [128]    86 B   % 16 = 6 input_layernorm.weight             [2560]  1708 B  % 16 = 12 post_attention_layernorm.weight    [2560]  1708 B  % 16 = 12 (all 2-D projection weights: row-aligned, % 16 = 0) ──────────────────────────────────────────────────────────── group all-gather input per rank:  67,319,300 B   % 16 = 4
+self_attn.q_norm.weight            [128]    86 B   % 16 = 6
+self_attn.k_norm.weight            [128]    86 B   % 16 = 6
+input_layernorm.weight             [2560]  1708 B  % 16 = 12
+post_attention_layernorm.weight    [2560]  1708 B  % 16 = 12
+(all 2-D projection weights: row-aligned, % 16 = 0)
+────────────────────────────────────────────────────────────
+group all-gather input per rank:  67,319,300 B   % 16 = 4
 ```
 
 (predicted from the sharding math and confirmed by intercepting the actual
@@ -92,7 +98,19 @@ size, i.e. the ring chunk boundaries.)
 
 ```python
 # All that matters is the per-rank byte count mod 16. torchrun --nproc_per_node=3:
-import os, time, torch, torch.distributed as dist dist.init_process_group("nccl") rank = dist.get_rank(); torch.cuda.set_device(rank); world = dist.get_world_size() for per_bytes in (67_287_212, 67_287_216):          # FSDP1's real chunk, then +4 B n = per_bytes // 4 s = torch.ones(n, dtype=torch.float32, device=rank) g = torch.zeros(n * world, dtype=torch.float32, device=rank) for _ in range(3): dist.all_gather_into_tensor(g, s) torch.cuda.synchronize(); t = time.perf_counter() for _ in range(15): dist.all_gather_into_tensor(g, s) torch.cuda.synchronize(); dt = (time.perf_counter() - t) / 15 bw = per_bytes * world * (world - 1) / world / dt / 1e9 if rank == 0: print(f"per-rank {per_bytes:,} B (%16={per_bytes%16}): {bw:.1f} GB/s")
+import os, time, torch, torch.distributed as dist
+dist.init_process_group("nccl")
+rank = dist.get_rank(); torch.cuda.set_device(rank); world = dist.get_world_size()
+for per_bytes in (67_287_212, 67_287_216):          # FSDP1's real chunk, then +4 B
+    n = per_bytes // 4
+    s = torch.ones(n, dtype=torch.float32, device=rank)
+    g = torch.zeros(n * world, dtype=torch.float32, device=rank)
+    for _ in range(3): dist.all_gather_into_tensor(g, s)
+    torch.cuda.synchronize(); t = time.perf_counter()
+    for _ in range(15): dist.all_gather_into_tensor(g, s)
+    torch.cuda.synchronize(); dt = (time.perf_counter() - t) / 15
+    bw = per_bytes * world * (world - 1) / world / dt / 1e9
+    if rank == 0: print(f"per-rank {per_bytes:,} B (%16={per_bytes%16}): {bw:.1f} GB/s")
 ```
 
 Measured (3× RTX 5090, PCIe, no P2P, NCCL 2.27.5, default protocol):
@@ -103,9 +121,13 @@ End-to-end on the same machine (3-GPU ZeRO-3; two independent same-ruler pairs,
 do not compare across them — configs differ):
 
 ```
-LL128 sidestep        update_actor 47.9 s -> 14.4 s (NCCL_PROTO=LL128 dodges the 16B path, but costs
+LL128 sidestep        update_actor 47.9 s -> 14.4 s
+                      (NCCL_PROTO=LL128 dodges the 16B path, but costs
                        -30% all_reduce / -41% broadcast elsewhere)
-shard padding alone   update_actor     100.0 -> 27.8 s   (3.6x) (this proposal)       ref fwd           41.6 ->  6.1 s   (6.9x) old_log_prob      44.6 ->  9.2 s   (4.8x) rollout generation (no FSDP collectives): unchanged
+shard padding alone   update_actor     100.0 -> 27.8 s   (3.6x)
+(this proposal)       ref fwd           41.6 ->  6.1 s   (6.9x)
+                      old_log_prob      44.6 ->  9.2 s   (4.8x)
+                      rollout generation (no FSDP collectives): unchanged
 ```
 
 ## Proposed fix
