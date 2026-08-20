@@ -170,8 +170,22 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
         return dict(row) if row else None
 
 
+# 终态 status → 终态事件。SSE 的关流判据（api.TERMINAL）必须与这张表一致。
+_TERMINAL_EVENT = {"succeeded": "run.succeeded",
+                   "failed": "run.failed",
+                   "cancelled": "run.cancelled"}
+
+
 async def finish_run(db: Database, *, org_id: str, run_id: str, status: str,
                      result: dict | None = None, error: str | None = None) -> None:
+    """收尾 run，并在**同一事务里**发终态事件。
+
+    ★★ 2026-08-20 冒烟实测抓到的结构 bug：此前终态事件由各调用方自己补发，
+    而 release_gate / 成本闸 / refused 这几条退出路径**谁都没发** ——
+    run 在库里已经 cancelled，SSE 客户端却永远等不到关流事件，挂死。
+    ⇒ 修法同「审批单和 run 状态同一事务」那条：**状态翻终态 = 必有终态事件**，
+    做成结构保证，调用方不再各自补发（补了就是重复）。
+    """
     async with db.tx() as conn:
         await conn.execute(
             """
@@ -180,6 +194,18 @@ async def finish_run(db: Database, *, org_id: str, run_id: str, status: str,
                    lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
              WHERE org_id=$1 AND run_id=$2
             """, org_id, run_id, status, result, error)
+        kind = _TERMINAL_EVENT.get(status)
+        if kind is not None:
+            payload = dict(result) if (status == "succeeded" and result) else (
+                {"error": error} if error else {})
+            await conn.execute(
+                """
+                INSERT INTO run_events (run_id, org_id, seq, kind, payload)
+                VALUES ($1, $2,
+                        COALESCE((SELECT max(seq) FROM run_events
+                                   WHERE run_id=$1 AND org_id=$2), 0) + 1,
+                        $3, $4)
+                """, run_id, org_id, kind, payload)
 
 
 async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> None:

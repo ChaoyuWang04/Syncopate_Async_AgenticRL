@@ -224,7 +224,9 @@ def create_app(db: Database | None = None) -> FastAPI:
 
     # 终态事件。收到它就关流 —— 否则客户端会**永远挂着等下一条**，
     # 而服务端也永远留着一个连接（压测场景①：连接数才是先撑爆的东西）。
-    TERMINAL = {"run.succeeded", "run.failed", "run.waiting_for_user"}
+    # ⚠️ 与 db._TERMINAL_EVENT 必须一致：库里翻终态 = 必发其中之一（同一事务，
+    #   2026-08-20 冒烟抓到 cancelled 各路径不发事件 ⇒ SSE 挂死，已改成结构保证）。
+    TERMINAL = {"run.succeeded", "run.failed", "run.cancelled", "run.waiting_for_user"}
 
     async def _event_stream(db: Database, org_id: str, run_id: str,
                             after_seq: int, request: Request) -> AsyncIterator[str]:

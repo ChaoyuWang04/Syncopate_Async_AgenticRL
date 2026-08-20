@@ -15,10 +15,22 @@ M0–M8 造的是**训练用的东西**（数据、沙盒、判据、模型）�
 接真实请求、调广告平台 API、把钱花出去。几乎不复用前面的代码。
 
 ```
-bash scripts/pg_bootstrap.sh                    # 起库（幂等，一条命令重建）
-python -m pytest tests/runtime/ -q              # 45 条
-uvicorn syncopate.runtime.api:app --port 8000   # 起服务
+bash scripts/pg_bootstrap.sh                            # 起库（幂等，一条命令重建）
+python -m pytest tests/runtime/ -q                      # 195 条
+uvicorn syncopate.runtime.api:app --port 8000           # 起 API
+python -m syncopate.runtime.worker --org-id org_acme    # 起 worker（队列的消费者）
+python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
+# B-4 模型端点（单卡）：
+CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-name sft-base \
+  --enable-lora --lora-modules candidate=checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25 \
+  --max-lora-rank 32 --max-model-len 7168 --port 8100    # 基线：scripts/measure_tpot.py
 ```
+
+⚠️ **worker 必须 `--org-id` 限定再起常驻** —— 队列是全局的，全局 worker 会把
+测试套件的 run 抢走（08-20 实测：2 条测试红，杀掉 worker 即绿，C-1 同一课）。
+⚠️ 此前 worker **没有进程入口**（只在测试里被实例化过），「起服务」只写了 uvicorn ——
+队列等于永远没有消费者。08-20 补 `__main__` 入口时一并发现
+`agent_loop` 也从没接进 worker（B-4 接线时修）。
 
 | 步 | 内容 | 状态 |
 |---|---|---|
@@ -112,7 +124,7 @@ M8 把 `no_match` 做成明确的信号位之后，runtime 才拿得到它。
 
 ---
 
-## 4 · 施工中抓到的六个真 bug（都有测试守着）
+## 4 · 施工中抓到的七个真 bug（都有测试守着）
 
 **① 所有按 `run_id` 做键的表作用域都错了。** `run_id` 只在 org 内唯一
 （`agent_runs` 的 UNIQUE 是 `(org_id, run_id)`），而我给 `run_events` /
@@ -138,7 +150,12 @@ M8 把 `no_match` 做成明确的信号位之后，runtime 才拿得到它。
 **⑥ `fastapi.testclient.TestClient` 在本环境挂死**（连最小 app 都卡在它的 portal 线程上）。
 ⇒ 测试用 `httpx.ASGITransport` 直连，附带好处是 startup 和请求同循环。
 
----
+**⑦ cancelled 各退出路径不发终态事件 ⇒ SSE 客户端永远挂着**（2026-08-20，
+**首次真跑冒烟**抓到 —— 195 条进程内测试全绿它也在）。release_gate 拦下 / 成本闸
+before_write / refused / D 档这些路都只 `finish_run` 落库；终态事件此前由各调用方
+**自己记得补发**，谁忘了谁挂。⇒ 修法同「审批单和 run 状态同一事务」：终态事件并进
+`finish_run` 同一事务（结构保证），新增 `run.cancelled` 种类（取消 ≠ 失败，
+四种停法要能分辨），api.TERMINAL 与 `db._TERMINAL_EVENT` 两张表必须一致。
 
 ## 4.5 · ★★★ M9.4 下半场：生产级 Agent Loop 的设计边界（B-0，2026-08-19）
 

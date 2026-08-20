@@ -231,8 +231,7 @@ class Worker:
                                 automation_tier=claimed.get("automation_tier"))
         except Exception as exc:                      # noqa: BLE001
             # ★ 兜底：worker 不能因为一条 run 挂掉而停摆（压测场景②）。
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
-                       payload={"error": str(exc)[:500]})
+            #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="failed", error=str(exc)[:500])
         return run_id
@@ -247,8 +246,8 @@ class Worker:
             await audit(self.db, org_id=org_id, run_id=run_id,
                         action="tier_d_refused", object_key=None, param_source="system",
                         detail={"automation_tier": "D"})
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
-                       payload={"error": "tier_d_never_automated"})
+            # 终态事件（run.cancelled）由 finish_run 发 —— D 档被拒是「取消」不是「失败」，
+            # 此前这里发 run.failed 而库里记 cancelled，事件和状态说的是两回事。
             await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
                              error="tier_d_never_automated")
             return
@@ -256,9 +255,9 @@ class Worker:
         # ---- 已经被人裁决过？那这一跑是**恢复**，不是重新决策 ----
         decided = await approved_action(self.db, org_id=org_id, run_id=run_id)
         if decided is not None and decided["status"] == "rejected":
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
-                       payload={"error": "approval_rejected",
-                                "case_ref": decided["case_ref"]})
+            await audit(self.db, org_id=org_id, run_id=run_id,
+                        action="approval_rejected", object_key=decided["case_ref"],
+                        param_source="system", detail=None)
             await finish_run(self.db, org_id=org_id, run_id=run_id, status="cancelled",
                              error="approval_rejected")
             return
@@ -358,14 +357,10 @@ class Worker:
         if written.status != "ok":
             await finish_run(self.db, org_id=org_id, run_id=run_id, status="failed",
                              error=written.error)
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.failed",
-                       payload={"error": written.error})
             return
 
         await finish_run(self.db, org_id=org_id, run_id=run_id, status="succeeded",
                          result={"new_budget": new_budget})
-        await emit(self.db, org_id=org_id, run_id=run_id, kind="run.succeeded",
-                   payload={"new_budget": new_budget})
 
     async def _loop(self, *, stop: asyncio.Event) -> None:
         """一条工作线。★ 没活干时**睡一下再看**，不是空转 —— 空转会把 CPU 吃满，
@@ -387,3 +382,47 @@ class Worker:
         """
         n = max(1, self.config.concurrency)
         await asyncio.gather(*(self._loop(stop=stop) for _ in range(n)))
+
+
+# --------------------------------------------------------------------------
+# 进程入口：`python -m syncopate.runtime.worker`
+#
+# ★ 此前 Worker 只在测试里被实例化过 —— 服务的"起法"里只写了 uvicorn（API），
+#   worker 没有进程入口，等于队列永远没有消费者（机制在但没接上的又一形态）。
+# ⚠️ 平台是 FakeAdPlatform：按 D-2 的决定不对接真实广告平台，这就是生产形状。
+# --------------------------------------------------------------------------
+
+
+async def _serve(config: WorkerConfig) -> None:
+    import signal
+
+    db = Database()
+    await db.connect()
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        # 收到信号只置位，不 sys.exit —— 让在飞的 run 走完当前动作再放 lease。
+        loop.add_signal_handler(sig, stop.set)
+    worker = Worker(db, FakeAdPlatform(), config)
+    try:
+        await worker.serve(stop=stop)
+    finally:
+        await db.close()
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Syncopate runtime worker")
+    parser.add_argument("--worker-id", default="worker-1")
+    parser.add_argument("--concurrency", type=int, default=WorkerConfig.concurrency)
+    parser.add_argument("--org-id", default=None,
+                        help="限定只消费一个租户的队列（默认全局）")
+    args = parser.parse_args()
+    asyncio.run(_serve(WorkerConfig(worker_id=args.worker_id,
+                                    concurrency=args.concurrency,
+                                    org_id=args.org_id)))
+
+
+if __name__ == "__main__":
+    main()
