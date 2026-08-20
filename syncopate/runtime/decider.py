@@ -33,10 +33,20 @@ from syncopate.train.rollout_budget import (
 from syncopate.train.rollout_loop import (
     ASSISTANT_TURN_END, CHAT_TEMPLATE_KWARGS, observation_message)
 
-# 默认的结论字段：runtime 的请求没有逐 case 的 verifier，先用最小集。
-# ⚠️ 这和训练分布有已知偏差（训练里 answer_fields 逐 case 不同）——
-#   B-4 完整版要按 intent 建字段表；先钉住可跑，缺口显式记在这里。
-DEFAULT_ANSWER_FIELDS = [{"key": "summary", "description": "本次任务的结论"}]
+# 结论字段契约。★★ 2026-08-20 由 O-2a 探针实测定型（`22 §J-6`）：
+#
+#   A 只要 summary「本次任务的结论」  闲聊自然语言 **2** token（机器标签）· 任务 2/2 调工具
+#   B 只要 reply「用人话说清楚」       闲聊 **21** token（真人话）· 任务 **1/2** 🔴
+#     └ 失败样本："查一下 CMP_1 昨天的花费" → 不调工具，直接编「今日投放未启动」
+#       ⇒ **只优化表达会把领域能力换走** —— `22 §J-3` 坑①的直接实证
+#   C 两个并列（本档）                 闲聊 **10** token · 任务 2/2 调工具 ✅
+#
+# ⇒ 取 C：评分器要的机器可校验字段不丢，人要读的话也有。
+# ⚠️ 剩余缺口（reply 质量仍不如裸底座）**才是 OPD 要修的那部分** —— 契约改不动它。
+DEFAULT_ANSWER_FIELDS = [
+    {"key": "summary", "description": "结论的机器可校验形式（简短标签或数值）"},
+    {"key": "reply", "description": "给用户读的完整回复：一到三句自然语言，说清结论和依据"},
+]
 
 # ★★ 部署侧的上下文上限 —— **刻意与训练契约（5120+2048=7168）不同**。
 #

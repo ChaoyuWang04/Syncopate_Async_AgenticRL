@@ -75,9 +75,16 @@ function ValueView({ value }: { value: unknown }) {
 function AnswerKV({ answer }: { answer: Record<string, unknown> }) {
   const entries = Object.entries(answer)
   if (entries.length === 0) return <div className="text-sm text-slate-400">（无内容）</div>
+  // ★ 2026-08-20：结论契约改成「机器字段 + 人话字段并列」（decider.DEFAULT_ANSWER_FIELDS）。
+  //   `reply` 是给人读的那一句 ⇒ 当正文突出显示；其余键退为附属明细。
+  const reply = typeof answer.reply === 'string' ? answer.reply : null
+  const rest = entries.filter(([k]) => k !== 'reply')
   return (
     <dl className="space-y-2">
-      {entries.map(([k, v]) => (
+      {reply && (
+        <div className="mb-1 text-[15px] leading-relaxed text-slate-900">{reply}</div>
+      )}
+      {rest.map(([k, v]) => (
         <div key={k}>
           <dt className="text-xs font-medium text-slate-500">{k}</dt>
           <dd className="text-sm text-slate-800">
