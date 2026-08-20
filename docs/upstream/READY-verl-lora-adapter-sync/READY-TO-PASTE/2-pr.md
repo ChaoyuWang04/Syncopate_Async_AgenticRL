@@ -7,9 +7,9 @@
 
 Fixes #<ISSUE>.
 
-With LoRA (`model.lora.merge=False`, the default) and a disaggregated deployment
-(`rollout.checkpoint_engine.backend != "naive"`), every weight sync pushed the unmodified frozen
-base model and never transferred the adapter — the rollout engine kept sampling from the initial
+This is the default path for async LoRA RL: `model.lora.merge=False` is the default and every
+disaggregated recipe uses a non-`naive` checkpoint-engine backend. In that configuration, every
+weight sync pushed the unmodified frozen base model and never transferred the adapter — the rollout engine kept sampling from the initial
 policy for the whole run, silently (evidence and impact in the issue).
 
 The disaggregated branch called `get_per_tensor_param()` with its defaults, pinning

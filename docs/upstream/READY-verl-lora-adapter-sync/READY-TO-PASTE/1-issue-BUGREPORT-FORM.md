@@ -77,6 +77,10 @@ between 0.8.0 and the `main` checkout above.
 
 ## What happens
 
+**This is the default path for async LoRA RL — no unusual flags are involved:**
+`model.lora.merge=False` is the default, and every disaggregated recipe sets a non-`naive`
+checkpoint-engine backend. Anyone running LoRA with `fully_async` / `one_step_off` is affected.
+
 With LoRA (`model.lora.merge=False`, the default) and a disaggregated trainer/rollout
 deployment (`rollout.checkpoint_engine.backend != "naive"`, i.e. the async RL recipes),
 **every weight sync pushes the unmodified frozen base model. The LoRA adapter is never
