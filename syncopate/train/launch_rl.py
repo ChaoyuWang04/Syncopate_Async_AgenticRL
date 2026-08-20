@@ -779,11 +779,11 @@ def main(argv: list[str] | None = None) -> int:
     # ★ 2026-08-19 默认 2 → 6：2×8=16 不能被 3 卡整除，默认起手就被起跑断言拦。
     #   6×8=48 是守卫 A4（≥24 条）标定的标准批；E20 更新次数实验要小批就显式传。
     parser.add_argument("--ppo-mini-batch-size", type=int, default=6)
-    parser.add_argument("--micro-batch-size", type=int, default=1,
-                        help="每次前向算几条**序列**（不是几个题目）。★ **1 是实测最优，别拉高**："
-                             "E25 实测 1→2 在定长上慢 1.0%%、变长上慢 6.3%%，且多花 4.2 GB 显存，"
-                             "4 直接 OOM。原因是一条序列已有 ~4850 token ⇒ GPU 早就吃饱了。"
-                             "见 docs/infra_exp/E25-trainer-feed.md §4.1")
+    parser.add_argument("--micro-batch-size", type=int, default=None,
+                        help="每次前向算几条**序列**（不是几个题目）。★ 默认跟 PrefixGrouper 联动"
+                             "（2026-08-20）：PG 开 ⇒ **8**（一组一批，E26 §6.6 实测最优，mb16 反慢 "
+                             "5.7%%）；PG 关 ⇒ **1**（E25：1→2 定长慢 1.0%%/变长慢 6.3%%，4 OOM——"
+                             "一条序列 ~4850 token，GPU 早吃饱了）。显式传值则不联动")
     # ★ 2026-08-18：默认值从 `rollout_budget` 取 —— **训练与评测共用一份**。
     #   显式传别的值是允许的，但 check_pipeline_invariants 会把不一致标红。
     parser.add_argument("--max-prompt-length", type=int, default=BUDGET_PROMPT)
@@ -943,7 +943,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kv-cache-dtype", default=None,
                         help="vLLM KV cache 精度（fp8_e4m3/fp8_e5m2）。KV 池容量 ×2 的免费杠杆；"
                              "默认不动。开了必须配 EVAL 128 配对回归验精度（Ostinato A1）")
-    parser.add_argument("--use-kl-loss", default="True")
+    # ★★ 2026-08-20（Chaoyu 拍板）：KL **默认关**。E17 两臂：砍 KL 省 15.4%（= ref 整遍
+    #   前向）、任务分 −0.009 < MDE（无差异）；cand_v13r2_e1 400 步 KL-off 长跑兑现
+    #   （判据③ rollout_corr/kl 不吃 ref，全程中位 4e-4 在地板）。
+    #   fabricated_safety_line_cap 仍是常驻观察（02 §1），每次 compare 必看。
+    parser.add_argument("--use-kl-loss", default="False")
     parser.add_argument("--val-before-train", default="False")
     parser.add_argument("--test-freq", type=int, default=-1)
     parser.add_argument("--save-freq", type=int, default=25,
@@ -1041,6 +1045,19 @@ def main(argv: list[str] | None = None) -> int:
     _assert_model_is_merged(str((ROOT / args.model).resolve()))
     _resolve_topology(args)
 
+    # ★★ 2026-08-20（Chaoyu 拍板）：PrefixGrouper **默认开**。证据链已闭合：
+    #   E26 端到端 2.31× + cand_v13r2_e1 全程 400 步（PG on + mb8）四常驻判据全绿、
+    #   候选 +0.186 晋级评测兜底到账（/MAINLINE-INFRA 五项确认①的对赌兑现）。
+    #   显式 SYNCOPATE_PREFIX_GROUPER=0 可关（对照实验用）。
+    #   ⚠️ 必须设在 build_overrides **之前**：第 210 行的 balance_batch=False
+    #   联动读的是本进程环境变量，只塞进子进程 env 它不会生效。
+    os.environ.setdefault("SYNCOPATE_PREFIX_GROUPER", "1")
+    pg_on = os.environ["SYNCOPATE_PREFIX_GROUPER"] == "1"
+    # ★ micro_batch 跟 PG 联动（E26 §6.6：PG 下最优 = mb8「一组一批」，mb1 无组可打包；
+    #   PG 关时 E25 的结论不变：mb1 最优）。显式传值则两种情况都尊重。
+    if args.micro_batch_size is None:
+        args.micro_batch_size = 8 if pg_on else 1
+
     # ★ 走我们的薄壳而不是 verl 的入口：它只把训练集采样器换成动态分池，
     # 其余原样交给 verl（见 main_ppo_pool 的模块 docstring）。
     # --no-pool 退回 verl 原生的均匀采样，用于对照实验。
@@ -1074,7 +1091,9 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_RL_MODE"] = args.mode
     # 这两个开关决定实验的物理含义，必须打印出来——静默的默认值是最难查的那种错
     print(f"[实验设定] latency_scale={args.latency_scale}  async_verifier={args.async_verifier}"
-          f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})")
+          f"  rollout_is={args.rollout_is}(阈值 {args.rollout_is_threshold})"
+          f"  prefix_grouper={'开' if pg_on else '关'}(mb={args.micro_batch_size})"
+          f"  kl={'开' if args.use_kl_loss == 'True' else '关'}")
     if args.mode == "colocate":
         print(f"[拓扑] colocate：rollout 和 train 共用 {args.trainer_gpus} 张卡"
               f"  vLLM 份额 {args.rollout_gpu_util}")

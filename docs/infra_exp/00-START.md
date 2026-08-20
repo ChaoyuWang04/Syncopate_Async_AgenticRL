@@ -70,18 +70,19 @@
 | E01–E26 | ★ **证据层**：编号是身份、永不重排、不合并 | 引用结论时 |
 | /MAINLINE-INFRA.md | 与主线往来的唯一文档（开着的事 + 双方现状） | 有交界动作前 |
 
-## 3 · 现在到哪一步（2026-08-19 晚收工）
+## 3 · 现在到哪一步（2026-08-20）
 
 ```
 ✅ 正确性   E21（梯度不同步）E22（LoRA 没推给 rollout）已修，异步 RL 第一次真正在学
             两个补丁默认开、不许关：SYNCOPATE_FSDP_DDP_FIX · SYNCOPATE_LORA_ADAPTER_SYNC
-✅ 吞吐     E26 PrefixGrouper：生产现状→PG **端到端 2.31×**（34.52→14.94 s/gstep），
-            生产配置定格 mb=8；gen 占步 12%→26% ⇒ 瓶颈开始向 rollout 移动
-✅ 学习     RL 任务分 +0.101→+0.137（修截断后）；defer 崩塌翻案 = prompt 截断不是 reward
-✅ 探针     E27 thinking 三臂：净效果 −0.057 但有梯度格子 170→233（探索空间开一半）；
-            永久基线落定 `_audit/e27_base_off.json`；红利路径=带思考的 SFT 数据
-⬜ 欠的     B5 任务尺子（PG 默认开的门槛）· KL/IS 多种子 · 「步数太少」正式验证
-完成度     Track B：诊断完 + 第一个 before→after（B12/E26）；Track A：四条兑现物落地一条半
+✅ 吞吐     E26 PrefixGrouper：生产现状→PG **端到端 2.31×**；cand 实测 11.33 s/gstep
+✅ 候选     cand_v13r2_e1（PG+mb8+KL关+seq IS）400 步全绿：候选 RL-100 配对 +0.186（t≈16）
+            ESS 中位 0.92/最低 0.816 · rollout_corr/kl 中位 4e-4 在地板 · abort=0
+✅ 默认值   **PG 开（mb 联动 8）· KL 关**已切库默认（08-20，上一行的证据垫底）；
+            B5/KL 多种子/token-seq 多种子/「步数太少」全部由 candidate 兜底结案或撤销
+⬜ 欠的     CoT（thinking）SFT/RL 训练支持（01 §1 队首）——E27 红利路径；
+            陈旧度/同步暂停两题停放，复活条件都挂在 CoT 之后
+完成度     Track B：诊断完 + before→after（B12/E26）+ 候选闭环；Track A：落地一条半
 ```
 
 ## 4 · 接着做什么

@@ -12,23 +12,26 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🔴 **陪跑 candidate 首跑**（主线开跑；PG=开+mb8、KL=关，五项确认见 /MAINLINE-INFRA）：开跑 ~30 min 跑 `check_pipeline_invariants --only rollout` + **P4 case_id 复查**；盯四常驻判据 + truncation=tokens 率 | infra | 陪跑 | 400 步 candidate 同时兑现三件事：B5 兜底（PG）· KL-off 首个长跑证据 · 「步数太少」的第一次 ≥3 epoch 实践 |
-| **2** | 🟠 **token vs sequence 多种子**，判据用 defer 不用总分 | infra | 4 卡 ~4 h | 每臂只有 1 种子；83% 那个数已被证明是截断造的 |
-| **3** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
-| **4** | 🆕 **同步不打断 rollout**（双缓冲 / 加深队列） | infra | 设计+实现 | sync_every 省的钱 96% 在 gen（E08 §5.5），「少打断一次」值 3.5 s |
+| **1** | 🆕 **CoT（thinking）SFT/RL 数据 + 训练支持**（Chaoyu 2026-08-20 立项）：主线产带思考的 SFT 数据（E27 红利路径），infra 解掉训练侧的拦截与预算（`SYNCOPATE_THINK` 目前 launch_rl 拦训练；think 预算 8192 契约联动；rollout 变长后 fully_async 的配比/等待形状要重看） | 双方 | 设计+实现 | E27 已证：拨开关净 −0.057 但探索空间开一半（格子 170→233）⇒ 吃红利的唯一路径是**带思考的训练数据**；且 CoT 后 rollout 才可能真的比训练慢——异步这条线的研究条件那时才出现 |
+| **2** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
 
-> 🔄 处置（Chaoyu 2026-08-19 晚）：**B5 独立消融跳过**（candidate 晋级评测兜底；不达标则 PG-off
-> 重跑是第一嫌疑）；**KL 多种子降级**（默认按 Chaoyu 改关跑 candidate；`fabricated_safety_line_cap`
-> 已是常驻观察，candidate 评测异常再回头）；「步数太少」验证由 candidate 本身覆盖第一轮。
-> 1–3 都是 ~4 h 级，适合打包夜间队列（已向 Chaoyu 提议，待点头）。
-> ✅ E27 三臂已完（结论在 E27 §5；永久基线 = `_audit/e27_base_off.json`）。
+> 🔄 处置（Chaoyu 2026-08-20，candidate 首跑 400 步全绿后）：
+> **token vs seq 多种子撤销** —— cand_v13r2_e1 实测 sequence IS 的 ESS 全程中位 0.92、
+> 最低 0.816（400 步、98 个观测点），健康且有读数，多种子不再有要回答的问题；
+> **R2 陈旧度重测撤销** —— 当前负载下陈旧度条件不存在（rollout 有大量空闲、
+> `partial_ratio` 恒 0 = 没有轨迹跨过权重版本边界；launch_rl `--rollout-is` 注释已载）。
+> 复活条件 = CoT 开启后 rollout 显著变慢（正是队首 #1）；
+> **「同步不打断 rollout」停放** —— 实况：轨迹从没被打断（cand 全程 abort=0、
+> partial rollout 从未触发），但每次 param_sync rollouter 整体暂停-排空-恢复
+> （400 步实数 99 次）。当前不值得做：慢的大头是 update_actor 54.2%，
+> gen 等待 23.6% 里同步暂停占多少量不清、且 rollout 有空闲兜底。
+> 复活条件同上 = CoT 后 rollout 变成瓶颈时，先量「暂停一次值多少」再动手。
+> ✅ PG+KL 已切库默认（2026-08-20，登记 02 §1）；✅ E27 三臂已完（E27 §5）。
 
 ## 2 · 接下来（正确性收尾）
 
 | 任务 | 归谁 | 说明 |
 |---|---|---|
-| **R2 · 陈旧度代价重测**（B10/B19 旧曲线作废） | infra | ★ E26 之后剂量条件才真正具备——现在测才有意义 |
-| **P4 组结构复查**（主线已在 dump 加 `case_id`，见 /MAINLINE-INFRA） | infra | `check_pipeline_invariants --only rollout` 全绿为过 |
 | **P8 占位 logprob 归因**（~0.1% 样本 coverage<1.0，污染 IS 权重） | 待认领（建议 infra） | 找到来源、判可否消除 |
 | **Q4 失败注入确定性 / Q5 Q6 token 序列与 mask 同构** | 双方 | 每条写成断言/探针，不要「读代码确认」 |
 | **E23 落地：评测侧采样对齐**（top_p=1.0 / top_k=-1） | 主线 | 决策已定，还没落地 |
@@ -63,9 +66,9 @@
 | 数据生成 / SFT / merge / rollout 生成 / eval 合并 / ckpt→adapter | ✅ |
 | RL trainer 梯度同步（E21 修 + 归约口径 1.000000） | ✅ |
 | RL 权重同步 trainer→vLLM（E22 修 + 数值验证） | ✅ |
-| PG 打包前向（E26：等价 + 归约逐位同 + 四常驻判据） | ✅（欠 B5） |
+| PG 打包前向（E26：等价 + 归约逐位同 + 四常驻判据） | ✅（B5 由 candidate 兜底兑现：400 步 +0.186，已切默认） |
 | `logprob_coverage` 全样本=1.0（旧 P8） | 🔴 **已降级**：~0.1% 样本 <1.0（最低 0.9932） |
-| 组结构 P4（按 fit step 口径） | ⬜ case_id 已就位，待复查（本文 §2） |
+| 组结构 P4（按 fit step 口径） | ✅ 复查已做（cand_v13r2_e1 有 4/400 步重复，归因=fully_async 完成序重排、非采样器；Chaoyu 08-20 裁定当前不重要不动管线，细节见 git e1043ee） |
 
 ## 6 · 维护约定
 
