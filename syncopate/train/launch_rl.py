@@ -378,7 +378,9 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         f"trainer.save_freq={args.save_freq}",
         f"trainer.val_before_train={str(args.val_before_train)}",
         f"trainer.test_freq={args.test_freq}",
-        "trainer.resume_mode=disable",
+        # ★ 默认 disable（每次都是新跑，防止误吃旧 ckpt）；断点续跑显式传 --resume auto
+        #   （E29 的续跑等价性验证要走这条路）。
+        f"trainer.resume_mode={args.resume}",
     ]
 
     # ---- ★★★ 分卡异步：rollout 和 training 各占各的卡（2026-08-13 上 4 卡后新增）----
@@ -948,6 +950,9 @@ def main(argv: list[str] | None = None) -> int:
     #   （判据③ rollout_corr/kl 不吃 ref，全程中位 4e-4 在地板）。
     #   fabricated_safety_line_cap 仍是常驻观察（02 §1），每次 compare 必看。
     parser.add_argument("--use-kl-loss", default="False")
+    parser.add_argument("--resume", default="disable", choices=["disable", "auto"],
+                        help="verl 的 trainer.resume_mode。默认 disable（新跑不吃旧 ckpt）；"
+                             "auto = 从 save-path 里最新 ckpt 续跑（E29 续跑验证 / 长跑恢复用）")
     parser.add_argument("--val-before-train", default="False")
     parser.add_argument("--test-freq", type=int, default=-1)
     parser.add_argument("--save-freq", type=int, default=25,

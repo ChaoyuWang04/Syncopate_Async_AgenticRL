@@ -23,6 +23,10 @@ cd "$(dirname "$0")/.."
 
 QUIET_MIN="${QUIET_MIN:-10}"        # 静默期（分钟）
 FREE_MB="${FREE_MB:-28000}"         # 每张卡至少要空出多少 MB（32 GB 卡，留 4 GB 余量）
+# ★ 圈卡模式（2026-08-20，对应 /MAINLINE-INFRA「GPU0 vLLM 常驻、1–3 可用」的共存约定）：
+#   GPUS=1,2,3 gpu_gate.sh ⇒ ②显存/计算进程只查圈内卡；③静默期放过 logs/runtime/（端点自己的日志）。
+#   ①主线训练/评测进程照查不放松——共存约定让的是卡，不是让训练撞车。不设 GPUS = 原样全查。
+GPUS="${GPUS:-}"
 WATCH_EVERY="${WATCH_EVERY:-120}"   # --watch 的轮询间隔（秒）
 
 # 主线会起的进程（我们自己的实验不在此列 —— 门禁只在起跑之前用）
@@ -50,6 +54,9 @@ check_once () {
     local bad=0
     while IFS=', ' read -r idx used total; do
         [ -z "${total:-}" ] && continue
+        if [ -n "$GPUS" ] && ! echo ",$GPUS," | grep -q ",$idx,"; then
+            continue                             # 圈卡模式：圈外卡（主线端点）不查
+        fi
         local free=$(( total - used ))
         if [ "$free" -lt "$FREE_MB" ]; then
             echo "🔴 ② GPU$idx 只空 ${free} MB（要 ≥ ${FREE_MB}）"
@@ -57,15 +64,24 @@ check_once () {
         fi
     done < <(nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader,nounits)
     if [ "$bad" -eq 0 ]; then
-        echo "🟢 ② 四张卡显存都还回来了（每张空 ≥ ${FREE_MB} MB）"
+        echo "🟢 ② ${GPUS:-全部} 卡显存都空着（每张空 ≥ ${FREE_MB} MB）"
     else
         ok=0
     fi
-    # 补一刀：有没有任何进程还挂在卡上（显存可能已释放但进程还在）
+    # 补一刀：有没有任何进程还挂在卡上（显存可能已释放但进程还在）。圈卡模式按 uuid 归卡后只看圈内。
     local apps
-    apps="$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null)"
+    if [ -n "$GPUS" ]; then
+        apps="$(nvidia-smi --query-compute-apps=pid,gpu_uuid,used_memory --format=csv,noheader 2>/dev/null \
+                | while IFS=', ' read -r pid uuid mem; do
+                    gidx="$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null \
+                            | grep "$uuid" | cut -d, -f1)"
+                    echo ",$GPUS," | grep -q ",$gidx," && echo "GPU$gidx:pid$pid:${mem}"
+                  done)"
+    else
+        apps="$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null)"
+    fi
     if [ -n "$apps" ]; then
-        echo "🔴 ② 卡上还有计算进程：$(echo "$apps" | tr '\n' ' ')"
+        echo "🔴 ② 圈内卡上还有计算进程：$(echo "$apps" | tr '\n' ' ')"
         ok=0
     fi
 
@@ -73,9 +89,12 @@ check_once () {
     # ⚠️ 排除 **我们自己**（infra 线）写的东西 —— 否则本窗口一边更新文档/解析日志，
     #    一边永远等不到静默期。判据要量的是「主线还在动」，不是「有人在动」。
     local recent
+    local extra_excl='^$'
+    [ -n "$GPUS" ] && extra_excl='logs/runtime/'   # 圈卡模式：端点常驻日志不算「主线在动」
     recent="$(find "${WATCH_DIRS[@]}" -type f -mmin "-${QUIET_MIN}" \
                 -not -path '*/.git/*' -not -name '*.log.lock' 2>/dev/null \
-              | grep -Ev '(e12d_|batch2_|_timing\.json|infra_|gpu_gate)' | head -5)"
+              | grep -Ev '(e12d_|batch2_|_timing\.json|infra_|gpu_gate)' \
+              | grep -Ev "$extra_excl" | head -5)"
     if [ -n "$recent" ]; then
         echo "🔴 ③ 最近 ${QUIET_MIN} 分钟内产物目录仍有写入（主线可能在阶段之间）："
         echo "$recent" | sed 's/^/      /'

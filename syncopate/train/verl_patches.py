@@ -376,6 +376,11 @@ def setup_worker() -> None:
     if os.environ.get("SYNCOPATE_LORA_ADAPTER_SYNC", "1") == "1":
         for _m in ("verl.checkpoint_engine.base", "verl.workers.engine_workers"):
             _defer_until_imported(_m, _patch_lora_adapter_sync)
+    # ★ E29（2026-08-20）：LoRA 下 ckpt 只存可训练部分（save 55 s → 秒级）。默认开；
+    #   =0 回退全量（对照/全参训练均安全：无 lora 键时补丁自动回退，不靠开关兜底）。
+    if os.environ.get("SYNCOPATE_CKPT_LORA_ONLY", "1") == "1":
+        _defer_until_imported("verl.utils.checkpoint.fsdp_checkpoint_manager",
+                              _patch_lora_only_ckpt)
     if os.environ.get("SYNCOPATE_OPT_STEP_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_opt_step_counter)
     if os.environ.get("SYNCOPATE_SYNC_PAYLOAD") == "1":
@@ -949,6 +954,89 @@ def _patch_pool_sampler() -> None:
 
     install_sampler_patch()
     print("[verl-patch] worker 进程：动态分池 sampler 已装", flush=True)
+
+
+def filter_lora_state(sd: dict) -> "dict | None":
+    """E29：从全量 state_dict 里挑出 LoRA 键。**没有 lora_ 键返回 None（全参训练，
+    调用方必须回退全量）**——兜底必须是对的那个，不能把全参模型静默存成空字典。"""
+    lora = {k: v for k, v in sd.items() if "lora_" in k}
+    return lora or None
+
+
+def merge_lora_into(full: dict, lora: dict) -> dict:
+    """E29：把 lora-only ckpt 合回「基座已就位」的当前 state_dict。
+    键空间必须一致——ckpt 里有当前模型没有的键说明模型结构变了，硬失败不猜。"""
+    missing = [k for k in lora if k not in full]
+    if missing:
+        raise RuntimeError(f"[ckpt-lora] lora-only ckpt 有 {len(missing)} 个键不在当前模型里"
+                           f"（如 {missing[:3]}）—— 模型结构或 target_modules 变了，拒绝合成加载")
+    full.update(lora)
+    return full
+
+
+def _patch_lora_only_ckpt() -> None:
+    """★ E29（2026-08-20）：LoRA 训练下 ckpt 只存可训练部分。
+
+    动机（cand_v13r2_e1 实测）：save_checkpoint 占步 **19.5%**、单次 ~55 s——每 rank
+    全量 state_dict 8.5 GB × 3 rank，**97% 是与基座逐字节相同的冻结权重**；
+    磁盘直写 3.9 GB/s ⇒ 时间不在盘，在**字节量驱动的序列化 + D2H 拷贝**。砍字节=砍时间。
+    verl 0.8.0 无此功能（checkpoint_contents 只能整类开关）⇒ 上游第 5 包的素材。
+
+    修法（save/load 两端都动，只动 model 分片；optimizer 状态本来就只含可训练参数）：
+      save  拦在 `self.model.state_dict` 上按 lora_ 键过滤；无 lora 键回退全量
+      load  检测到 lora-only ckpt ⇒ 取当前（基座已由模型初始化就位）state_dict、
+            更新 lora 键、整载 —— 不赌 FSDP 分片 load_state_dict 的 strict=False 语义
+    ⚠️ 装在 **trainer WorkerDict 进程**（守则②）；`SYNCOPATE_CKPT_LORA_ONLY=0` 关掉回全量。
+    """
+    from verl.utils.checkpoint import fsdp_checkpoint_manager as M
+
+    T = M.FSDPCheckpointManager
+    if getattr(T, "_syncopate_lora_only_ckpt", False):
+        return
+    orig_save, orig_load = T.save_checkpoint, T.load_checkpoint
+
+    def save_filtered(self, *a, **kw):
+        orig_sd_fn = self.model.state_dict
+
+        def filtered(*sa, **skw):
+            sd = orig_sd_fn(*sa, **skw)
+            lora = filter_lora_state(sd)
+            if lora is None:
+                print("[ckpt-lora] ⚠️ 没有 lora_ 键（全参训练？）⇒ 回退全量保存", flush=True)
+                return sd
+            mb = sum(v.numel() * v.element_size() for v in lora.values()) / 2**20
+            print(f"[ckpt-lora] 模型分片按 lora_ 过滤：{len(lora)}/{len(sd)} 键，"
+                  f"{mb:.0f} MB（全量 ≈8.5 GB）", flush=True)
+            return lora
+
+        self.model.state_dict = filtered        # 实例属性遮蔽，只影响本次 save
+        try:
+            return orig_save(self, *a, **kw)
+        finally:
+            del self.model.state_dict
+
+    def load_merged(self, *a, **kw):
+        orig_load_fn = self.model.load_state_dict
+
+        def merged(sd, *la, **lkw):
+            if isinstance(sd, dict) and sd and all("lora_" in k for k in sd):
+                full = merge_lora_into(self.model.state_dict(), sd)
+                print(f"[ckpt-lora] 检测到 lora-only ckpt ⇒ 合成加载（更新 {len(sd)} 键）",
+                      flush=True)
+                return orig_load_fn(full, *la, **lkw)
+            return orig_load_fn(sd, *la, **lkw)   # 旧全量 ckpt 原样加载，向后兼容
+
+        self.model.load_state_dict = merged
+        try:
+            return orig_load(self, *a, **kw)
+        finally:
+            del self.model.load_state_dict
+
+    T.save_checkpoint = save_filtered
+    T.load_checkpoint = load_merged
+    T._syncopate_lora_only_ckpt = True
+    print("[verl-patch] E29 ckpt 只存 LoRA 已装（SYNCOPATE_CKPT_LORA_ONLY，默认开）——"
+          "判据：save 时打 [ckpt-lora] 过滤行；resume 时打合成加载行", flush=True)
 
 
 def _patch_grad_probe() -> None:
