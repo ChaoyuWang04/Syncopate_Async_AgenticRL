@@ -62,6 +62,20 @@ NVTX 阶段（kernel 时间）old_log_prob 44.4% · update_actor 34.1% · gen 13
 kernel 构成             GEMM 全部仍是 cutlass_80（FP8 任务的钩子再确认）· elementwise 27–31%
 ```
 
+## 4.5 第二批 · Test A：vLLM CUDA graph A/B（2026-08-20，同尺子 24 gstep，唯一变量 `--enforce-eager`）
+
+```
+                     eager(对照)      graph(处理)        Δ
+s/gstep                12.84            11.89          −7.4%
+gen（trainer 等题）     4.10 (28.3%)     2.75 (23.8%)   −33%
+update_actor / olp     6.82 / 2.31      6.79 / 2.37    持平（受控性 ✓）
+graph 捕获判据          —               Capturing 行 ×31+，FULL_AND_PIECEWISE
+显存                    —               无 OOM（担心未兑现）
+```
+⇒ E14 批1 的微间隙预测兑现：生成端提速 → 队列回填快 → gen 等待 −33%。
+⚠️ 单种子短跑；要进默认值需任务配对闸 + 正式跑复验（enforce_eager 的历史动机
+已确认是 colocate sleep/wake 时代遗产，分家后不适用）。
+
 ## 5 · 工具判决（第一批后的边界表雏形）
 
 | 工具 | 判决 | 依据 |

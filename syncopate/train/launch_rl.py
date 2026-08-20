@@ -302,7 +302,10 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         # 多出来的 960 个槽位不是白占的：调度结构和 block table 都按它预留，
         # 而这块显存在 sleep/wake 循环里每轮都要重新申请 —— 实测 wake_up 就死在这。
         f"actor_rollout_ref.rollout.max_num_seqs={args.max_num_seqs}",
-        "actor_rollout_ref.rollout.enforce_eager=True",
+        # ★ E14 批2（2026-08-20）：eager 固定 True 是 colocate 单卡 sleep/wake 时代的显存
+        #   顾虑（cudagraph 池在 wake 循环里反复申请）。分家后前提大概率消失，而 E14 实测
+        #   eager 的微间隙 32.4s > 计算本身 29.1s ⇒ 开放成旗子做 A/B。
+        f"actor_rollout_ref.rollout.enforce_eager={args.enforce_eager}",
         # ---- ★★★ H1a：要不要每步把 vLLM 的权重搬去 CPU 再搬回来 ----
         #
         # `free_cache_engine=True`（verl 默认）= 每步 sleep/wake：
@@ -940,6 +943,10 @@ def main(argv: list[str] | None = None) -> int:
                              "假定 unpadded 扁平契约，单独开会 AssertionError@padding.py:131")
     parser.add_argument("--fused-kernels-backend", default="torch", choices=["torch", "triton"],
                         help="融合 kernel 的实现后端")
+    parser.add_argument("--enforce-eager", default="True", choices=["True", "False"],
+                        help="vLLM 是否禁用 CUDA graph。默认 True（沿用现状）；E14 实测 eager 的"
+                             "发令微间隙 32.4s 超过计算本身 ⇒ False（开 graph）是批2探针。"
+                             "⚠️ graph 池要吃额外显存，rollout 卡余量本就贴边，OOM 了先降 gpu_util")
     parser.add_argument("--no-engine-stats", action="store_true",
                         help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")
     parser.add_argument("--kv-cache-dtype", default=None,
