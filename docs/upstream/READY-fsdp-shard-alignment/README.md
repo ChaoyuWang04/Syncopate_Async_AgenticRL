@@ -1,6 +1,6 @@
 # 提交包 · FSDP 分片无 16 字节对齐 ⇒ NCCL all_gather 掉 12×（E18）
 
-> **状态：材料齐备（A17 端到端 ✅ 2026-08-19：update_actor 3.6× / ref 6.9×），正文待 Chaoyu 过目。**
+> **状态：`READY` —— 材料齐备（A17 端到端 ✅ 2026-08-19：update_actor 3.6× / ref 6.9×），待 Chaoyu 过目。**
 > 两个目标：**pytorch/pytorch**（issue，修法主推 FSDP2）+ **NVIDIA/nccl**（#413 重开评论，不提新 issue）。
 > ⚠️ 与包①②不同：这条已**不影响我们自己的训练**（生产路径定了 DDP 不分片）——纯社区贡献件。
 

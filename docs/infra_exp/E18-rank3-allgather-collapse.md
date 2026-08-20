@@ -604,7 +604,7 @@ issue 作为「下游实证」引用过去。
 
 ## 14 · 2026-08-19 · 提交包③收口：FSDP2 实测 + A17 端到端（三跑一败一成）
 
-> 材料与英文正文在 **`docs/upstream/fsdp-shard-alignment/`**；本节只记数与教训。
+> 材料与英文正文在 **`docs/upstream/READY-fsdp-shard-alignment/`**；本节只记数与教训。
 
 **① FSDP2 也中招（从 [推断] 升级为实测）**：真实 Qwen3-4B 层 + `fully_shard(world=3)`，
 捕获真实 `all_gather_into_tensor` —— per-rank **67,319,300 B（%16=4）**，预测=实测逐字节吻合；

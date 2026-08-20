@@ -2,7 +2,7 @@
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
 > 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E22-lora-never-synced.md`](../infra_exp/E22-lora-never-synced.md)
-> 同族：[`verl-fsdp-size-1/analysis.md`](verl-fsdp-size-1/analysis.md)（同一天、同一形状：**配置意图正确，静默走进错误分支**）
+> 同族：[`OPEN-verl-fsdp-size-1/analysis.md`](OPEN-verl-fsdp-size-1/analysis.md)（同一天、同一形状：**配置意图正确，静默走进错误分支**）
 
 ---
 
@@ -314,6 +314,6 @@ if effective_mode != "naive" and peft_config is not None and not self.peft_merge
 - [ ] 附 §4 的后果表（**"看起来像陈旧度的现象在替它顶包"这一段要突出** ——
       它说明这条 bug 会把使用者的注意力引向完全错误的方向）
 - [ ] 提出 §5-③ 的防御性判据（比只修分支更有价值）
-- [ ] 与同族两份互相引用（`verl-fsdp-size-1/analysis.md` /
-      `verl-fsdp-size-1/pytorch-background.md`）—— **同一天、同一形状：
+- [ ] 与同族两份互相引用（`OPEN-verl-fsdp-size-1/analysis.md` /
+      `OPEN-verl-fsdp-size-1/pytorch-background.md`）—— **同一天、同一形状：
       配置意图正确，静默走进错误分支，所有指标正常**

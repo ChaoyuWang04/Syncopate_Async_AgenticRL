@@ -1,6 +1,8 @@
 # 提交包⑤ · verl：LoRA 训练的 checkpoint 无条件全量落盘（E29）
 
-> **状态：问题描述 + 修改范围（本文档）。完整 PR 由 upstream 同事调研后成稿**——
+> **状态：`DRAFT` —— 问题描述 + 修改范围已就位，等 Claude 做上游考据后成稿。**
+> ⛔ 未经考据不许提交（见 [`../README.md`](../README.md) §4-①）。原文如下：
+> 完整 PR 由 upstream 同事调研后成稿——
 > 提交前必查上游 main 是否已有同类功能/在途 PR（我们钉死的是 **verl 0.8.0**）。
 > 目标仓库：**verl-project/verl**（feature PR，非 bug report——功能缺失，不是行为错误）。
 

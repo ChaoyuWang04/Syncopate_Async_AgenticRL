@@ -2,7 +2,7 @@
 
 > 状态：**草稿完成，等 Chaoyu 过目后提交**（2026-08-19）。
 > 中文分析与证据链 → [`analysis.md`](analysis.md)。目标仓库 **verl-project/verl**。
-> 顺序：先 issue，PR 里填 `Fixes #<n>`；与包①（`../verl-fsdp-size-1/`）同批提交、互相引用。
+> 顺序：先 issue，PR 里填 `Fixes #<n>`；与包①（`../OPEN-verl-fsdp-size-1/`）同批提交、互相引用。
 > ⚠️ 验证数字标注：〔源码树验证跑〕的数字以 `logs/e22_verl_fix_20260819.log` 为准回填。
 
 ---

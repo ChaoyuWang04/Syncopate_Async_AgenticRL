@@ -1,6 +1,9 @@
 # 提交包 · verl `fsdp_size=1`
 
-> ✅ **issue 已提交：[verl#7493](https://github.com/verl-project/verl/issues/7493)**（2026-08-20）。下一步：fork → push → 开 PR。 静默不同步梯度（E21）
+> **状态：`OPEN` —— 已提交，等 CI / review**（2026-08-20）
+> issue [#7493](https://github.com/verl-project/verl/issues/7493) · PR [#7494](https://github.com/verl-project/verl/pull/7494)
+> CLA ✅ 已签 · CI ✅ 已在飞书群申请 · 分支 `fix/fsdp-size-1-degenerate-mesh-grad-sync` @ `a130ede`
+> ⇒ 合入后把目录改名为 `MERGED-`；被拒则改 `CLOSED-` 并写清理由（见 [`../README.md`](../README.md) §1） 静默不同步梯度（E21）
 
 > **状态：材料齐备，等 Chaoyu 点头后提交。** 目标仓库 **verl-project/verl**（已迁库，别用 volcengine 旧名）。
 > 顺序：先 issue（拿编号）→ PR 填 `Fixes #<n>` → （可选）去 pytorch#154888 评论补证据 + 链接。

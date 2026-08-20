@@ -2,7 +2,7 @@
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
 > 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../../infra_exp/E21-ddp-not-syncing.md)
-> 姊妹文档：[`../fsdp-shard-alignment/analysis.md`](../fsdp-shard-alignment/analysis.md)（同一批调查里的另一个上游问题）
+> 姊妹文档：[`../READY-fsdp-shard-alignment/analysis.md`](../READY-fsdp-shard-alignment/analysis.md)（同一批调查里的另一个上游问题）
 
 ---
 

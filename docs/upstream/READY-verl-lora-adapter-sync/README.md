@@ -1,7 +1,7 @@
 # 提交包 · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
-> **状态：材料齐备（源码树验证 ✅ 2026-08-19），等 Chaoyu 点头后提交。** 目标 **verl-project/verl**。
-> 与包①（[`../verl-fsdp-size-1/`](../verl-fsdp-size-1/)）同批提交：同一天发现、同一形状 ——
+> **状态：`READY` —— 材料齐备（源码树验证 ✅ 2026-08-19），等 Chaoyu 点头后提交。** 目标 **verl-project/verl**。
+> 与包①（[`../OPEN-verl-fsdp-size-1/`](../OPEN-verl-fsdp-size-1/)）同批提交：同一天发现、同一形状 ——
 > **配置意图正确，静默走进错误分支，所有指标正常**。
 
 ## 一句话

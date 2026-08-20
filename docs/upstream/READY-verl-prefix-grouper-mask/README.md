@@ -1,11 +1,13 @@
 # 提交包 · verl `use_prefix_grouper` 从未接上（+ 接上后会咬人的 mask 语义）
 
-> **状态：材料齐备（掩码主打定位，2026-08-19 重写完成），等 Chaoyu 过目后提交。** 目标 **verl-project/verl**。
+> **状态：`READY` —— 材料齐备（掩码主打定位，2026-08-19 重写完成），等 Chaoyu 过目后提交。** 目标 **verl-project/verl**。
+> ⚠️ 目录原名 `verl-prefix-grouper-not-wired`，2026-08-20 改名 —— 「从未接上」那个框架**已被考据推翻**
+> （真相是重构回归 + 掩码 bug），名字里不该继续留着一个错的定位。
 > 定位（考古后敲定）：**主打断点③掩码语义**（全网无人报过、打中所有 shared-prefix 路线）+
 > 小 PR（掩码修复 + 死开关警告）+ 两条评论递给 MAGI 方向（#6689/#6401）。
 > **刻意不提接线 PR** —— #7202 已为此被关（维护者转向 MAGI），接线走我们自己的本地补丁，
 > 验证数据回头以评论补进 issue。历史链条与人物表见 analysis.md 顶部七条。
-> 与包①（[`../verl-fsdp-size-1/`](../verl-fsdp-size-1/)）、包②（[`../verl-lora-adapter-sync/`](../verl-lora-adapter-sync/)）
+> 与包①（[`../OPEN-verl-fsdp-size-1/`](../OPEN-verl-fsdp-size-1/)）、包②（[`../READY-verl-lora-adapter-sync/`](../READY-verl-lora-adapter-sync/)）
 > 是**同一个形状的第三例**：**配置项存在、工具函数齐全、文档也写了，唯独中间那根线没接。**
 
 ## 一句话

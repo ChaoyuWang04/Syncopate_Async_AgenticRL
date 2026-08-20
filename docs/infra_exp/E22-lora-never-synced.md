@@ -451,7 +451,7 @@ rollout 传的是**未解析的** `"all-linear"` 字符串）。
 ```
 
 产物：`logs/e22_verl_fix_20260819.log` · PR 版 patch（基于 main，带 wire_format 守卫）与
-测试草稿在 **`docs/upstream/verl-lora-adapter-sync/`**。跑完 stock verl 已还原。
+测试草稿在 **`docs/upstream/READY-verl-lora-adapter-sync/`**。跑完 stock verl 已还原。
 
 ---
 
