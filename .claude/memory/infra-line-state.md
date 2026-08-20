@@ -280,6 +280,19 @@ E22 修法① **自己实现并默认开启**（SYNCOPATE_LORA_ADAPTER_SYNC）
 ```
 
 
+## ★★ 2026-08-20（晚）：Track 换标 + JD 对齐重写
+
+```
+⚠️ 换标：Track A = 框架/异步 RL（原 B）· Track B = 算子/硬件（原 A）。
+   执行编号（B5/B12/A2/A4/P4…）不变；08-20 前的记忆/git 里 "Track A/B" 按旧标读。
+✅ NARRATIVE-AND-RESUME 全文重写：§1 五岗两家族 JD 压缩+叙事重心对照 ·
+   §2 事实底账（简历数字唯一来源）· §3/4 四段式 · §5 训练版+推理版简历文本
+✅ 队首 = JD 对齐组（01 §1-1..5：压测共建/量化推理/MoE/PD 探针/A3）；
+   主线压测 before 基线已备（runtime_loadtest 24/25 达标，11 §5）
+候补待入队：torch.compile A/B（训练 C 加分明写）· ckpt IO（save_ckpt 占步 19.5%）·
+   上游四包提交（框架研发岗价值最高，等 Chaoyu 点头）
+```
+
 ## ★★ 2026-08-20：candidate 兜底兑现 → PG/KL 切库默认 · 队首换 CoT
 
 ```

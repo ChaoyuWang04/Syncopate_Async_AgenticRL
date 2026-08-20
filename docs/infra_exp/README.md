@@ -47,6 +47,10 @@
 
 ## 1.5 · ★ 两条 track：编号是身份，track 是视图（2026-08-14 新增）
 
+> ⚠️ **2026-08-20 换标（Chaoyu）**：**Track A = 框架/异步 RL 线（原 B）· Track B = 算子/硬件线（原 A）**。
+> 下表 Track 列已按新标翻转；队列/E 报告里的历史执行编号（B5/B12/A2/A4/P4…）**不随换标变**；
+> 08-20 之前的 git 历史与记忆里的 "Track A/B" 按旧标读。
+
 目标从「把 4×5090 压榨到极限」收窄成**两个有真实需求支撑的项目**，
 于是需要一层「这个实验服务哪条线」的索引。**但 E 编号不重排**——
 §1 的规矩仍然有效（别的文档引用「E02 的结论」，编号一动引用就烂）。
@@ -84,41 +88,41 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 
 | # | 实验组 | 一句话 | Track | 状态 | 优先 | GPU |
 |---|---|---|---|---|---|---|
-| **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | A+B | 🟡 | 🔴 | 🔴 |
-| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台）。🆕 **算子构成已拿到**（trainer gemm 58%/attn 12%/elementwise 24%；rollout gemm 53%/attn 42%），**全部 GEMM 是 `cutlass_80`（Ampere 代）**，且 **E13 的修复在 kernel 层被证实**（每步 CPU 快照 8.31→0.26 GB）。⚠️ **阶段归属还差 NVTX** —— verl 的 `marked_timer` 名字在、marker 一个没有 ⇒ 已写补丁（`--nvtx`） | A+B | 🟡 **部分完成** | 🔴 | 🐟 采 + 🔴 重采 |
-| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档稳态：**DDP 7.97 s / ZeRO-2 慢 3.42× / ZeRO-3 慢 6.02×**（3 卡；根因是 E18 对齐悬崖）⇒ DDP 必选 | **A** | ✅ **完成** | — | — |
-| **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮：哪些真有用。🆕 **已成文**：只有两个旋钮有用（`CUMEM_ENABLE=0` 必设、`PROTO=LL128` 只在分片路径开）；`ALGO`/`Simple`/`BUFFSIZE`(1–32MB)/NUMA 绑定/切分次数 **全部无效**，且 LL128 是**绕过症状**不是治本 | **A** | ✅ **完成** | — | — |
-| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 🆕 **TP=2 限制在同一 socket 内**（组内 28.8 GB/s）净正还是净负 | **A** | ⬜ | 🔴 探针 | 🔴 |
+| **E00** | [机器体质档案](E00-machine-profile.md) | 通信带宽曲线 / 内存带宽 / **满载降频** / PCIe 实测代数 | B+A | 🟡 | 🔴 | 🔴 |
+| **E01** | [一步的时间去哪了](E01-step-anatomy.md) | nsys 拆解 + 纯训练 microbench（后面所有实验的跑台）。🆕 **算子构成已拿到**（trainer gemm 58%/attn 12%/elementwise 24%；rollout gemm 53%/attn 42%），**全部 GEMM 是 `cutlass_80`（Ampere 代）**，且 **E13 的修复在 kernel 层被证实**（每步 CPU 快照 8.31→0.26 GB）。⚠️ **阶段归属还差 NVTX** —— verl 的 `marked_timer` 名字在、marker 一个没有 ⇒ 已写补丁（`--nvtx`） | B+A | 🟡 **部分完成** | 🔴 | 🐟 采 + 🔴 重采 |
+| **E02** | [数据并行的分片策略](E02-data-parallel.md) | DDP / ZeRO-2 / ZeRO-3 三档稳态：**DDP 7.97 s / ZeRO-2 慢 3.42× / ZeRO-3 慢 6.02×**（3 卡；根因是 E18 对齐悬崖）⇒ DDP 必选 | **B** | ✅ **完成** | — | — |
+| **E03** | [通信调优](E03-nccl-tuning.md) | NCCL 旋钮：哪些真有用。🆕 **已成文**：只有两个旋钮有用（`CUMEM_ENABLE=0` 必设、`PROTO=LL128` 只在分片路径开）；`ALGO`/`Simple`/`BUFFSIZE`(1–32MB)/NUMA 绑定/切分次数 **全部无效**，且 LL128 是**绕过症状**不是治本 | **B** | ✅ **完成** | — | — |
+| **E04** | [张量并行 / 流水并行](E04-tp-pp.md) | 🆕 **TP=2 限制在同一 socket 内**（组内 28.8 GB/s）净正还是净负 | **B** | ⬜ | 🔴 探针 | 🔴 |
 | **E05** | [序列并行](E05-sequence-parallel.md) | Ulysses / Ring，多长的序列之后才划算 | ⚪ **无主** | ⬜ | ⚪ | — |
 | **E06** | [装更大的模型](E06-bigger-models.md) | 全参 vs LoRA 的可行域地图 | 🔻 并入 E07 | ⬜ | ⚪ | — |
-| **E07** | [MoE 与专家并行](E07-moe-ep.md) | 分片/复制/EP 三摆法 | **A**(通信动机) + B(路由) | 🟡 **模型改用 Qwen3-30B-A3B**（GLM-4.7-Flash 当前栈不支持，已下载 57 GB）；**账已用真 config 校准**（bf16 61.1 / 4bit 16.8 GB；分片每 micro-batch gather 61.1 GB 而只用 10%）；**★ MoE 上 `all-linear` 会挂 18,432 个专家 Linear ⇒ 必须改 target_modules** | 🔴 | 🟡 P2 探针 |
-| **E08** | [异步 RL 三模式与分布漂移](E08-async-rl.md) | colocate / one_step_off / fully_async + 分布漂移 + **占空比** | **B** | 🟡 **★ 同机分母：colocate 1卡 117.8 s vs fully_async 3+1 74.1 s ⇒ 4 张卡只换 1.59×**；**★ 整机占空比 31%**（rollout 空闲 82.5% @47.7W）；漂移「完成→训练」段零差但仪器在下游；one_step_off 因 bucket OOM 待补 | 🔴 | 🟢 已完成部分 |
-| **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | **B** | ⬜ | 🟠 | 🔴 |
-| **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | **B** | ⬜ | 🟠 | 🟢 画像 |
-| **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **A** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
-| **E12** | ~~权重同步的代价与根因~~ → 📦 [`docs/archive/E12-weight-sync.md`](../archive/E12-weight-sync.md) | ⛔ 核心谜题随前提消失（以为推 132 MB 实推 8.4 GB）。现值：修法① 后 `param_sync` 0.97 s / 0.8%（E22 §6.4） | **B** | 📦 归档 | — | — |
-| **E13** | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | 902 张量/8.3 GB 里只有 3.18% 可训练 ⇒ 按 `requires_grad` 筛后 **4.34→0.083 s/步，省 5.7%**（kernel 层被 E01 证实） | **B** | ✅ **完成** | — | — |
-| **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | 🆕 **第一枪打完：FP8 点亮了，1.90–2.08×**（8192³ 451 vs 237 TFLOPS）⇒ ⛔ **推翻了我们自己的悲观前提** —— 不是「点不亮」，是**我们的栈没去拿**（E01 实测热点全是 `cutlass_80` 的 bf16）。Triton 低精度路径 / FP4 inline PTX 待做 | **A** | 🟡 **第一枪完成** | 🔴 | 🔴 |
-| **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **A** | ⬜ | ⚪ | 🔴 |
-| **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **B**（A 共用） | ⬜ | 🟠 | 🔴 |
-| **E18** 🆕 | [3-rank all_gather 塌陷](E18-rank3-allgather-collapse.md) | 3 卡 ZeRO-3 慢 6.02× 的谜：**不是带宽、不是次数、不是拓扑，是 NCCL 在 3 rank 上给 `all_gather` 选了坏协议**（2卡51/4卡37.9/**3卡3.2** GB/s）。`NCCL_PROTO=LL128` 治好：47.94→14.40 s（**3.33×**） | **A** | ✅ **完成** | — | — |
-| **E17** 🆕 | [训练侧三次前向的必要性](E17-triple-forward.md) | `ref` 那遍前向占步 14.7%，而 KL 项只贡献损失 **0.011%**。**A/B 定案（§9 · 干净基线 + 5120 预算）**：砍 KL 省 **15.4%**（正好等于 ref 的 20.93 s，其余项纹丝不动）；任务分 A vs B **−0.009 < MDE 0.015 ⇒ 无差异**，defer 100% 双同、REJ 0.953 双同 —— **B5 首次通过**。🟠 唯一反向信号 `fabricated_safety_line_cap` +2（基数小）⇒ 多种子必盯。⛔ 连带 E19「ref 走 FP8」失效 | **B** | ✅ **完成（吞吐+精度）** | **15.4%** | ✅ 已切默认关（08-20，cand 400 步兜底；多种子撤销） |
+| **E07** | [MoE 与专家并行](E07-moe-ep.md) | 分片/复制/EP 三摆法 | **B**(通信动机) + A(路由) | 🟡 **模型改用 Qwen3-30B-A3B**（GLM-4.7-Flash 当前栈不支持，已下载 57 GB）；**账已用真 config 校准**（bf16 61.1 / 4bit 16.8 GB；分片每 micro-batch gather 61.1 GB 而只用 10%）；**★ MoE 上 `all-linear` 会挂 18,432 个专家 Linear ⇒ 必须改 target_modules** | 🔴 | 🟡 P2 探针 |
+| **E08** | [异步 RL 三模式与分布漂移](E08-async-rl.md) | colocate / one_step_off / fully_async + 分布漂移 + **占空比** | **A** | 🟡 **★ 同机分母：colocate 1卡 117.8 s vs fully_async 3+1 74.1 s ⇒ 4 张卡只换 1.59×**；**★ 整机占空比 31%**（rollout 空闲 82.5% @47.7W）；漂移「完成→训练」段零差但仪器在下游；one_step_off 因 bucket OOM 待补 | 🔴 | 🟢 已完成部分 |
+| **E09** | [前缀缓存分片](E09-prefix-sharding.md) | 多 rollout 副本会不会打碎 97% 的命中率 | **A** | ⬜ | 🟠 | 🔴 |
+| **E10** | [rollout 长尾](E10-straggler.md) | DP 下最慢的那张卡拖累多少、怎么救 | **A** | ⬜ | 🟠 | 🟢 画像 |
+| **E11** 🆕 | [RL 侧稀疏 logprob](E11-sparse-logprob.md) | verl rmpad 路径对 prompt+工具返回全算 logprob/entropy；**密度实测 4.17%**（1755 条）⇒ 切 prompt 省 8.5×、完整筛省 24× | **B** | 🟡 密度已测，切片对照组待做 | 🔴 | 🟢 已完成部分 / 🔴 跑分 |
+| **E12** | ~~权重同步的代价与根因~~ → 📦 [`docs/archive/E12-weight-sync.md`](../archive/E12-weight-sync.md) | ⛔ 核心谜题随前提消失（以为推 132 MB 实推 8.4 GB）。现值：修法① 后 `param_sync` 0.97 s / 0.8%（E22 §6.4） | **A** | 📦 归档 | — | — |
+| **E13** | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | 902 张量/8.3 GB 里只有 3.18% 可训练 ⇒ 按 `requires_grad` 筛后 **4.34→0.083 s/步，省 5.7%**（kernel 层被 E01 证实） | **A** | ✅ **完成** | — | — |
+| **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | 🆕 **第一枪打完：FP8 点亮了，1.90–2.08×**（8192³ 451 vs 237 TFLOPS）⇒ ⛔ **推翻了我们自己的悲观前提** —— 不是「点不亮」，是**我们的栈没去拿**（E01 实测热点全是 `cutlass_80` 的 bf16）。Triton 低精度路径 / FP4 inline PTX 待做 | **B** | 🟡 **第一枪完成** | 🔴 | 🔴 |
+| **E14** 🆕 | [消泡与执行层](E14-bubble.md) | CUDA graph（前提已消失未测）/ overlap / decode occupancy | **B** | ⬜ | ⚪ | 🔴 |
+| **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **A**（B 共用） | ⬜ | 🟠 | 🔴 |
+| **E18** 🆕 | [3-rank all_gather 塌陷](E18-rank3-allgather-collapse.md) | 3 卡 ZeRO-3 慢 6.02× 的谜：**不是带宽、不是次数、不是拓扑，是 NCCL 在 3 rank 上给 `all_gather` 选了坏协议**（2卡51/4卡37.9/**3卡3.2** GB/s）。`NCCL_PROTO=LL128` 治好：47.94→14.40 s（**3.33×**） | **B** | ✅ **完成** | — | — |
+| **E17** 🆕 | [训练侧三次前向的必要性](E17-triple-forward.md) | `ref` 那遍前向占步 14.7%，而 KL 项只贡献损失 **0.011%**。**A/B 定案（§9 · 干净基线 + 5120 预算）**：砍 KL 省 **15.4%**（正好等于 ref 的 20.93 s，其余项纹丝不动）；任务分 A vs B **−0.009 < MDE 0.015 ⇒ 无差异**，defer 100% 双同、REJ 0.953 双同 —— **B5 首次通过**。🟠 唯一反向信号 `fabricated_safety_line_cap` +2（基数小）⇒ 多种子必盯。⛔ 连带 E19「ref 走 FP8」失效 | **A** | ✅ **完成（吞吐+精度）** | **15.4%** | ✅ 已切默认关（08-20，cand 400 步兜底；多种子撤销） |
 
-| **E19** 🆕 | [FP8 进训练](E19-fp8-in-training.md) | 真实形状 1.70–2.22×；**ref 可以换、rollout 先别换**（FP8 误差是 vLLM↔FSDP 数值地板的 316×） | **A** | 🟡 数值对拍已过 | 🔴 | 🔴 |
-| **E20** 🆕 | [RL 学不动](E20-rl-not-learning.md) | 两个独立原因：① 序列级 IS 在 694 token 上指数崩塌（`chi2_seq` 64.19 vs `chi2_token` 0.065）② 一个 epoch 只更新 110 次。⛔ **实测数字已被 E21/E22 作废**，数学结论仍成立 | **B** | 🟡 诊断完成、数字待重跑 | 🔴 | 🔴 |
-| **E21** 🆕 | [三个 rank 没同步梯度](E21-ddp-not-syncing.md) | 🔴 **正确性 bug，已修已复验**：`fsdp_size=1` ⇒ 退化网格 ⇒ PyTorch 静默降级，归约留在大小为 1 的组上 ⇒ 每次更新只用 1/3 数据。**0-A 又验了归约口径正确（3卡=1卡，1.000000）** | **B** | ✅ **完成**（上游草稿 2 份） | — | — |
-| **E22** 🆕 | [LoRA 从没推给 rollout](E22-lora-never-synced.md) | 🔴🔴 **正确性 bug，影响面最大**：disaggregated 下每次同步推的是**冻结基座**（`‖W‖` 与磁盘起点逐位相同），rollout 的策略恒为 π₀ ⇒ **从没跑过一次正确的异步 RL**。✅ 修法①（adapter 推送）落地：载荷 8414→252 MiB、kl 回地板；⛔ `--lora-merge` 被否决并拦截 | **B** | ✅ **已修（修法①：adapter 推送，默认开）+ 数值验证** | — | — |
+| **E19** 🆕 | [FP8 进训练](E19-fp8-in-training.md) | 真实形状 1.70–2.22×；**ref 可以换、rollout 先别换**（FP8 误差是 vLLM↔FSDP 数值地板的 316×） | **B** | 🟡 数值对拍已过 | 🔴 | 🔴 |
+| **E20** 🆕 | [RL 学不动](E20-rl-not-learning.md) | 两个独立原因：① 序列级 IS 在 694 token 上指数崩塌（`chi2_seq` 64.19 vs `chi2_token` 0.065）② 一个 epoch 只更新 110 次。⛔ **实测数字已被 E21/E22 作废**，数学结论仍成立 | **A** | 🟡 诊断完成、数字待重跑 | 🔴 | 🔴 |
+| **E21** 🆕 | [三个 rank 没同步梯度](E21-ddp-not-syncing.md) | 🔴 **正确性 bug，已修已复验**：`fsdp_size=1` ⇒ 退化网格 ⇒ PyTorch 静默降级，归约留在大小为 1 的组上 ⇒ 每次更新只用 1/3 数据。**0-A 又验了归约口径正确（3卡=1卡，1.000000）** | **A** | ✅ **完成**（上游草稿 2 份） | — | — |
+| **E22** 🆕 | [LoRA 从没推给 rollout](E22-lora-never-synced.md) | 🔴🔴 **正确性 bug，影响面最大**：disaggregated 下每次同步推的是**冻结基座**（`‖W‖` 与磁盘起点逐位相同），rollout 的策略恒为 π₀ ⇒ **从没跑过一次正确的异步 RL**。✅ 修法①（adapter 推送）落地：载荷 8414→252 MiB、kl 回地板；⛔ `--lora-merge` 被否决并拦截 | **A** | ✅ **已修（修法①：adapter 推送，默认开）+ 数值验证** | — | — |
 
-| **E23** 🆕 | [采样截尾与 IS](E23-sampling-truncation-and-is.md) | 答主线 §10.4：**训练侧绝不能对齐到 `top_p=0.95/top_k=20`**。verl 的 rollout 报 `processed_logprobs`（截尾后），而 trainer 侧的截尾器**被注释掉了**（`torch_functional.py:672`，还留着 TODO）⇒ 开截尾就是两个分布族，每 token 系统性偏 `Z`，序列级 `Z^694`。⇒ 反过来把**评测**对齐到训练 | **B** | ✅ **源码实证已答** | — | ⬜ 验证探针（可并进 R0-a） |
+| **E23** 🆕 | [采样截尾与 IS](E23-sampling-truncation-and-is.md) | 答主线 §10.4：**训练侧绝不能对齐到 `top_p=0.95/top_k=20`**。verl 的 rollout 报 `processed_logprobs`（截尾后），而 trainer 侧的截尾器**被注释掉了**（`torch_functional.py:672`，还留着 TODO）⇒ 开截尾就是两个分布族，每 token 系统性偏 `Z`，序列级 `Z^694`。⇒ 反过来把**评测**对齐到训练 | **A** | ✅ **源码实证已答** | — | ⬜ 验证探针（可并进 R0-a） |
 
-| **E27** 🆕 | [thinking 三臂探针](E27-thinking-probe.md) | thinking 净效果 **−0.057**（t=−4.9）：REJ/FRESH ↑、FAIL/ATTR/CHAT ↓（想多了会越界，acted_when_should_not 0→14）；★ **有梯度格子 170→233、卡死 109→60** —— 不涨均分但打开 RL 探索空间。SFT 完胜（+0.347/+0.404）。开关 `SYNCOPATE_THINK=1` 默认关；A 臂 = 永久基线 `_audit/e27_base_off.json`。红利路径 = 带思考的 SFT 数据，不是拨开关 | **B** | ✅ **完成** | — | ⬜（若立项 thinking-SFT 另开实验） |
+| **E27** 🆕 | [thinking 三臂探针](E27-thinking-probe.md) | thinking 净效果 **−0.057**（t=−4.9）：REJ/FRESH ↑、FAIL/ATTR/CHAT ↓（想多了会越界，acted_when_should_not 0→14）；★ **有梯度格子 170→233、卡死 109→60** —— 不涨均分但打开 RL 探索空间。SFT 完胜（+0.347/+0.404）。开关 `SYNCOPATE_THINK=1` 默认关；A 臂 = 永久基线 `_audit/e27_base_off.json`。红利路径 = 带思考的 SFT 数据，不是拨开关 | **A** | ✅ **完成** | — | ⬜（若立项 thinking-SFT 另开实验） |
 
 > ★★★ **想一次看懂这条线是怎么断又怎么接上的 → [`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)**
 > —— 不是实验报告，是把「现象 → 误判 → 根因 → 为什么框架自带的办法不行 → 我们改了什么 → 结果」讲一遍。
 
-| **E24** 🆕 | [bf16 合并损失的任务分](E24-merge-loss-on-task-score.md) | RL 的真起点（合并后的 SFT 模型）比一直当基线用的那个（裸基座+SFT adapter）**低 0.025**，而 MDE 只有 0.016 ⇒ **旧配对比较系统性低估 RL 的效果**。与权重空间的保真残差 0.36 互相印证 | **B** | ✅ **完成** | — | — |
-| **E25** 🆕 | [trainer 是活重还是没喂饱](E25-trainer-feed.md) | **否定结果**：两个候选解法都被证伪 —— `micro_batch` 1→2 是**负收益**（定长慢 1.0%、变长慢 6.3%、mb=4 OOM）；关 `gradient_checkpointing` 在 mb=1 就 OOM。★ **喂饱 GPU 的单位是 token 不是序列条数**（一条已 ~4850 token）⇒ trainer 是真在算，慢是因为**活多 11.6 倍**。⇒ 省时间只剩「让它少算」：prefix grouper（上界 4.1×，⚠️ 非即插即用）· 砍 ref · ref 走 FP8 | **B** | ✅ **完成** | — | ⬜ prefix grouper 立项 |
-| **E26** 🆕 | [PrefixGrouper：题面只算一次](E26-prefix-grouper.md) | 一组 8 条共享的 4196 token 题面**只算一次**。微基准 3.96× · fp32 逐位等价。✅ **2026-08-19 集成已通 + 同尺子 A/B 定案**：生产现状→PG **端到端 2.31×**（34.52→14.94 s/gstep）、PG 净效果 2.23×、三次前向占步 91→74%；mb16 慢 5.7% ⇒ **最优 = mb8（一组一批）**。★ 集成卡点的真身 = **绕过根 FSDP ⇒ 梯度归约竞态**（E21 形状的静默错误，脱 Ray 复现 `repro_pg_dtype.py` 定案，§6.3）。★★ §7 **判据失效七形状** + 四个解药 | **B** | ✅ **吞吐已定·欠 B5** | **2.31×（端到端实测）** | ⬜ B5 任务尺子 |
+| **E24** 🆕 | [bf16 合并损失的任务分](E24-merge-loss-on-task-score.md) | RL 的真起点（合并后的 SFT 模型）比一直当基线用的那个（裸基座+SFT adapter）**低 0.025**，而 MDE 只有 0.016 ⇒ **旧配对比较系统性低估 RL 的效果**。与权重空间的保真残差 0.36 互相印证 | **A** | ✅ **完成** | — | — |
+| **E25** 🆕 | [trainer 是活重还是没喂饱](E25-trainer-feed.md) | **否定结果**：两个候选解法都被证伪 —— `micro_batch` 1→2 是**负收益**（定长慢 1.0%、变长慢 6.3%、mb=4 OOM）；关 `gradient_checkpointing` 在 mb=1 就 OOM。★ **喂饱 GPU 的单位是 token 不是序列条数**（一条已 ~4850 token）⇒ trainer 是真在算，慢是因为**活多 11.6 倍**。⇒ 省时间只剩「让它少算」：prefix grouper（上界 4.1×，⚠️ 非即插即用）· 砍 ref · ref 走 FP8 | **A** | ✅ **完成** | — | ⬜ prefix grouper 立项 |
+| **E26** 🆕 | [PrefixGrouper：题面只算一次](E26-prefix-grouper.md) | 一组 8 条共享的 4196 token 题面**只算一次**。微基准 3.96× · fp32 逐位等价。✅ **2026-08-19 集成已通 + 同尺子 A/B 定案**：生产现状→PG **端到端 2.31×**（34.52→14.94 s/gstep）、PG 净效果 2.23×、三次前向占步 91→74%；mb16 慢 5.7% ⇒ **最优 = mb8（一组一批）**。★ 集成卡点的真身 = **绕过根 FSDP ⇒ 梯度归约竞态**（E21 形状的静默错误，脱 Ray 复现 `repro_pg_dtype.py` 定案，§6.3）。★★ §7 **判据失效七形状** + 四个解药 | **A** | ✅ **吞吐已定·欠 B5** | **2.31×（端到端实测）** | ⬜ B5 任务尺子 |
 
 ### 2.1 「无主」实验的停放理由（不删，理由是资产）
 

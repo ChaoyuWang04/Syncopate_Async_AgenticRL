@@ -82,7 +82,8 @@
             B5/KL 多种子/token-seq 多种子/「步数太少」全部由 candidate 兜底结案或撤销
 ⬜ 欠的     CoT（thinking）SFT/RL 训练支持（01 §1 队首）——E27 红利路径；
             陈旧度/同步暂停两题停放，复活条件都挂在 CoT 之后
-完成度     Track B：诊断完 + before→after（B12/E26）+ 候选闭环；Track A：落地一条半
+完成度     ⚠️ 08-20 换标：A=框架/异步（原 B）· B=算子/硬件（原 A）——
+            Track A：诊断完 + before→after（B12/E26）+ 候选闭环；Track B：落地一条半
 ```
 
 ## 4 · 接着做什么
