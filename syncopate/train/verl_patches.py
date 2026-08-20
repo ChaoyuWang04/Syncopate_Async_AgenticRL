@@ -358,6 +358,9 @@ def setup_worker() -> None:
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_ddp_sync_probe)
     if os.environ.get("SYNCOPATE_GRAD_PROBE") == "1":
         _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_grad_probe)
+    # ★ E14 批2-①：torch profiler 抓 update_actor 同步调用点（探针，默认关）
+    if os.environ.get("SYNCOPATE_TORCH_PROF"):
+        _defer_until_imported("verl.workers.engine_workers", _patch_torch_prof)
     # ⛔⛔ 2026-08-18 修：这两行原来**嵌在 `_patch_grad_probe()` 的函数体末尾** ——
     #    也就是只有同时开 `SYNCOPATE_GRAD_PROBE=1` 才会装上分步计时。
     #    后果：B15 那一跑设了 `SYNCOPATE_SYNC_TIMING=1`，**一行判据都没打**，
@@ -1057,6 +1060,69 @@ def _patch_lora_only_ckpt() -> None:
     T._syncopate_lora_only_ckpt = True
     print("[verl-patch] E29 ckpt 只存 LoRA 已装（SYNCOPATE_CKPT_LORA_ONLY，默认开）——"
           "判据：save 时打 [ckpt-lora] 过滤行；resume 时打合成加载行", flush=True)
+
+
+def _patch_torch_prof() -> None:
+    """★ E14 批2-①（探针，默认关）：torch profiler 抓 update_actor 的同步乒乓调用点。
+
+    `SYNCOPATE_TORCH_PROF=<N>` ⇒ rank 0 的第 N 次 update_actor 整体包进
+    torch.profiler（with_stack）：导出 chrome trace + 直接打印**同步类算子账本**——
+    `aten::_local_scalar_dense`（= `.item()` 的真身）/ 显式 synchronize / D2H copy 的
+    次数、耗时与 Python 调用栈。nsys 答不了"谁调的"（E14 §7：对 Ray trainer 还丢事件），
+    这里在进程内记账，天然无截断。⚠️ 装在 WorkerDict 进程；@register 元数据按
+    E12 §262 教训原样搬运，丢了组级方法直接消失。
+    """
+    import functools
+
+    from verl.workers.engine_workers import ActorRolloutRefWorker as W
+
+    if getattr(W, "_syncopate_torch_prof", False):
+        return
+    target = int(os.environ.get("SYNCOPATE_TORCH_PROF", "0") or 0)
+    MAGIC_ATTR = "attrs_3141562937"
+    orig = W.update_actor
+    state = {"n": 0}
+
+    @functools.wraps(orig)
+    def profiled(self, *a, **kw):
+        state["n"] += 1
+        import torch.distributed as dist
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        if state["n"] != target or rank != 0:
+            return orig(self, *a, **kw)
+        from torch.profiler import ProfilerActivity, profile
+        print(f"[torch-prof] 抓取第 {target} 次 update_actor（rank 0，with_stack）…", flush=True)
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                     with_stack=True) as prof:
+            out = orig(self, *a, **kw)
+        outdir = ROOT / "logs" / "torchprof"
+        outdir.mkdir(parents=True, exist_ok=True)
+        trace = outdir / f"update_actor_call{target}.json"
+        prof.export_chrome_trace(str(trace))
+        # ① 全局 top 表（和 SFT H0 观测仪同款口径）
+        print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=12), flush=True)
+        # ② 同步类算子专表：次数 × 耗时 × 栈（乒乓元凶名单）
+        ka = prof.key_averages(group_by_stack_n=6)
+        rows = [r for r in ka if any(s in r.key for s in
+                ("_local_scalar_dense", "Synchronize", "synchronize", "copy_", "to_copy", "item"))]
+        rows.sort(key=lambda r: -r.self_cpu_time_total)
+        print("[torch-prof] ── 同步类算子账本（top10）──", flush=True)
+        for r in rows[:10]:
+            stack = " <- ".join(s.split("/")[-1] for s in (r.stack or [])[:3])
+            print(f"[torch-prof]   {r.key:<38} ×{r.count:>5}  cpu {r.self_cpu_time_total/1e3:8.1f} ms"
+                  f"  | {stack}", flush=True)
+        print(f"[torch-prof] ✅ trace → {trace}", flush=True)
+        return out
+
+    if hasattr(orig, MAGIC_ATTR):
+        setattr(profiled, MAGIC_ATTR, getattr(orig, MAGIC_ATTR))
+    else:
+        print("[verl-patch] ⚠️ update_actor 没有 dispatch 元数据，torch-prof 探针放弃安装", flush=True)
+        return
+    W.update_actor = profiled
+    W._syncopate_torch_prof = True
+    print(f"[verl-patch] torch-prof 探针已装（SYNCOPATE_TORCH_PROF={target}）——"
+          "判据：目标步打「抓取…」行 + 同步类算子账本", flush=True)
 
 
 def _patch_grad_probe() -> None:
