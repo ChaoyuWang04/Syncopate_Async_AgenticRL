@@ -75,9 +75,33 @@ class RunHandle:
     created: bool          # False = 命中了已有的那次请求，**没有新建**
 
 
+# --------------------------------------------------------------------------
+# F-1 · 会话（chatbox 壳的载体，22 §I-1）——只是组织方式，不改 run 语义
+# --------------------------------------------------------------------------
+
+
+async def create_conversation(db: Database, *, org_id: str, conversation_id: str,
+                              title: str | None = None) -> None:
+    async with db.tx() as conn:
+        await conn.execute(
+            "INSERT INTO conversations (conversation_id, org_id, title) "
+            "VALUES ($1, $2, $3) ON CONFLICT (org_id, conversation_id) DO NOTHING",
+            conversation_id, org_id, title)
+
+
+async def conversation_exists(db: Database, *, org_id: str,
+                              conversation_id: str) -> bool:
+    """★ 越权同 run：`WHERE org_id=` 在 SQL 里挡 —— 别人的会话和不存在的会话不可区分。"""
+    async with db.tx() as conn:
+        return bool(await conn.fetchval(
+            "SELECT 1 FROM conversations WHERE org_id=$1 AND conversation_id=$2",
+            org_id, conversation_id))
+
+
 async def create_run(db: Database, *, org_id: str, run_id: str, user_message: str,
                      idempotency_key: str | None = None, intent: str | None = None,
-                     automation_tier: str | None = None) -> RunHandle:
+                     automation_tier: str | None = None,
+                     conversation_id: str | None = None) -> RunHandle:
     """建一次 run。带 Idempotency-Key 时**同一个 org 内重复请求返回原来那次**。
 
     ★ 用 `ON CONFLICT DO NOTHING` + 回查，而不是"先查再插" ——
@@ -88,13 +112,14 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
         row = await conn.fetchrow(
             """
             INSERT INTO agent_runs (run_id, org_id, idempotency_key, user_message,
-                                    intent, automation_tier, status)
-            VALUES ($1, $2, $3, $4, $5, $6, 'queued')
+                                    intent, automation_tier, status, conversation_id)
+            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7)
             ON CONFLICT (org_id, idempotency_key) WHERE idempotency_key IS NOT NULL
             DO NOTHING
             RETURNING run_id
             """,
-            run_id, org_id, idempotency_key, user_message, intent, automation_tier)
+            run_id, org_id, idempotency_key, user_message, intent, automation_tier,
+            conversation_id)
         if row is not None:
             return RunHandle(run_id=row["run_id"], created=True)
         # 冲突 ⇒ 把原来那次捞出来返回。**不报错** —— 重复提交是正常现象，不是错误。

@@ -29,7 +29,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from syncopate.runtime.db import Database, create_run, resume_after_approval
+from syncopate.runtime.db import (Database, conversation_exists, create_conversation,
+                                  create_run, resume_after_approval)
 
 # --------------------------------------------------------------------------
 # 鉴权：token → org。最小实现，形状是对的。
@@ -112,6 +113,42 @@ class ApprovalDecision(BaseModel):
     decision: str = Field(pattern="^(approved|rejected|modified)$")
     modified_params: dict[str, Any] | None = None
     reviewer_id: str
+
+
+class ConversationCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+
+
+class ConversationView(BaseModel):
+    conversation_id: str
+    title: str | None = None
+    runs: int = 0
+    last_activity: str | None = None
+
+
+class MessageCreate(BaseModel):
+    """会话里发一条消息 = 建一个挂在会话上的 run。
+
+    ★ `automation_tier` 在这个**新入口必填**（09 §4.6.4 的缺口在此关掉：
+      旧 /runs 不动以免破坏现有调用方，新入口不留"没声明"这种状态）。
+    """
+
+    user_message: str = Field(min_length=1, max_length=4000)
+    intent: str | None = None
+    automation_tier: str = Field(pattern="^[ABCD]$")
+
+
+class MessageView(BaseModel):
+    """会话历史里的一条：一问 +（跑完后的）一答。前端按它回放历史。"""
+
+    run_id: str
+    user_message: str
+    status: str
+    intent: str | None = None
+    automation_tier: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    created_at: str
 
 
 # --------------------------------------------------------------------------
@@ -226,6 +263,76 @@ def create_app(db: Database | None = None) -> FastAPI:
         # 「暂停就必须能恢复」：网关的输出是暂停不是拒绝，只做前半截等于永久卡死。
         await resume_after_approval(db, org_id=org_id, run_id=row["run_id"])
         return ApprovalView(**dict(row))
+
+    # ---- F-1 · 会话门面（chatbox 壳的载体；run 语义原样不动）--------------
+
+    @app.post("/conversations", response_model=ConversationView,
+              status_code=status.HTTP_201_CREATED)
+    async def create_conversation_endpoint(body: ConversationCreate, org_id: OrgId,
+                                           db: DB) -> ConversationView:
+        cid = f"conv_{uuid.uuid4().hex[:12]}"
+        await create_conversation(db, org_id=org_id, conversation_id=cid,
+                                  title=body.title)
+        return ConversationView(conversation_id=cid, title=body.title)
+
+    @app.get("/conversations", response_model=list[ConversationView])
+    async def list_conversations(org_id: OrgId, db: DB) -> list[ConversationView]:
+        async with db.tx() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT c.conversation_id, c.title,
+                       count(r.run_id) AS runs,
+                       to_char(max(coalesce(r.created_at, c.created_at)),
+                               'YYYY-MM-DD"T"HH24:MI:SSZ') AS last_activity
+                FROM conversations c
+                LEFT JOIN agent_runs r ON r.org_id = c.org_id
+                     AND r.conversation_id = c.conversation_id
+                WHERE c.org_id = $1
+                GROUP BY c.conversation_id, c.title, c.created_at
+                ORDER BY max(coalesce(r.created_at, c.created_at)) DESC
+                """, org_id)
+        return [ConversationView(**dict(r)) for r in rows]
+
+    @app.get("/conversations/{cid}/messages", response_model=list[MessageView])
+    async def conversation_messages(cid: str, org_id: OrgId,
+                                    db: DB) -> list[MessageView]:
+        """会话历史：runs 按时间回放（前端渲染完历史后，对最新 run 开 SSE）。"""
+        if not await conversation_exists(db, org_id=org_id, conversation_id=cid):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在")
+        async with db.tx() as conn:
+            rows = await conn.fetch(
+                "SELECT run_id, user_message, status, intent, automation_tier, "
+                "       result, error, "
+                "       to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ') AS created_at "
+                "FROM agent_runs WHERE org_id=$1 AND conversation_id=$2 "
+                "ORDER BY created_at", org_id, cid)
+        out = []
+        for r in rows:
+            d = dict(r)
+            if isinstance(d.get("result"), str):
+                d["result"] = json.loads(d["result"])
+            out.append(MessageView(**d))
+        return out
+
+    @app.post("/conversations/{cid}/messages", response_model=RunView,
+              status_code=status.HTTP_201_CREATED)
+    async def post_message(
+        cid: str, body: MessageCreate, org_id: OrgId, db: DB,
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> RunView:
+        """一条消息 = 一个 run。幂等/审批/事件全部沿用 run 的既有语义。"""
+        if not await conversation_exists(db, org_id=org_id, conversation_id=cid):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在")
+        handle = await create_run(
+            db, org_id=org_id, run_id=f"run_{uuid.uuid4().hex[:12]}",
+            user_message=body.user_message, idempotency_key=idempotency_key,
+            intent=body.intent, automation_tier=body.automation_tier,
+            conversation_id=cid)
+        async with db.tx() as conn:
+            row = await conn.fetchrow(
+                "SELECT run_id,status,intent,automation_tier,requires_approval "
+                "FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, handle.run_id)
+        return RunView(**dict(row), created=handle.created)
 
     # ---- M9.6 · SSE：事件流 + 断线补发 ----------------------------------
 

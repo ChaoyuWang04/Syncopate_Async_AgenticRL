@@ -406,3 +406,23 @@ CREATE TABLE IF NOT EXISTS geo_performance (
     asset_count INTEGER NOT NULL DEFAULT 0,
     UNIQUE (product_id, region)
 );
+
+-- ---------------------------------------------------------------------------
+-- F-1（2026-08-20）· 会话：chatbox 壳的载体（22 §I-1）。
+-- 一条用户消息 = 该会话下的一个 run；对话历史 = 会话内 runs 按时间回放。
+-- ⚠️ 会话只是**组织方式**，不改变 run 的任何语义 —— 幂等/审批/事件全部原样。
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id              BIGSERIAL   PRIMARY KEY,
+    conversation_id TEXT        NOT NULL,
+    org_id          TEXT        NOT NULL,      -- ★ 同 run_id：只在 org 内唯一
+    title           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, conversation_id)
+);
+
+-- 已建库的加列路径（幂等；新建库走 CREATE TABLE 时不会有这列 ⇒ 两条路都要能过）
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+CREATE INDEX IF NOT EXISTS agent_runs_by_conversation
+    ON agent_runs (org_id, conversation_id, created_at);
