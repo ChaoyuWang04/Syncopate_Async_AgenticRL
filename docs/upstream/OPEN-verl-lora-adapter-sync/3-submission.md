@@ -315,3 +315,27 @@ Issue： https://github.com/verl-project/verl/issues/<ISSUE> PR： https://githu
 
 **发完之后**：回 PR 勾上最后一条 checklist · 签 CLA `https://cla-assistant.io/verl-project/verl?pullRequest=<PR>` ·
 把目录改名 `READY-` → `OPEN-` 并更新 `2-case.md` 顶部状态块。
+
+---
+
+## ④ · 回 #7495 的两条评论（2026-08-21）
+
+**对方说了什么**：wuxibin89 *"Does LoRA really need async training?"* ·
+HollowMan6 *"...vllm supports multi-LoRA so we rarely idle GPUs even for long tail generation."*
+⇒ **没人质疑 bug 本身，问的是这个组合值不值得支持。**
+
+**为什么 multi-LoRA 不适用**（别在评论里展开争，这段是给我们自己的）：
+它填的是**任务之间**的空档（一个引擎服务 N 个并发 LoRA 任务），
+async 填的是**一个任务内部**的空档；我们只有一个任务在飞，没有第二个租户。
+而且我们的训推分离是**显存逼的**（4×5090 / 31.84 GB，KV cache + 训练态挤不进同一张卡），
+不是为吞吐选的。另外 multi-LoRA 服务的 adapter 通常是冻结成品，RL 里 adapter 每步都变
+⇒ **仍然要推权重，正是本 issue 报的那条路**。
+
+**回复（一段，可直接粘；段内不许折行）**：
+
+````markdown
+Fair question — for us async is not really a LoRA thing, it is a memory one: on 4 consumer GPUs the trainer and vLLM do not fit on the same card, so trainer and rollout end up on separate devices and run concurrently by construction. multi-LoRA makes sense for the serving case you describe; we only ever have one job in flight, so there is no second tenant to fill the gap. That said, I am not asking you to support async LoRA — if it is out of scope, that is completely reasonable. My only ask would be that it says so: today the combination is accepted silently, training runs and the metrics look fine while the rollout policy never changes, and it took us a long time to notice. A warning or an assert would be enough, and I am happy to rework the PR into that instead if you would prefer.
+````
+
+⚠️ 如果对方回「就走 guard 那条」⇒ PR 改成**在 worker setup 硬失败/告警**（守则 §6.2：
+「让它硬失败」比「修行为」容易被接受）。材料不作废，本地补丁照常用。
