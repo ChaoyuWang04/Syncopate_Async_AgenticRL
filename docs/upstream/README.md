@@ -27,7 +27,7 @@ PARKED-<主题>    我们主动决定不提（例如影响面太窄），写清�
 | 包 | 目标 | 状态 |
 |---|---|---|
 | `CLOSED-verl-fsdp-size-1` | verl | 🔴 [#7493](https://github.com/verl-project/verl/issues/7493)/[#7494](https://github.com/verl-project/verl/pull/7494) 被 `wontfix` 关闭（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
-| `OPEN-verl-lora-adapter-sync` | verl | [#7495](https://github.com/verl-project/verl/issues/7495) + [#7496](https://github.com/verl-project/verl/pull/7496) 已开，⬜ 待申请 CI |
+| `OPEN-verl-lora-adapter-sync` | verl | [#7495](https://github.com/verl-project/verl/issues/7495) + [#7496](https://github.com/verl-project/verl/pull/7496) 已开。**CI 自动跑了**（74 过 / 13 红），13 红里**只有 `cpu_unit_tests` 是我们的**，已修 ⬜ 待推 |
 | `READY-verl-prefix-grouper-mask` | verl | 正文成稿；⚠️ 分支/测试尚未备 |
 | `READY-fsdp-shard-alignment` | PyTorch + NCCL | 正文成稿；优先级最低（不影响我们自己的训练） |
 | `DRAFT-verl-lora-only-checkpoint` | verl | 待上游考据（feature PR，非 bug） |
@@ -216,7 +216,14 @@ not_planned**；包④差点以"从未接上"提交，实际是**重构回归、
                    类型小写。包② 初版标题 `[LoRA][Async]Fix:` 会让 CI 直接红
               ⚠️ **粘完回读一遍渲染结果**：包② 粘贴时丢了首个小标题和半句话，都是肉眼没看出来的
 5. CLA        PR 开完机器人会留言 → 点链接签（DCO 已由 commit 的 Signed-off-by 满足）
-6. CI         ⚠️ **Slack 进不去**（限 anyscale/bytedance/together.ai 域名）⇒ 走**飞书群**申请
+6. CI         **PR 一开就自动跑**（包② 实测 92 个 check，不用申请；~~飞书群~~ 只在真被卡住时用）
+              ⚠️ **看结果按 name 取最新一次**：页面把同一个 check 的历次运行都列出来 ——
+                 包② 页面上那条红的 `check-title` 是开 PR 时旧标题留下的，改名后 4 次全绿
+              ⚠️ **先分清红的是不是自己的**（三个对照，都不用登录）：同期别的 PR 那几小时绿不绿 ·
+                 main 上有没有正在修 CI 的提交 · 有没有带着同一条红被合进 main 的 PR
+              ⚠️ **日志看不到**（`actions/jobs/<id>/logs` 要 admin 权限）⇒ 只能本地复现：
+                 照抄 workflow 的命令（`cpu_unit_tests` 是 `python_files = *_on_cpu.py` + `pytest -s -x tests/`），
+                 `-x` 意味着页面上看不出停在哪条，必须自己跑整棵 `tests/`
 7. 收尾       PR 编号写回 `2-case.md` 顶部状态块，`git mv` 改前缀 `READY-` → `OPEN-`
 ```
 

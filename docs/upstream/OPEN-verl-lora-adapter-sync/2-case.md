@@ -1,12 +1,11 @@
 # Case · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
 ```
-状态      OPEN —— 已提交，等 CI / review（2026-08-20）
+状态      OPEN —— 已提交，**CI 自己跑起来了**（不用飞书申请）：92 个 check，74 过 / 13 红 / 1 取消
 issue/PR  #7495 · #7496（标题 [rollout, fully_async] fix: ... 已过 verl 的 check_pr_title）
-分支      ChaoyuWang04/verl → fix/disaggregated-lora-adapter-sync @ bba0c45（基于 main 9326156，DCO 已签）
-待办      ⬜ 飞书群申请 CI（话术见 3-submission.md §③，PR=7496 / ISSUE=7495）
-          ⬜ PR 正文重贴一次：补回 "### What does this PR do?" 标题 + 补全被截断的半句
-             + 去掉硬折行（3-submission.md 已是重排版）
+分支      ChaoyuWang04/verl → fix/disaggregated-lora-adapter-sync @ **149e203**（bba0c45 + CI 修复，
+          基于 main 9326156，DCO 已签）⬜ **未推**
+待办      ⬜ 推 149e203（`git push fork fix/disaggregated-lora-adapter-sync`）
 验证      测试 修前 3 failed（红在行为断言）→ 修后 7 passed · pre-commit 14 钩子全过
           源码树实测 3 次同步全 adapter（252 MiB）、基座 0 次、kl 贴地板（6.4e-05 / 2.9e-04）
 ```
@@ -25,6 +24,57 @@ issue/PR  #7495 · #7496（标题 [rollout, fully_async] fix: ... 已过 verl �
 三类不受影响     全参 / merge=True / dummy 首推基座 —— 载荷里没有 lora_ ⇒ 走今天的原路
 delta_sharded    peek 守在 wire_format=="named_tensors" 上 ⇒ delta 引擎自管的路不碰
 ```
+
+## CI 的 13 红：只有 1 条是我们的（2026-08-20 核）
+
+**⛔ 不要按 GitHub 页面上的红点数办事** —— 它把**同一个 check 的历次运行**都列出来，
+`check-title` 那条红是 **11:18 开 PR 时旧标题 `[LoRA][Async]Fix:` 留下的**；11:20 改名后
+它跑了 4 次**全绿**，红的那次是死的。⇒ 判据是**按 name 取最新一次**，不是数页面上的叉。
+
+| 类别 | 条数 | 是不是我们的 | 依据 |
+|---|---|---|---|
+| `cpu_unit_tests` | 1 | ✅ **是我们的，必须自己修** | 同期 PR #7373 13:43 / #7448 13:45 全绿 ⇒ 环境好的；本地已复现（见下） |
+| `*_ascend` / `npu_unit_tests`（华为 NPU） | 10 | ⛔ 不是 | 当天 main 上连着两个 CI 修复：#7492「revert megatron version on ascend ci」12:30、#7456「Update ascend ci image」13:30 —— 我们 12:57–14:02 正夹在中间 |
+| `e2e_ppo_trainer_megatron-qwen3` | 1 | ⛔ 不是 | **#7485 同一条也红，照样被合进了 main** |
+| `e2e_ppo_trainer_fsdp_vllm_rocm` | 1（cancelled） | ⛔ 不是 | 被取消，不是失败 |
+
+### `cpu_unit_tests` 的根因（本地逐字复现）
+
+CI 跑的是 `pytest -s -x --asyncio-mode=auto tests/`（`python_files = *_on_cpu.py`），
+`-x` 让它停在第一条红上 ⇒ 页面看不出是哪条。本地复现：
+
+```
+tests/checkpoint_engine/test_global_steps_on_cpu.py::test_actor_worker_passes_global_steps_to_checkpoint_engine_send
+AttributeError: 'types.SimpleNamespace' object has no attribute 'load_format'
+    verl/workers/engine_workers.py:772
+```
+
+**是上游自己的一条老测试被我们改红的**，不是我们的新测试（新测试 7 条全绿）。
+它的桩 `SimpleNamespace(checkpoint_engine=...)` 只有 `checkpoint_engine` 一个字段，
+而我们新加的两句要读 `rollout.load_format`、并给 `get_per_tensor_param()` 传两个 kwarg
+（桩里的 `_FakeTrainerEngine.get_per_tensor_param(self)` 一个 kwarg 都不收 ⇒ 修完第一条还会红第二次）。
+
+⇒ **修桩不修生产代码**，理由要在 review 里说得出：
+`RolloutConfig` 里 `load_format`（默认 `"dummy"`）与 `layered_summon` **都是真字段**
+（`verl/workers/config/rollout.py:249/251`），colocate 路径 L672 早就在无保护地读 `load_format`；
+四个引擎的 `get_per_tensor_param` **全都收 `**kwargs`** ⇒ 桩落后于真实签名，不是我们的代码太脆。
+在生产路径加 `getattr(..., default)` 只会把"桩太薄"伪装成"配置可能缺字段"。
+
+```
+tests/checkpoint_engine/test_global_steps_on_cpu.py
+  + class _FakeRolloutConfig(SimpleNamespace)   给桩补 .get()（真 RolloutConfig 是 dataclass，两种访问都支持）
+  ~ _FakeTrainerEngine.get_per_tensor_param(self, **kwargs)
+  ~ 桩 rollout 补 load_format="dummy"           ⇒ ckpt_base_sync_done=False = 该测试原本的语义，断言不变
+```
+
+**验证**：`tests/checkpoint_engine/` 25 passed（原来 24 passed + 1 failed）·
+`tests/workers/test_engine_{return_model_output,workers_mini_batch_trace}_on_cpu.py` 5 passed ·
+pre-commit **14 个钩子全过**。
+
+★ 教训：**改了函数签名，要连同上游已有的桩一起搜一遍**（`grep -rl "get_per_tensor_param" tests/`）——
+我们本地只跑了自己新加的那个文件，CI 跑的是整棵 `tests/`。
+
+---
 
 ★ **上游自己留了面包屑**：`engine_workers.py` 里那句注释
 *"base_sync_done is unused in merge-only mode but **kept for Phase 2 adapter path**"*
