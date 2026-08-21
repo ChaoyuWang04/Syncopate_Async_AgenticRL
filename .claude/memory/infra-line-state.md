@@ -366,6 +366,20 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
 ✅ 乒乓修理 A/B 阶梯逐级命中预测：912→820(③jagged)→328(②PG-RI)→236(both)；
    ⛔ Adam 无罪（CPU 张量 .item() 不同步——判罪要按同栈 Synchronize 配对,不按 scalar 计数）
 ✅ 全开终值：fixes+graph @ s16/0.1 = **9.23 s/gstep**（update_actor 6.47·gen 3.3%）
-欠：s16/0.1 多种子 → 切默认；graph 精度闸；compile 微基准
 工具沉淀：run_e14_sweep/phase2 编排脚本（门禁→训→评→比全自动）+ torch-prof 探针 + 栈对齐
+
+## ★★ 2026-08-21：E14 收官三件全过 → 闭环归档，两默认值切库
+
+```
+✅ s16/0.1 三种子复核过（run_e14_final3.sh）：均值 −0.005/−0.012/−0.013 全无差异 ·
+   defer 0/−3/−8pt 全门槛内（不再刀锋态）· vs SFT +0.150~0.158 稳定
+   ⚠️ 如实登记：三种子均值方向一致偏负（合并可能有 ~0.01 真实小代价），由等时论证背书补回
+✅ graph 精度闸单变量通过：graphgate 臂与 ctrl64 逐字段同（修理②③关回旧状态）唯一变量
+   enforce-eager=False ⇒ +0.019(t=3.1) 无退化（正差按跑间方差读，不记功）· Capturing ×28
+⇒ **launch_rl 默认已切：--sync-every 16 · --enforce-eager False**（08-21，E14 §4.10）
+⛔ compile 微基准判死（bench_compile_update_actor.py）：update_actor 段生产形状零收益
+   （8.371 vs 8.362s）+ 变长批重编译税 ~14s/形状；max-autotune graph 池 +2.8GB 贴顶 OOM
+   ★ 自省：数值红线没先立噪声地板（max|Δ|=0.103 触线无法归因）——守则①违例实录进 E14 §7
+⇒ E14 状态=✅ 收官；速度线下一靶 = FP8 新消费者（01 §1-2）；边界表定稿 E14 §5
+```
 ```

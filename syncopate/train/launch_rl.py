@@ -833,8 +833,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="fully_async：攒够几个 mini-batch 才训一步")
     parser.add_argument("--staleness-threshold", type=float, default=0.1,
                         help="fully_async：允许的样本陈旧度上限")
-    parser.add_argument("--sync-every", type=int, default=4,
-                        help="fully_async：每几步把权重推给 rollout 池")
+    # ★★ 2026-08-21：sync-every 默认 4→16（E14 §4.8 五臂扫描 + 三种子复核）。
+    #   杀接力赛的是同步暂停频率不是陈旧度阈值：s16/0.1 拿到全部吞吐收益（9.57 s/gstep，
+    #   gen 28%→<1%）而陈旧样本仅 7%；质量三种子（1234/2/3）均值全部无差异、
+    #   defer 全在门槛内（0/−3/−8pt）。要复现旧行为显式传 --sync-every 4。
+    parser.add_argument("--sync-every", type=int, default=16,
+                        help="fully_async：每几步把权重推给 rollout 池（默认 16，E14 定案）")
     parser.add_argument("--partial-rollout", default="True", choices=["True", "False"],
                         help="fully_async：权重同步时被打断的轨迹要不要续跑。"
                              "★ 关掉它，长轨迹会被系统性丢掉 —— 而长链正是 agentic 的核心能力，"
@@ -943,9 +947,12 @@ def main(argv: list[str] | None = None) -> int:
                              "假定 unpadded 扁平契约，单独开会 AssertionError@padding.py:131")
     parser.add_argument("--fused-kernels-backend", default="torch", choices=["torch", "triton"],
                         help="融合 kernel 的实现后端")
-    parser.add_argument("--enforce-eager", default="True", choices=["True", "False"],
-                        help="vLLM 是否禁用 CUDA graph。默认 True（沿用现状）；E14 实测 eager 的"
-                             "发令微间隙 32.4s 超过计算本身 ⇒ False（开 graph）是批2探针。"
+    # ★★ 2026-08-21：默认 True→False（开 CUDA graph）。E14：eager 发令微间隙 32.4s 超过
+    #   计算本身；graph 开后 gen −33%。精度闸已过（graphgate 臂：与 ctrl64 同配置单变量对照，
+    #   捕获判据 Capturing ×28、任务配对无退化、defer 无退化、kl 地板 1.9e-4）。
+    #   enforce_eager=True 的历史动机是 colocate sleep/wake 时代遗产，分家后不适用。
+    parser.add_argument("--enforce-eager", default="False", choices=["True", "False"],
+                        help="vLLM 是否禁用 CUDA graph。默认 False（开 graph，E14 精度闸已过）；"
                              "⚠️ graph 池要吃额外显存，rollout 卡余量本就贴边，OOM 了先降 gpu_util")
     parser.add_argument("--no-engine-stats", action="store_true",
                         help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")

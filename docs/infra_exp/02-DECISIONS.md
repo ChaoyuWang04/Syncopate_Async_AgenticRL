@@ -25,7 +25,7 @@
 | **KL / ref** | ✅ **已切库默认关**（Chaoyu 2026-08-20；`--use-kl-loss` 默认 False）。E17 两臂：省 15.4%、任务分无差异；cand 400 步 KL-off 长跑兑现。★ 判据③ `rollout_corr/kl` **不随 ref 消失**（rollout-IS 诊断；cand 全程 98 点中位 4e-4 在地板，第二次实证）。`fabricated_safety_line_cap` 保持常驻观察；⛔ 连带「ref 走 FP8」失效 | E17 §9 · /MAINLINE-INFRA |
 | **lr 与步数**（Chaoyu 08-19） | 「学不动」主因是**步数太少**（≤1 epoch）不是 lr 低 ⇒ 解法是加步数/固定 epoch；**上线候选不用 lr 1e-4**；400 步是下限、停由判据定 | 01 §1-4 |
 | 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4 · `clip_ratio=0.0000` | 00 §6 |
-| launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动；cand 实测中位 0.92/最低 0.816，健康）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 · **PG 开（mb 联动 8）· KL 关**（08-20） | launch_rl help |
+| launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动；cand 实测中位 0.92/最低 0.816，健康）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 · **PG 开（mb 联动 8）· KL 关**（08-20）· **sync-every 16 + CUDA graph 开**（08-21，三种子复核 + 单变量精度闸，E14 §4.10） | launch_rl help |
 | **thinking 开关** | `SYNCOPATE_THINK=1` **只许评测**（launch_rl 拦训练）；开关在契约模块（模板 kwarg + 预算 8192 一起切）；**裸基座 eval 臂单轮上限必须给 2048**（256 的砍断与真实弱分不开）。零训练拨开关不上生产（净 −0.057）；红利路径=带思考的 SFT 数据 | **E27** |
 | **永久基线** | eval 配对的基座参照 = `_audit/e27_base_off.json`（base think-off @2048/轮，修复后管线产）；SFT/RL 配对基线仍是 `v13_sft_*_merged` 族（E24） | E27 §5 |
 | **常驻观察** | `fabricated_safety_line_cap`：两处独立反向信号汇合（E17 KL 臂 +2 · E27 SFT vs 基座 +18）⇒ 每次 compare 必看 | E17 §9 · E27 §5 |
