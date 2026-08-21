@@ -400,4 +400,21 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
 ⇒ 开着的裁定（Chaoyu）：① fp8 KV 是否设 rollout/serving 默认（代价 −0.009 在 MDE 界）
    ② trainer 侧 FP8 融合栈上不上（周级）；下一大项 = A3 手写算子（01 §1-3）
 ```
+
+## ★★★ 2026-08-21（下午）：A3 探底三件套闭环——sm_120 的"半速 FP8"大发现
+
+```
+✅ A3-① Triton 退化实锤且更糟（E16 §6）：tl.dot_scaled 在 sm_120 = bf16 仿真
+   （docstring 自供）——MXFP8 反慢 bf16 38%（119 vs 192.5 TFLOPS）、MXFP4 与 MXFP8
+   同速（=没走原生，双证）、距 cuBLAS 锚 3.2×；判据自省：P2 没预留「反慢」档位
+✅ A3-② 指令面+尺子+数值（E16 §7）：四种块缩放 MMA（含 NVFP4）sm_120a 汇编全通；
+   峰值阶梯 bf16 258 / fp8旧 516 / mxf8 1026 / fp4 2055 = 1:2:4:8；
+   ★★ 头号发现：**传统 FP8 mma 只有原生速率一半，满吞吐必须 kind::mxf8f6f4**；
+   数值语义单 warp 真数据对拍 max|Δ|=0 逐位 + ue8m0 两档缩放精确
+⇒ 三层账对齐：Triton 仿真 119 → cuBLAS 378 → 传统峰 516 → 原生峰 1026 → FP4 2055
+   ⇒ 手写上限 = FP8 2.7× / FP4 5.4×（对 cuBLAS）——A3 正餐（TileLang 真 GEMM）的
+   分母与需求论证双双齐活；工具沉淀 probe_triton_dot_scaled.py ·
+   bench_fp4_ptx_peak.cu · check_mxf8_mma_numerics.cu（nvcc 12.8 -arch=sm_120a）
+📚 背景层沉淀：PRIMER-precision-sm120.md（精度格式/单元/软件栈/训推组合，通俗版）
+```
 ```
