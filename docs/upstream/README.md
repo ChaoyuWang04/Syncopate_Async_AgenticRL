@@ -28,7 +28,7 @@ PARKED-<主题>    我们主动决定不提（例如影响面太窄），写清�
 |---|---|---|
 | `CLOSED-verl-fsdp-size-1` | verl | 🔴 [#7493](https://github.com/verl-project/verl/issues/7493)/[#7494](https://github.com/verl-project/verl/pull/7494) 被 `wontfix` 关闭（"fsdp_size=1 is a rare case"）。**决定不再跟进** |
 | `OPEN-verl-lora-adapter-sync` | verl | [#7495](https://github.com/verl-project/verl/issues/7495) + [#7496](https://github.com/verl-project/verl/pull/7496) 已开。**CI 已跑**（飞书申请后 08-20 12:57 起跑，74 过 / 13 红），13 红里**只有 `cpu_unit_tests` 是我们的**，已修 ⬜ 待推 |
-| `READY-verl-prefix-grouper-mask` | verl | 正文成稿；⚠️ 分支/测试尚未备 |
+| `READY-verl-prefix-grouper-mask` | verl | **全齐**（08-21）：issue 表单版 + PR + 三条评论 · 分支 `fix/prefix-grouper-pack-with-existence-mask @ 03b9a91` · 单测验过负例 · 复现 5/5。**报三条**（C 掩码 / D pad-id / E 后端），E 只进 issue ⬜ 待推 |
 | `READY-fsdp-shard-alignment` | PyTorch + NCCL | 正文成稿；优先级最低（不影响我们自己的训练） |
 | `DRAFT-verl-lora-only-checkpoint` | verl | 待上游考据（feature PR，非 bug） |
 

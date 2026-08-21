@@ -1,7 +1,7 @@
 # 提交件 · PyTorch issue + NCCL #413 评论（可直接粘贴）
 
 > 状态：**草稿完成，等 Chaoyu 过目后提交**（2026-08-19）。
-> 中文分析与证据链 → [`analysis.md`](analysis.md)。
+> 中文分析与证据链 → [`2-case.md`](2-case.md)。
 > 两个动作：① `pytorch/pytorch` 提 issue（FSDP1+FSDP2 同报，修法主推 FSDP2）；
 > ② `NVIDIA/nccl` **在 #413 下评论请求重开**（不提新 issue —— 维护者 2020 年已确认，
 > 机器人关闭时留了"仍相关请重开"的口）。①②互相引用。

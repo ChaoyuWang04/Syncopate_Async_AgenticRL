@@ -1,13 +1,21 @@
 # Case · verl `use_prefix_grouper` 的掩码语义 bug（E26 / E25 §5）
 
 ```
-状态    READY —— 提交件成稿，等 Chaoyu 提交（⚠️ 分支/测试尚未备，提交前要先做）
-目标    verl-project/verl（bug report + 小 PR：掩码修复 + 死开关警告，刻意不含接线）
+状态    READY —— **正文 + 分支 + 测试全部备齐（2026-08-21）**，等 Chaoyu 提交
+目标    verl-project/verl（bug report + 小 PR：两处掩码修复 + 死开关告警，刻意不含接线）
+分支    /workspace/_upstream/verl → fix/prefix-grouper-pack-with-existence-mask @ 03b9a91
+        （基于上游 main 4905d0c，DCO 已签）⬜ **未推**
+issue/PR 未提交
 定位    ⛔ 「从未接上」是错的 —— 真相是 #6067 重构回归；#7202 已交修复被维护者关闭
         （转向 MAGI #6689：draft / old_log_prob diverge / Megatron 向）
-        ★ 我们独有的是**掩码语义 bug**：全网无人报过，且 #7202 的复活版仍带着它
+        ★ 我们独有的是**休眠代码里的三条静默错误**（C/D/E，全网无人报过；#7202 的复活版仍带着 C 和 D）
+验证    复现脚本 5/5 PASS（对 0.8.0 与今日 main 各跑一遍）
+        单测 修前 3 failed（红在**行为**：丢 token / prefix_len 7≠4 / 返回梯度掩码）→ 修后 4 passed
+        告警单测 修前红（"got []"）→ 修后绿 · pre-commit 14 钩子全过
+        ⚠️ 掩码单测在 CI 里会 **skip**（prefix-grouper 不是 verl 依赖，也不在 uv.lock）——
+           这句话已明写进 PR 正文，不许含糊过去
 风险    同一维护者（wuxibin89）关掉过 #7202，也以 "rare case" 关掉了我们的包①
-        ⇒ 本包刻意只提「护栏」不提「接线」，避免撞同一堵墙
+        ⇒ 本包刻意只提「护栏」不提「接线」；**E（后端支持列表）只进 issue 不进 PR**
 ```
 
 发现来源 [`../../infra_exp/E26-prefix-grouper.md`](../../infra_exp/E26-prefix-grouper.md) ·
@@ -15,7 +23,7 @@
 
 ---
 
-> 2026-08-19。英文提交正文 → [`submission-EN.md`](submission-EN.md)。
+> 2026-08-19。英文提交正文 → [`3-submission.md`](3-submission.md)。
 > 实验背景 → [`../../infra_exp/E25-trainer-feed.md §5`](../../infra_exp/E25-trainer-feed.md)。
 
 > 🆕🆕 **2026-08-19 · 上游考古完成，七条 —— ⛔ 本包定位要整个换**：
@@ -46,7 +54,7 @@
 > **人物表**：kevssim（原作者）· supercharleszhu（修复者，天然盟友，另有 #7292 ref-KV-cache wip）·
 > wuxibin89（裁决维护者）· arvyanh（#6401 RFC + #6689 MAGI）。
 >
-> 🆕 **8/19 晚追加三条**（读 #7202 实际 diff，详见 [`SYNC-2026-08-19-fused-kernel-conflict.md`](SYNC-2026-08-19-fused-kernel-conflict.md) 的回复段）：
+> 🆕 **8/19 晚追加三条**（读 #7202 实际 diff，详见本文末尾「附 · fused kernel 冲突线」）：
 > 8. ★ **#7202 的复活版仍带掩码 bug**：它对 `prefix_grouper_utils.py` 的 diff 只改 nested→padded
 >    与 uid 解包，**`suffix_mask=response_mask` 一字未动** ⇒ 维护者一旦重开它，工具 observation
 >    照样被静默删掉。**⇒ 新增行动：直接去 #7202 下评论递给作者本人。**
@@ -56,6 +64,25 @@
 >    ⇒ 同一个功能，**在两个时代因两个不同原因静默失效**。
 > 10. `use_fused_kernels` × PG 的失败形状比"不返回 logits"更毒：`CausalLMOutputForPPO.logits`
 >    **存在但为 None** ⇒ 不是 AttributeError，而是 None 流进 `split_output` 后炸在无关的地方。
+
+## ★ 提交的是三条，不是一条（2026-08-21 重新定范围）
+
+E26 里我们实际找到六处问题，其中**三条是休眠代码里的静默错误、且全网无人报过**。
+此前的提交件只报了 C 一条 —— 那等于把「我们是唯一真正把这条路跑起来过的人」这个最硬的资本丢掉三分之二。
+
+| | 内容 | 判据（复现脚本里的编号） | 去处 |
+|---|---|---|---|
+| **C** | `suffix_mask` 拿到的是**梯度**掩码 ⇒ 多轮下工具 observation 被从模型输入里删掉 | check C：`[12,13,22,23]` 被丢 | issue + **PR** |
+| **D** | 前缀掩码靠 `ne(pad_token_id)` 猜，而那个 id 由 `micro_batch.get("pad_token_id", 0)` 解析 —— **这个键从来进不了训练批**（同仓库 engine 路径用的是 `get_non_tensor_data`）⇒ 任何 pad id≠0 的模型，**prompt 的 padding 会被打包进共享前缀** | check D：`ne(0)` 数出 5 个「真」token，attention_mask 说只有 3 个 | issue + **PR** |
+| **E** | wrapper 把 PrefixGrouper 的 **2D padding 掩码**当 HF 的 `attention_mask` 递下去。suffix 子调用 `q_len=R` 而 `k_len=P+R`：sdpa 直接**报错**；把掩码丢掉也救不了 —— torch 的 `is_causal=True` 在 `q_len≠k_len` 时是**左上对齐**（每个回答 token 只看得见前 t+1 个**题面** token）。只有 flash-attn 的 `causal=True` 是右下对齐，而 `_PREFIX_GROUPER_SUPPORTED_ATTENTIONS` 把 `sdpa`/`eager`/`flex_attention` 也列成支持 | check E：`|sdpa(is_causal) − 左上| = 0.000e+00`、`− 右下| = 9.136e-01`；可见 key 数 `[1,2,3]` vs 正确 `[5,6,7]` | **只进 issue** |
+
+⇒ **E 不进 PR** 的理由：它要改 `_create_prefix_grouper_wrapper` 的行为，属于接线范畴 ——
+而接线正是 #7202 被关的原因。C/D 是「打包用哪个掩码」，一个函数、十几行，和后端选型无关。
+
+⇒ D 还额外坐实一条：`prefix_grouper` **根本不是 verl 的依赖**（不在 pyproject、不在 uv.lock），
+`prefix_grouper_utils.py` 也**零 importer** —— 这条路径是完整孤立的，所以上面三条谁都没撞见过。
+
+---
 
 ## 0 · 我们为什么会去看它
 
@@ -299,7 +326,7 @@ MAGI    未核（Megatron/TE 链，另一套投影路径）⇒ 这条留作待�
 只改了 nested→padded 转换和 uid 解包，**`suffix_mask=response_mask` 那行一字未动**。
 
 ⇒ 也就是说：**维护者一旦重开 #7202，多轮工具场景下工具 observation 照样会被静默删掉。**
-⇒ 新增一条行动（已写进 submission-EN §3）：**去 #7202 下评论**，把掩码这条直接递给作者本人 ——
+⇒ 新增一条行动（已写进 [`3-submission.md`](3-submission.md) §3）：**去 #7202 下评论**，把掩码这条直接递给作者本人 ——
 他是最可能复活这条线的人，而我们补的正好是他缺的那块。
 
 ## 🎁 白捡的实现情报（给我们自己的本地补丁，能省一次调试）
