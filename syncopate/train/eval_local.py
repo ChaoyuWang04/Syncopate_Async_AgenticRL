@@ -149,9 +149,18 @@ class VLLMEngine:
         # async 版多条 rollout 同时在引擎里飞，decode 自动拼 batch。
         # ⚠️ 引擎把后台任务绑在第一个事件循环上，所以整个评测必须跑在
         # **同一个 asyncio.run** 里（main 里已按此重构）。
+        # E19-c（2026-08-21）：serving 量化的质量配对臂。默认全关 = 行为一字不变；
+        # 设了就打判据行（防「机制在但没接上」——env 拼错时这行不出现，臂作废）。
+        _quant = os.environ.get("SYNCOPATE_EVAL_QUANT") or None
+        _kv_dtype = os.environ.get("SYNCOPATE_EVAL_KV_DTYPE") or "auto"
+        if _quant or _kv_dtype != "auto":
+            print(f"[eval-quant] quantization={_quant} kv_cache_dtype={_kv_dtype}",
+                  file=sys.stderr)
         self.engine = AsyncLLMEngine.from_engine_args(AsyncEngineArgs(
             model=model_path,
             dtype="bfloat16",
+            quantization=_quant,
+            kv_cache_dtype=_kv_dtype,
             gpu_memory_utilization=gpu_util,
             # ★ 这里要的是**多轮累积后的总长**，不是首轮 prompt 的上限。
             #

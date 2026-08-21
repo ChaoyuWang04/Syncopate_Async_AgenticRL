@@ -382,4 +382,22 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
    ★ 自省：数值红线没先立噪声地板（max|Δ|=0.103 触线无法归因）——守则①违例实录进 E14 §7
 ⇒ E14 状态=✅ 收官；速度线下一靶 = FP8 新消费者（01 §1-2）；边界表定稿 E14 §5
 ```
+
+## ★★ 2026-08-21（上午）：E19-c serving 量化四臂+归因全完（Chaoyu 点单当天闭环）
+
+```
+✅ 曲线 bf16→fp8kv→fp8w→nvfp4 全测（E19 §8）：fp8 KV=**容量杠杆**（KV池×2 ⇒ 并发+50%，
+   TPOT 不变——收益全是"装得下"的钱）；质量 −0.009~−0.010 归因=**几乎全来自 KV FP8**
+   （长上下文负载对 KV 精度敏感，"KV-only 免费午餐"在质量维不成立）
+⛔ FP4 权重对 4B agentic 判死（凶手锁定）：W4A4 −0.680 / W4A16 −0.669 /
+   无 adapter 基座 −0.489 三读数互证；失败形态=工具调用格式坏死（parse_ok=0）
+★ sm_120 kernel 成熟度地图（A3 素材）：W4A16 单流 3.57ms/tok（1.85×）· NVFP4 6.04 ·
+   fp8 W8A8 反慢 37%——同卡三条量化路径天差地别，"硬件有单元≠软件能兑现"第四证
+⛔⛔ 事故与恢复：llmcompressor 装进生产 venv ⇒ torch 2.9→2.13 整栈静默重解析；
+   uv sync --frozen --all-extras + flash-attn 反向判据 15min 复原 ⇒ 守则⑧新增
+   「第三方工具只住隔离 venv」；llmcompressor 0.13 新 config 字段 vs vllm 0.12 拒收=剥字段
+🧹 顺手：GPU0 上 129 个无主 pytest 孤儿（空收集器+文件锁互等）按 PID 清理
+⇒ 开着的裁定（Chaoyu）：① fp8 KV 是否设 rollout/serving 默认（代价 −0.009 在 MDE 界）
+   ② trainer 侧 FP8 融合栈上不上（周级）；下一大项 = A3 手写算子（01 §1-3）
+```
 ```

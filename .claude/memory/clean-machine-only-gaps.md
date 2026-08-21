@@ -76,3 +76,18 @@ v11 → v12（`--freeze-from data/batches/v11`）重跑一遍，
 
 ★ 好消息：官方 `cu13torch2.9` 轮子是好的，缺的 `libcudart.so.13` 用 PyPI
 `nvidia-cuda-runtime<=13.2` 补上即可（驱动 595 支持 CUDA 13.2），**不必本地编译**。
+
+---
+
+## ★★★ 2026-08-21 追加：②的镜像形态——往生产 venv 里装新工具 = 整栈静默重解析
+
+`uv pip install llmcompressor` 进 `.venv`：**torch 2.9→2.13(cu130)、transformers 4.57→5.14、
+triton 3.5→3.7 全被连带升级**，vllm/verl/flash-attn 的 ABI 前提一锅端；且我当时
+`| tail -3` 把安装 diff 弄丢，差点连"改了什么"都不知道。
+两条固化（已进 00-START 守则⑧）：
+① **一次性工具住隔离 venv**（`/workspace/venvs/<tool>`），产物走文件交接——
+   量化 ckpt、转换脚本的输出都是纯文件，没理由让工具的依赖树碰生产环境；
+② **`uv.lock`（+ `--all-extras`）是真的救命绳**：`uv sync --frozen --all-extras`
+   ＋ flash-attn 反向判据 15 分钟完整复原——「一条命令重建」在锁文件维护住的部分是真的；
+   但注意裸 `uv sync` 会**卸掉 extras**（vllm/verl/flash-attn 全在 train extra 里），
+   同 ② 的"接上了又被工具拆掉"。安装类操作的输出**永远全量落盘**，别 tail。

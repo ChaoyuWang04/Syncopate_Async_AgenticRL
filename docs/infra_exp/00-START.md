@@ -128,7 +128,10 @@ pre-backward hook 驱动，绕过 = **梯度静默不跨 rank 归约且不报错
 每个短跑收尾会落 **27 GB ckpt**（`--save-freq 999` 挡不住），跑完就删
 `global_step_*`（dispatched.jsonl / rollout_dumps 留；**要过任务尺子的 ckpt 必须留**）。
 
-**⑧ 工具卫生**：`pkill -f` 会杀掉你自己（用 `[.]` 转义或按 PID）；
+**⑧ 工具卫生**：⛔ **第三方工具绝不 `uv pip install` 进生产 venv**（08-21 事故：装 llmcompressor
+把 torch 2.9→2.13 整栈静默重解析；恢复 = `uv sync --frozen --all-extras` + flash-attn 反向判据）
+——一次性工具住隔离 venv（`/workspace/venvs/<tool>`），产物走文件交接；
+`pkill -f` 会杀掉你自己（用 `[.]` 转义或按 PID）；
 nsys 不在 PATH（`/opt/nvidia/nsight-compute/2025.1.1/host/target-linux-x64/nsys`）、
 只能包住启动、中间文件吃几十 GB；换 flash-attn 轮子先跑
 `scripts/check_flash_attn_backward.py`（有轮子**前向全对反向全错**）。
