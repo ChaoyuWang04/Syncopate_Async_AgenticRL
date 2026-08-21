@@ -1,7 +1,7 @@
 # Case · verl disaggregated 下 LoRA adapter 从不同步（E22）
 
 ```
-状态      OPEN —— 已提交，**CI 自己跑起来了**（不用飞书申请）：92 个 check，74 过 / 13 红 / 1 取消
+状态      OPEN —— 已提交，飞书申请后 CI 已跑（08-20 12:57 起跑）：92 个 check，74 过 / 13 红 / 1 取消
 issue/PR  #7495 · #7496（标题 [rollout, fully_async] fix: ... 已过 verl 的 check_pr_title）
 分支      ChaoyuWang04/verl → fix/disaggregated-lora-adapter-sync @ **149e203**（bba0c45 + CI 修复，
           基于 main 9326156，DCO 已签）⬜ **未推**
@@ -26,6 +26,8 @@ delta_sharded    peek 守在 wire_format=="named_tensors" 上 ⇒ delta 引擎�
 ```
 
 ## CI 的 13 红：只有 1 条是我们的（2026-08-20 核）
+
+（CI **不是自动触发**的：PR 11:18 开、12:57 才全部起跑，中间是飞书申请 + 维护者点 approve。）
 
 **⛔ 不要按 GitHub 页面上的红点数办事** —— 它把**同一个 check 的历次运行**都列出来，
 `check-title` 那条红是 **11:18 开 PR 时旧标题 `[LoRA][Async]Fix:` 留下的**；11:20 改名后
