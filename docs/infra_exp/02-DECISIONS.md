@@ -47,6 +47,9 @@
 | 🔴 `_patch_prefix_grouper`（默认关） | E26：打包前向走根 FSDP + hook 捕获 hidden + 0×根输出锚 | `repro_pg_dtype.py` + 判据A/组构成 |
 | `ddp_save_to_cpu` 加 `if requires_grad` | E13：old_log_prob/ref 比值 1.94→1.07（≈8.5 s/步） | 3 条测试 |
 | launch_rl 启动守卫 | mini_batch×rollout_n 整除检查（列可用值 [3,6,9,12,15]）· lora-merge 拦截 · 数据默认值跟 DATA_VERSION | 都在最早能判的地方炸 |
+| 🆕 乒乓修理②③（默认开，E14 §4.7/4.9） | PG `repeat_interleave` 补 output_size（×584→0）· `_to_jagged` 批量 tolist（×96→2）；数值零算术不变；A/B 阶梯 912→236 逐级命中 | SYNCOPATE_FIX_PG_RI / FIX_JAGGED（=0 对照） |
+| 🆕 `--enforce-eager` 旗子（默认 True 沿现状，E14） | False=开 vLLM CUDA graph：gen −33%（sync4 档）；晋级默认欠精度闸 | 捕获判据行 ×31+ |
+| 🆕 torch-prof 探针（默认关） | SYNCOPATE_TORCH_PROF=N 抓 rank0 第 N 次 update_actor：chrome trace + 同步类算子账本（判罪按同栈 Synchronize 配对） | E12 §262 元数据搬运 |
 | 🆕 `_patch_lora_only_ckpt`（默认开，E29） | LoRA 下 ckpt 只存可训练部分：save 7.91→0.83 s（9.5×）、ckpt 18→1.5 GB；load 端合成加载；全参自动回退全量 | 5 条单测 + [ckpt-lora] 判据行 + 续跑实跑 |
 | 探针族（verl_patches） | SYNCOPATE_SYNC_PAYLOAD / OPT_STEP_PROBE / DDP_PROBE / SYNC_TIMING | 绑不上就报红，不打结论 |
 | NVTX 阶段标注（`--nvtx`） | verl `marked_timer` 有名无实，补齐后 nsys 才能按阶段归属 | — |
@@ -80,10 +83,7 @@
 ⛔ E11 手写 kernel · mb/GC/mb16 三条路（E25/E26 证伪）
 🔄 token vs seq 多种子撤销（Chaoyu 08-20）：cand 实测 seq IS 的 ESS 98 点中位 0.92/
    最低 0.816、无衰减 —— 健康且有读数，多种子没有要回答的问题
-⚪ R2 陈旧度重测停放（Chaoyu 08-20）：当前负载陈旧度条件不存在（partial_ratio 恒 0 =
-   没有轨迹跨过权重版本边界，rollout 大量空闲）。复活条件 = CoT 后 rollout 显著变慢
-⚪ 「同步不打断 rollout」停放（Chaoyu 08-20）：轨迹从没被杀（cand 全程 abort=0、
-   partial rollout 零触发），但 rollouter 每次 sync 暂停-排空-恢复（400 步 ×99 实锤）；
-   当前大头是 update_actor 54.2%，gen 23.6% 里暂停占比量不清 ⇒ 不值得做。
-   复活条件同上，且动手前先量「暂停一次值多少」
+✅ R2 剂量曲线已测（08-20 夜由闸门实验兑现，早于 CoT 路径）：5 臂+等时臂定案在 E14 §4.8
+✅ 「同步不打断 rollout」被更好的解法取代（E14）：降低同步频率（sync16）直接把暂停次数 ÷4，
+   gen 28%→0.6%——双缓冲/加深队列不必做了
 ```
