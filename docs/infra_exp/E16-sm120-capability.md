@@ -113,3 +113,29 @@ bf16 再 dot"——白付一遍 upcast，还占寄存器。**双证**：① e2m1
 （反慢）——枚举失败模式时要留「更糟」的档位。
 ⇒ A3 的需求测量至此齐活：sm_120 的块缩放 MMA 只能从 CUTLASS sm120 路径或
 inline PTX 拿（下一件 = FP4 `mma` inline PTX 探底，01 §1-3）。
+
+## 7 · 2026-08-21 · A3-②前半：块缩放 MMA 指令面 + 峰值尺子（inline PTX）
+
+**编译面**（nvcc 12.8 / sm_120a，四变体全过汇编）：传统 `e4m3` mma ✅ ·
+`kind::mxf8f6f4.block_scale` ✅ · `kind::mxf4`(MXFP4) ✅ · `kind::mxf4nvf4`(NVFP4, ue4m3 缩放) ✅
+⇒ **硬件指令在 PTX 层全暴露，"够不着"纯属库层缺口**（torch 派 cutlass_80 · Triton 仿真）。
+
+**峰值尺子**（`scripts/bench_fp4_ptx_peak.cu`：寄存器驻留 · 4 独立累加器 · 170 SM 打满）：
+
+```
+bf16 m16n8k16          258 TFLOPS   1×
+fp8  m16n8k32（传统）   516 TFLOPS   2×    ← Ada 兼容路径
+mxf8 m16n8k32 块缩放  1026 TFLOPS   4×    ★ 传统 FP8 的 2 倍
+mxf4/nvf4 m16n8k64    2055 TFLOPS   8×    （两种 4-bit 同速）
+```
+
+★★ **头号发现：sm_120 上传统 FP8 mma 只有原生速率的一半**——FP8 满吞吐必须走
+块缩放 `kind::mxf8f6f4` 形式（缩放全 1 也行）。三层账就此对齐：
+Triton 仿真 119 → cuBLAS 实测 378 → 传统峰 516 → **原生峰 1026** → FP4 峰 2055
+⇒ cuBLAS 连传统路径峰值都没吃满；**手写上限 = FP8 2.7× / FP4 5.4×（对 cuBLAS 378）**。
+
+⚠️ 成立范围三条：① 寄存器驻留峰 ≠ 真实 GEMM 可达峰（无访存/无 smem 流水），
+它是「距硬件上限%」的分母不是承诺；② 时钟未钉（boost 漂移）；③ **只测了发射吞吐，
+数值语义未验**（寄存器喂的是垃圾位型）——正确性微 kernel 是 A3-② 后半的第一件事。
+⇒ 下一步：真实数据+缩放语义对拍 → TileLang/CUTLASS sm120 路径搭真 GEMM，
+判据 = 对拍等价 + 距 1026/2055 的百分比（01 §1-3）。
