@@ -3,7 +3,8 @@
 #   用法: bash scripts/push_adapter_to_hf.sh <adapter目录> <仓库内子路径> ["提交说明"]
 #   例:   bash scripts/push_adapter_to_hf.sh models/adapters/e14x_graphgate adapters/e14x_graphgate
 # 幂等：同内容重推 = 无 diff 不产生提交。SSH 走 ~/.ssh/id_ed25519_hf（Host hf.co 已配）。
-# ⚠️ 收官/晋级流程的默认动作（2026-08-21 Chaoyu 定）：底座改动走独立仓库，这里只管 adapter。
+# ⚠️ 收官/晋级流程的默认动作（2026-08-21 Chaoyu 定）：单仓库制——底座在 bases/、
+#    SFT 出处链在 sft/、RL adapter 在 adapters/ 与 cand_*/；本脚本管 adapter 类推送。
 set -euo pipefail
 SRC="${1:?用法: push_adapter_to_hf.sh <adapter目录> <仓库内子路径> [说明]}"
 DST="${2:?}"
