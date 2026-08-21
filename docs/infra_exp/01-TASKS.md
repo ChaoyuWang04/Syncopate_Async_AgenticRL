@@ -13,7 +13,7 @@
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
 | **2** | **FP8 找新消费者（软硬结合）**：⚠️ **段级探针已出负结果待裁定**（08-21，E19 §7）——朴素接线（per-tensor+`_scaled_mm`）速度仅 −3.8%、显存 +4 GB、per-seq 20 nats 系统偏置破常驻判据③，三条独立判死；**剩余可行路 = 融合量化栈（torchao/TE，周级）或转 A3/推理侧**。Chaoyu 裁定：结案转移 or 上融合栈 | infra→**Chaoyu 裁定** | 已花 0.5 天 | DeepSeek H「距上限」+ 字节「低精度」；5090 FP8 兑现主场或移 A3（TileLang FP8 GEMM）+ FP8 KV（#5） |
-| **3** | **A3 · sm_120 能力探底收尾**：Triton 低精度静默退化复现 + FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%；并入决定 08-20） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项 |
+| **3** | **A3 · sm_120 能力探底收尾**：~~Triton 退化复现~~ ✅ 08-21 已完（**实锤且更糟**：`tl.dot_scaled` MXFP8 反慢 bf16 38%、MXFP4 同速=仿真路径、距 cuBLAS 锚 3.2×，E16 §6）→ 剩 FP4 inline PTX + **TileLang 重写一个自有算子**（稀疏投影切片或 FP8 GEMM；判据=对拍等价+距硬件上限%） | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项；需求测量已齐（本行✅ + E19 §8 kernel 成熟度地图） |
 | **4** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#3 并行**；before 基线已备：24/25 + TPOT/TTFT，`11 §5`）。优化面口径已定（Chaoyu 08-20，按预期收益序）：批调度/chunked prefill → prefix cache×gpu_util 余量 → FP8 KV（并 #5 一次跑）→ 多 LoRA 热切换；投机解码仅探针级 | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
 | **6** | **PD 分离 go/no-go 探针**：prefill 重（88%）但 prefix cache 命中 97% ⇒ 可能是 PD 的反例。判据已定（Chaoyu 08-20）：分离 vs 单实例的 TTFT/TPOT 差值必须与 KV 传输耗时（走主机内存）**对上账**，成立与否都写成立范围 | infra | 30 min 探针 | 推理 F②核心词；实测否决也是结果 |
 | **7** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线；同步暂停题的复活条件 |
