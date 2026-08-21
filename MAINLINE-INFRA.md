@@ -25,6 +25,7 @@
 | 双方 | 🆕 **CoT（thinking）训练支持立项**（Chaoyu 2026-08-20）：主线产**带思考的 SFT 数据**（E27 红利路径：拨开关净 −0.057 但探索格子 170→233）；infra 解训练侧（`SYNCOPATE_THINK` 目前 launch_rl 拦训练 · think 预算 8192 契约联动 · CoT 后 rollout 变慢，异步配比/陈旧度条件那时才真正出现）。任务细分挂 infra 01 §1 | 双方 | 设计先行，动代码前对齐口径 |
 | 双方 | 🆕 **OPD 立项**（Chaoyu 08-20，`docs/syncopate/22 §J`）：把"说人话"的能力从**裸底座 Qwen3-4B**（与我们 SFT 同源）蒸回候选。O-1 探针已给绿灯：分歧集中在自然语言段（Δ=+1.91，58% 的 token \|Δ\|>3），**任务段几乎零漂（+0.01）**。主线出分布设计与 token 级 mask（分段器已写好），**训练侧实现可能要 infra**（on-policy：学生生成→老师在学生轨迹上给 token 级监督；只动 LoRA） | 双方 | 口径对齐后定分工；主线 01 §O |
 | infra→主线 | ✅ **GPU0/GPU1 两个端点已于 08-20 12:47 关闭让卡**（Chaoyu 当面指令：主线侧测试已完，infra 起 4 卡采集）。按你们记的运维坑连 EngineCore 一起杀，显存已全部归还。要重起按 `docs/syncopate/09 §0` | 双方知悉 | 主线重起端点时删本行 |
+| infra→主线 | 🆕 **serving 端点默认已加 `--kv-cache-dtype fp8`**（Chaoyu 08-21 拍板，`logs/runtime/start_vllm.sh` 已改）：KV 池 ×2 ⇒ 并发 +50%；质量 −0.009 恰在 MDE 界（E19 §8 五臂+归因）。压测口径注意：重起端点后 TTFT/TPOT 基线要按 fp8 KV 重记 | 主线知悉 | 主线确认后删本行 |
 | infra→主线 | **「真压测」共建**（Chaoyu 08-20 JD 对齐，infra 01 §1-1）：infra 出压测框架与优化（SLO 画像/prefix cache/批调度/多 LoRA 热切换），主线出业务流量形状与验收口径。**主线侧交付已就位（08-20）**：驱动器 `scripts/runtime_loadtest.py`（分意图流量形状 + §19 全表判定）+ 首轮全量实测 24/25 达标（`docs/syncopate/11 §5`，含单流 TPOT/TTFT 基线）——可直接作为你们优化的 before 基线 | 双方 | infra 侧接手框架后各自记账 |
 | 主线→infra | ⚠️ **评测单轮上限默认已改**：256 → `MAX_RESPONSE_LENGTH`（2048/think 8192，E23「评测跟训练」——256 会把崩塌型长轮截掉，评测在最需要诚实时不诚实）。你们注释里「off=256 逐字节不变」的冻结被此取代；**审计头部现在记录 `gen`（max_new_tokens/温度/组大小）与 `data_version`**（分片合并器此前把这些键丢了——e27 两臂 label 一模一样分不清的缺口已堵）。E27 若要续跑，跨代配对看 `gen` 字段 | infra 知悉 | — |
 

@@ -417,4 +417,22 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
    bench_fp4_ptx_peak.cu · check_mxf8_mma_numerics.cu（nvcc 12.8 -arch=sm_120a）
 📚 背景层沉淀：PRIMER-precision-sm120.md（精度格式/单元/软件栈/训推组合，通俗版）
 ```
+
+## ★★★ 2026-08-21（晚）：三裁定落地 + 云端资产全量收尾（搬家就绪）
+
+```
+✅ Chaoyu 三裁定全落地：① **fp8 KV 切默认**（launch_rl --kv-cache-dtype=fp8 +
+   serving 端点脚本；⚠️ 判据③ kl 地板首跑要实测重标）② trainer FP8 融合栈**降独立线**
+   （01 §4 与 MoE 同档）③ **A3/TileLang 自有算子 = 队首**（FP8 GEMM 或稀疏切片，
+   判据=对拍等价+距 1026/2055 峰值%）
+✅ 云端三通道齐：GitHub 全同步 · **HF 资产库 SamWang0405/Syncopate-AgenticRL**
+   （单仓库制：bases/ 底座真身×2 · sft/ 出处链 · adapters/ 实验臂×14 · cand 四档 ·
+   模型卡 README；推送脚本 push_adapter_to_hf.sh=晋级默认动作，SSH 走 id_ed25519_hf）
+★ 底座不可再生已实测钉死：base+SFT adapter 重合并 max|Δ|=4.9e-4（bf16 舍入路径不可考）
+   > RL 信号 1.3e-5 ⇒ **禁止用"重 merge"替代底座**——merged 权重是唯一真身
+★ HF 推送两坑：>10MB 的 tokenizer.json 必须 lfs track；大上传别用带 timeout 的
+   前台命令（10min 上限），要 nohup detach + 监视器
+✅ 搬家清单收敛到两件手工件：/workspace/.env（含密钥）+ reference/（版权包）；
+   换机器重建清单+重画像清单已进 00-START §6（拓扑变了先重测通信微基准，决策大概率不翻）
+```
 ```

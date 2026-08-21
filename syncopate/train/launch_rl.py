@@ -956,9 +956,13 @@ def main(argv: list[str] | None = None) -> int:
                              "⚠️ graph 池要吃额外显存，rollout 卡余量本就贴边，OOM 了先降 gpu_util")
     parser.add_argument("--no-engine-stats", action="store_true",
                         help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")
-    parser.add_argument("--kv-cache-dtype", default=None,
-                        help="vLLM KV cache 精度（fp8_e4m3/fp8_e5m2）。KV 池容量 ×2 的免费杠杆；"
-                             "默认不动。开了必须配 EVAL 128 配对回归验精度（Ostinato A1）")
+    # ★★ 2026-08-21（Chaoyu 拍板）：KV cache 默认 fp8。E19 §8 五臂：KV 池 ×2 ⇒ 并发 +50%
+    #   （容量杠杆非算力杠杆）；质量代价 −0.009 恰在 MDE 界、defer 门槛内，且归因臂证明
+    #   代价全在 KV 侧、W8A8 叠加零增伤。要复现旧行为显式传 --kv-cache-dtype auto。
+    #   ⚠️ 常驻判据③（rollout_corr/kl 回落 ~3.4e-4）的地板在 fp8 KV 下会略抬——
+    #   首个正式跑要实测重标那个地板值（00-START §6 有注）。
+    parser.add_argument("--kv-cache-dtype", default="fp8",
+                        help="vLLM KV cache 精度（默认 fp8，E19 §8 定案；auto=关）")
     # ★★ 2026-08-20（Chaoyu 拍板）：KL **默认关**。E17 两臂：砍 KL 省 15.4%（= ref 整遍
     #   前向）、任务分 −0.009 < MDE（无差异）；cand_v13r2_e1 400 步 KL-off 长跑兑现
     #   （判据③ rollout_corr/kl 不吃 ref，全程中位 4e-4 在地板）。

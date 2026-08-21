@@ -94,8 +94,10 @@
             全曲线（E19 §8：fp8 KV=容量杠杆+50% · FP4 权重对 4B 判死）；A3 探底闭环
             （E16 §6/§7：Triton 仿真实锤 · 块缩放 MMA 峰值阶梯 1:2:4:8 ·
             ★传统 FP8 mma 半速 · 数值逐位验证）；背景层沉淀 PRIMER-precision-sm120
-⬜ 欠的     CoT 训练支持（产品线）；A3 正餐 = TileLang 真 GEMM（选型待 Chaoyu）；
-            三裁定挂起：fp8 KV 默认 / trainer FP8 融合栈 / A3 算子选型
+✅ 三裁定   08-21 Chaoyu 已定：**fp8 KV 切默认**（launch_rl + serving 端点，02 §1）·
+            trainer FP8 融合栈**降独立线**（01 §4，与 MoE 同档）· **A3/TileLang = 队首**
+⬜ 欠的     🔴 队首 = A3 TileLang 自有算子（01 §1-3，尺子已立 1026/2055）；
+            CoT 训练支持（产品线）；⚠️ 判据③ kl 地板在 fp8 KV 下首跑要实测重标
 完成度     ⚠️ 08-20 换标：A=框架/异步（原 B）· B=算子/硬件（原 A）——
             Track A：诊断完 + before→after（B12/E26）+ 候选闭环；Track B：落地一条半
 ```
@@ -180,6 +182,31 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 
 ⚠️ 关机重启后：`/workspace` 是网络盘会活着；记忆软链断了重建：
 `ln -s /workspace/Syncopate_Async_AgenticRL/.claude/memory /root/.claude/projects/-workspace-Syncopate-Async-AgenticRL/memory`
+
+### ★ 换机器完全重建清单（2026-08-21 立，搬家用）
+
+```
+① git clone + uv sync --frozen --all-extras   ⚠️ 裸 uv sync 会卸掉 train extras（守则⑧事故）
+② 手放 /workspace/.env（含密钥，不在任何仓库）→ set -a; . /workspace/.env; set +a
+③ 必跑 scripts/check_flash_attn_backward.py（退出码 0 才算环境可用；反向恒 0 比 nan 更毒）
+④ 重建记忆软链（上面那行）
+⑤ 资产：HF SamWang0405/Syncopate-AgenticRL 下回 bases/（底座真身，不可再生——
+   重合并实测 max|Δ|=4.9e-4 > RL 信号 1.3e-5，禁止用"重新 merge"替代）+ 所需 adapter
+⑥ reference/（版权包）只能人工拷，不进任何云端
+```
+
+**新机器重画像（拓扑变了哪些数字要重测；决策大概率不翻——当年都是输数倍）**：
+
+```
+🔴 必重测（~2h 全有现成尺子）：集合通信带宽（probe_allreduce/collective_bw）·
+   16B 对齐悬崖复现（probe_alignment_cliff，预期复现=给上游的跨机验证）·
+   NCCL 旋钮（LL128 结论可能翻）· 满载降频（probe_power_throttle）· README 机器画像重写
+🟡 探针大动才复核：A6 三档稳态（DDP必选）· E04 TP=2 ——输 3–6× 的比赛不因跑道好 30% 翻盘
+🟢 不动：全部正确性/学习/质量结论 · E16/A3 单卡硅片数字 · E19-c serving 曲线 · 全部默认值
+⚠️ 方向未知处：同 socket 消掉 UPI 跳但四卡挤一份内存带宽——通信数字可能反变差，先测再说
+⚠️ 判据③ 的 kl 地板（3.4e-4）在 fp8 KV 默认下会略抬：新机器首跑实测重标，别拿旧地板判罪
+⚠️ 若新卡不是 5090/sm_120：E16/A3 全部硬件结论不迁移，重新探底
+```
 
 ## 7 · 最后一句
 
