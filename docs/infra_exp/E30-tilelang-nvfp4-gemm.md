@@ -28,7 +28,7 @@
 
 ## 2 · 配置扫描：默认即最优，墙是共享内存
 
-11 组 block_m/n/k × stages 扫描（`/workspace/a3_tilelang/sweep1.log`）：
+11 组 block_m/n/k × stages 扫描（`logs/a3_nvfp4_sweep1.log`）：
 
 ```
 8192³   128/128/256/s2 = 1266 最优;  64/256 掉到 1111;
