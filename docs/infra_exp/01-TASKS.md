@@ -12,12 +12,16 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **1** | 🔴🔴 **训推部署 FP8 全盘一致（队首，单任务制，Chaoyu 08-27 立）**：消费级 sm_120 复刻 Miles 端到端 MXFP8 RL——施工图/逐步验收/测试规格全在 [E31](E31-unified-fp8.md)（第 0 步=三个契约测试起手）。地基已齐：E30 三件套 kernel（627/2.1×/1.7×）· 温度偏置机理与对消原理（§11）· A4 真训练同带（§13）。原理=量化项在 IS 比率对消，TIS 回归只付陈旧度的本职账 | infra | 分 6 步，步步有验收 | Chaoyu 定向：训-推-部署三方一致；Miles 已证 B200 可行，消费卡为空白 |
 | **4** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#3 并行**；before 基线已备：24/25 + TPOT/TTFT，`11 §5`）。优化面口径已定（Chaoyu 08-20，按预期收益序）：批调度/chunked prefill → prefix cache×gpu_util 余量 → FP8 KV（并 #5 一次跑）→ 多 LoRA 热切换；投机解码仅探针级 | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
 | **6** | **PD 分离 go/no-go 探针**：prefill 重（88%）但 prefix cache 命中 97% ⇒ 可能是 PD 的反例。判据已定（Chaoyu 08-20）：分离 vs 单实例的 TTFT/TPOT 差值必须与 KV 传输耗时（走主机内存）**对上账**，成立与否都写成立范围 | infra | 30 min 探针 | 推理 F②核心词；实测否决也是结果 |
 | **7** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线；同步暂停题的复活条件 |
 | **8** | **常驻行为判据进 `compare`** | 主线 | 小 | 正是它让 defer 翻案成为可能 |
 
+> ✅ **E31 训推统一 FP8 2026-08-27 单日全六步闭环**（原队首，Chaoyu 08-27 立/同日完）：
+> 可行域=lm_head（偏置 9× 对消至本底·400 步长跑三把尺健康·配对 +0.109 入带·零速度税）；
+> 内层判负定界（异构引擎 hidden 微差被激活量化逐层放大，~−1.2e-4/层；复活=token 级 IS
+> 或同构引擎）⇒ 全档在 [E31](E31-unified-fp8.md)；开着的裁定：终审 ±MDE 加跑与否 ·
+> 生态数据点是否外发（DRAFT-sm120-mxfp8-ecosystem-datapoints）。
 > ✅ A3/TileLang 2026-08-27 一日收官（[E30](E30-tilelang-nvfp4-gemm.md) 十三节）：sm120 首个 MXFP8 GEMM
 > 543(tilelang)/627(裸 CUDA=消费卡包络) · 反向 dgrad/wgrad 2.1×/1.7× · 温度偏置机理+c* 补偿 ·
 > **A4 同日收官**：8bit lm_head 前向+反向完整 SFT 与 bf16 同带（§13）· 上游两 DRAFT 包移交。
@@ -59,7 +63,7 @@
 | 🆕 **MoE 线**（A19 3 行修复 → A2 三摆法；Qwen3-30B-A3B 已下好，⚠️ bitsandbytes 未装）：Chaoyu 08-20 降级——**优先级低于 CoT**，独立推进、不 gate 也不被 gate | 🟠 排后 |
 | ~~trainer 侧 FP8 融合栈~~ → **已并入队首 E31 第 3/4 步**（08-27；自有 kernel 替代 torchao/TE 路线） | 📦 并入 |
 | A17 · 对齐补丁端到端（上次钩子没挂白跑） | 🔴 可重跑 |
-| 上游四包 issue/PR（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 | ✅ **已移交 upstream 同事（08-20 提交中）**；本窗口只做证据支援（E 报告/复现脚本随叫随到），提交编号回来后记入 NARRATIVE 底账 |
+| 上游包（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 ✅ 已移交 upstream 同事（08-20）；🆕 **E31 路新增两 DRAFT（08-27）**：verl entropy_coeff=0 连图（一行修 PR 候选）· sm120 MXFP8 生态数据点回帖包（TE#2304/triton#7550/CUTLASS#2867/DeepGEMM#236 + RL 社区正负双结果）；vLLM prompt_logprobs OOM 判 PARKED（上游已有 tracking #5907） | 本窗口只做证据支援；新 DRAFT 待考据成稿 → Chaoyu 点头 |
 | 🔵 lr 1e-4 @5120 上限基线（已降级，脚本 `scripts/run_e20h_lr1e4_5120.sh` 备好） | 想测随时跑，不挡人 |
 | 🆕 **训推量化失配剂量学**（Chaoyu 08-27 立项）：独立 side project，**归其他同事**，两线只供数据不参与——交接件 [`docs/side-quant-mismatch/00-PROJECT.md`](../side-quant-mismatch/00-PROJECT.md) | ⬜ 待认领 |
 
