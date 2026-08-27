@@ -254,3 +254,28 @@ token 级 IS 🟡（逐 token 扰动 ≈1.003，正是 NVIDIA e2e FP8 选 token-
 p−y 行内相消放大相对误差（绝对量仍小）。⇒ **lm_head 层的 FP8 训练三件套
 （前向 543/627 · dgrad 2.1× · wgrad 1.7×）全部有实测对拍的可用实现**；
 剩余工程 = autograd Function 封装 + cubin 脱离 tilelang 运行时 + 端到端 loss 曲线对照（挂 A4）。
+
+## 13 · 2026-08-27 · A4 收官：MXFP8 lm_head 完整训练打通（首个 8bit 参训的真训练）
+
+工程三件（commit 2e86064）：裸 CUDA T1 kernel → torch 扩展 JIT 进生产 venv（自有源码
+零依赖，编译 50s 落重定向缓存）· autograd 三件套封装（冻结权重量化整训缓存、wgrad 按
+requires_grad 跳过）· SFT 稀疏投影开关 `SYNCOPATE_LMHEAD_MXFP8`（默认关，bf16 逐位不变）。
+
+**完整 2-epoch SFT A/B（同种子同数据，v13 · Qwen3-4B+LoRA r32）**：
+
+| | bf16 基线 | MXFP8 lm_head | Δ |
+|---|---|---|---|
+| train/loss 终值 | 0.00036 | **0.00031** | −6e-5（略优） |
+| val/loss 五行为 | 0.00072–0.0477 | 0.00059–0.0528 | −2e-4 ~ **+5.1e-3** |
+| epoch 秒 / steps/s | 585.5 / 0.1846 | 585.3 / 0.1845 | 持平 |
+
+判读：**收敛曲线与终态同带**（answer/reject 两桶 +5e-3、clarify/defer 反而更低——
+种子级噪声带内，方向不一致 ⇒ 无系统性退化信号）；速度持平符合预期
+（lm_head 仅占前向 ~4%，量化开销与 kernel 增益相抵——**本次目标是精度可行性不是加速**，
+加速要等内层 GEMM 8bit 化）。wandb: a4_bf16(vy5mzrw9) / a4_mxfp8(fnvdzx9q)。
+
+⇒ **A4 定案：8bit（激活+权重）lm_head 的前向+反向参与真实训练，任务口径无退化。**
+FP8 训练拼图现状：lm_head 层全通（fwd 627 · dgrad 2.1× · wgrad 1.7× · 真训练 A/B 同带）；
+下一步（Chaoyu 方向已定=训推全 8bit）：①vLLM compute_logits 同量化器 monkeypatch
+（两侧 lm_head 位一致 ⇒ 量化项在 IS 比率对消，Miles 路线的消费卡最小复刻）
+②内层 GEMM 渐进 8bit（融合栈独立线，Miles/DeepSeek-V3 配方为参考）。
