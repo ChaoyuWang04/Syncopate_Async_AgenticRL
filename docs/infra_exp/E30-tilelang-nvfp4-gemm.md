@@ -49,3 +49,37 @@ lm_head block_n=256 全断言死：151936=128×1187（1187 奇数）不能被 25
 2. lm_head 形状专用 schedule（N 巨大 ⇒ B 常驻 L2 分条带 + 输出写合并）；
 3. MXFP8 配置表扩展（mxf8f6f4 / ue8m0 / m16n8k32）→ 上游 PR 候选；
 4. 出成果后回帖 triton#7550 / CUTLASS#2867（E16 §8 圈子地图）。
+
+## 4 · 2026-08-27 · MXFP8 正餐：自有 mxf8f6f4 kernel 首通（v0.2 = 543 TFLOPS，超 cuBLAS）
+
+**这次是我们自己的 kernel**（`scripts/tl_mxfp8_gemm.py`）：TileLang 管分块/TMA/流水，
+MMA 内层 = 自写设备函数发射 `mma.m16n8k32.kind::mxf8f6f4.block_scale.scale_vec::1X`
+（T.import_source 逃生门，绕开 tilelang C++ 校验只认 NVFP4 的限制）。
+
+**三件此前不存在的东西**：
+① **缩放 lane 映射硬件反演**（`scripts/probe_mxf8_scale_mapping.cu`，全域唯一指数法）：
+   A 行 r(<8)←lane(4r+tid·2)·byte(bid)，行 r+8←lane(4r+tid·2+1)；B 列 n←lane(4n+tid)。
+   bid=字节窗 ⇒ 一个 uint32 装 4 个 k-block 缩放，内层 4 发 mma 各用 bid 0..3；
+② **MXFP8 量化器**（OCP：块 32 · ue8m0 幂缩放 · e4m3, fp8_max=448）+ 逐块反量化 fp32 参考；
+③ **kernel 原生数据布局**：行内 128B 组 16B 块 `chunk^=(row&7)` 预置换（宿主做），
+   TMA 线性搬运，设备 ldmatrix 地址同款 XOR ⇒ bank 冲突消除。
+
+**性能阶梯（8192³，全部 --verify 过，err ~2.9e-3 = bf16 输出舍入带）**：
+
+| 版本 | TFLOPS | 距峰 1026 |
+|---|---|---|
+| v0.1 标量 smem 加载 | 296 | 28.9% |
+| + ldmatrix（x4/x2） | 293 | ——（指令数非瓶颈） |
+| **+ XOR swizzle（v0.2）** | **543** | **52.9%** |
+
+⇒ **543 > cuBLAS-cu13 523（老指令路径顶棚）**：本机实测最快 FP8 GEMM，新指令路径首个可用实现。
+
+**踩到的上游坑（两个，各值一个 issue）**：
+- TileLang warp 特化把消费者放在 threadIdx 256..511——extern 设备函数必须用 `tx&255` 取
+  逻辑线程号（首跑 nan 的根因）；
+- 撤掉任一 smem 拷贝会让生产者分区缩到 128 线程而释放 barrier 计数仍 256 ⇒
+  相位竞态、散点错块（4096+ 才显形，2048 以下侥幸过——**「小尺寸对拍过」不等于「没竞态」**）。
+  已在 kernel 注释钉死"缩放必须走 smem"。
+
+**下一步**：块形状 128×256（B 复用×2，寄存器预算 ~240 内重排 kb 交错加载）· 3 级流水
+（去 B 缩放 smem 挤出 2KB）· 距 70% 峰值目标差 17 个百分点。
