@@ -104,7 +104,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E13** | [proximal anchor 的 CPU 快照](E13-proximal-anchor-snapshot.md) | 902 张量/8.3 GB 里只有 3.18% 可训练 ⇒ 按 `requires_grad` 筛后 **4.34→0.083 s/步，省 5.7%**（kernel 层被 E01 证实） | **A** | ✅ **完成** | — | — |
 | **E16** 🆕 | [sm_120 能力探底](E16-sm120-capability.md) | 🆕 **第一枪打完：FP8 点亮了，1.90–2.08×**（8192³ 451 vs 237 TFLOPS）⇒ ⛔ **推翻了我们自己的悲观前提** —— 不是「点不亮」，是**我们的栈没去拿**（E01 实测热点全是 `cutlass_80` 的 bf16）。Triton 低精度路径 / FP4 inline PTX 待做 | **B** | 🟡 **第一枪完成** | 🔴 | 🔴 |
 | **E14** 🆕 | [执行层优化工具箱](E14-bubble.md) | ★ 第一批定稿：**vLLM 侧（完整数据）84s 里忙 35%，10–100µs 微间隙 ×79.7 万=32.4s＞计算本身 29.1s** ⇒ enforce_eager/CUDA graph = 最大单点机会；trainer 侧大洞+sync 乒乓待 torch profiler 复核（nsys 对 Ray trainer 进程事件截断不可修，已按预立判据弃用）；elementwise 27–31%=compile 靶子；GEMM 仍全 cutlass_80 | **B** | 🟡 **第一批完成** | 🔴 | 🔴 |
-| **E15** 🆕 | [训推一致性尺子](E15-train-infer-consistency.md) | ESS / TIS / 逐 token logprob 差，统一度量量化·路由·陈旧三种失配 | **A**（B 共用） | ⬜ | 🟠 | 🔴 |
+| **E15** | ~~训推一致性尺子~~ → 📦 使命并入独立 side project [`docs/side-quant-mismatch/`](../side-quant-mismatch/00-PROJECT.md)（Chaoyu 08-27 立项，归其他同事，与两线互不 gate）；编号封存不复用 | — | 📦 移交 | — | — |
 | **E18** 🆕 | [3-rank all_gather 塌陷](E18-rank3-allgather-collapse.md) | 3 卡 ZeRO-3 慢 6.02× 的谜：**不是带宽、不是次数、不是拓扑，是 NCCL 在 3 rank 上给 `all_gather` 选了坏协议**（2卡51/4卡37.9/**3卡3.2** GB/s）。`NCCL_PROTO=LL128` 治好：47.94→14.40 s（**3.33×**） | **B** | ✅ **完成** | — | — |
 | **E17** 🆕 | [训练侧三次前向的必要性](E17-triple-forward.md) | `ref` 那遍前向占步 14.7%，而 KL 项只贡献损失 **0.011%**。**A/B 定案（§9 · 干净基线 + 5120 预算）**：砍 KL 省 **15.4%**（正好等于 ref 的 20.93 s，其余项纹丝不动）；任务分 A vs B **−0.009 < MDE 0.015 ⇒ 无差异**，defer 100% 双同、REJ 0.953 双同 —— **B5 首次通过**。🟠 唯一反向信号 `fabricated_safety_line_cap` +2（基数小）⇒ 多种子必盯。⛔ 连带 E19「ref 走 FP8」失效 | **A** | ✅ **完成（吞吐+精度）** | **15.4%** | ✅ 已切默认关（08-20，cand 400 步兜底；多种子撤销） |
 

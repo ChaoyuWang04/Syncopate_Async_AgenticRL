@@ -59,6 +59,7 @@
 | A17 · 对齐补丁端到端（上次钩子没挂白跑） | 🔴 可重跑 |
 | 上游四包 issue/PR（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 | ✅ **已移交 upstream 同事（08-20 提交中）**；本窗口只做证据支援（E 报告/复现脚本随叫随到），提交编号回来后记入 NARRATIVE 底账 |
 | 🔵 lr 1e-4 @5120 上限基线（已降级，脚本 `scripts/run_e20h_lr1e4_5120.sh` 备好） | 想测随时跑，不挡人 |
+| 🆕 **训推量化失配剂量学**（Chaoyu 08-27 立项）：独立 side project，**归其他同事**，两线只供数据不参与——交接件 [`docs/side-quant-mismatch/00-PROJECT.md`](../side-quant-mismatch/00-PROJECT.md) | ⬜ 待认领 |
 
 ## 5 · 管线验证状态（引用前查这张，别重新论证）
 
