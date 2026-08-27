@@ -56,4 +56,13 @@ LoRA bf16 推送不变；量化基座两侧字节一致由 1/3 步保证。
 
 ## 2 · 状态
 
-⬜ 未开工（2026-08-27 立项）。第 0 步三测试为起手式。
+🟡 **第 0 步 ✅（2026-08-27）**：三契约测试进 suite（`tests/train/test_e31_fp8_contract.py`，
+8 项全绿；全套 702/0 skip）。
+- T0.1 五类张量位一致过（含 bf16/fp32 同值、非连续布局、换 stream 三个接缝维度；
+  语义钉死：全零块 e=0、2 的整幂无损重建、448±ulp 换挡不溢出）；
+- T0.2 GEMM ×100 + 换 stream 逐位同；输出对 dequant 参考只剩 bf16 舍入（rel 实测 1.7e-3 < 5e-3）；
+- T0.3 **kl_floor_bf16 = 4.27e-4**（median，n=3，08-27 冒烟 bf16 臂）固化在
+  `logs/e31/kl_floor_bf16.json`（`scripts/e31_kl_floor.py` 标定；守卫实测拒绝 fp8 臂
+  5.3e-3 —— 分母拿错臂比没有分母更毒）。
+
+⬜ 下一步 = 第 1 步：vLLM `compute_logits` monkeypatch，lm_head 两侧同量化。
