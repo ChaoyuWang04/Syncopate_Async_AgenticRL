@@ -66,22 +66,25 @@ ldconfig 路径。`pg_bootstrap.sh` 已经把这两件都处理了（`LD_LIBRARY
 
 ```bash
 set -a; . /workspace/.env; set +a                  # ★ 先加载持久化重定向，见 2.0
-uv sync --extra train --extra dev --extra runtime  # ← 三个 extra 都要，见 2.1
+uv sync --frozen --all-extras                      # ← 锁文件是救命绳；裸 uv sync 会卸掉 extras（00-START 守则⑧）
 hf download Qwen/Qwen3-4B   --local-dir models/Qwen3-4B     # 7.6G
 hf download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B   # 1.4G，31 个测试要它
+python scripts/check_flash_attn_backward.py        # ★ 退出码 0 才算环境可用（反向恒 0 比 nan 更毒）
 python scripts/ingest_external.py                  # ★ 派生数据，不跑的话 27 个测试红
 bash scripts/pg_bootstrap.sh                       # ★ 不起 PG 的话 45 条 runtime 测试 skip
+python scripts/ingest_corpus.py                    # ★ RAG 语料入 PG，不跑的话 3 条 retrieval 测试红
 # reference/ 870M 只能手动 scp —— 版权所有（深圳途明智启科技），永不进 git
-python -m pytest -q                                # 应为 365 passed, 0 skipped
+python -m pytest -q                                # 应为全 passed, 0 skipped（2026-08-27 实测 694 passed·1 xfailed）
 ```
 
-⚠️ **四个最容易漏的**（漏了的表现都不像缺步骤，很容易误判成别的问题）：
+⚠️ **五个最容易漏的**（漏了的表现都不像缺步骤，很容易误判成别的问题）：
 
 | 步骤 | 漏了会怎样 |
 |---|---|
-| `--extra runtime` | `asyncpg`/`fastapi` 缺失 ⇒ tests/runtime 4 个模块**收集阶段**就 ImportError |
+| `--all-extras`（或三个 `--extra` 全给） | `asyncpg`/`fastapi` 缺失 ⇒ tests/runtime 4 个模块**收集阶段**就 ImportError |
 | `ingest_external.py` | `data/external/ingested.json` 是 gitignore 的派生产物 ⇒ **27 个测试红**，签名像"数据过期" |
 | `pg_bootstrap.sh` | 45 条 runtime 测试静默 **skip** —— 它们的 docstring 自己写着**「不要把跳过当通过」** |
+| `ingest_corpus.py` | 政策语料在 PG 不在文件 ⇒ **3 条 retrieval 测试红**（StopIteration/KeyError，签名像检索逻辑坏了）——2026-08-27 干净机器重建暴露 |
 | `set -a; . /workspace/.env` | 缓存全落 16 G overlay，Ray 一溢写就爆 |
 
 ### 2.0 ★★ 持久化重定向（`/workspace/.env`）
@@ -144,7 +147,9 @@ flash_attn_varlen_func 反向  有限但**恒为 0**（参考值 136/178/1450）
 **现在用的（可直接照抄）**：官方 `cu13torch2.9` 轮子 —— 它 `cxx11abiTRUE`（和 torch 一致）、
 含 sm_120 cubin，唯一缺 `libcudart.so.13`，由 PyPI 的 `nvidia-cuda-runtime<=13.2` 补上
 （驱动 595 的 `driver_max_cuda=13.2` 支持 CUDA 13；torch 自己仍是 cu128，**两个运行时共存**）。
-两者都已写进 `pyproject.toml`，`uv sync` 会自动装；`LD_LIBRARY_PATH` 在 `/workspace/.env`。
+两者都已写进 `pyproject.toml`，`uv sync` 会自动装；`LD_LIBRARY_PATH` 在 `/workspace/.env`
+（⚠️ 2026-08-27 实测：`libcudart.so.13` 装在 `.venv/…/site-packages/nvidia/cu13/lib`，
+不是望文生义的 `nvidia/cuda_runtime/lib` —— 路径写错的症状是 import flash_attn 直接 ImportError）。
 
 ```bash
 python scripts/check_flash_attn_backward.py     # ★ 换轮子/换机器后必跑，退出码 0 才算可用

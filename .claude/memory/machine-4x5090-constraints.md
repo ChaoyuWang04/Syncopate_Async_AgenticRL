@@ -49,3 +49,17 @@ metadata:
 
 细节见 `docs/syncopate/08-machine-and-environment.md`；焦点迁移见 `docs/focus-migration-2026-08.md`。
 相关：[[feedback-measure-dont-infer]] [[infra-line-state]] [[clean-machine-only-gaps]]
+
+---
+
+## ⚠️ 2026-08-27 搬家：拓扑变了，本文件的带宽/拓扑数字全部待重测
+
+新机（vast.ai）：仍是 4×5090 / sm_120 / P2P 全关（这些结论迁移），但——
+**单 socket EPYC 9B14 96 核 · 4 NUMA（NPS4）**：GPU0/1 同桥 PHB@node3 ·
+GPU2@node2 · GPU3@node0；RAM 566G；驱动 595.71.05；/workspace = 本地盘 300G 持久卷。
+⇒ 旧机「2+2 跨 socket / 组内 28.8 / 跨 22.2 / 四卡 25.6」全部作废待重测
+（00-START §6 重画像清单：probe_allreduce_bw · 对齐悬崖 · NCCL 旋钮 · 满载降频）。
+⚠️ 同 socket 消掉 UPI 跳但四卡挤一份内存带宽——方向未知，先测再说。
+✅ 判据③ kl 地板已重标（08-27 冒烟）：bf16 KV 3.6–4.8e-4，旧口径沿用；
+   新机步速 9.3–9.7 s/gstep（比旧机 11.33 快 ~14%）· param_sync 稳态 1.02s
+   （旧机 update_weights 之谜 13.3s 在新机大幅缩小，未归因）。

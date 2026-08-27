@@ -94,10 +94,15 @@
             全曲线（E19 §8：fp8 KV=容量杠杆+50% · FP4 权重对 4B 判死）；A3 探底闭环
             （E16 §6/§7：Triton 仿真实锤 · 块缩放 MMA 峰值阶梯 1:2:4:8 ·
             ★传统 FP8 mma 半速 · 数值逐位验证）；背景层沉淀 PRIMER-precision-sm120
-✅ 三裁定   08-21 Chaoyu 已定：**fp8 KV 切默认**（launch_rl + serving 端点，02 §1）·
-            trainer FP8 融合栈**降独立线**（01 §4，与 MoE 同档）· **A3/TileLang = 队首**
+✅ 三裁定   08-21 Chaoyu 已定：fp8 KV 切默认 · trainer FP8 融合栈**降独立线**（01 §4，
+            与 MoE 同档）· **A3/TileLang = 队首**；⚠️ fp8 KV 案 08-27 已修订（下行）
+✅ 搬家收官 08-27 新机（单 socket 4-NUMA）重建全绿：pytest 694/0 skip · 冒烟 48 步八判据全过
+            · 9.3–9.7 s/gstep（快 ~14%）· param_sync 稳态 1.02s；挖出两 bug（fp8 override
+            缺 `++` 从未真跑 · prefix_grouper 缺依赖）；**fp8 KV 默认拆两侧**（Chaoyu 08-27：
+            serving 保 fp8 · 训练回 bf16——A/B 定罪：IS 截断破 H3 红线且容量杠杆无着力点，02 §1）；
+            判据③地板 bf16 下实测 3.6–4.8e-4，旧口径 3.4e-4 沿用
 ⬜ 欠的     🔴 队首 = A3 TileLang 自有算子（01 §1-3，尺子已立 1026/2055）；
-            CoT 训练支持（产品线）；⚠️ 判据③ kl 地板在 fp8 KV 下首跑要实测重标
+            CoT 训练支持（产品线）；新机重画像探针未跑（§6 清单，~2h）
 完成度     ⚠️ 08-20 换标：A=框架/异步（原 B）· B=算子/硬件（原 A）——
             Track A：诊断完 + before→after（B12/E26）+ 候选闭环；Track B：落地一条半
 ```
@@ -204,7 +209,8 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 🟡 探针大动才复核：A6 三档稳态（DDP必选）· E04 TP=2 ——输 3–6× 的比赛不因跑道好 30% 翻盘
 🟢 不动：全部正确性/学习/质量结论 · E16/A3 单卡硅片数字 · E19-c serving 曲线 · 全部默认值
 ⚠️ 方向未知处：同 socket 消掉 UPI 跳但四卡挤一份内存带宽——通信数字可能反变差，先测再说
-⚠️ 判据③ 的 kl 地板（3.4e-4）在 fp8 KV 默认下会略抬：新机器首跑实测重标，别拿旧地板判罪
+✅ 判据③ 的 kl 地板已在新机重标（08-27 冒烟）：bf16 KV 下 3.6–4.8e-4，旧口径 3.4e-4 沿用
+   （fp8 KV 会抬到 ~5e-3 并连带 IS 截断破线——训练侧默认已回 bf16，02 §1）
 ⚠️ 若新卡不是 5090/sm_120：E16/A3 全部硬件结论不迁移，重新探底
 ```
 

@@ -436,3 +436,23 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
    换机器重建清单+重画像清单已进 00-START §6（拓扑变了先重测通信微基准，决策大概率不翻）
 ```
 ```
+
+## ★★★ 2026-08-27：搬家收官 + fp8 KV 案修订（Chaoyu 拍板）
+
+```
+✅ 新机重建全绿：uv sync --frozen --all-extras + flash-attn 反向判据 + 数据从零全链
+   （v13 splits 与 git SHA 逐位一致）+ PG 重装 + pytest 694/0 skip
+✅ 冒烟 48 步（fully_async 全默认）八判据全过；新机 9.3–9.7 s/gstep（快 ~14%）·
+   param_sync 稳态 1.02s
+★ 两 bug：① fp8 KV 的 Hydra override 缺 `++`——08-21 切默认时训练路径**从未真跑过**
+   （"切了默认"≠"跑过默认"，机制在但没接上的又一形态）；② prefix_grouper 缺依赖表
+   （已进 pyproject train extra 钉 0.0.1.post1）
+★ fp8 KV 默认拆两侧（Chaoyu 08-27 修订 08-21 案）：serving 保 fp8（容量杠杆实测 +50%）；
+   训练回 bf16——单变量 A/B 定罪：fp8 使 kl 抬 15×（4.8e-3）· IS 截断 0.46–0.48 破 H3
+   红线 · IS 均值 0.65–0.72 有偏 · 反慢 4.6%；训练 rollout KV 池仅用 16.7% ⇒ 杠杆无着力点。
+   复活条件 = CoT/think-on 让 KV 容量重新成为约束
+★ 判定框架（Chaoyu 定调）：精度取舍看**绝对红线**（IS 截断 ≤0.40 · ESS 有效条数 ≥24 ·
+   IS 均值 ≈1），不是"必须不差于 bf16"；A/B 的用途是归因和定价，不是选美
+⚠️ 流程坑：rl_guard 心跳写 logs/ 会永久卡死 gpu_gate 静默期 ⇒ 顺序必须"先起跑后挂守卫"
+⬜ 新机重画像探针（~2h）未跑；正式跑的步速/构成以长跑为准（冒烟含暖机）
+```

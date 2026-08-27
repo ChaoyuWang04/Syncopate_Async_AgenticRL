@@ -24,8 +24,8 @@
 | 配对比较基线 | 一律 `_audit/v13_sft_e1_merged.json`（旧 v13_sft_e1 会系统性低估 RL +0.025） | E24 |
 | **KL / ref** | ✅ **已切库默认关**（Chaoyu 2026-08-20；`--use-kl-loss` 默认 False）。E17 两臂：省 15.4%、任务分无差异；cand 400 步 KL-off 长跑兑现。★ 判据③ `rollout_corr/kl` **不随 ref 消失**（rollout-IS 诊断；cand 全程 98 点中位 4e-4 在地板，第二次实证）。`fabricated_safety_line_cap` 保持常驻观察；⛔ 连带「ref 走 FP8」失效 | E17 §9 · /MAINLINE-INFRA |
 | **lr 与步数**（Chaoyu 08-19） | 「学不动」主因是**步数太少**（≤1 epoch）不是 lr 低 ⇒ 解法是加步数/固定 epoch；**上线候选不用 lr 1e-4**；400 步是下限、停由判据定 | 01 §1-4 |
-| 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4（⚠️ fp8 KV 默认后地板会略抬，首个正式跑实测重标） · `clip_ratio=0.0000` | 00 §6 |
-| **fp8 KV cache** | ✅ **已切默认**（Chaoyu 2026-08-21；launch_rl `--kv-cache-dtype fp8` + serving 端点同步）。E19 §8 五臂+归因：KV 池 ×2 ⇒ 并发 +50%（容量杠杆）；质量 −0.009 恰在 MDE 界、defer 门槛内、归因=代价全在 KV 侧。⛔ FP4 权重同案判死（4B 崩塌，三读数互证）；trainer 侧 FP8 融合栈降独立线（01 §4） | E19 §8 |
+| 常驻判据四条 | lora-probe 非空 · 第 2 次同步 lora_>0 · kl 回落 3.4e-4（✅ 新机 bf16 KV 首跑实测 3.6–4.8e-4 在带内，旧口径沿用；08-27 冒烟 A/B） · `clip_ratio=0.0000` | 00 §6 |
+| **fp8 KV cache** | ✅ **默认拆两侧**（Chaoyu 2026-08-27，修订 08-21 案）：**serving 保 fp8**（E19 §8 五臂：KV 池 ×2 ⇒ 并发 +50%，质量 −0.009 在 MDE 界）；**训练侧回 auto/bf16**——新机 48 步单变量 A/B：fp8 使 kl 抬 15×（4.8e-3）、IS 截断 0.46–0.48 破 H3 红线（bf16 臂 0.07–0.09）、IS 均值 0.65–0.72 有偏（bf16 臂 0.97+，ESS/N 0.92），且训练 rollout KV 池仅用 16.7% ⇒ 容量杠杆无着力点、fp8 臂反慢 4.6%。⚠️ 08-21 切默认时训练路径带 Hydra `++` bug 从未真跑过，负收益因此迟到六天才显形。复活条件 = CoT/think-on 使 KV 容量重新成为约束。⛔ FP4 权重同案判死（4B 崩塌，三读数互证）；trainer 侧 FP8 融合栈降独立线（01 §4） | E19 §8 · logs/smoke_newbox_0827*.log |
 | launch_rl 默认值 | bucket 512 · `--rollout-is sequence`（08-19 改回，序列级 ESS 才会动；cand 实测中位 0.92/最低 0.816，健康）· `ulysses_sp=1` · 数据文件跟 `DATA_VERSION` 走 · **PG 开（mb 联动 8）· KL 关**（08-20）· **sync-every 16 + CUDA graph 开**（08-21，三种子复核 + 单变量精度闸，E14 §4.10） | launch_rl help |
 | **thinking 开关** | `SYNCOPATE_THINK=1` **只许评测**（launch_rl 拦训练）；开关在契约模块（模板 kwarg + 预算 8192 一起切）；**裸基座 eval 臂单轮上限必须给 2048**（256 的砍断与真实弱分不开）。零训练拨开关不上生产（净 −0.057）；红利路径=带思考的 SFT 数据 | **E27** |
 | **永久基线** | eval 配对的基座参照 = `_audit/e27_base_off.json`（base think-off @2048/轮，修复后管线产）；SFT/RL 配对基线仍是 `v13_sft_*_merged` 族（E24） | E27 §5 |

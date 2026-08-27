@@ -91,3 +91,20 @@ triton 3.5→3.7 全被连带升级**，vllm/verl/flash-attn 的 ABI 前提一�
    ＋ flash-attn 反向判据 15 分钟完整复原——「一条命令重建」在锁文件维护住的部分是真的；
    但注意裸 `uv sync` 会**卸掉 extras**（vllm/verl/flash-attn 全在 train extra 里），
    同 ② 的"接上了又被工具拆掉"。安装类操作的输出**永远全量落盘**，别 tail。
+
+---
+
+## 2026-08-27 追加：第二次搬家重建（vast.ai 新机）又挖出三个
+
+| 缺口 | 症状 |
+|---|---|
+| `ingest_corpus.py` 不在 08 §2 搭环境步骤（RAG 语料在 PG 不在文件） | 3 条 retrieval 测试红，StopIteration/KeyError，签名像检索逻辑坏了（已补进 08 §2） |
+| `.env` 里 libcudart.so.13 路径望文生义写成 `nvidia/cuda_runtime/lib` | 实际装在 `nvidia/cu13/lib`；症状 = import flash_attn 直接 ImportError（已修 + 写进 08 §2.2） |
+| 新版 `hf download` 的 `--include` 只吃**一个**模式 | 多传的模式静默变成位置参数，部分文件被跳过下载还 exit 0；每个 include 模式单独跑一次 |
+
+★ 整体验证了 00-START §6 重建清单是真的：uv.lock（`--frozen --all-extras`）+ flash-attn
+反向判据 + 数据链从零全跑 ⇒ **v13 splits 与 git SHA-256 逐字节一致**；
+v11/v12 的 splits 重跑**与 git 存档不同**（EVAL 198→258 / 254→319）——那是历史工件，
+split 逻辑演进过，当前链路不消费，恢复 git 版即可，别当 bug 追。
+xlsx 重生成永远有字节差（zip 时间戳），内容逐单元格比对一致就恢复 git 版。
+验收口径已长大：365 → **694 passed · 0 skipped**。

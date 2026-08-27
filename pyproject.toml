@@ -30,7 +30,7 @@ dependencies = [
 # 里写着 `assert parse_version(tensordict.__version__) >= parse_version("0.10")`
 # （`protocol.py:1108 to_tensordict`）。**声明的下界比代码实际要的低**，上游不一致。
 # 走分卡异步路径时必踩（colocate 不走 to_tensordict，所以以前从没暴露）。
-train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<2.3", "tensordict==0.10.0", "flash-attn", "nvidia-cuda-runtime<=13.2"]
+train = ["vllm==0.12.0", "verl==0.8.0", "numpy>=2.2,<2.3", "tensordict==0.10.0", "flash-attn", "nvidia-cuda-runtime<=13.2", "prefix-grouper==0.0.1.post1"]
 dev = ["pytest>=8.0"]
 # ⚠️ 2026-08-17 换机器时发现：M9 runtime 的依赖**一条都没进过依赖表** ——
 # 旧机器上是手动装的，于是在一台干净机器上 `uv sync --extra train --extra dev`

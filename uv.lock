@@ -2985,6 +2985,14 @@ wheels = [
 ]
 
 [[package]]
+name = "prefix-grouper"
+version = "0.0.1.post1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/3b/6c08bd5cb8c0c46ec248b9acfda85c14cfd333d838629b5b17359535c059/prefix_grouper-0.0.1.post1-py3-none-any.whl", hash = "sha256:a55127a02ed0e50e2817842e273c7280e9a5c171cb6a415075cac7416256a0cd", size = 17459, upload-time = "2025-06-10T11:45:47.813Z" },
+]
+
+[[package]]
 name = "prometheus-client"
 version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4409,6 +4417,7 @@ train = [
     { name = "flash-attn", marker = "python_full_version < '3.13'" },
     { name = "numpy" },
     { name = "nvidia-cuda-runtime" },
+    { name = "prefix-grouper" },
     { name = "tensordict" },
     { name = "verl" },
     { name = "vllm" },
@@ -4424,6 +4433,7 @@ requires-dist = [
     { name = "nvidia-cuda-runtime", marker = "extra == 'train'", specifier = "<=13.2" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pandas", specifier = ">=2.0" },
+    { name = "prefix-grouper", marker = "extra == 'train'", specifier = "==0.0.1.post1" },
     { name = "pyarrow", specifier = ">=15.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

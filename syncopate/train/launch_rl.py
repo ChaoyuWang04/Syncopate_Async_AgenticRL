@@ -602,12 +602,13 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             f"actor_rollout_ref.rollout.layered_summon={args.layered_summon}",
         ]
 
-    # ---- Ostinato A1 实验入口：KV cache 量化（fp8_e4m3 / fp8_e5m2）----
-    # 经 engine_kwargs.vllm 透传。容量红利：同一块 KV 池装 2× token ⇒ 驱逐/preemption
-    # 减半。不设默认值 —— 开不开必须是显式决定，且开了要跑 EVAL 128 配对回归验精度。
+    # ---- KV cache 量化（默认 fp8，Chaoyu 08-21 裁定；E19 §8 容量杠杆 +50%）----
+    # 经 engine_kwargs.vllm 透传。⚠️ 该键不在 verl 的 config struct 里，必须用 Hydra 的
+    # `++`（force-add）——裸 `key=` 会直接报 "Key 'kv_cache_dtype' is not in struct"
+    # （2026-08-27 新机首跑实测：08-21 切默认时训练路径从没真的起过一跑）。
     if args.kv_cache_dtype:
         overrides.append(
-            f"actor_rollout_ref.rollout.engine_kwargs.vllm.kv_cache_dtype={args.kv_cache_dtype}")
+            f"++actor_rollout_ref.rollout.engine_kwargs.vllm.kv_cache_dtype={args.kv_cache_dtype}")
 
     # ---- TIS / rollout correction：主线研究要用的诊断指标 ----
     if args.rollout_correction:
@@ -956,13 +957,15 @@ def main(argv: list[str] | None = None) -> int:
                              "⚠️ graph 池要吃额外显存，rollout 卡余量本就贴边，OOM 了先降 gpu_util")
     parser.add_argument("--no-engine-stats", action="store_true",
                         help="关掉 vLLM 周期性统计日志（默认开：吞吐/prefix cache 命中率/preemption）")
-    # ★★ 2026-08-21（Chaoyu 拍板）：KV cache 默认 fp8。E19 §8 五臂：KV 池 ×2 ⇒ 并发 +50%
-    #   （容量杠杆非算力杠杆）；质量代价 −0.009 恰在 MDE 界、defer 门槛内，且归因臂证明
-    #   代价全在 KV 侧、W8A8 叠加零增伤。要复现旧行为显式传 --kv-cache-dtype auto。
-    #   ⚠️ 常驻判据③（rollout_corr/kl 回落 ~3.4e-4）的地板在 fp8 KV 下会略抬——
-    #   首个正式跑要实测重标那个地板值（00-START §6 有注）。
-    parser.add_argument("--kv-cache-dtype", default="fp8",
-                        help="vLLM KV cache 精度（默认 fp8，E19 §8 定案；auto=关）")
+    # ★★ 2026-08-27（Chaoyu 拍板，推翻 08-21 的一半）：训练侧 KV cache 默认回 **auto(bf16)**，
+    #   fp8 只留给 serving 端点（logs/runtime/start_vllm.sh 不变）。新机首跑 48 步单变量 A/B：
+    #     fp8   kl 4.8–5.5e-3 · IS 截断 0.46–0.48（>0.40 红线 H3）· IS 均值 0.65–0.72（有偏）· 9.74 s/gstep
+    #     bf16  kl 3.6–4.8e-4（回旧地板）· 截断 0.07–0.09 · 均值 0.97–0.98 · ESS/N 0.92 · 9.29 s/gstep
+    #   ⇒ 训练 rollout 的 KV 池峰值只用 16.7%（零 preemption），容量杠杆无着力点：
+    #     fp8 在训练侧零收益还倒贴（logprob 扰动打穿 IS 红线 + 慢 4.6%）。
+    #   复活条件：CoT/think-on（response 8192）让 KV 容量重新成为约束时，按 IS 健康度重测。
+    parser.add_argument("--kv-cache-dtype", default="auto",
+                        help="vLLM KV cache 精度（默认 auto=bf16，08-27 A/B 定案；fp8 只用于 serving）")
     # ★★ 2026-08-20（Chaoyu 拍板）：KL **默认关**。E17 两臂：砍 KL 省 15.4%（= ref 整遍
     #   前向）、任务分 −0.009 < MDE（无差异）；cand_v13r2_e1 400 步 KL-off 长跑兑现
     #   （判据③ rollout_corr/kl 不吃 ref，全程中位 4e-4 在地板）。
