@@ -271,14 +271,25 @@ torch/vllm    torch 2.9.0+cu128 / vllm 0.12.0
 
 ```
 卡间 all-reduce bus bandwidth（NCCL_CUMEM_ENABLE=0，尺子 scripts/probe_allreduce_bw.py）
-    组内(0,1)/(2,3)   1MB 18.1 · 8MB 26.6 · 64MB 28.0 · 256MB **28.8** GB/s
-    跨 socket(0,2)/(1,3)                                256MB **22.2** GB/s   ← 掉 22%
-    四卡 0-3（= DDP 实际走的）                           256MB **25.6** GB/s
-    ⇒ NUMA 绑定无效（22.23→22.34，噪声内）⇒ 跨 socket 是 UPI 跳的物理代价，没有旋钮
-    ⛔ 原来这里换算过「DDP 梯度 260MB ⇒ 跨 socket 净代价一步的 0.004%」——**那 260 MB 是算出来的、从没量过**，且 E21 之前那段流量根本不存在。**要实测一次 NCCL 流量之后才能引用**（handoff §5.3 第 12 项）
-    ⇒ 传输通道实测 SHM/direct/direct（P2P 全 0）；torch 2.9/NCCL 2.27.5 与 2.11/2.28.9 一致
-    ⇒ 对照：H100 NVLink ≈ 900 GB/s，约是它的 1/35
-    原始数据 logs/e00_allreduce_{default,default_bind,trainstack}.json
+    ★ 2026-08-27 换机重测（单 socket EPYC 9B14 · 4 NUMA：GPU0/1 同桥@n3 · GPU2@n2 · GPU3@n0）
+    同桥对(0,1)        1MB 11.8 · 8MB 14.7 · 64MB 15.2 · 256MB **16.3** GB/s
+    跨 NUMA 对（其余）                                    256MB **14.4–15.1** GB/s  ← 只差 ~8%
+    四卡 0-3（= DDP 实际走的）                            256MB **17.9** GB/s
+    ⇒ **比上一台（2 socket，四卡 25.6）反而低 30%**——同 socket 消掉 UPI 跳，但四卡挤一份
+      内存子系统，净输（搬家清单"方向未知先测再说"已裁决）；NUMA 绑定仍无效（±0.05，噪声内）
+    ⇒ 摆位红利缩水：对间差距 22%→8% ⇒ B11 拓扑感知放置在这台机器上更不值得做
+    ⇒ 换算 DDP 梯度 260MB@17.9 ≈ 15 ms/步 = 步长 9.7s 的 0.15%（260MB 仍是算的，实测流量欠 R6）
+    ⇒ 传输通道实测 SHM/direct/direct（P2P 全 0，与前两台一致）
+    原始数据 logs/e00_allreduce_run{,_bind}.json · 全套探针 logs/newbox_profile/probes_0827.log
+
+★ 三个「换机可能翻」的结论 08-27 全部复现，一个没翻（跨机验证，给上游 issue 的硬证据）：
+    3-rank all_gather 塌陷（E18）   3卡 4.3 GB/s vs 2卡 25.8 / 4卡 23.2（塌 5–6×）
+        LL128 仍治它：4.3→14.2（3.3×，与旧机 3.33× 几乎一致）；但 LL128 伤其它算子
+        （all_reduce busbw 17.0→10.5 · broadcast 22→12）⇒ E03 结论原样成立：只在分片路径开
+    16B 对齐悬崖（E18 §10.3）      %16≠0 ⇒ all_gather 8.0→1.7 GB/s（4.7×；旧机 12×，形状同幅度异）
+        verl 真实分块 67,287,212（%16=12）实测 1.5 vs 对齐后 7.9 GB/s
+    满载降频（E00，首次测齐）      4×575W 稳态：频率 −0.5% · 单卡 TFLOPS −0.9%（221→219）· 69°C
+        ⇒ 多卡对照里的非通信损失 ≈0.9%，可忽略——「降频污染对照」的担忧在这台机器上不成立
 
 单卡 RL 每步（sync colocate, Qwen3-4B+LoRA r32, v11）   91–99 秒
 rollout 长尾（同批最慢/平均）                          1.37–2.75×
@@ -295,8 +306,11 @@ flash-attn: 🆕 **官方 cu13torch2.9 轮子** + PyPI `nvidia-cuda-runtime<=13.
          逐条中位 3.94% · p90 5.56% · 最大 15.21%；按轮数 1 轮 0.88% → 8 轮 8.41%
          response 中位仅 422 token（配置上限 1536 的 27%）；prompt 中位 3584 = 打满
     ⇒ lm_head 计算量：切 prompt 省 8.5×，完整按 mask 筛省 24×
-4 卡 all-reduce 曲线                                    ⬜ 还没测（E00）
-满载功耗与降频（2.3 kW）                                ⬜ 还没测（E00，会污染所有对照）
+4 卡 all-reduce 曲线 · 满载降频                          ✅ 08-27 已测齐（见上方换机重测块）
+RL 每步（新机冒烟，fully_async 3+1 全默认 48 步）        9.3–9.7 s/gstep（旧机 cand 11.33，快 ~14%）
+    param_sync 稳态 1.02 s/次 —— 三段账：13.3（08-13 旧机一步一同步）→ ~3.3（旧机 E14 修理后）
+    → 1.02（新机）。⚠️ 最后一段**不是**带宽红利（集合通信反而低 30%）⇒ 剩余成分在
+    CPU 侧取参/拷贝路径，未归因（E12 的"固定开销"在新平台缩小了，顺手可查不必专项）
 
 ★ FA2 × dynamic_bsz 2×2（2026-08-14 主线实测，one_step_off / Qwen3-4B base / bypass_mode）
     update_actor 按 token 归一（ms/token）

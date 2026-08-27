@@ -7,12 +7,14 @@
 
 ## 1 · 硬件画像（实测）
 
+> ⚠️ 2026-08-27 换机（vast.ai）后全量重画像，旧机（2×EPYC 9V74 2+2 跨 socket）数字去 git log。
+
 ```
-4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 595.58.03  CUDA 12.8  torch 2.9.0+cu128
-CPU   2× EPYC 9V74（80 核/路，320 线程，2 NUMA）   RAM 503 GB
-拓扑  🔴 **2+2 跨 socket**：GPU0/1@node0、GPU2/3@node1，组内 NODE、跨组 SYS（走 UPI）
+4 × RTX 5090  32607 MiB / 575W / sm_120   驱动 595.71.05  CUDA 12.8  torch 2.9.0+cu128
+CPU   1× EPYC 9B14（96 核，192 线程，**4 NUMA/NPS4**）   RAM 566 GB
+拓扑  单 socket：GPU0/1 同桥（PHB）@node3 · GPU2@node2 · GPU3@node0，跨 NUMA 走 SYS
 PCIe  **Gen5 x16**（32 GT/s；空闲时报 Gen1 属正常）
-盘    /workspace = 本地 XFS 300G（**持久卷**，workspace_is_volume=true，权限位生效）
+盘    /workspace = 本地 300G（**持久卷**，workspace_is_volume=true，权限位生效）
       / 只有 **16G overlay** ⇒ 见 §2.0，缓存必须重定向
 ```
 
@@ -21,15 +23,17 @@ PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这
 ⇒ 卡间通信一律经主机内存中转（NCCL 实测走 `SHM/direct/direct`）。
 
 **卡间 all-reduce bus bandwidth**（`scripts/probe_allreduce_bw.py`，
-`NCCL_CUMEM_ENABLE=0` / 256MB，与 `infra_exp/README.md` §6 同口径）：
+`NCCL_CUMEM_ENABLE=0` / 256MB，2026-08-27 实测，与 `infra_exp/README.md` §6 同口径）：
 
 ```
-组内 (0,1)/(2,3)  28.8 GB/s      跨 socket (0,2)/(1,3)  22.2      四卡（DDP 走这条）25.6
-⇒ 跨 socket 掉 22%；NUMA 绑定救不回来（22.23→22.34，噪声内）＝ UPI 跳的物理代价
-⇒ 换算负载：DDP 梯度 260MB ≈ 10.2 ms/步，跨 socket 净代价 1.2 ms/步 ＝ 一步的 0.004%
+同桥对 (0,1) 16.3 GB/s    跨 NUMA 对 14.4–15.1    四卡（DDP 走这条）17.9
+⇒ 比上一台（四卡 25.6）**低 30%**：同 socket 无 UPI 跳，但四卡挤一份内存子系统，净输
+⇒ 对间差距只剩 ~8% ⇒「摆哪张卡」在这台机器上基本不重要；NUMA 绑定仍无效
+⇒ 换算负载：DDP 梯度 260MB ≈ 15 ms/步 = 一步(9.7s)的 0.15%，仍可忽略
 ```
 
-⬜ 还没测：主机内存带宽、**满载功耗与降频**（4×575W=2.3kW，会污染所有对照实验，队列 A7）。
+✅ 满载降频已测（08-27）：4×575W 稳态频率 −0.5%、单卡 TFLOPS −0.9%（221→219）、69°C
+⇒ 多卡对照的非通信损失可忽略。⬜ 还没测：主机内存带宽。
 
 ## 1.1 · PostgreSQL 的落盘
 
