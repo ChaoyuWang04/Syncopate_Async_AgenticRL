@@ -53,8 +53,9 @@ __device__ __forceinline__ void tl_mxf8_mma_atom(
 extern "C" __device__ void tl_mxf8_warp_gemm(
     const uint8_t* __restrict__ A_sh, const uint8_t* __restrict__ B_sh,
     const uint8_t* __restrict__ SFA_g, const uint8_t* __restrict__ SFB_g,
-    float* __restrict__ acc, int lda, int ldb, int lds,
-    int sfa_base_row, int sfb_base_row, int sf_col) {
+    float* __restrict__ acc, int lda, int ldb,
+    int sfa_lds, int sfb_lds, int sfa_base_row, int sfb_base_row,
+    int sfa_col, int sfb_col) {
   // ★ TileLang 会把带 TMA 流水的 kernel warp 特化成 512 线程（低 256 生产/高 256 消费），
   //   消费者的逻辑线程号 = threadIdx.x & 255（flat 256 线程时是恒等映射）
   const int tx = threadIdx.x & 255;
@@ -77,7 +78,7 @@ extern "C" __device__ void tl_mxf8_warp_gemm(
   #pragma unroll
   for (int mi = 0; mi < 4; mi++) {
     const int sfa_row = warp_m + mi * 16 + g + ((q & 1) ? 8 : 0);
-    sfa_r[mi] = *reinterpret_cast<const uint32_t*>(SFA_g + (int64_t)(sfa_base_row + sfa_row) * lds + sf_col);
+    sfa_r[mi] = *reinterpret_cast<const uint32_t*>(SFA_g + (int64_t)(sfa_base_row + sfa_row) * sfa_lds + sfa_col);
     #pragma unroll
     for (int kb = 0; kb < 4; kb++) {
       const int ar = warp_m + mi * 16 + a_row_off;
@@ -93,7 +94,7 @@ extern "C" __device__ void tl_mxf8_warp_gemm(
   #pragma unroll
   for (int ni = 0; ni < 4; ni++) {
     const int col = warp_n + ni * 8;
-    sfb_r[ni] = *reinterpret_cast<const uint32_t*>(SFB_g + (int64_t)(sfb_base_row + col + g) * lds + sf_col);
+    sfb_r[ni] = *reinterpret_cast<const uint32_t*>(SFB_g + (int64_t)(sfb_base_row + col + g) * sfb_lds + sfb_col);
     #pragma unroll
     for (int kb = 0; kb < 4; kb++) {
       const int br = col + b_row_off;
@@ -132,8 +133,8 @@ extern "C" __device__ void tl_mxf8_warp_gemm_g(
   const int sfk = K / 32;
   tl_mxf8_warp_gemm(A + (int64_t)base_m * K + ko * BK,
                     B + (int64_t)base_n * K + ko * BK,
-                    SFA, SFB, acc, K, K, sfk,
-                    base_m, base_n, ko * (BK / 32));
+                    SFA, SFB, acc, K, K,
+                    sfk, sfk, base_m, base_n, ko * (BK / 32), ko * (BK / 32));
 }
 
 // 尾声：m16n8 fragment 按标准映射散回全局 C（bf16 输出）
@@ -163,7 +164,10 @@ extern "C" __device__ void tl_mxf8_epilogue(
 # ────────────────────────── TileLang 主体 ──────────────────────────
 @tilelang.jit
 def build_kernel(M: int, N: int, K: int, block_M=128, block_N=128, block_K=128,
-                 num_stages=2, threads=256, direct=False):
+                 num_stages=2, threads=256, direct=False, sfb_global=False,
+                 grid_m_fast=False):
+    """grid_m_fast：M 维做 blockIdx.x（最快轴）——瘦长形状（N 巨大）下让同一 B tile
+    被连续的 M 块复用而常驻 L2，B 的显存流量从 (M/BM)×N×K/2 掉回 N×K/2。"""
     assert M % block_M == 0 and N % block_N == 0 and K % block_K == 0
     KB = block_K // 32
 
@@ -175,7 +179,13 @@ def build_kernel(M: int, N: int, K: int, block_M=128, block_N=128, block_K=128,
         SFB: T.Tensor((N, K // 32), "uint8"),
         C: T.Tensor((M, N), "bfloat16"),
     ):
-        with T.Kernel(T.ceildiv(N, block_N), T.ceildiv(M, block_M), threads=threads) as (bx, by):
+        with T.Kernel(
+            T.ceildiv(M, block_M) if grid_m_fast else T.ceildiv(N, block_N),
+            T.ceildiv(N, block_N) if grid_m_fast else T.ceildiv(M, block_M),
+            threads=threads,
+        ) as (b0, b1):
+            bx = b1 if grid_m_fast else b0
+            by = b0 if grid_m_fast else b1
             A_sh = T.alloc_shared((block_M, block_K), "uint8")
             B_sh = T.alloc_shared((block_N, block_K), "uint8")
             # ⚠️ 缩放必须走 smem 拷贝：撤掉它会让 TileLang 把生产者分区缩到 128 线程而
@@ -199,6 +209,19 @@ def build_kernel(M: int, N: int, K: int, block_M=128, block_N=128, block_K=128,
                         by * block_M, bx * block_N, ko, K, block_K,
                         dtype="int32",
                     )
+            elif sfb_global:
+                for ko in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):
+                    T.copy(A[by * block_M, ko * block_K], A_sh)
+                    T.copy(B[bx * block_N, ko * block_K], B_sh)
+                    T.copy(SFA[by * block_M, ko * KB], SFA_sh)
+                    T.call_extern(
+                        "tl_mxf8_warp_gemm",
+                        T.access_ptr(A_sh, "r"), T.access_ptr(B_sh, "r"),
+                        T.access_ptr(SFA_sh, "r"), T.access_ptr(SFB, "r"),
+                        T.access_ptr(acc, "rw"), block_K, block_K,
+                        KB, K // 32, 0, bx * block_N, 0, ko * KB,
+                        dtype="int32",
+                    )
             else:
                 for ko in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):
                     T.copy(A[by * block_M, ko * block_K], A_sh)
@@ -209,13 +232,171 @@ def build_kernel(M: int, N: int, K: int, block_M=128, block_N=128, block_K=128,
                         "tl_mxf8_warp_gemm",
                         T.access_ptr(A_sh, "r"), T.access_ptr(B_sh, "r"),
                         T.access_ptr(SFA_sh, "r"), T.access_ptr(SFB_sh, "r"),
-                        T.access_ptr(acc, "rw"), block_K, block_K, KB,
-                        0, 0, 0,
+                        T.access_ptr(acc, "rw"), block_K, block_K,
+                        KB, KB, 0, 0, 0, 0,
                         dtype="int32",
                     )
 
             T.call_extern(
                 "tl_mxf8_epilogue",
+                T.access_ptr(acc, "r"), T.access_ptr(C, "w"),
+                N, by * block_M, bx * block_N,
+                dtype="int32",
+            )
+
+    return main
+
+
+# v2：块 128×256×128 · warp tile 64×64（mi=4, ni=8）· 逐 kb 交错加载省寄存器
+# SFA 走 smem（保生产者 256 分区），SFB 直读全局 L2（省 smem 挤进 2 级流水）
+MXF8_DEVICE_SRC_V2 = r"""
+#include <cstdint>
+#include <cuda_bf16.h>
+#include <cutlass/numeric_types.h>
+
+template <int KB>
+__device__ __forceinline__ void tl_mxf8_mma_atom_v2(
+    const uint32_t a0, const uint32_t a1, const uint32_t a2, const uint32_t a3,
+    const uint32_t b0, const uint32_t b1,
+    const uint32_t sa, const uint32_t sb, float* d) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X"
+      ".f32.e4m3.e4m3.f32.ue8m0 {%0,%1,%2,%3},{%4,%5,%6,%7},{%8,%9},{%0,%1,%2,%3},"
+      "{%10},{%11,0},{%12},{%11,0};"
+      : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+      : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1),
+        "r"(sa), "n"(KB), "r"(sb));
+}
+
+extern "C" __device__ void tl_mxf8_warp_gemm_v2(
+    const uint8_t* __restrict__ A_sh, const uint8_t* __restrict__ B_sh,
+    const uint8_t* __restrict__ SFA_sh, const uint8_t* __restrict__ SFB_g,
+    float* __restrict__ acc, int sfb_base_row, int sfb_lds, int sfb_col) {
+  const int tx = threadIdx.x & 255;
+  const int lane = tx & 31, w = tx >> 5;
+  const int warp_m = (w >> 2) * 64;          // 2×4 warp 网格，warp tile 64×64
+  const int warp_n = (w & 3) * 64;
+  const int g = lane >> 2, q = lane & 3;
+  const int l = lane;
+  const int a_row_off = l & 15, a_byte_off = (l >> 4) << 4;
+  const int b_row_off = l & 7,  b_byte_off = ((l >> 3) & 1) << 4;
+
+  uint32_t sfa_r[4], sfb_r[8];
+  #pragma unroll
+  for (int mi = 0; mi < 4; mi++) {
+    const int sfa_row = warp_m + mi * 16 + g + ((q & 1) ? 8 : 0);
+    sfa_r[mi] = *reinterpret_cast<const uint32_t*>(SFA_sh + sfa_row * 4);
+  }
+  #pragma unroll
+  for (int ni = 0; ni < 8; ni++) {
+    const int col = warp_n + ni * 8 + g;
+    sfb_r[ni] = *reinterpret_cast<const uint32_t*>(
+        SFB_g + (int64_t)(sfb_base_row + col) * sfb_lds + sfb_col);
+  }
+
+  #pragma unroll
+  for (int kb = 0; kb < 4; kb++) {
+    uint32_t af[4][4], bf[8][2];
+    #pragma unroll
+    for (int mi = 0; mi < 4; mi++) {
+      const int ar = warp_m + mi * 16 + a_row_off;
+      const int ac = (kb * 32 + a_byte_off) >> 4;
+      const int acs = (ac & ~7) | ((ac & 7) ^ (ar & 7));
+      const uint32_t sa_addr = static_cast<uint32_t>(
+          __cvta_generic_to_shared(A_sh + (int64_t)ar * 128 + (acs << 4)));
+      asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];"
+                   : "=r"(af[mi][0]), "=r"(af[mi][1]), "=r"(af[mi][2]), "=r"(af[mi][3])
+                   : "r"(sa_addr));
+    }
+    #pragma unroll
+    for (int ni = 0; ni < 8; ni++) {
+      const int br = warp_n + ni * 8 + b_row_off;
+      const int bc = (kb * 32 + b_byte_off) >> 4;
+      const int bcs = (bc & ~7) | ((bc & 7) ^ (br & 7));
+      const uint32_t sb_addr = static_cast<uint32_t>(
+          __cvta_generic_to_shared(B_sh + (int64_t)br * 128 + (bcs << 4)));
+      asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0,%1}, [%2];"
+                   : "=r"(bf[ni][0]), "=r"(bf[ni][1]) : "r"(sb_addr));
+    }
+    #pragma unroll
+    for (int mi = 0; mi < 4; mi++)
+      #pragma unroll
+      for (int ni = 0; ni < 8; ni++) {
+        float* d = acc + (mi * 8 + ni) * 4;
+        if (kb == 0) tl_mxf8_mma_atom_v2<0>(af[mi][0],af[mi][1],af[mi][2],af[mi][3],bf[ni][0],bf[ni][1],sfa_r[mi],sfb_r[ni],d);
+        if (kb == 1) tl_mxf8_mma_atom_v2<1>(af[mi][0],af[mi][1],af[mi][2],af[mi][3],bf[ni][0],bf[ni][1],sfa_r[mi],sfb_r[ni],d);
+        if (kb == 2) tl_mxf8_mma_atom_v2<2>(af[mi][0],af[mi][1],af[mi][2],af[mi][3],bf[ni][0],bf[ni][1],sfa_r[mi],sfb_r[ni],d);
+        if (kb == 3) tl_mxf8_mma_atom_v2<3>(af[mi][0],af[mi][1],af[mi][2],af[mi][3],bf[ni][0],bf[ni][1],sfa_r[mi],sfb_r[ni],d);
+      }
+  }
+}
+
+extern "C" __device__ void tl_mxf8_epilogue_v2(
+    const float* __restrict__ acc, cutlass::bfloat16_t* __restrict__ C,
+    int ldc, int base_m, int base_n) {
+  const int tx = threadIdx.x & 255;
+  const int lane = tx & 31, w = tx >> 5;
+  const int warp_m = (w >> 2) * 64, warp_n = (w & 3) * 64;
+  const int g = lane >> 2, q = lane & 3;
+  #pragma unroll
+  for (int mi = 0; mi < 4; mi++)
+    #pragma unroll
+    for (int ni = 0; ni < 8; ni++) {
+      const float* d = acc + (mi * 8 + ni) * 4;
+      const int r0 = base_m + warp_m + mi * 16 + g;
+      const int c0 = base_n + warp_n + ni * 8 + q * 2;
+      C[(int64_t)r0 * ldc + c0] = cutlass::bfloat16_t(d[0]);
+      C[(int64_t)r0 * ldc + c0 + 1] = cutlass::bfloat16_t(d[1]);
+      C[(int64_t)(r0 + 8) * ldc + c0] = cutlass::bfloat16_t(d[2]);
+      C[(int64_t)(r0 + 8) * ldc + c0 + 1] = cutlass::bfloat16_t(d[3]);
+    }
+}
+"""
+
+
+@tilelang.jit
+def build_kernel_v2(M: int, N: int, K: int, num_stages=2, threads=384):
+    """块 128×256×128；SFA smem / SFB 全局；smem 2×(48KB+0.5KB)=99328 < 上限。"""
+    block_M, block_N, block_K = 128, 256, 128
+    assert M % block_M == 0 and N % block_N == 0 and K % block_K == 0
+    KB = block_K // 32
+
+    @T.prim_func
+    def main(
+        A: T.Tensor((M, K), "uint8"),
+        B: T.Tensor((N, K), "uint8"),
+        SFA: T.Tensor((M, K // 32), "uint8"),
+        SFB: T.Tensor((N, K // 32), "uint8"),
+        C: T.Tensor((M, N), "bfloat16"),
+    ):
+        with T.Kernel(T.ceildiv(N, block_N), T.ceildiv(M, block_M), threads=threads) as (bx, by):
+            A_sh = T.alloc_shared((block_M, block_K), "uint8")
+            B_sh = T.alloc_shared((block_N, block_K), "uint8")
+            SFA_sh = T.alloc_shared((block_M, KB), "uint8")
+            acc = T.alloc_local((128,), "float32")
+
+            T.import_source(MXF8_DEVICE_SRC_V2)
+            # ⚠️ 别用 annotate_producer_reg_dealloc/consumer_reg_alloc 强开重分配：
+            #   在 256/256 分区上实测挂死（2026-08-27）。走 threads=384 让静态上限升到 170。
+
+            for i in T.serial(128):
+                acc[i] = T.float32(0)
+
+            for ko in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):
+                T.copy(A[by * block_M, ko * block_K], A_sh)
+                T.copy(B[bx * block_N, ko * block_K], B_sh)
+                T.copy(SFA[by * block_M, ko * KB], SFA_sh)
+                T.call_extern(
+                    "tl_mxf8_warp_gemm_v2",
+                    T.access_ptr(A_sh, "r"), T.access_ptr(B_sh, "r"),
+                    T.access_ptr(SFA_sh, "r"), T.access_ptr(SFB, "r"),
+                    T.access_ptr(acc, "rw"),
+                    bx * block_N, K // 32, ko * KB,
+                    dtype="int32",
+                )
+
+            T.call_extern(
+                "tl_mxf8_epilogue_v2",
                 T.access_ptr(acc, "r"), T.access_ptr(C, "w"),
                 N, by * block_M, bx * block_N,
                 dtype="int32",
@@ -268,6 +449,9 @@ def main():
     p.add_argument("--num-stages", type=int, default=2)
     p.add_argument("--verify", action="store_true")
     p.add_argument("--direct", action="store_true", help="诊断：直读全局内存，绕过 smem")
+    p.add_argument("--v2", action="store_true", help="块 128x256（B 复用×2）")
+    p.add_argument("--sfb-global", action="store_true", help="SFB 直读全局，省 smem 上 3 级流水")
+    p.add_argument("--grid-m-fast", action="store_true", help="M 维最快轴：瘦长形状 B tile 常驻 L2")
     args = p.parse_args()
     M, N, K = args.m, args.n, args.k
     torch.manual_seed(7)
@@ -280,7 +464,10 @@ def main():
     A_k, B_k = swizzle_rows(A_u8), swizzle_rows(B_u8)             # kernel 原生布局
     C = torch.empty(M, N, device=dev, dtype=torch.bfloat16)
 
-    kernel = build_kernel(M, N, K, num_stages=args.num_stages, direct=args.direct)
+    if args.v2:
+        kernel = build_kernel_v2(M, N, K, num_stages=args.num_stages)
+    else:
+        kernel = build_kernel(M, N, K, num_stages=args.num_stages, direct=args.direct, sfb_global=args.sfb_global, grid_m_fast=args.grid_m_fast)
     kernel(A_k, B_k, SFA, SFB, C)
 
     if args.verify:
