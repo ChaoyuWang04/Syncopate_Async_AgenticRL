@@ -159,7 +159,13 @@ def token_losses(model, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, t
     # 用 [N, H] 的扁平表示天然处理这种不齐
     sel_hidden = shift_hidden[rows, cols]                       # [N, 2560]
     sel_labels = shift_labels[rows, cols]                       # [N]
-    logits = lm_head(sel_hidden).float()                        # [N, 151936]
+    # A4（E30 §12）：SYNCOPATE_LMHEAD_MXFP8=1 时 lm_head 走 MXFP8 三件套
+    # （sm_120 自有 kernel；判据行 [mxfp8-lmhead]；默认关，bf16 逐位不变）
+    from syncopate.train import mxfp8_lmhead
+    if mxfp8_lmhead.enabled():
+        logits = mxfp8_lmhead.mxf8_lm_head(sel_hidden, lm_head.weight).float()
+    else:
+        logits = lm_head(sel_hidden).float()                    # [N, 151936]
     losses = torch.nn.functional.cross_entropy(logits, sel_labels, reduction="none")
     return losses, rows
 
