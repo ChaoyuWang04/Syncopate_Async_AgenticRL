@@ -1519,8 +1519,6 @@ def _patch_prefix_grouper() -> None:
     def _pg_forward(model, prefix_grouper, concat_input_ids, attention_mask, position_ids,
                     completion_ids, completion_mask, *, temperature=1.0, padding_mode="right",
                     include_prefix_last=1, calculate_entropy=False, entropy_fn=None):
-        from verl.utils.experimental.torch_functional import FusedLinearForPPO
-
         # ★★★ 2026-08-19 修（E26 §6.3 的真正根因，脱 Ray 复现 scripts/repro_pg_dtype.py）：
         #   前向必须走**根 FSDP 模块**、且损失必须流经**根 forward 的输出**。
         #
@@ -1573,7 +1571,11 @@ def _patch_prefix_grouper() -> None:
         #   no_grad 下、丢掉隐状态梯度 —— 不报错，只训歪）
         h = suffix_h[:, :-1].contiguous()
         B, T, D = h.shape
-        log_probs, entropy = FusedLinearForPPO()(
+        # E31：投影唯一入口在 unified_fp8.linear_for_ppo —— SYNCOPATE_UNIFIED_FP8=1 时
+        # 走 MXFP8（与 vLLM 侧同量化器同 kernel，量化项在 IS 比率对消）；
+        # 关（默认）= 原样走 FusedLinearForPPO，逐位不变（tests/train/test_e31_step1.py 钉）。
+        from syncopate.train.unified_fp8 import linear_for_ppo as _linear_for_ppo
+        log_probs, entropy = _linear_for_ppo(
             hidden_states=h.view(B * T, D),
             vocab_weights=_lm_head_weight(model),
             input_ids=completion_right.reshape(B * T),

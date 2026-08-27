@@ -40,6 +40,13 @@ dev = ["pytest>=8.0"]
 # uvicorn 不被测试 import，但 09-runtime-handoff.md §0 的起服务命令要它。
 runtime = ["asyncpg>=0.29", "fastapi>=0.110", "httpx>=0.27", "uvicorn>=0.30"]
 
+# E31：vLLM 每个进程（含 spawn 的 Worker 子进程）启动时会调用该入口点——
+# 这是把统一 FP8 lm_head 补丁送进 vLLM Worker 的唯一可靠通道（普通 monkeypatch
+# 只落在 Ray actor 进程，模型跑在 spawn 出来的 Worker 里根本看不见）。
+# register() 在 SYNCOPATE_UNIFIED_FP8≠1 时零动作零开销。
+[project.entry-points."vllm.general_plugins"]
+syncopate_unified_fp8 = "syncopate.train.unified_fp8:register"
+
 [tool.uv]
 # ★ 上面那条注释只写了结论（numpy 整条栈正常），没写「怎么装得进去」。
 # 2026-08-13 搬到 4 卡机时暴露：verl 0.8.0 的 `numpy<2.0.0` 和我们的 `numpy>=2.2`

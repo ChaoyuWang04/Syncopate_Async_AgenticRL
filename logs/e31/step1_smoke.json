@@ -1,0 +1,28 @@
+{
+  "log": "logs/e31s1_smoke_0827.log",
+  "kl_values": [
+    0.00032760700984605745,
+    0.0005552360403555667,
+    0.0005191258387640119
+  ],
+  "kl_floor": 0.00042674476094362035,
+  "seq_truncation_frac_max": 0.08072916674427688,
+  "ess_min": 0.8678060152136815,
+  "steps_completed": 48,
+  "eight_criteria": {
+    "pool_动态分池": true,
+    "agent-loop_下发记账": true,
+    "lora-probe_非空": true,
+    "sync-payload_lora>0": true,
+    "kl_回落地板": true,
+    "prompt_clip_ratio_恒0": true,
+    "aborted_恒0": true,
+    "unified-fp8_两侧判据行": true
+  },
+  "s_per_gstep": [
+    9.12,
+    9.2
+  ],
+  "user_warnings": 14,
+  "lora_push_count": 6
+}
