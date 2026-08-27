@@ -236,3 +236,21 @@ token 级 IS 🟡（逐 token 扰动 ≈1.003，正是 NVIDIA e2e FP8 选 token-
 完全安全；序列级 IS 仍边缘超阈（残余=逐 token 噪声 σ≈1.6e-2×√1800≈0.7/σ 的天然方差）——
 **序列 IS 的最终判决不变（不裸接），但从"必死"降级为"差一口气"**；c* 校准 + 阈值口径
 讨论移交 side-quant-mismatch（这也是他们"量化项分解"空角的完整方法论样板）。
+
+## 12 · 2026-08-27 · 反向两 GEMM 打通：FP8 训练三件套齐（前向+dgrad+wgrad）
+
+设计要点：**两个反向都复用前向 kernel**——矩阵乘换收缩维（dgrad 收缩 V、wgrad 收缩 M），
+只需"操作数转置 + 沿收缩维 MXFP8 量化"。真正的新考题是**梯度量化**（dZ=softmax−onehot，
+动态范围极端 + 行内相消），MXFP8 的 32 块幂缩放实测扛住了。
+探针 `scripts/tl_mxfp8_backward_probe.py`（28,668 真 RL token、真 CE 梯度）：
+
+| GEMM（收缩维） | bf16 本底 cos/rel | **MXFP8 cos/rel** | 速度 vs torch bf16 |
+|---|---|---|---|
+| dgrad dH（V=151,936 深收缩） | 0.999998 / 2.2e-3 | **0.99928 / 3.8e-2** | **2.11×**（467 TF） |
+| wgrad dW（M=28,672 浅收缩） | 1.000000 / 5.7e-4 | **0.99996 / 8.6e-3** | **1.69×**（383 TF） |
+
+判读：梯度**方向**几乎无损（cos≥0.9993，远高于 minibatch 梯度噪声的典型批间余弦）⇒
+8bit 反向对 LoRA+Adam 大概率可训（与 FP8 训练文献一致）；dgrad 误差偏大源于
+p−y 行内相消放大相对误差（绝对量仍小）。⇒ **lm_head 层的 FP8 训练三件套
+（前向 543/627 · dgrad 2.1× · wgrad 1.7×）全部有实测对拍的可用实现**；
+剩余工程 = autograd Function 封装 + cubin 脱离 tilelang 运行时 + 端到端 loss 曲线对照（挂 A4）。
