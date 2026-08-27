@@ -27,3 +27,9 @@
 ① 最小复现（建议从本仓库 kernel 裁）：一个 T.Pipelined + TMA copy + call_extern 的玩具 kernel，删/留一条 smem 拷贝两态对比 `get_kernel_source()` 的 init 计数；
 ② 上游定位：warp 特化 pass 里分区宽度与 barrier arrive-count 的推导处（怀疑分区宽度按"软件拷贝线程需求"推、计数按"声明线程数"推，两处各算各的）；
 ③ 顺带一提（可并入同 issue 或另开 docs issue）：warp 特化下 `T.call_extern` 设备函数拿到的 `threadIdx.x` 是 256..511，逻辑线程号需 `&255`——文档没写，首撞必 nan。
+
+## 补充证据（08-27 晚）：缺陷代价已定价
+
+裸 CUDA 复刻同一 kernel（TMA+warp 特化+64×64 大块，`scripts/mxf8_gemm_limit_tma.cu`）
+实测 **627 TFLOPS**，tilelang 版被寄存器机制限制在 543 ⇒ 该缺陷/限制的性能代价 ≈15%，
+且 627 即消费卡寄存器包络顶点（E30 §10）——PR/issue 里可作为"修复收益上界"引用。
