@@ -12,7 +12,7 @@
 
 | # | 任务 | 归谁 | 成本 | 为什么排这里 |
 |---|---|---|---|---|
-| **3** | 🔴 **A3 · TileLang 自有算子（队首，Chaoyu 08-21 定；🆕 08-27 开工 → [E30](E30-tilelang-nvfp4-gemm.md)）**：day-1 已完：工具链通 + 上游 NVFP4 kernel 在本机对拍过、8192³ **1308 TFLOPS=峰值 63.6%**（比最好库路径 2.5×）+ 扫描证明默认配置被 smem 100KB 钉死。剩余路线（E30 §3）：①自有变体冲 >70% 峰 ②lm_head 瘦长形状专用 schedule（现 600）③**MXFP8 配置表扩展**（tilelang 未接线，PR 入口）④回帖 triton#7550/CUTLASS#2867。判据不变 = 对拍等价 + 距 1026/2055 % | infra | ~1 周 | 「GPU 编程/PTX/DSL」；DeepSeek H 主载体 + 字节 C/D 硬性项；需求测量五证齐 |
+| **3** | ✅ **A3 · TileLang 自有算子 2026-08-27 收官**（[E30](E30-tilelang-nvfp4-gemm.md) 全七节）：自研 mxf8f6f4 kernel = **sm120 首个可用 MXFP8 GEMM，8192³ 543 TFLOPS=峰值 52.9%，超 cuBLAS-cu13(523)**；瘦长形状轴序 +32%（487/440）；负结果三连定界（>53% 挂上游寄存器机制）；两 DRAFT 包移交 upstream；简历已填实。接力：稀疏投影融合挂 A4（§3）；MXFP8 进 tilelang 正规路径挂 upstream | infra | 已完 | 判据两条全兑现（对拍等价 + 距峰 %） |
 | **4** | **B-4 推理服务真压测 + 优化**（与主线共建，**可与 #1–#3 并行**；before 基线已备：24/25 + TPOT/TTFT，`11 §5`）。优化面口径已定（Chaoyu 08-20，按预期收益序）：批调度/chunked prefill → prefix cache×gpu_util 余量 → FP8 KV（并 #5 一次跑）→ 多 LoRA 热切换；投机解码仅探针级 | infra+主线 | 就地（GPU0 已占） | 推理 E①「在线推理服务」；主线本来就欠真压测，一件事双向记账 |
 | **6** | **PD 分离 go/no-go 探针**：prefill 重（88%）但 prefix cache 命中 97% ⇒ 可能是 PD 的反例。判据已定（Chaoyu 08-20）：分离 vs 单实例的 TTFT/TPOT 差值必须与 KV 传输耗时（走主机内存）**对上账**，成立与否都写成立范围 | infra | 30 min 探针 | 推理 F②核心词；实测否决也是结果 |
 | **7** | **CoT（thinking）SFT/RL 数据 + 训练支持**（主线产数据；infra 解训练侧拦截与预算、rollout 变长后的配比形状） | 双方 | 设计+实现 | E27 红利路径；产品线；同步暂停题的复活条件 |
