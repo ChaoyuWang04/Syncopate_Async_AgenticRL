@@ -8,6 +8,7 @@
 另报不设门槛的观察值：s/gstep（覆盖数按 global_step 差分实测，守则④）、新增 UserWarning 数。
 
 用法：.venv/bin/python scripts/e31_step1_smoke_check.py <训练日志> [--out logs/e31/step1_smoke.json]
+     [--require-inner]（第 3 步：内层两条判据行也必须在）[--kl-mult 1.5]（第 3 步用 2.0）
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ def main() -> int:
     step_s = grab(text, "timing_s/step")
 
     floor = json.loads((ROOT / "logs/e31/kl_floor_bf16.json").read_text())["median"]
+    kl_mult = float(sys.argv[sys.argv.index("--kl-mult") + 1]) if "--kl-mult" in sys.argv else 1.5
     lora_pushes = len(re.findall(r"\[sync-payload\] 本次同步推出去：.*lora_ ([1-9]\d*) 个", text))
 
     eight = {
@@ -47,12 +49,16 @@ def main() -> int:
         "agent-loop_下发记账": "[agent-loop] 下发记账 ✓" in text,
         "lora-probe_非空": bool(re.search(r"\[lora-probe\] step=[1-9]\d* engine\.list_loras\(\)=\[\d", text)),
         "sync-payload_lora>0": lora_pushes >= 1,
-        "kl_回落地板": bool(kl) and max(kl) <= 1.5 * floor,
+        "kl_回落地板": bool(kl) and max(kl) <= kl_mult * floor,
         "prompt_clip_ratio_恒0": bool(clip) and max(clip) == 0.0,
         "aborted_恒0": bool(aborted) and max(aborted) == 0.0,
         "unified-fp8_两侧判据行": ("[unified-fp8] vLLM lm_head MXFP8 已生效" in text
                                    and "[unified-fp8] trainer lm_head MXFP8 已生效" in text),
     }
+    if "--require-inner" in sys.argv:
+        eight["unified-fp8_内层两侧判据行"] = (
+            "[unified-fp8] vLLM 内层 MXFP8 已生效" in text
+            and "[unified-fp8] trainer 内层 MXFP8 已生效" in text)
 
     # s/gstep：覆盖数按相邻行 global_step 差分实测（单行日志答不了，守则④）
     per_gstep = [s / d for s, d in
@@ -72,7 +78,7 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
 
-    ok = (bool(kl) and max(kl) <= 1.5 * floor
+    ok = (bool(kl) and max(kl) <= kl_mult * floor
           and report["seq_truncation_frac_max"] <= 0.10
           and report["ess_min"] >= 0.85
           and report["steps_completed"] >= 48

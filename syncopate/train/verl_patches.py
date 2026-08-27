@@ -1538,6 +1538,10 @@ def _patch_prefix_grouper() -> None:
         #   ③ 给 log_probs 加一个 0×根输出 的锚，保证根的 pre-backward 在 backward 一开始
         #      就触发（判据：repro 探针「final排队/执行」每次 backward 各 +1，
         #      三 rank 梯度和与健康路径**逐位相同**）
+        # E31 第 3 步：内层 MXFP8 的 swap 必须发生在根前向**之前**（首调一次，幂等；
+        # SYNCOPATE_UNIFIED_FP8_LAYERS=0 时零动作）。swap 数断言 N×7，半接线直接拒跑。
+        from syncopate.train.unified_fp8 import patch_trainer_inner as _ufp8_inner
+        _ufp8_inner(model)
         _causal = None
         for _m in model.modules():
             if type(_m) in _orig_cls_forward:

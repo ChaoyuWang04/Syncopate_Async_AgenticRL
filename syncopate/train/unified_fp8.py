@@ -56,8 +56,9 @@ def _weight_cache(W: torch.Tensor, part: str = "fwd"):
             src = W.detach() if part == "fwd" else W.detach().T.contiguous()
             cache = _quant_sw(src)
         _WCACHE[key] = cache
-        # 生产里只该有一份 lm_head（单测会喂多个随机 W，上限放宽但仍要有）
-        assert len(_WCACHE) <= 64, "[unified-fp8] 权重缓存膨胀 —— data_ptr 在漂，查 FSDP 形态"
+        # 合法上限：第 3 步 trainer 30 层×7×(fwd+bwd)+头 ≈ 422 份。真 data_ptr 漂移
+        # 每步会再涨 ~210 份，两步内必撞线 —— 守卫功能不丢
+        assert len(_WCACHE) <= 512, "[unified-fp8] 权重缓存膨胀 —— data_ptr 在漂，查 FSDP 形态"
     return cache
 
 
@@ -152,6 +153,125 @@ def linear_for_ppo(hidden_states: torch.Tensor, vocab_weights: torch.Tensor,
                                      temperature, chunk_size)
 
 
+# ───────────────────────── 第 3 步：内层 GEMM（两侧同一实现） ─────────────────────────
+
+LAYERS_FLAG = "SYNCOPATE_UNIFIED_FP8_LAYERS"
+
+# trainer/vLLM 各自的目标模块名（同一批权重的两种打包形态；行块量化对行拼接不变 ⇒ 字节同）
+_TRAINER_INNER_PAT = (r"layers\.(\d+)\.(?:self_attn|mlp)\."
+                      r"(?:q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)$")
+_VLLM_INNER_PAT = r"layers\.(\d+)\.(?:self_attn\.(?:qkv_proj|o_proj)|mlp\.(?:gate_up_proj|down_proj))$"
+
+
+def quant_layers() -> int:
+    n = int(os.environ.get(LAYERS_FLAG, "0") or 0)
+    if n > 0 and not enabled():
+        # 只量内层不量 lm_head（或反之单侧）= 亲手制造 §9b 毒状态，宁可不起
+        raise RuntimeError(f"[unified-fp8] {LAYERS_FLAG}={n} 但 {FLAG}≠1 —— 半接线禁止")
+    return n
+
+
+class _MXF8InnerLinearFn(torch.autograd.Function):
+    """无 bias 冻结权重 Linear：y = x·Wᵀ 走 MXFP8。dgrad 只要 dY 与 Wᵀ 缓存 ⇒ 不存激活。"""
+
+    @staticmethod
+    def forward(ctx, x2d, W):
+        assert not W.requires_grad, "[unified-fp8] 内层权重应当冻结（wgrad 未接）"
+        qw, qw_sf = _weight_cache(W, "fwd")
+        ctx.save_for_backward(W)
+        return _mxf8_logits(x2d, qw, qw_sf)          # [T, N] bf16（复用同一投影实现）
+
+    @staticmethod
+    def backward(ctx, dY):
+        from .mxfp8_lmhead import _quant_sw, _ext
+        (W,) = ctx.saved_tensors
+        qwt, qwt_sf = _weight_cache(W, "bwd")
+        qdy, qdy_sf = _quant_sw(dY.to(torch.bfloat16).contiguous())   # 块沿 N = dgrad 收缩维
+        dx = _ext().mxf8_gemm(qdy, qwt, qdy_sf, qwt_sf)[: dY.shape[0]]
+        return dx.to(dY.dtype), None
+
+
+def _wrap_linear_forward(lin: torch.nn.Linear) -> bool:
+    """把一个（冻结、无 bias 的）nn.Linear 的 forward 换成 MXFP8 路径。幂等。"""
+    if getattr(lin, "_syncopate_mxf8_inner", False):
+        return False
+    assert lin.bias is None, "[unified-fp8] 目标 Linear 带 bias —— 未覆盖，拒绝静默回退"
+
+    def fwd(x, _lin=lin):
+        y = _MXF8InnerLinearFn.apply(x.reshape(-1, x.shape[-1]), _lin.weight)
+        return y.reshape(*x.shape[:-1], _lin.weight.shape[0]).to(x.dtype)
+
+    lin.forward = fwd
+    lin._syncopate_mxf8_inner = True
+    return True
+
+
+_TRAINER_INNER_DONE = {"done": False}
+
+
+def patch_trainer_inner(model) -> int:
+    """trainer 模型上就地 swap 前 N 层的 QKVO/MLP（PEFT 取 base_layer，裸 Linear 直用）。
+
+    swap 数断言 = N×7 —— 少一个 = 模块树变了 = 半接线，直接拒绝起跑。
+    """
+    import re
+    n = quant_layers()
+    if n <= 0 or _TRAINER_INNER_DONE["done"]:
+        return 0
+    pat = re.compile(_TRAINER_INNER_PAT)
+    cnt = 0
+    for name, mod in model.named_modules():
+        m = pat.search(name)
+        if not m or int(m.group(1)) >= n:
+            continue
+        base = getattr(mod, "base_layer", mod)
+        if isinstance(base, torch.nn.Linear) and _wrap_linear_forward(base):
+            cnt += 1
+    _TRAINER_INNER_DONE["done"] = True
+    assert cnt == n * 7, f"[unified-fp8] 内层 swap 数 {cnt} ≠ {n}×7 —— 模块树变了，拒绝半接线"
+    print(f"[unified-fp8] trainer 内层 MXFP8 已生效 · 前 {n} 层 × 7 = {cnt} 个 Linear", flush=True)
+    return cnt
+
+
+def patch_vllm_inner() -> bool:
+    """vLLM 侧：拦 UnquantizedLinearMethod.apply，按 layer.prefix 的层号选前 N 层。幂等。"""
+    import re
+    n = quant_layers()
+    if n <= 0:
+        return False
+    from vllm.model_executor.layers.linear import UnquantizedLinearMethod
+    if getattr(UnquantizedLinearMethod, "_syncopate_mxf8_inner", False):
+        return False
+    pat = re.compile(_VLLM_INNER_PAT)
+    orig_apply = UnquantizedLinearMethod.apply
+    hit = {"announced": False}
+    debug = os.environ.get("SYNCOPATE_UNIFIED_FP8_DEBUG") == "1"
+    seen: set = set()
+
+    def apply(self, layer, x, bias=None):
+        m = pat.search(getattr(layer, "prefix", "") or "")
+        if not m or int(m.group(1)) >= n:
+            return orig_apply(self, layer, x, bias)
+        if debug and layer.prefix not in seen:
+            seen.add(layer.prefix)
+            print(f"[unified-fp8-debug] 内层命中 #{len(seen)}: {layer.prefix}", flush=True)
+        if bias is not None:
+            raise RuntimeError(f"[unified-fp8] {layer.prefix} 带 bias —— MXFP8 未覆盖")
+        W = layer.weight
+        qw, qw_sf = _weight_cache(W, "fwd")
+        with torch.no_grad():
+            y = _mxf8_logits(x.reshape(-1, x.shape[-1]), qw, qw_sf)
+        if not hit["announced"]:
+            hit["announced"] = True
+            print(f"[unified-fp8] vLLM 内层 MXFP8 已生效 · 前 {n} 层 · 首触 {layer.prefix} · "
+                  f"W={tuple(W.shape)}", flush=True)
+        return y.reshape(*x.shape[:-1], W.shape[0])
+
+    UnquantizedLinearMethod.apply = apply
+    UnquantizedLinearMethod._syncopate_mxf8_inner = True
+    return True
+
+
 # ───────────────────────── rollout 侧：vLLM 插件 ─────────────────────────
 
 def patch_logits_processor(cls) -> bool:
@@ -190,3 +310,6 @@ def register() -> None:
     from vllm.model_executor.layers.logits_processor import LogitsProcessor
     if patch_logits_processor(LogitsProcessor):
         print("[unified-fp8] vLLM LogitsProcessor 补丁已注册（等待首次前向确认生效行）", flush=True)
+    if patch_vllm_inner():
+        print(f"[unified-fp8] vLLM 内层补丁已注册 · 前 {quant_layers()} 层（等待首触确认生效行）",
+              flush=True)

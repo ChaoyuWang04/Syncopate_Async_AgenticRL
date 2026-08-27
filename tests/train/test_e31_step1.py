@@ -216,3 +216,190 @@ def test_a2_smoke_acceptance() -> None:
     for name, ok in d["eight_criteria"].items():
         assert ok, f"八判据之「{name}」没过"
     assert d["steps_completed"] >= 48
+
+
+# ───────────── U5 · 第 3 步 trainer 内层 ─────────────
+
+@needs_cuda
+def test_u5_merged_equals_split_bitwise(monkeypatch) -> None:
+    """位一致基石：vLLM 合并权重（qkv/gate_up 行拼接）与 trainer 分开权重，
+    量化字节与 GEMM 输出都必须逐位同 —— 两侧一致的全部数学都压在这条上。"""
+    monkeypatch.setenv(unified_fp8.FLAG, "1")
+    from syncopate.train.mxfp8_lmhead import quantize_mxfp8
+    g = torch.Generator(device="cpu").manual_seed(31)
+    x = torch.randn(100, 256, generator=g).to(torch.bfloat16).cuda()
+    wq = torch.randn(256, 256, generator=g).mul(0.05).to(torch.bfloat16).cuda()
+    wk = torch.randn(128, 256, generator=g).mul(0.05).to(torch.bfloat16).cuda()
+    merged = torch.cat([wq, wk], 0)
+    # 量化字节逐位同（行块量化不跨行）
+    mq, msf = quantize_mxfp8(merged)
+    q1, sf1 = quantize_mxfp8(wq)
+    q2, sf2 = quantize_mxfp8(wk)
+    assert torch.equal(mq, torch.cat([q1, q2], 0)) and torch.equal(msf, torch.cat([sf1, sf2], 0))
+    # GEMM 输出逐位同（输出元素只依赖自己的行列）
+    qwm, qwm_sf = unified_fp8._weight_cache(merged, "fwd")
+    qwa, qwa_sf = unified_fp8._weight_cache(wq, "fwd")
+    qwb, qwb_sf = unified_fp8._weight_cache(wk, "fwd")
+    y_m = unified_fp8._mxf8_logits(x, qwm, qwm_sf)
+    y_s = torch.cat([unified_fp8._mxf8_logits(x, qwa, qwa_sf),
+                     unified_fp8._mxf8_logits(x, qwb, qwb_sf)], 1)
+    assert torch.equal(y_m, y_s), "合并与分开 GEMM 输出不逐位同 —— 两侧一致的地基塌了"
+
+
+@needs_cuda
+def test_u5_inner_backward_matches_manual(monkeypatch) -> None:
+    monkeypatch.setenv(unified_fp8.FLAG, "1")
+    from syncopate.train.mxfp8_lmhead import _quant_sw, _ext
+    g = torch.Generator(device="cpu").manual_seed(41)
+    x = torch.randn(100, 128, generator=g).to(torch.bfloat16).cuda().requires_grad_(True)
+    W = torch.randn(256, 128, generator=g).mul(0.05).to(torch.bfloat16).cuda()
+    y = unified_fp8._MXF8InnerLinearFn.apply(x, W)
+    dY = torch.randn(100, 256, generator=g).to(torch.bfloat16).cuda()
+    y.backward(dY)
+    with torch.no_grad():
+        qwt, qwt_sf = unified_fp8._weight_cache(W, "bwd")
+        qdy, qdy_sf = _quant_sw(dY.contiguous())
+        manual = _ext().mxf8_gemm(qdy, qwt, qdy_sf, qwt_sf)[:100].to(torch.bfloat16)
+    assert torch.equal(x.grad, manual), "内层 dgrad 与解析复算不逐位同"
+    assert x.grad.abs().sum() > 0
+    W2 = W.clone().requires_grad_(True)
+    with pytest.raises(AssertionError, match="冻结"):
+        unified_fp8._MXF8InnerLinearFn.apply(x.detach(), W2)
+
+
+class _TinyLayer(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.self_attn = torch.nn.Module()
+        self.mlp = torch.nn.Module()
+        for host, names in ((self.self_attn, ("q_proj", "k_proj", "v_proj", "o_proj")),
+                            (self.mlp, ("gate_proj", "up_proj", "down_proj"))):
+            for nm in names:
+                lin = torch.nn.Linear(128, 128, bias=False, dtype=torch.bfloat16)
+                lin.weight.requires_grad_(False)
+                setattr(host, nm, lin)
+
+
+class _TinyModel(torch.nn.Module):
+    def __init__(self, n_layers=3):
+        super().__init__()
+        self.layers = torch.nn.ModuleList([_TinyLayer() for _ in range(n_layers)])
+
+
+@needs_cuda
+def test_u5_trainer_patch_selection_and_gate(monkeypatch) -> None:
+    monkeypatch.setenv(unified_fp8.FLAG, "1")
+    monkeypatch.setenv(unified_fp8.LAYERS_FLAG, "2")
+    monkeypatch.setitem(unified_fp8._TRAINER_INNER_DONE, "done", False)
+    m = _TinyModel(3).cuda()
+    assert unified_fp8.patch_trainer_inner(m) == 14, "前 2 层 ×7 应 swap 14 个"
+    assert getattr(m.layers[1].self_attn.q_proj, "_syncopate_mxf8_inner", False)
+    assert not getattr(m.layers[2].self_attn.q_proj, "_syncopate_mxf8_inner", False), "越界层被 swap"
+    # 幂等：done 标志防重入，再调零动作（不许绕过标志重扫——严断言只在首扫成立）
+    assert unified_fp8.patch_trainer_inner(m) == 0
+    # 半接线拒绝：LAYERS>0 但 FLAG 没开 ⇒ 必须炸
+    monkeypatch.delenv(unified_fp8.FLAG)
+    with pytest.raises(RuntimeError, match="半接线"):
+        unified_fp8.quant_layers()
+
+
+@needs_cuda
+def test_u5_flag_off_forward_untouched(monkeypatch) -> None:
+    monkeypatch.delenv(unified_fp8.FLAG, raising=False)
+    monkeypatch.delenv(unified_fp8.LAYERS_FLAG, raising=False)
+    monkeypatch.setitem(unified_fp8._TRAINER_INNER_DONE, "done", False)
+    m = _TinyModel(1).cuda()
+    x = torch.randn(4, 128).to(torch.bfloat16).cuda()
+    ref = m.layers[0].self_attn.q_proj(x)
+    assert unified_fp8.patch_trainer_inner(m) == 0
+    assert torch.equal(m.layers[0].self_attn.q_proj(x), ref), "开关关着 forward 却变了"
+
+
+# ───────────── U6 · 第 3 步 vLLM 层选择 ─────────────
+
+@needs_cuda
+def test_u6_vllm_inner_selection(monkeypatch) -> None:
+    monkeypatch.setenv(unified_fp8.FLAG, "1")
+    monkeypatch.setenv(unified_fp8.LAYERS_FLAG, "2")
+
+    class _FakeMethod:                      # UnquantizedLinearMethod 替身
+        def apply(self, layer, x, bias=None):
+            return x @ layer.weight.T       # bf16 原路径
+
+    import re
+    pat = re.compile(unified_fp8._VLLM_INNER_PAT)
+    W = torch.randn(256, 128).mul(0.05).to(torch.bfloat16).cuda()
+    x = torch.randn(10, 128).to(torch.bfloat16).cuda()
+
+    def mk(prefix):
+        return type("L", (), {"prefix": prefix, "weight": W})()
+
+    # 选择逻辑与补丁行为分开验：先验正则本身
+    assert pat.search("model.layers.1.self_attn.qkv_proj")
+    assert pat.search("model.layers.1.mlp.gate_up_proj")
+    assert not pat.search("model.layers.1.self_attn.q_norm")
+    assert not pat.search("lm_head")
+    # 补丁行为：命中层走 MXFP8（≠bf16 直乘），越界层走原路径（==bf16 直乘）
+    import vllm.model_executor.layers.linear as vlin
+    monkeypatch.setattr(vlin, "UnquantizedLinearMethod", _FakeMethod)
+    assert unified_fp8.patch_vllm_inner() is True
+    meth = _FakeMethod()
+    y_hit = meth.apply(mk("model.layers.1.self_attn.qkv_proj"), x)
+    y_miss = meth.apply(mk("model.layers.2.self_attn.qkv_proj"), x)
+    ref = x @ W.T
+    assert not torch.equal(y_hit, ref), "命中层没走 MXFP8（第八形态）"
+    assert torch.equal(y_miss, ref), "越界层被误量化"
+    qw, qw_sf = unified_fp8._weight_cache(W, "fwd")
+    assert torch.equal(y_hit, unified_fp8._mxf8_logits(x, qw, qw_sf)), "与 trainer 投影不同源"
+    with pytest.raises(RuntimeError, match="bias"):
+        meth.apply(mk("model.layers.0.mlp.down_proj"), x, torch.zeros(256).cuda())
+
+
+# ───────────── A3 · 第 3 步定界工件 + T5 · 第 5 步权重契约 ─────────────
+
+def test_a3_step3_boundary_artifact_consistent() -> None:
+    """第 3 步定界（负结果）工件的内部一致性：verdicts 必须能从 stats 复算出来。
+
+    负结果与正结果同权：这个测试防的是工件被手改后叙事与数据脱节。
+    复活条件（doc 同步）：token 级 IS 或同构引擎；届时重跑产新工件、判定表随之更新。
+    """
+    p = ROOT / "logs" / "e31" / "step3_offline.json"
+    assert p.exists(), "缺第 3 步定界工件 —— 跑 scripts/e31_step3_offline.py"
+    d = json.loads(p.read_text())
+    base = d["baseline_bf16_eager"]
+    prev = None
+    for n in d["groups"]:
+        u = d["unified"][str(n)]
+        ok = (abs(u["token_bias"]) <= 2 * abs(base["token_bias"])
+              and u["seq_abs_sum_p95"] <= 2 * base["seq_abs_sum_p95"]
+              and (prev is None or u["token_abs_mean"] <= 1.5 * prev))
+        assert d["verdicts"][str(n)] == ok, f"N={n} 的 verdict 与 stats 复算不一致"
+        prev = u["token_abs_mean"]
+    assert d["verdicts"]["0"], "G0'（仅 lm_head，eager 锚）都不过 —— 测量本身坏了"
+
+
+@needs_cuda
+def test_t5_weight_contract_disk_is_truth() -> None:
+    """第 5 步 · 权重契约：两侧的 lm_head 权重都源自同一份磁盘字节（tie 到 embedding），
+    两条独立加载路径逐位同 ⇒ 量化缓存必然逐位同。运行期由 [sync-payload] ‖W‖ 探针
+    与 kl 地板判据兜底（字节漂了 kl 立刻起飞）。"""
+    import json as _json
+    from pathlib import Path as _P
+    from safetensors import safe_open
+    model_dir = _P("/workspace/hf_assets/bases/Qwen3-4B-sft-v13r2-e1")
+    if not model_dir.exists():
+        pytest.skip("底座不在本机")
+    idx = _json.loads((model_dir / "model.safetensors.index.json").read_text())
+    assert "lm_head.weight" not in idx["weight_map"], "tie 模型不应单独存 lm_head"
+    shard = idx["weight_map"]["model.embed_tokens.weight"]
+    with safe_open(model_dir / shard, framework="pt") as f:
+        w_disk = f.get_tensor("model.embed_tokens.weight")
+    from transformers import AutoModelForCausalLM
+    m = AutoModelForCausalLM.from_pretrained(model_dir, dtype=torch.bfloat16)
+    w_hf = m.get_output_embeddings().weight.detach()
+    assert torch.equal(w_disk, w_hf.cpu()), "两条加载路径的 lm_head 字节不同 —— 契约破"
+    del m
+    from syncopate.train.mxfp8_lmhead import quantize_mxfp8
+    q1, s1 = quantize_mxfp8(w_disk[:256].cuda().contiguous())
+    q2, s2 = quantize_mxfp8(w_hf[:256].cuda().contiguous())
+    assert torch.equal(q1, q2) and torch.equal(s1, s2)

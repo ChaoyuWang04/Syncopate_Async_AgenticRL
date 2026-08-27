@@ -58,24 +58,77 @@ IS 修正的总账 = 陈旧度项（fully_async 设计使然）+ kernel 项（�
 > 单变量 = 开关本身。判据行两条：`[unified-fp8] vLLM/trainer lm_head MXFP8 已生效`，
 > 冒烟里缺任何一条 = 机制没接上（第八形态），直接判负。
 
-### 第 3 步 · 内层 GEMM 渐进 8bit（前向，两侧同步推）
-顺序：前 ~85% 层冻结基座 QKVO/MLP（LoRA 增量保 bf16 = 天然高精度孤岛）；末 15% 层
-与非 GEMM 算子保 bf16（Miles 分配）。**每扩一组层验一次**：|Δlp| ≤ 前一步 1.5× ·
-kl ≤ 2×floor；炸的层组划进 bf16 孤岛（照登）。
+### 第 3 步 · 内层 GEMM 渐进 8bit（前向，两侧同步推；**08-27 施工细化，分 3a/3b 两级**）
+顺序：前 30/36 层（83%）冻结基座 QKVO/MLP；LoRA 增量、attention/RoPE/norm、embedding、
+末 6 层保 bf16（Miles 分配）。**每扩一组层验一次**，炸的层组划进 bf16 孤岛（照登）。
 
-### 第 4 步 · 反向 8bit（三件套 dgrad/wgrad；梯度逐 token 量化；DeepSeek 分段 fp32 累加已在 kernel）
-验收：梯度 cos ≥ 0.999（§12 口径）+ 同种子短训 loss 曲线与 bf16 臂重合。
+**3a（eager 版，本级交付）**——绕开两个硬阻塞拿正确性：
+- 事实依据：`enforce_eager=True` ⇒ vLLM 强制 O0（inductor 关）+ cudagraph NONE ⇒
+  python 补丁安全（vllm/config/vllm.py:599/706 实读）；速度税由冒烟记账，3b 再赎。
+- **位一致基石**：行块量化对行拼接不变 ⇒ vLLM 合并权重（qkv[6144,2560]·gate_up[19456,2560]）
+  与 trainer 分开权重的量化字节逐位同；GEMM 输出元素只依赖自己行列 ⇒ 合并/分开输出
+  逐位同（U5 测试钉）。全部维度过 128 约束（4096/1024/2560/9728/6144/19456 ✓）。
+- 开关：`SYNCOPATE_UNIFIED_FP8_LAYERS=N`（前 N 层；默认 0=现状只有 lm_head）；
+  **N>0 必须同时 `SYNCOPATE_UNIFIED_FP8=1`**，否则启动即炸（半接线=毒状态）。
+- trainer 侧：`_pg_forward` 首调时按名遍历 swap `base_layer.forward`（PEFT 外裸 Linear
+  同支持）；autograd 只做 dgrad（dx=dY_q·Wᵀ_q，**不存激活**，wgrad 冻结拒绝）；
+  swap 数断言 =N×7，差一个都不许跑。
+- vLLM 侧：插件加患 `UnquantizedLinearMethod.apply`，按 `layer.prefix` 解析层号选层；
+  bias 非空即炸。
+- 显存账（预算，跑中验证）：u8 缓存≈bf16 一半 ⇒ vLLM +~2.6GB（画像阶段自动入 KV 预算）·
+  trainer 前向+转置 +~5.2GB ⇒ 峰值 ~21/32 GB。
+- **渐进组与验收（跑前写死）**：G0'=仅 lm_head（eager 重锚）→ G1=8 层 → G2=16 → G3=24 →
+  G4=30。每组离线四臂（§9b 同尺，全 eager）：unified token |Δlp| mean ≤ **1.5× 上一组** ·
+  签名偏置 ≤ 2×本底 · 序列 p95 ≤ 2×本底（本底=同 eager 的 bf16 臂）。
+- 终验收：48 步冒烟（N=30 + `--enforce-eager True`）：**kl ≤ 2×floor（8.54e-4）** ·
+  截断 ≤0.10 · ESS ≥0.85 · 八判据；速度税记账：**s/gstep ≤ 12.0（1.3×）为绿**，
+  超了黄牌入档、3b 提级。
 
-### 第 5 步 · 权重同步契约（E22 推送链的量化版）
-LoRA bf16 推送不变；量化基座两侧字节一致由 1/3 步保证。
-测试：推送后 rollout 侧抽层 `‖W_q‖` 与 trainer 侧逐字节同。
+**3b（后续提速）**：`mxf8_gemm` 注册 torch custom op（fake impl）+ 量化路径过 inductor ⇒
+恢复 compile/cudagraph，赎回 eager 税；正确性判据=与 3a eager 输出逐位同。
+
+> ⛔⛔ **第 3 步定界（08-27 实测判负，负结果同权入档；工件 `logs/e31/step3_offline.json`）**
+> 逐组数据（分母=同 eager bf16 臂 mean 1.37e-2 · bias −4.4e-4 · p95 2.71）：
+> `N=0 ✅(1.63e-2/−5.2e-4/4.39) · N=8 🔴(2.12e-2/−1.26e-3/6.59) · N=16 🔴(3.57e-2/−2.63e-3/10.9)
+> · N=24 🔴 · N=30 🔴(4.96e-2/−3.56e-3/12.6)` —— **偏置随层数近线性 ~−1.2e-4/层**，
+> 8 层即破 2×本底门，30 层序列 p95=12.6 ⇒ 序列 IS 必死，冒烟无需再跑。
+> 三个替代解释全排除：①接线错位——trainer N×7 硬断言 + vLLM 命中审计恰 N×4、层号 0..N-1
+> 对齐；②权重字节——U5 证合并≡分开逐位同；③跑间噪声——同配置 vLLM 重跑**逐位相同**。
+> **根因是结构性的**：§0 原理卡"激活因 kernel 而异 ⇒ kernel 项永生"的极端化——两引擎
+> hidden 本有微差（异构 attention），**每层激活量化放大它并向下一层传递**。Miles 内层
+> 可行靠两侧同 TE kernel（hidden 同构）；消费卡 vLLM↔FSDP 异构引擎无此前提。
+> ⇒ **裁决：内层全部划 bf16 孤岛；统一 FP8 的可行域 = lm_head**（对消成立·零速度税）。
+> 代码留库停放（`SYNCOPATE_UNIFIED_FP8_LAYERS` 默认 0，U5/U6 测试常驻）。
+> **复活条件**：① 切 token 级 IS（N=30 的 token mean 4.96e-2 ⇒ 逐 token 扰动 ~1.05，
+> §9b 判读表 token-IS 安全档）；② 两侧引擎同构化（前提大改，当前不成立）。
+
+### 第 4 步 · 反向 8bit（✅ 08-27 随存活范围收口）
+存活范围=lm_head：dgrad 走同 kernel **已在生产接线**（第 1/2 步 `_MXF8LinearForPPOFn`，
+U3 逐位钉）+ 梯度 cos 0.99928（E30 §12 真数据）+ A4 完整 SFT 同带 + 本线 48/400 步
+真 RL 训练全程带着它学出 +0.109 —— 验收各面已实测覆盖。wgrad：lm_head 冻结 ⇒ 不适用
+（非冻结即炸的断言常驻）。内层反向随第 3 步定界一并停放。
+
+### 第 5 步 · 权重同步契约（✅ 08-27 收口）
+LoRA bf16 推送不变（E22 链 + [sync-payload] 探针常驻）；存活范围下"量化基座两侧字节
+一致"归结为 lm_head（tie 到 embedding·冻结·启动推一次基座）——契约测试 T5
+（`test_t5_weight_contract_disk_is_truth`）：磁盘 safetensors 直读与 HF 加载两条路径
+逐位同 ⇒ 两侧量化缓存必然同；运行期由 ‖W‖ 探针 + kl 地板判据兜底（字节漂 = kl 起飞）。
 
 ### 终审
 400 步 candidate 全默认 + 任务分配对 ±MDE + 奖励曲线重叠；负结果同权入档。
 
+> ⚠️ 口径评注（08-27）：「与 bf16 臂任务分差 ±MDE(0.015)」在**单种子跨跑**下不可判——
+> 家族内种子带宽实测 0.085（+0.101 vs +0.186），比 MDE 大 5×。可达的终审口径 =
+> 落家族带 + 曲线同形 + 三把尺全程（已由 08-27 长跑满足）；要收紧到 ±MDE 只有
+> 多种子配对或同种子同位选点重跑（save-freq 调密），是否加跑归 Chaoyu 裁定。
+
 ## 2 · 状态
 
-🟡 **第 0/1/2 步 ✅（2026-08-27 一日三步）**；下一步 = 第 3 步内层 GEMM 渐进 8bit。
+🟢 **全六步闭环（2026-08-27 单日）**：0/1/2 ✅ · 3 ⛔定界（内层判负入档，可行域=lm_head）·
+4/5 ✅ 随存活范围收口 · 终审=可达口径已满足（±MDE 收紧与否待 Chaoyu 裁定，见 §1 终审评注）。
+**定案一句话：消费级异构引擎上，训推统一 FP8 的可行域 = lm_head 层——量化项对消实测
+成立（偏置 9× 消减至本底）、400 步真训练三把尺健康、质量入带、零速度税；内层因激活
+量化逐层放大引擎间 hidden 微差而判负（结构性，复活条件=token 级 IS 或同构引擎）。**
 
 **第 0 步**：三契约测试进 suite（`tests/train/test_e31_fp8_contract.py`，8 项）——
 T0.1 量化器五类张量位一致（bf16/fp32 同值·非连续·换 stream 三接缝 + 全零/整幂/448±ulp
