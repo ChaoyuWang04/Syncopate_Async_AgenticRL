@@ -39,25 +39,32 @@ EXTRA=(); [ "${1:-}" = "--" ] && { shift; EXTRA=("$@"); }
 until bash scripts/gpu_gate.sh >/dev/null 2>&1; do echo "[B4x] gpu_gate 未过，等 60s" >&2; sleep 60; done
 : > "$D/pids"
 BACKENDS=""
-for i in $(seq 0 $((N - 1))); do
-  port=$((8101 + i))
-  say "起引擎 $i → GPU$i :$port cpus=${CPUS[$i]} extra=(${EXTRA[*]:-})"
+# ⚠️ 串行启动（08-28 学费）：四引擎并行拉起时，启动早期的瞬时显存占用会撞上
+#   彼此的 free-memory 检查（引擎 0 实测被 4.6GB 幽灵占用判死）——起一个等健康再起下一个；
+#   失败重试一次（瞬态竞态重试即愈，真错第二次也会死）。
+launch_one() {  # $1=idx
+  local i=$1 port=$((8101 + $1))
   CUDA_VISIBLE_DEVICES=$i taskset -c "${CPUS[$i]}" vllm serve "$MODEL" \
     --served-model-name sft-base \
     --enable-lora --lora-modules candidate="$ADAPTER" \
     --max-lora-rank 32 --max-model-len 14336 --kv-cache-dtype fp8 \
     --host 127.0.0.1 --port "$port" "${EXTRA[@]}" > "$D/vllm_$i.log" 2>&1 &
   echo $! >> "$D/pids"
-  BACKENDS="$BACKENDS${BACKENDS:+,}http://127.0.0.1:$port"
-done
-
-for i in $(seq 0 $((N - 1))); do
-  port=$((8101 + i)); ok=0
   for _ in $(seq 1 90); do
-    sleep 7; curl -sf "http://127.0.0.1:$port/health" >/dev/null 2>&1 && { ok=1; break; }
+    sleep 7; curl -sf "http://127.0.0.1:$port/health" >/dev/null 2>&1 && return 0
   done
-  [ "$ok" = 1 ] || { say "🔴 引擎 $i 没起来："; tail -5 "$D/vllm_$i.log"; bash "$0" stop; exit 1; }
+  return 1
+}
+for i in $(seq 0 $((N - 1))); do
+  port=$((8101 + i))
+  say "起引擎 $i → GPU$i :$port cpus=${CPUS[$i]} extra=(${EXTRA[*]:-})"
+  if ! launch_one "$i"; then
+    say "⚠️ 引擎 $i 首次没起来，15s 后重试一次"; tail -3 "$D/vllm_$i.log"
+    sleep 15
+    launch_one "$i" || { say "🔴 引擎 $i 重试仍失败："; tail -5 "$D/vllm_$i.log"; bash "$0" stop; exit 1; }
+  fi
   say "引擎 $i 就绪"
+  BACKENDS="$BACKENDS${BACKENDS:+,}http://127.0.0.1:$((8101 + i))"
 done
 
 # 键=prompt[4409:4409+6144]：skip=全局公共前缀实测 4409 字符；窗口 6144=实测最小平衡窗
