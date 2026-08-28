@@ -86,7 +86,7 @@ def render_prompt_text(tokenizer, user_message: str, tools) -> str:
 _ENUM_KEYS = {"behavior"}
 
 
-def _char_labels(text: str) -> list[str]:
+def _char_labels(text: str, text_value_keys: set | None = None) -> list[str]:
     """字符级标注：tool / text / format。
 
     ⚠️ **先字符级再映射到 token**，不要逐 token 跑状态机 ——
@@ -125,8 +125,11 @@ def _char_labels(text: str) -> list[str]:
                     cur_key = text[key_start:i]
                 i += 1
                 continue
-            labels[i] = ("text" if (is_value and cur_key not in _ENUM_KEYS)
-                         else "format")
+            if text_value_keys is None:            # O-1 旧口径（存档）
+                is_text = is_value and cur_key not in _ENUM_KEYS
+            else:                                   # U 路白名单口径：只蒸指定键的值
+                is_text = is_value and cur_key in text_value_keys
+            labels[i] = "text" if is_text else "format"
         else:
             if ch == '"':
                 in_string = True
@@ -292,3 +295,21 @@ async def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
+
+
+def segment_text(tokenizer, text: str) -> tuple[list[int], list[str]]:
+    """★ 生产版分段（U 路 P0-3 修复，2026-08-28）：按 offset_mapping 把字符级标注
+    映射到 token。⚠️ 老的 `segment_tokens` 对 BPE 表面形式（CJK 的 byte-level
+    token 如 'ĠæŁ¥'）会整体错位——`"".join(tokens)` 不是原文，len(token)≠字符数，
+    众数全塌 format ⇒ NL mask 恒空 ⇒ 蒸馏恒零（"机制在但没接上"候选，被 P0-3
+    20 条抽检当场抓获）。训练侧一律用本函数；segment_tokens 仅存档 O-1 口径。"""
+    from collections import Counter
+
+    enc = tokenizer(text, return_offsets_mapping=True, add_special_tokens=False)
+    ch = _char_labels(text, text_value_keys={"reply"})   # ★ 只有 reply 值可蒸（O-2a 语义：
+    #   summary=机器值、tool/arguments/missing_field=工具段红线、rationale 先保守排除）
+    labels = []
+    for a, b in enc["offset_mapping"]:
+        span = ch[a:b]
+        labels.append(Counter(span).most_common(1)[0][0] if span else "format")
+    return enc["input_ids"], labels
