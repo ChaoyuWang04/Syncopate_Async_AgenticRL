@@ -28,23 +28,44 @@ CONC=${2:-64}
 exec 3>&- 3<&- 2>/dev/null || true
 : > "$D/pids"
 
-# B-5 S1 扩池（PG max_connections 已抬到 300；预算按 S3 多进程终态留：4×32+4×12=176 ≤ 210）
-export SYNCOPATE_WORKER_DB_POOL="${SYNCOPATE_WORKER_DB_POOL:-128}"
-export SYNCOPATE_API_DB_POOL="${SYNCOPATE_API_DB_POOL:-32}"
-uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 > "$D/api.log" 2>&1 &
+# B-5 S1+S2（扩池×多进程必须连着落——S1 单独验证实测负收益：10 条连接原是天然限流阀，
+# 单进程下拆阀=IO 回调全砸一个 GIL，llm/db_tx 反涨；E33 §6 记档）。
+# 连接预算：4 API×12 + N worker×32 ≤ 300×0.7。
+API_WORKERS="${B4_API_WORKERS:-4}"
+N_WORKERS="${B4_WORKERS:-4}"
+export SYNCOPATE_WORKER_DB_POOL="${SYNCOPATE_WORKER_DB_POOL:-40}"
+export SYNCOPATE_API_DB_POOL="${SYNCOPATE_API_DB_POOL:-12}"
+uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 \
+  --workers "$API_WORKERS" > "$D/api.log" 2>&1 &
 echo $! >> "$D/pids"
 for _ in $(seq 1 30); do
   sleep 1; curl -sf http://127.0.0.1:8000/healthz >/dev/null 2>&1 && break
 done
 curl -sf http://127.0.0.1:8000/healthz >/dev/null || { echo "🔴 API 没起来："; tail -5 "$D/api.log"; exit 1; }
-echo "[stack] API :8000 就绪"
+echo "[stack] API :8000 就绪（$API_WORKERS 进程）"
 
 # 压测 org 日预算抬 1000×（默认 10M micros 在 ~300 run 处刷爆 ⇒ 其后全部秒失败，
 # goodput 阶梯必须先解除这个编排层瓶颈；生产 org 的默认值不动）
-SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
-  python -m syncopate.runtime.worker --org-id org_acme --worker-id b4-loadtest \
-  --concurrency "$CONC" --daily-cost-cap-micros "${B4_COST_CAP:-10000000000}" > "$D/worker.log" 2>&1 &
-echo $! >> "$D/pids"
+PER=$(( (CONC + N_WORKERS - 1) / N_WORKERS ))
+for w in $(seq 1 "$N_WORKERS"); do
+  # B4_DECIDER_MODE=direct ⇒ worker w 直连引擎 810w（"理想路由器"对照臂，量 router 自身开销）
+  if [ "${B4_DECIDER_MODE:-router}" = "direct" ]; then
+    DURL="http://127.0.0.1:$((8100 + w))"
+  else
+    DURL="${B4_DECIDER_URL:-http://127.0.0.1:8100}"
+  fi
+  SYNCOPATE_DECIDER_URL="$DURL" \
+    python -m syncopate.runtime.worker --org-id org_acme --worker-id "b4-loadtest-$w" \
+    --concurrency "$PER" --daily-cost-cap-micros "${B4_COST_CAP:-10000000000}" \
+    > "$D/worker_$w.log" 2>&1 &
+  echo $! >> "$D/pids"
+done
 sleep 3
-kill -0 "$(tail -1 "$D/pids")" 2>/dev/null || { echo "🔴 worker 启动即死："; tail -5 "$D/worker.log"; exit 1; }
-echo "[stack] worker org_acme 并发=$CONC 就绪（vLLM :8100 由压测方保证在跑）"
+alive=0
+for p in $(tail -n "$N_WORKERS" "$D/pids"); do kill -0 "$p" 2>/dev/null && alive=$((alive+1)); done
+[ "$alive" = "$N_WORKERS" ] || { echo "🔴 worker 启动即死（$alive/$N_WORKERS 活）："; tail -5 "$D/worker_1.log"; exit 1; }
+# 分账采集向后兼容：verify 链读 stack/worker.log ⇒ 聚合软链
+cat > "$D/collect_worker_logs.sh" <<'EOS'
+cat "$(dirname "$0")"/worker_*.log
+EOS
+echo "[stack] $N_WORKERS 个 worker（各并发 $PER）就绪（vLLM :8100 由压测方保证在跑）"

@@ -175,6 +175,33 @@ class MessageView(BaseModel):
 def create_app(db: Database | None = None) -> FastAPI:
     app = FastAPI(title="Syncopate Runtime", version="0.1.0")
     app.state.db = db
+    # B-5 S3 门铃：{f"{org}|{run}": {asyncio.Event,...}}；listener 断了 SSE 靠
+    # 2s 兜底轮询照常活（[sse-bell] 判据行），铃只是把事件延迟从 ≤2s 压到 ~0。
+    app.state.sse_waiters = {}
+    app.state.sse_bell_task = None
+
+    async def _sse_bell() -> None:
+        import asyncpg as _apg
+
+        from syncopate.runtime.db import DSN as _dsn
+        while True:
+            try:
+                conn = await _apg.connect(_dsn)
+
+                def _cb(_c, _pid, _ch, payload) -> None:
+                    for ev in tuple(app.state.sse_waiters.get(payload, ())):
+                        ev.set()
+
+                await conn.add_listener("run_events", _cb)
+                print("[sse-bell] listener 就位", flush=True)
+                while not conn.is_closed():
+                    await asyncio.sleep(5)
+                print("[sse-bell] listener 连接关闭，重建（兜底轮询在扛）", flush=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                print(f"[sse-bell] listener 异常 {exc!r}，5s 重连（兜底轮询在扛）", flush=True)
+                await asyncio.sleep(5)
 
     @app.on_event("startup")
     async def _startup() -> None:
@@ -185,9 +212,13 @@ def create_app(db: Database | None = None) -> FastAPI:
             import os
             await app.state.db.connect(
                 max_size=int(os.environ.get("SYNCOPATE_API_DB_POOL", "10")))
+        app.state.sse_bell_task = asyncio.create_task(_sse_bell())
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
+        if app.state.sse_bell_task is not None:
+            app.state.sse_bell_task.cancel()
+            app.state.sse_bell_task = None
         # ⚠️ 关完必须**清掉引用**。只 close 不清空的话，同一个 app 再次 startup 时
         # `if app.state.db is None` 判成"已有"，于是攥着一个**已关闭的池**继续跑，
         # 表现是 "连接池没建"。生产里 uvicorn --reload 和测试里都会重进 lifespan。
@@ -372,34 +403,50 @@ def create_app(db: Database | None = None) -> FastAPI:
 
     async def _event_stream(db: Database, org_id: str, run_id: str,
                             after_seq: int, request: Request) -> AsyncIterator[str]:
+        # B-5 S3 门铃：先挂铃再查库（挂→查的顺序消掉"查完刚好来事件"的窗口；
+        # 铃只是加速，2s 兜底轮询保住原语义——listener 死了 SSE 照常活）。
         last = after_seq
         idle = 0.0
+        waiters: dict[str, set[asyncio.Event]] = request.app.state.sse_waiters
+        wkey = f"{org_id}|{run_id}"
         while True:
             # ★ 客户端断开就停 —— 不检查的话，浏览器关了标签页我们还在轮询数据库。
             if await request.is_disconnected():
                 return
-            async with db.tx() as conn:
-                rows = await conn.fetch(
-                    "SELECT seq, kind, payload FROM run_events "
-                    "WHERE org_id=$1 AND run_id=$2 AND seq>$3 ORDER BY seq",
-                    org_id, run_id, last)
-            for row in rows:
-                last = row["seq"]
-                # ★ `id:` 就是客户端下次带回来的 Last-Event-ID。
-                yield (f"id: {row['seq']}\n"
-                       f"event: {row['kind']}\n"
-                       f"data: {json.dumps(row['payload'], ensure_ascii=False)}\n\n")
-                if row["kind"] in TERMINAL:
-                    return
-            if rows:
-                idle = 0.0
-            else:
-                idle += 0.25
-                # 心跳：注释行，客户端会忽略，但能让中间的代理不掐断空闲连接。
-                if idle >= 5.0:
+            bell = asyncio.Event()
+            waiters.setdefault(wkey, set()).add(bell)
+            try:                                 # 每圈自挂自摘（挂→查消竞态窗）
+                async with db.tx() as conn:
+                    rows = await conn.fetch(
+                        "SELECT seq, kind, payload FROM run_events "
+                        "WHERE org_id=$1 AND run_id=$2 AND seq>$3 ORDER BY seq",
+                        org_id, run_id, last)
+                for row in rows:
+                    last = row["seq"]
+                    # ★ `id:` 就是客户端下次带回来的 Last-Event-ID。
+                    yield (f"id: {row['seq']}\n"
+                           f"event: {row['kind']}\n"
+                           f"data: {json.dumps(row['payload'], ensure_ascii=False)}\n\n")
+                    if row["kind"] in TERMINAL:
+                        return
+                if rows:
                     idle = 0.0
-                    yield ": keepalive\n\n"
-                await asyncio.sleep(0.25)
+                else:
+                    try:
+                        await asyncio.wait_for(bell.wait(), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        pass                     # 兜底轮询（拔铃仍活）
+                    idle += 2.0
+                    # 心跳：注释行，客户端会忽略，但能让中间的代理不掐断空闲连接。
+                    if idle >= 4.0:
+                        idle = 0.0
+                        yield ": keepalive\n\n"
+            finally:
+                s = waiters.get(wkey)
+                if s is not None:
+                    s.discard(bell)
+                    if not s:
+                        waiters.pop(wkey, None)
 
     @app.get("/runs/{run_id}/events")
     async def stream_events(

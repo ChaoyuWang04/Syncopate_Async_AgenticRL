@@ -426,3 +426,15 @@ CREATE TABLE IF NOT EXISTS conversations (
 ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS conversation_id TEXT;
 CREATE INDEX IF NOT EXISTS agent_runs_by_conversation
     ON agent_runs (org_id, conversation_id, created_at);
+
+-- B-5 S3 · SSE 门铃（E33）：事件落库即通知，触发器覆盖所有写入路径（worker emit /
+-- finish_run / 审批翻转）；载荷 org|run（run_id 只在 org 内唯一，同上面 UNIQUE 的理由）。
+-- listener 断了 SSE 靠 2s 兜底轮询照常活（拔铃判据行 [sse-bell]）。
+CREATE OR REPLACE FUNCTION notify_run_event() RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify('run_events', NEW.org_id || '|' || NEW.run_id);
+  RETURN NULL;
+END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_notify_run_event ON run_events;
+CREATE TRIGGER trg_notify_run_event AFTER INSERT ON run_events
+  FOR EACH ROW EXECUTE FUNCTION notify_run_event();
