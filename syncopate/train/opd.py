@@ -178,9 +178,18 @@ def main() -> int:
             opt.zero_grad(set_to_none=True)
             kl_chat = kl_task = 0.0
             n_chat = n_task = tok_chat = tok_task = 0
+            chat_no_reply = 0
+            seg_sick = 0
             for prm, rep, fam in samples:
                 aux = teacher if fam == "chat" else anchor
                 s, m = kl_step(student, aux, tok, prm, rep, aux_dev)
+                if fam == "chat" and m == 0:
+                    # 区分：回复带 "reply" 键却蒸不到 = 分段器真病；没 reply 键 =
+                    # 学生老毛病本体（可蒸面之外，记 wandb 观察，考场终判）
+                    if '"reply"' in rep:
+                        seg_sick += 1
+                    else:
+                        chat_no_reply += 1
                 if fam == "chat":
                     kl_chat += s; tok_chat += m; n_chat += 1
                 else:
@@ -189,9 +198,10 @@ def main() -> int:
             # ⚠️ 判据分两层（首跑 rank1 全 task 批被误杀的学费）：
             #   chat 样本有回复却零掩码 = 分段器病 ⇒ 停机；
             #   全批只有 task 且回复=工具 JSON（无 reply 可蒸）= 合法 ⇒ 跳步记数
-            if n_chat > 0 and tok_chat == 0:
-                log(f"[opd-mask] 🔴 step {step} chat 样本掩码为零——分段器/生成出问题，停机自查")
-                raise RuntimeError("chat-zero mask batch")
+            if seg_sick > 0:
+                log(f"[opd-mask] 🔴 step {step} 有 {seg_sick} 条 chat 回复带 reply 键"
+                    f"却零掩码——分段器真病，停机自查")
+                raise RuntimeError("segmenter-sick batch")
             # 跳步必须集体决定（单 rank 跳而对端进 all_reduce = 死锁）
             gm = torch.tensor([float(total_masked)], device=f"cuda:{rank}")
             dist.all_reduce(gm)
@@ -222,6 +232,7 @@ def main() -> int:
                 if wb:
                     wb.log({"opd/kl_chat_per_tok": m_chat,
                             "opd/kl_task_per_tok": m_task,
+                            "opd/chat_no_reply": chat_no_reply,
                             "opd/masked_tokens": total_masked,
                             "opd/route_chat": n_chat, "opd/route_task": n_task,
                             "opd/step_time_s": dt, "opd/epoch": ep}, step=step)
