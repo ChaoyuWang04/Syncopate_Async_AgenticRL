@@ -117,19 +117,24 @@ util085 2403 —— 全在地板内；mns64 2341（−2.6% 真实劣化，排除
 
 （OFAT 网格与判据见 `b4_sweep.sh` 头注；胜出配置已冻结为 S2 fleet 统一配置。）
 
-### S2 · 4×DP + 路由（~1 天，主战场）→ 填〔SLO/吞吐〕〔多卡拓扑〕
+### S2 · 4×DP + 路由 ✅（08-28 上午；胜出拓扑 = 4 独立引擎 + 亲和 router）
 
-| # | 臂 | 判据 |
-|---|---|---|
-| S2.0 | 兼容冒烟 10 min：`--data-parallel-size 4` × LoRA × fp8 KV 是否同开（vllm 0.12 组合未验）；不支持则内建 DP 臂降级为"仅记录"，router 臂本就是主案 | 起得来 + 一条请求走通 |
-| S2.1 | 拓扑 A：内建 `vllm serve -dp 4`（一个 API server 分发 4 engine） | 双轨压测全套 |
-| S2.2 | 拓扑 B：4 独立引擎 :8101–8104 + `scripts/b4_router.py`（httpx 反代监听 :8100，`--policy {rr,affinity}`；affinity = prompt 前缀一致性哈希，副本挂了退相邻） | 双轨全套 ×2 策略 |
-| S2.3 | 扩展曲线：1 / 2 / 4 卡三点（router 拓扑） | 饱和 tok/s 对卡数 |
-| S2.4 | **goodput@SLO**：`scripts/b4_goodput.py`（复用 runtime_loadtest 的 submit/follow 与 §19 门槛，并发阶梯 8→16→24→32→48→64，首个 P95 破线的前一档 = goodput）。意图混合与 loadtest phase_concurrency 同口径 | after 主数字 |
+```
+⛔ 内建 DP 判不可用：vllm 0.12 上游自供 "LoRA in DP mode is not supported yet."
+   （NotImplementedError 启动即死）⇒ 生产必须带 candidate LoRA ⇒ 自研 router 是必需品不是优化
+扩展曲线（random 轨=预注册扩展尺子；trace 轨另注）：
+   1 卡 1488 → 2 卡 2838（1.91×）→ 4 卡 aff 5422（3.66×）/ rr 5727（3.86×）tok/s
+   ⇒ ≥3.2× 预注册门槛双双通过，无需 NUMA 复查；零卡间通信架构兑现
+   trace 轨 2404 → 4332（1.80×）→ 6821/7055（2.84×/2.94×）——短板在重放客户端单进程
+   +512 条尾部排空（有限批 drain），已注记不作扩展判据；全臂 512 条零失败
+affinity vs rr（4 卡）：cache 命中 95.9-97.6% vs 95.1-95.5%（+1~1.5pt）·
+   TTFT p90 1.61s vs 2.70s（**−40% 尾延迟**）· 吞吐 −3.3%；本 trace 的 case 重复率被
+   采样稀释（338 case/512 条），生产 8-rollout×多轮下亲和差距只会放大 ⇒ 生产选 affinity
+路由器自证：rr 分发 178/179/178/178 完美均衡；aff 分发 176/204/155/178 · 零 case 分裂
+```
 
-预注册判据：**4 卡饱和 ≥ 3.2× 单卡**（不达 ⇒ 先 NUMA 绑定复查一轮再如实记账——2+2
-跨 socket，每引擎 numactl 绑本地 node）；**亲和路由 trace 轨 cache 命中 ≥ 单卡 −5pt**；
-random 轨 rr≈affinity（预测 P2 的对照半）。胜出拓扑 = after 生产结构。
+S2.4 goodput@SLO before/after 同尺阶梯（全栈：production 单卡 vs aff4+fleet 旗子，
+worker 并发 64 先不设编排瓶颈，`/tmp/b4_goodput_chain.sh`）→ 〔SLO/吞吐〕：〔跑数中〕
 
 ### S3 · PD go/no-go 探针（≤半天，**账面收口**，不追加实跑投入）→ 填〔PD 判定〕
 
