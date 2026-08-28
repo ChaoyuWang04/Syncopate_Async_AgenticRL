@@ -60,10 +60,13 @@ for i in $(seq 0 $((N - 1))); do
   say "引擎 $i 就绪"
 done
 
-HASH_SKIP=${HASH_SKIP:-4000}
-say "起路由器 :8100 policy=$POLICY backends=$BACKENDS hash_skip=$HASH_SKIP"
+# 键=prompt[4409:4409+6144]：skip=全局公共前缀实测 4409 字符；窗口 6144=实测最小平衡窗
+# （2048/4096 会塌到单副本——公共前缀后的模板段仍共享；6144 起 [140,146,98,128] 平衡且
+#  零 case 分裂，E32 §7）
+HASH_SKIP=${HASH_SKIP:-4409}; HASH_WINDOW=${HASH_WINDOW:-6144}
+say "起路由器 :8100 policy=$POLICY backends=$BACKENDS hash=[$HASH_SKIP:+$HASH_WINDOW]"
 .venv/bin/python scripts/b4_router.py --port 8100 --policy "$POLICY" \
-  --backends "$BACKENDS" --hash-skip "$HASH_SKIP" > "$D/router.log" 2>&1 &
+  --backends "$BACKENDS" --hash-skip "$HASH_SKIP" --hash-window "$HASH_WINDOW" > "$D/router.log" 2>&1 &
 echo $! >> "$D/pids"
 for _ in $(seq 1 20); do
   sleep 2; curl -sf http://127.0.0.1:8100/health >/dev/null 2>&1 && { say "路由器就绪"; break; }

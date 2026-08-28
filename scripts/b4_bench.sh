@@ -33,7 +33,7 @@ say() { echo "[B4 $(date +%H:%M:%S)] $*" | tee -a "$D/progress.log"; }
 SRV=""
 if [ -z "${NO_SERVE:-}" ]; then
   # ⚠️ 门禁等待期间绝不写 logs/（否则自己的心跳把静默期永久续住——08-27 rl_guard 同款坑）
-  until GPUS=0 bash scripts/gpu_gate.sh >/dev/null 2>&1; do echo "[B4] gpu_gate 未过，等 60s" >&2; sleep 60; done
+  until GPUS="${SERVE_GPU:-0}" bash scripts/gpu_gate.sh >/dev/null 2>&1; do echo "[B4] gpu_gate 未过，等 60s" >&2; sleep 60; done
   say "起服务 arm=$ARM extra=(${EXTRA[*]:-})"
   CUDA_VISIBLE_DEVICES=${SERVE_GPU:-0} vllm serve "$MODEL" \
     --served-model-name sft-base \
@@ -106,7 +106,7 @@ if [ -n "$SRV" ]; then
   say "拆服务"
   kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
   for i in $(seq 1 30); do
-    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "${SERVE_GPU:-0}")
+    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "${SERVE_GPU:-0}" | sort -n | tail -1)
     [ "$used" -lt 2000 ] && break
     [ "$i" = 12 ] && { say "⚠️ 60s 未归还，补杀 EngineCore"; pkill -f 'VLLM::EngineCore' 2>/dev/null; }
     sleep 5
