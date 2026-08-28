@@ -1,0 +1,18 @@
+{
+  "decode_only": {
+    "n_decode_rounds": 320,
+    "tpot_ms": {
+      "p50": 7.79,
+      "p99": 7.8
+    },
+    "storm_prefill_tok_per_s": 0.0
+  },
+  "decode_plus_storm": {
+    "n_decode_rounds": 192,
+    "tpot_ms": {
+      "p50": 13.34,
+      "p99": 16.15
+    },
+    "storm_prefill_tok_per_s": 839109.0
+  }
+}

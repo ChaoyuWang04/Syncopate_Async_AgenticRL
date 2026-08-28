@@ -1,0 +1,57 @@
+{
+  "tag": "after_ext",
+  "goodput_at_slo": 0,
+  "levels": [
+    {
+      "concurrency": 96,
+      "n": 192,
+      "wall_s": 16.5,
+      "runs_per_min": 697.3,
+      "intents": {
+        "I01": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 48
+          },
+          "p95_ms": 5305.0,
+          "thr_ms": 5000,
+          "pass": false
+        },
+        "I07": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 48
+          },
+          "p95_ms": 7043.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.waiting_for_user": 22,
+            "run.succeeded": 26
+          },
+          "p95_ms": 10474.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 46,
+            "run.waiting_for_user": 2
+          },
+          "p95_ms": 11042.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": false
+    }
+  ]
+}

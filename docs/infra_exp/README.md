@@ -120,7 +120,7 @@ E 报告答「量到了什么」、track 答「这条线要兑现什么、现在
 | **E29** 🆕 | [ckpt 只存 LoRA](E29-ckpt-lora-only.md) | verl 对 LoRA 训练无条件全量落盘（27 GB/次，97% 冻结基座）⇒ save 端按 lora_ 键过滤 + load 端合成加载：save **7.91→0.83 s（9.5×）**、ckpt **12×**、续跑/adapter 链路全验。⛔ §6：动机数字「占步 19.5%」被自己复核翻案（解析器稀疏键假象，实为 0.6%，解析器已修）⇒ 价值主体=字节与高频存档解锁 | **A** | ✅ **完成** | — | 素材待交 upstream（第 5 包候选） |
 | **E31** 🆕 | [训推部署 FP8 全盘一致](E31-unified-fp8.md) | 六步全档（08-27 单日闭环）：可行域=**lm_head**（偏置 9× 对消至本底·400 步 +0.109(t=7.4) 入带·零速度税）；内层判负=机理定界（异构引擎 hidden 微差被激活量化逐层放大 ~−1.2e-4/层；复活=token 级 IS 或同构引擎） | **B+A** | ✅ **完成** | — | 生态 DRAFT 待 Chaoyu 点头 |
 | **E30** 🆕 | [TileLang 块缩放 GEMM](E30-tilelang-nvfp4-gemm.md) | A3 正餐开工（08-27）：上游 sm120 NVFP4 kernel 本机对拍过、8192³ **1308 TFLOPS=FP4 峰 63.6%**（2.5× 于 cuBLAS/Triton 最好路径）；扫描证明默认 tile 被 smem 100KB 墙钉死；tilelang 的 MXFP8 未接线=PR 入口 | **B** | 🔴 进行中 | — | — |
-| **E32** 🆕 | [B-4 四卡分布式 serving 压测](E32-serving-loadtest-4gpu.md) | 收尾包施工图（08-28 立，Chaoyu 四裁定齐）：4×DP 副本+前缀亲和路由（TP/PD 三本账判倾向、探针给数）· 批调度扫参 · PD go/no-go（账面收口）· ngram 投机探针；主口径=**goodput@SLO**，S0 先重记新机 fp8-KV 基线+噪声地板 | **A** | ⬜ 施工图已立 | 🔴 唯一在办 | 🔴 |
+| **E32** 🆕 | [B-4 四卡分布式 serving 压测](E32-serving-loadtest-4gpu.md) | ✅ 08-28 单日收官（全线最后一案）：4 引擎+亲和 router（DP×LoRA 上游判死自研补位·扩展 **3.66–3.86×**·TTFT P90 −40%）· goodput@SLO=**64 并发**且膝点在编排层（四卡等值证明）· PD **no-go**（98% 命中=无物可卸，chunked 两态拆穿字面 go）· **ngram 投机采纳**（单流 **2.3×**·48 并发 +41%·接受率 64%·50/50 逐字无损）——两项进生产默认冒烟实跑 | **A** | ✅ **完成** | — | — |
 
 > ★★★ **想一次看懂这条线是怎么断又怎么接上的 → [`STORY-async-lora-weight-sync.md`](STORY-async-lora-weight-sync.md)**
 > —— 不是实验报告，是把「现象 → 误判 → 根因 → 为什么框架自带的办法不行 → 我们改了什么 → 结果」讲一遍。

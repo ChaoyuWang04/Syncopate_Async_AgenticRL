@@ -19,7 +19,7 @@
 
 | 方向 | 事项 | 谁在打 | 判据 / 去处 |
 |---|---|---|---|
-| infra→主线 | 🆕 **B-4 压测收尾开工，范围已展开为整机四卡（Chaoyu 08-28，施工图 `docs/infra_exp/E32`）**：压测期间端点会反复起停、四卡轮占，主线要用 chatbox/端点请先打招呼错峰（loadtest 全量含 model_down 阶段会杀 vLLM，默认 `--skip`）。最终生产结构若变为 4 副本+路由器，**router 保 :8100 ⇒ decider URL/chatbox 零改动**；`start_vllm.sh` 与 `09 §0` 届时就地改写并通知。范围：新机 fp8-KV 基线重记 · 批调度扫参 · 4×DP+前缀亲和路由 · PD 探针（账面收口）· ngram 投机探针；**多 LoRA 热切换已撤出交付面**。⚠️ 顺手通报：**生产端点在新机上此前起不来**——candidate adapter 没随搬家回来（ckpt 不进 git），infra 已从 HF 资产库拉回原路径并校验（504 键/r32），`start_vllm.sh` 现可正常起 | infra | after 数字回填 `11 §5` 同表口径；完成即删行 |
+| infra→主线 | ✅ **B-4 压测收尾完毕（08-28 单日，E32 全档；infra 线全线收官）**，主线需知四件：① **端点默认已升级**（`start_vllm.sh`：+mnbt16384 +ngram 投机——单流 TPOT 8.3→2.94ms、无损性 50/50 逐字实证，已冒烟实跑；chatbox/decider 无感）；② 四卡高吞吐模式 `scripts/b4_serve_4x.sh start 4 affinity`（router 顶 :8100，重生成负载 3.86×）；③ **candidate adapter 曾没随搬家回来**（端点在新机起不来过；已从 HF 拉回并校验 504 键）；④ after 已按约回填 `11 §5`（goodput@SLO=64 并发·膝点在编排层——单卡/四卡等值证明，**业务并发要再抬是 worker/API/PG 的活**，引擎不是约束）。压测已全部让卡 | 主线 | 阅后删行 |
 | infra→主线 | 🆕 **worker 加 `--daily-cost-cap-micros` CLI 透传**（B-4 压测需要：org_acme 日预算 10M 在 ~300 run 刷爆，其后全 run 秒失败把 goodput 阶梯变垃圾数据；默认值一分未动，只是把已有 WorkerConfig 字段暴露出来。压测 org 抬 1000× 的动作在 b4_stack.sh，不碰生产 org） | 主线知悉 | 无异议即删行 |
 | infra→主线 | 🆕 **CoT 训练支持 infra 侧退出**（Chaoyu 08-28 裁定，随之撤出 infra 简历）：主线带思考 SFT 数据线的节奏自定；将来若重启训练侧支持，从 infra 01 §1 的停放注记复活 | 主线知悉 | — |
 | 主线→infra | ⚠️ 采样器现在**排除上一批**（重复的根因是批边界错位，`docs/syncopate/18 §6` 更正）⇒ 新旧跑的采样序列**同 seed 也不再逐步可比**，严格重放对照别跨这条边 | 双方知悉 | — |
@@ -72,7 +72,7 @@ PG/KL 的**库默认值今晚不动**（显式旗子跑）——candidate 过晋
        B/F 路**已交付到人手上**：chatbox 在跑（会话+多轮+全量工具自选+档位推导），
        B-4 端点 + §19 压测 24/25（11 §5）。队首转向 **M 路多轮数据**（22 §J-8 有实测形状）；
        O 路 OPD 探针做完、范围缩一半，训练建议先观望（22 §J）
-infra  PG+KL 已切库默认（08-20，cand 400 步全绿垫底）；token/seq 多种子与 R2 陈旧度
-       按 Chaoyu 裁定撤销（ESS 中位 0.92 健康 · partial_ratio 恒 0 = 陈旧度条件不存在）；
-       队首换成 CoT 训练支持（01 §1），复活条件都挂在它上面
+infra  ★ **全线收官（08-28）**：训练线闭环（E31 FP8 定界·占空比 73.4%）+ serving 线
+       收官（E32：四卡拓扑 3.86×·goodput@SLO 64·PD no-go·ngram 投机 2.3× 进默认）；
+       队列为空，只剩行政等待（上游编号×2·DRAFT 两包等 Chaoyu）；入口 infra 00-START
 ```

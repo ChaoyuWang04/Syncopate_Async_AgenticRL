@@ -1,0 +1,37 @@
+{
+  "arm": "base_fp8kv_r2",
+  "trace": {
+    "arm": "logs/b4/base_fp8kv_r2/trace.json",
+    "n": 512,
+    "errors": 0,
+    "concurrency": 32,
+    "wall_s": 125.7,
+    "output_tok_per_s": 2403.7,
+    "req_per_s": 4.072,
+    "ttft_s": {
+      "p50": 0.051,
+      "p90": 0.06,
+      "p99": 0.42
+    },
+    "tpot_ms": {
+      "p50": 12.48,
+      "p90": 12.67,
+      "p99": 13.23
+    },
+    "prefix_cache": {
+      "http://127.0.0.1:8100": {
+        "hit_rate": 0.98,
+        "queries": 2146156.0
+      }
+    }
+  },
+  "random": {
+    "ttft_median_ms": 5092.23,
+    "ttft_p99_ms": 10106.46,
+    "tpot_median_ms": 25.53,
+    "tpot_p99_ms": 31.5,
+    "output_tok_per_s": 1405.98,
+    "req_per_s": 2.16,
+    "duration_s": 22.19
+  }
+}

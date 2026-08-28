@@ -1,0 +1,37 @@
+{
+  "arm": "s1_mns64",
+  "trace": {
+    "arm": "logs/b4/s1_mns64/trace.json",
+    "n": 512,
+    "errors": 0,
+    "concurrency": 32,
+    "wall_s": 129.1,
+    "output_tok_per_s": 2341.5,
+    "req_per_s": 3.967,
+    "ttft_s": {
+      "p50": 0.06,
+      "p90": 0.079,
+      "p99": 0.415
+    },
+    "tpot_ms": {
+      "p50": 12.84,
+      "p90": 13.14,
+      "p99": 14.34
+    },
+    "prefix_cache": {
+      "http://127.0.0.1:8100": {
+        "hit_rate": 0.9801,
+        "queries": 2146156.0
+      }
+    }
+  },
+  "random": {
+    "ttft_median_ms": 4943.9,
+    "ttft_p99_ms": 9942.47,
+    "tpot_median_ms": 25.46,
+    "tpot_p99_ms": 31.31,
+    "output_tok_per_s": 1418.74,
+    "req_per_s": 2.18,
+    "duration_s": 21.99
+  }
+}

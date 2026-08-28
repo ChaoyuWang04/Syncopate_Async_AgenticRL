@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c3d425ff-4b6a-4dd8-a186-e21d060e01e9
-  modified: 2026-08-19T13:34:45.625Z
+  modified: 2026-08-28T10:57:11.800Z
 ---
 
 > ⛔⛔ **2026-08-18：本条里所有「异步 / 陈旧度 / ESS」相关的结论作废** ——
@@ -550,3 +550,43 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
    （E19"rollout 禁用"补 E31 归属 · E31 施工图→收官数）
 ⚠️ 新工具沉淀：e31_step1_smoke_check.py（判据机读）· 扫描线栈对齐/忙闲比脚本（对话内成型，
    下次可从 git log 的分析命令里捞）· torch-prof trace 文件名已加 pid 防覆盖
+
+## ★★ 2026-08-28（下）：B-4 展开为 E32——四卡分布式 serving 施工图立案
+
+```
+★ 前提变更（Chaoyu）：训练线闭环后训练/serving 分时共用整机 ⇒ B-4 从 GPU0 单卡升级整机四卡
+✅ 结构定案（三本账，E32 §3）：4×DP 独立引擎 + 前缀亲和路由器（router 保 :8100 主线无感）；
+   TP 判无靶子（延迟余量 3.8×、瓶颈=KV 容量排队；02 §1 净亏损裁定沿用）；PD 倾向 no-go
+   （97% 命中 ⇒ 可省 prefill ~3%，KV 搬运 ~300MB/请求固定要付）——探针给数不靠推算
+✅ Chaoyu 四裁定：简历三格→四格（新增〔多卡拓扑/投机〕）· after 主口径=goodput@SLO ·
+   PD 账面收口不加投入 · trace 数据集用真实 rollout prompt（只进 _audit/）
+★ 投机解码边界：MTP 对 Qwen3-4B 不可用（无 MTP 头）、EAGLE 需训头 ⇒ 探针=ngram
+   （vllm 0.12 --speculative-config）；预测分场景（单流开/批式关）；无损性=greedy 逐字比对
+⚠️ 可比性裂缝已堵进施工图：旧 before=旧机+bf16 KV（原始日志没搬过来）⇒ S0 必须先重记
+   新机 fp8-KV 单卡基线 + 噪声地板 ×3，否则收益与换机/换 KV 混账
+⚠️ 三处兼容未验（各 10min 冒烟先行）：dp4×LoRA×fp8KV · ngram×LoRA · router 转发流式
+⇒ 施工图=docs/infra_exp/E32-serving-loadtest-4gpu.md（预测 P1–P5 已写死）；
+   周边五处已同步改写（README 索引含 E31 状态翻新 · 01 · NARRATIVE 四格 · 00-START · MAINLINE）
+```
+
+## ★★★ 2026-08-28（下）：E32 单日收官 ⇒ infra 线全线收官
+
+```
+✅ 拓扑定案：4 独立引擎+前缀亲和 router（vLLM 0.12 内建 DP×LoRA 上游自供 not supported
+   ⇒ 自研 ~150 行流式反代补位）；重负载扩展 3.66-3.86×（≥3.2 预注册门槛）·突发 TTFT
+   P90 −40%·哈希窗实测 [4409:+6144]（2048/4096 塌单副本——模板段仍共享）
+✅ goodput@SLO=64 并发（C=96 I01 破 5s）★膝点与引擎无关：单卡/四卡逐级等值 ⇒ 业务膝点
+   在编排层（worker/API/PG）——"4 卡买的是引擎层容量与 CoT 时代头寸"式结论
+⛔ PD no-go 机理级：98% 命中下风暴 prefill 84万 tok/s=几乎全缓存命中 ⇒ 无物可卸；
+   chunked on/off 两态逐位同拆穿"字面 go"（减速=负载分摊非 prefill 干扰）；
+   搬运账便宜（292MB÷26.5GiB/s=21.5ms）⇒ 死因=无物可卸+被 DP 支配；复活=缓存冷/CoT
+★★ ngram 投机全场景采纳进生产默认（P4 预测被向好推翻）：单流 TPOT 6.76→2.94ms（2.3×）·
+   48 并发 +41%·接受率 63.9%·50/50 greedy 逐字无损——agentic 输出抄题面=lookup 甜点区
+★ 三个新翻案/坑（全靠判据自反抓出）：①goodput 首跑双假=org 日预算 10M 刷爆致秒失败 ×
+   "到过终态"判据（runs/min 623→12161 物理不可能显形）⇒ worker 加 cost-cap 旗子+判据
+   收紧合法终态；②candidate adapter 没随搬家（生产端点新机起不来过，HF 拉回 504 键验）；
+   ③门禁等待心跳写 logs/ 自锁（rl_guard 同款在自家重演）
+✅ 生产落地已冒烟：start_vllm.sh=+mnbt16384+ngram；四卡模式=b4_serve_4x.sh（:8100 无感）
+⇒ 四格全填·11 §5 已回填·队列空·线收官；仪器 11 件 scripts/b4_*；新机 serving 与旧机
+   同水位（E19-c 逐位级复现 1406.6 vs 1409）——旧机 serving 结论全部可引
+```

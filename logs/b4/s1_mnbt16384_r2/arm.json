@@ -1,0 +1,37 @@
+{
+  "arm": "s1_mnbt16384_r2",
+  "trace": {
+    "arm": "logs/b4/s1_mnbt16384_r2/trace.json",
+    "n": 512,
+    "errors": 0,
+    "concurrency": 32,
+    "wall_s": 125.7,
+    "output_tok_per_s": 2403.8,
+    "req_per_s": 4.073,
+    "ttft_s": {
+      "p50": 0.05,
+      "p90": 0.061,
+      "p99": 0.465
+    },
+    "tpot_ms": {
+      "p50": 12.47,
+      "p90": 12.62,
+      "p99": 13.01
+    },
+    "prefix_cache": {
+      "http://127.0.0.1:8100": {
+        "hit_rate": 0.98,
+        "queries": 2146156.0
+      }
+    }
+  },
+  "random": {
+    "ttft_median_ms": 4466.41,
+    "ttft_p99_ms": 8542.7,
+    "tpot_median_ms": 25.44,
+    "tpot_p99_ms": 31.67,
+    "output_tok_per_s": 1481.77,
+    "req_per_s": 2.28,
+    "duration_s": 21.06
+  }
+}

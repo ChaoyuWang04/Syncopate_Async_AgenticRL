@@ -1,0 +1,307 @@
+{
+  "tag": "before",
+  "goodput_at_slo": 64,
+  "levels": [
+    {
+      "concurrency": 8,
+      "n": 24,
+      "wall_s": 7.6,
+      "runs_per_min": 189.3,
+      "intents": {
+        "I01": {
+          "n": 6,
+          "succeeded": 6,
+          "terminals": {
+            "run.succeeded": 6
+          },
+          "p95_ms": 1774.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 6,
+          "succeeded": 6,
+          "terminals": {
+            "run.succeeded": 6
+          },
+          "p95_ms": 2032.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 6,
+          "succeeded": 6,
+          "terminals": {
+            "run.waiting_for_user": 5,
+            "run.succeeded": 1
+          },
+          "p95_ms": 3026.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 6,
+          "succeeded": 6,
+          "terminals": {
+            "run.succeeded": 6
+          },
+          "p95_ms": 3790.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "concurrency": 16,
+      "n": 32,
+      "wall_s": 5.9,
+      "runs_per_min": 327.4,
+      "intents": {
+        "I01": {
+          "n": 8,
+          "succeeded": 8,
+          "terminals": {
+            "run.succeeded": 8
+          },
+          "p95_ms": 1825.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 8,
+          "succeeded": 8,
+          "terminals": {
+            "run.succeeded": 8
+          },
+          "p95_ms": 2330.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 8,
+          "succeeded": 8,
+          "terminals": {
+            "run.waiting_for_user": 5,
+            "run.succeeded": 3
+          },
+          "p95_ms": 3337.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 8,
+          "succeeded": 8,
+          "terminals": {
+            "run.succeeded": 8
+          },
+          "p95_ms": 4087.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "concurrency": 24,
+      "n": 48,
+      "wall_s": 8.2,
+      "runs_per_min": 352.7,
+      "intents": {
+        "I01": {
+          "n": 12,
+          "succeeded": 12,
+          "terminals": {
+            "run.succeeded": 12
+          },
+          "p95_ms": 2111.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 12,
+          "succeeded": 12,
+          "terminals": {
+            "run.succeeded": 12
+          },
+          "p95_ms": 3109.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 12,
+          "succeeded": 12,
+          "terminals": {
+            "run.waiting_for_user": 9,
+            "run.succeeded": 3
+          },
+          "p95_ms": 3847.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 12,
+          "succeeded": 12,
+          "terminals": {
+            "run.succeeded": 12
+          },
+          "p95_ms": 5371.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "concurrency": 32,
+      "n": 64,
+      "wall_s": 8.5,
+      "runs_per_min": 453.3,
+      "intents": {
+        "I01": {
+          "n": 16,
+          "succeeded": 16,
+          "terminals": {
+            "run.succeeded": 16
+          },
+          "p95_ms": 2529.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 16,
+          "succeeded": 16,
+          "terminals": {
+            "run.succeeded": 16
+          },
+          "p95_ms": 4031.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 16,
+          "succeeded": 16,
+          "terminals": {
+            "run.waiting_for_user": 12,
+            "run.succeeded": 4
+          },
+          "p95_ms": 4845.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 16,
+          "succeeded": 16,
+          "terminals": {
+            "run.succeeded": 15,
+            "run.waiting_for_user": 1
+          },
+          "p95_ms": 6124.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "concurrency": 48,
+      "n": 96,
+      "wall_s": 9.7,
+      "runs_per_min": 591.2,
+      "intents": {
+        "I01": {
+          "n": 24,
+          "succeeded": 24,
+          "terminals": {
+            "run.succeeded": 24
+          },
+          "p95_ms": 3171.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 24,
+          "succeeded": 24,
+          "terminals": {
+            "run.succeeded": 24
+          },
+          "p95_ms": 3955.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 24,
+          "succeeded": 24,
+          "terminals": {
+            "run.waiting_for_user": 20,
+            "run.succeeded": 4
+          },
+          "p95_ms": 5294.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 24,
+          "succeeded": 24,
+          "terminals": {
+            "run.succeeded": 24
+          },
+          "p95_ms": 6911.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    {
+      "concurrency": 64,
+      "n": 128,
+      "wall_s": 11.8,
+      "runs_per_min": 651.1,
+      "intents": {
+        "I01": {
+          "n": 32,
+          "succeeded": 32,
+          "terminals": {
+            "run.succeeded": 32
+          },
+          "p95_ms": 3984.0,
+          "thr_ms": 5000,
+          "pass": true
+        },
+        "I07": {
+          "n": 32,
+          "succeeded": 32,
+          "terminals": {
+            "run.succeeded": 32
+          },
+          "p95_ms": 4936.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 32,
+          "succeeded": 32,
+          "terminals": {
+            "run.waiting_for_user": 22,
+            "run.succeeded": 10
+          },
+          "p95_ms": 6163.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 32,
+          "succeeded": 32,
+          "terminals": {
+            "run.succeeded": 32
+          },
+          "p95_ms": 8522.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": true
+    }
+  ]
+}

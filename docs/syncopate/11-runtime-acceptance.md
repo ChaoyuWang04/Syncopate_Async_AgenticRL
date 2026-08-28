@@ -413,6 +413,23 @@ calendar 的 `date+unknown` SQL 类型错（模型传 "30" 字符串 ⇒ I11 8/8
 ⚠️ 口径注记：工具延迟/RAG 是 Fake 平台与本机 PG（D-2 决定不接真平台），
 不含真平台 RTT；延迟数字受益于 vLLM prefix cache（4k system prompt 命中）。
 
+**③ ✅ B-4 压测收尾 after（2026-08-28，infra 回填——新机 · fp8 KV · 全档在
+`docs/infra_exp/E32`，MAINLINE 约定的同表口径）**：
+
+```
+goodput@SLO   混合四意图闭环阶梯（只认 succeeded/waiting_for_user 终态）：
+              64 并发四意图 P95 全守门槛（I01 3.98s/5s）；C=96 破线（I01 5.3–5.7s）
+              ★ 膝点与引擎无关：单卡与 4×DP 逐级等值 ⇒ 业务膝点在编排层（worker/API/PG）
+服务面复测     loadtest 子集（lat/comp/conc）before/after 双跑 21/22 同表全绿；
+              唯一红项仍 = 上表已登记的 P50/P95 判据病（待 §19 改判）；
+              16 并发劣化 1.37× → 1.03×（4 卡余量可见）
+引擎层增益     重生成负载（in4200/out650）单卡 1483 → 4 卡 5727 tok/s（3.86×）；
+              ngram 投机进生产默认：单流 TPOT 6.76→2.94ms（2.3×，超越旧表 8.3ms 基线）
+              · 48 并发 +41% · 50/50 greedy 逐字无损
+端点现状       start_vllm.sh 单卡默认已带 mnbt16384+ngram（冒烟实跑）；四卡高吞吐模式
+              b4_serve_4x.sh（router 顶 :8100，decider/chatbox 无感）
+```
+
 ---
 
 ## 6 · 已就位的判据

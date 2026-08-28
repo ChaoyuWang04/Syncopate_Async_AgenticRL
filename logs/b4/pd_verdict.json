@@ -1,0 +1,11 @@
+{
+  "interference_per_req_ms": {
+    "chunked_on": 4819.0,
+    "chunked_off": 4609.2
+  },
+  "kv_transfer_per_req_ms": 21.5,
+  "kv_mb_p50": 291.9,
+  "out_tokens_p50": 552,
+  "go": true,
+  "note": "go ⇔ chunked-on 残余干扰 > KV 搬运附加；chunked_off 档只用来标 PD 理论上限"
+}

@@ -1,0 +1,48 @@
+{
+  "n": 512,
+  "seed": 42,
+  "sources": [
+    "e31s12_cand_unified",
+    "e31s1_smoke_0827",
+    "fill_smoke_0828",
+    "smoke_newbox_0827",
+    "smoke_newbox_0827_kvauto"
+  ],
+  "families": {
+    "REJ": 19,
+    "DIA": 40,
+    "POLU": 26,
+    "FRESH": 77,
+    "SCALE": 39,
+    "RAG": 37,
+    "MISS": 6,
+    "BUD": 52,
+    "POL": 31,
+    "CLAR": 18,
+    "CHAT": 10,
+    "FAIL": 29,
+    "INJ": 17,
+    "CONF": 26,
+    "CRE": 43,
+    "HIGH": 7,
+    "POLM": 17,
+    "LONG": 18
+  },
+  "prompt_tokens": {
+    "0.1": 3932,
+    "0.5": 4151,
+    "0.9": 4604,
+    "0.99": 4638
+  },
+  "output_tokens": {
+    "0.1": 206,
+    "0.5": 552,
+    "0.9": 973,
+    "0.99": 1411
+  },
+  "common_prefix_tokens": 1905,
+  "kv_fp8_mb_per_req": {
+    "p50": 291.9,
+    "p90": 323.7
+  }
+}

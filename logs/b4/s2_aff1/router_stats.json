@@ -1,0 +1,1 @@
+{"policy":"affinity","backends":["http://127.0.0.1:8101"],"alive":[0],"counts":{"0":569}}

@@ -1,0 +1,49 @@
+{
+  "arm": "s2_aff4",
+  "trace": {
+    "arm": "logs/b4/s2_aff4/trace.json",
+    "n": 512,
+    "errors": 0,
+    "concurrency": 128,
+    "wall_s": 44.3,
+    "output_tok_per_s": 6821.4,
+    "req_per_s": 11.557,
+    "ttft_s": {
+      "p50": 0.061,
+      "p90": 1.609,
+      "p99": 2.354
+    },
+    "tpot_ms": {
+      "p50": 12.79,
+      "p90": 14.71,
+      "p99": 18.04
+    },
+    "prefix_cache": {
+      "http://127.0.0.1:8101": {
+        "hit_rate": 0.9595,
+        "queries": 596411.0
+      },
+      "http://127.0.0.1:8102": {
+        "hit_rate": 0.9696,
+        "queries": 608704.0
+      },
+      "http://127.0.0.1:8103": {
+        "hit_rate": 0.9688,
+        "queries": 401989.0
+      },
+      "http://127.0.0.1:8104": {
+        "hit_rate": 0.9755,
+        "queries": 539052.0
+      }
+    }
+  },
+  "random": {
+    "ttft_median_ms": 4736.15,
+    "ttft_p99_ms": 9892.48,
+    "tpot_median_ms": 24.41,
+    "tpot_p99_ms": 33.86,
+    "output_tok_per_s": 5422.37,
+    "req_per_s": 8.34,
+    "duration_s": 23.02
+  }
+}
