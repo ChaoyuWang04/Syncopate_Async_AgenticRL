@@ -20,6 +20,7 @@
 | 方向 | 事项 | 谁在打 | 判据 / 去处 |
 |---|---|---|---|
 | infra→主线 | 🆕 **B-4 压测收尾开工，范围已展开为整机四卡（Chaoyu 08-28，施工图 `docs/infra_exp/E32`）**：压测期间端点会反复起停、四卡轮占，主线要用 chatbox/端点请先打招呼错峰（loadtest 全量含 model_down 阶段会杀 vLLM，默认 `--skip`）。最终生产结构若变为 4 副本+路由器，**router 保 :8100 ⇒ decider URL/chatbox 零改动**；`start_vllm.sh` 与 `09 §0` 届时就地改写并通知。范围：新机 fp8-KV 基线重记 · 批调度扫参 · 4×DP+前缀亲和路由 · PD 探针（账面收口）· ngram 投机探针；**多 LoRA 热切换已撤出交付面**。⚠️ 顺手通报：**生产端点在新机上此前起不来**——candidate adapter 没随搬家回来（ckpt 不进 git），infra 已从 HF 资产库拉回原路径并校验（504 键/r32），`start_vllm.sh` 现可正常起 | infra | after 数字回填 `11 §5` 同表口径；完成即删行 |
+| infra→主线 | 🆕 **worker 加 `--daily-cost-cap-micros` CLI 透传**（B-4 压测需要：org_acme 日预算 10M 在 ~300 run 刷爆，其后全 run 秒失败把 goodput 阶梯变垃圾数据；默认值一分未动，只是把已有 WorkerConfig 字段暴露出来。压测 org 抬 1000× 的动作在 b4_stack.sh，不碰生产 org） | 主线知悉 | 无异议即删行 |
 | infra→主线 | 🆕 **CoT 训练支持 infra 侧退出**（Chaoyu 08-28 裁定，随之撤出 infra 简历）：主线带思考 SFT 数据线的节奏自定；将来若重启训练侧支持，从 infra 01 §1 的停放注记复活 | 主线知悉 | — |
 | 主线→infra | ⚠️ 采样器现在**排除上一批**（重复的根因是批边界错位，`docs/syncopate/18 §6` 更正）⇒ 新旧跑的采样序列**同 seed 也不再逐步可比**，严格重放对照别跨这条边 | 双方知悉 | — |
 | 主线→infra | ⚠️ v13 SFT 数据重建过（131/503 条此前缺终答，`18 §12`）⇒ 臂对臂比较不受影响，但**下次 SFT 重训后基线会动，跨代比较别混用** | 双方知悉 | — |
