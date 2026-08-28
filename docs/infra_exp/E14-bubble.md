@@ -209,6 +209,31 @@ compile(max-autotune) 生产形状直接 OOM：graph 私有池 +2.8 GB，贴顶�
 ⇒ 真实负载变长批（每批 R 不同）下重编译税必然为净负 ⇒ **⛔ update_actor 不上 compile**，
 边界表定稿见 §5。（基准自身的坑：R=800 臂 OOM 是尺寸没留余量，读数不受影响。）
 
+## 4.11 第三批 · 残余同步全链路清零（2026-08-28，四轮"拔榜首→看搬家"）
+
+> 起因：E31 收官后的 profiler 全链路教学走查，把 §4.9 终态（236 次 sync）的残余追到底。
+> 方法即结论：**每轮拔掉归因榜榜首，等待搬去下一站并曝出下一个隐藏同步，直到榜上只剩
+> 合法栅栏**。判罪升级一档：CPU 栈会串帧（flash-attn 被冤枉过一轮），**GPU 侧配对事件
+> 不会**——两笔"大拷贝"的真身都是 `Memcpy DtoH 64B / 0.00ms`（= mb8 批的 8 个 int64
+> 长度），搬运免费，等待全是排空队列。
+
+| 轮 | 榜首（单次代价） | 修理 | 手法 |
+|---|---|---|---|
+| 1 | PG `convert_padding` 的 `max().item()`（172ms）+ 两个 nonzero | **⑤** 零同步等价改写 | max_len 走建组期 CPU int 表；压缩 cumsum+scatter（单拔 .item() 等待会原地转移到 nonzero——必须整路清） |
+| 1 | tensordict `.to(device)` 隐藏 synchronize（119ms） | **⑥** pinned + non_blocking | 回退带响声 |
+| 2 | §4.7-③ 刻意残留的 2 次批量 `.tolist()`（178ms） | **⑦a** 上卡前 CPU 算长度 | "早取"的极致：取在数据还没过河时 |
+| 2 | verl postprocess `unbind→重打包`（nested offsets.tolist，144ms） | **⑦b** 零同步 jagged 拼接 | values cat + offsets GPU 累加平移（monkeypatch） |
+| 3 | 自家 `_to_jagged` 的 `as_nested_tensor`（构造器内置同步 ×2=351ms） | **⑦c** CPU 长度直构 `from_jagged` | 拔掉前两站后它才接班曝光 |
+| 4 | optimizer 栅栏 115ms + nested to_copy 88ms | **收手** | 结构性地板（前者语义必须等；后者第三方深处 <1.5%） |
+
+终值：GPU 空隙 0.64 → 0.27~0.40 s/update_actor（各轮探针抽批不同，±0.1s 批组合噪声；
+铁证=榜上点名嫌疑人逐轮清零）；忙闲比 90.2 → 94–96%。三个位等价单测常驻
+（convert_padding / jagged 拼接 / jagged 直构，均对拍原实现逐位）。五个修理默认开、
+独立开关（SYNCOPATE_FIX_PG_PAD_SYNC / FIX_MB_PIN / FIX_JAGGED_CPULEN /
+FIX_POSTPROC_CONCAT + ⑦c 随 ⑦a 联动），端到端收益（预期 2–4%）搭下次冒烟顺带验。
+物理三条入档：**DtoH 必排队、H2D 只等装车；同步消不掉只能挪到队列空时；CPU 栈会串帧、
+GPU 配对事件不会**。
+
 ## 5 · 工具判决（边界表定稿，2026-08-21；「工具×位置」不是「工具×机器」）
 
 | 工具 × 位置 | 判决 | 依据 |
