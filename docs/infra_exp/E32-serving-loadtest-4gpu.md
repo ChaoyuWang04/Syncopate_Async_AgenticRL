@@ -188,7 +188,18 @@ random 轨 rr≈affinity（预测 P2 的对照半）。胜出拓扑 = after 生�
 
 ## 7 · 踩的坑（施工中随手记，症状→根因→修法）
 
-〔开工后填〕
+```
+① 生产端点在新机上从来起不来（S0 首跑当场撞上）：start_vllm.sh 随 git 搬了家，但它引用的
+   candidate adapter（checkpoints/grpo/cand_v13r2_e1/）没搬——ckpt 不进 git，搬家清单
+   只搬了 bases/。vLLM 启动即死 "No adapter found"。修法：HF 资产库 cand_v13r2_e1/step_25
+   拉回原路径，判据=safetensors 可开+504 键（与 E29 逐位校验记录吻合）+r32/α64。
+   ★ 教训：搬家验收跑了训练冒烟没跑 serving 起点——"脚本在 ≠ 依赖在"，
+   00-START §6 搬家清单⑤已补注。
+② 门禁等待循环自己往 logs/ 写心跳 ⇒ 静默期永久续住（08-27 rl_guard 同款坑在自家脚本重演）；
+   修法=等待期只写 stderr，b4 产物前缀照 e14/e19 先例登记进 gpu_gate 排除表。
+③ bash 全角括号 `）` 在 $(...) 里不闭合，静默吞掉后面整个 heredoc，报错位置在 11 行外
+   （报错位置≈误导，守则②又一证）。
+```
 
 ## 8 · 下一步 / 衍生问题
 

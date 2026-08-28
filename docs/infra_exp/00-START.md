@@ -193,6 +193,8 @@ SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 ④ 重建记忆软链（上面那行）
 ⑤ 资产：HF SamWang0405/Syncopate-AgenticRL 下回 bases/（底座真身，不可再生——
    重合并实测 max|Δ|=4.9e-4 > RL 信号 1.3e-5，禁止用"重新 merge"替代）+ 所需 adapter
+   ⚠️ **含生产端点的 candidate**（cand_v13r2_e1/step_25 → checkpoints/grpo/cand_v13r2_e1/
+   adapter_global_step_25）——08-28 实测 start_vllm.sh 在新机起不来就是它没搬（E32 §7）
 ⑥ reference/（版权包）只能人工拷，不进任何云端
 ```
 
