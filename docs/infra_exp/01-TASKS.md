@@ -61,7 +61,7 @@
 
 | 任务 | 状态 |
 |---|---|
-| 🆕 **MoE 线**（A19 3 行修复 → A2 三摆法；Qwen3-30B-A3B 已下好，⚠️ bitsandbytes 未装）：Chaoyu 08-20 降级——**优先级低于 CoT**，独立推进、不 gate 也不被 gate | 🟠 排后 |
+| **MoE 线** → ⛔ **Chaoyu 08-28 裁定停做**（并撤出简历成果栏；E07 的账与陷阱留作面试故事）。Qwen3-30B-A3B 57GB 仍在盘上，复活按 E07 §4.5 重启 | ⛔ 停做 |
 | ~~trainer 侧 FP8 融合栈~~ → **已并入队首 E31 第 3/4 步**（08-27；自有 kernel 替代 torchao/TE 路线） | 📦 并入 |
 | A17 · 对齐补丁端到端（上次钩子没挂白跑） | 🔴 可重跑 |
 | 上游包（`docs/upstream/`）：16 字节对齐 · HYBRID_SHARD · verl 两条 ✅ 已移交 upstream 同事（08-20）；🆕 **E31 路新增两 DRAFT（08-27）**：verl entropy_coeff=0 连图（一行修 PR 候选）· sm120 MXFP8 生态数据点回帖包（TE#2304/triton#7550/CUTLASS#2867/DeepGEMM#236 + RL 社区正负双结果）；vLLM prompt_logprobs OOM 判 PARKED（上游已有 tracking #5907） | 本窗口只做证据支援；新 DRAFT 待考据成稿 → Chaoyu 点头 |
