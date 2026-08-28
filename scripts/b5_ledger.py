@@ -52,7 +52,7 @@ async def main() -> int:
     gp = json.load(open(args.goodput))
     stages = load_stage_lines(args.worker_log)
     conn = await asyncpg.connect(DSN)
-    skew = await conn.fetchval("SELECT extract(epoch FROM clock_timestamp())") - time.time()
+    skew = float(await conn.fetchval("SELECT extract(epoch FROM clock_timestamp())")) - time.time()
 
     ledgers = []
     for lv in gp["levels"]:
@@ -74,7 +74,9 @@ async def main() -> int:
         e2e_sum = 0.0
         miss_stage = 0
         for r in runs:
-            t = tl.get(r["run_id"])
+            t0 = tl.get(r["run_id"])
+            t = ({k: (float(v) if v is not None and k != "run_id" else v)
+                  for k, v in dict(t0).items()} if t0 else None)
             s = stages.get(r["run_id"])
             if not t or not t["started"] or not t["finished"] or not r.get("t_done"):
                 continue

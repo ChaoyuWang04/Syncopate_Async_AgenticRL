@@ -180,7 +180,11 @@ def create_app(db: Database | None = None) -> FastAPI:
     async def _startup() -> None:
         if app.state.db is None:
             app.state.db = Database()
-            await app.state.db.connect()
+            # B-5 S1：池容量 env 可配（默认 10 不变）。S0 实测 C=96 时借连接等待
+            # 占 e2e 24-29%（每单 1.9s）——10 条连接伺候不了高并发。
+            import os
+            await app.state.db.connect(
+                max_size=int(os.environ.get("SYNCOPATE_API_DB_POOL", "10")))
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:

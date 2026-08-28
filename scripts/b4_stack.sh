@@ -28,6 +28,9 @@ CONC=${2:-64}
 exec 3>&- 3<&- 2>/dev/null || true
 : > "$D/pids"
 
+# B-5 S1 扩池（PG max_connections 已抬到 300；预算按 S3 多进程终态留：4×32+4×12=176 ≤ 210）
+export SYNCOPATE_WORKER_DB_POOL="${SYNCOPATE_WORKER_DB_POOL:-128}"
+export SYNCOPATE_API_DB_POOL="${SYNCOPATE_API_DB_POOL:-32}"
 uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 > "$D/api.log" 2>&1 &
 echo $! >> "$D/pids"
 for _ in $(seq 1 30); do

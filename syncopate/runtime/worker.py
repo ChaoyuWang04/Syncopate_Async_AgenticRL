@@ -522,10 +522,12 @@ class Worker:
 
 
 async def _serve(config: WorkerConfig) -> None:
+    import os
     import signal
 
     db = Database()
-    await db.connect()
+    # B-5 S1：池容量 env 可配（默认 10 不变）。S0 实测 C=96 借连接等待占 24-29%。
+    await db.connect(max_size=int(os.environ.get("SYNCOPATE_WORKER_DB_POOL", "10")))
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
