@@ -22,7 +22,10 @@ start) ;;
 esac
 
 CONC=${2:-64}
-pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 || { echo "🔴 PG 没起（先 pg_bootstrap.sh）"; exit 1; }
+# ⚠️ 不用 pg_isready——它不在 PATH（PG 装在 /workspace/tools/postgres 下），检查器指向
+#   不存在的工具会把活着的 PG 判死（08-28 实录）。TCP 探活即可。
+(exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null || { echo "🔴 PG 没起（先 pg_bootstrap.sh）"; exit 1; }
+exec 3>&- 3<&- 2>/dev/null || true
 : > "$D/pids"
 
 uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 > "$D/api.log" 2>&1 &
