@@ -361,6 +361,9 @@ def setup_worker() -> None:
     # ★ E14 批2-①：torch profiler 抓 update_actor 同步调用点（探针，默认关）
     if os.environ.get("SYNCOPATE_TORCH_PROF"):
         _defer_until_imported("verl.workers.engine_workers", _patch_torch_prof)
+    # ★ 乒乓修理⑦b（默认开，08-28 二轮走查）：verl postprocess 的 unbind→重打包换零同步拼接
+    if os.environ.get("SYNCOPATE_FIX_POSTPROC_CONCAT", "1") == "1":
+        _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", _patch_postprocess_concat)
     # ⛔⛔ 2026-08-18 修：这两行原来**嵌在 `_patch_grad_probe()` 的函数体末尾** ——
     #    也就是只有同时开 `SYNCOPATE_GRAD_PROBE=1` 才会装上分步计时。
     #    后果：B15 那一跑设了 `SYNCOPATE_SYNC_TIMING=1`，**一行判据都没打**，
@@ -1095,6 +1098,99 @@ def _fix_pg_repeat_interleave() -> None:
           flush=True)
 
 
+def _build_jagged_nosync(x, plen_c, rlen_c):
+    """乒乓修理⑦c：用 CPU 已知长度直构 jagged NestedTensor，零 GPU→CPU 同步。
+
+    原路 `as_nested_tensor(list, layout=jagged)` 的构造函数（torch nested
+    jagged_from_list）内部自带 stream 同步（三轮 profile 实测 ×2=351ms）。
+    values 布局与原路逐位同（逐行 zeros + response 段右对齐写入后平铺）；
+    offsets 由 CPU int 累加而来（小 H2D 不排队——H2D 只等 staging，不像 DtoH
+    要等整条队列）。位等价由 tests/train/test_verl_patches.py 钉死。
+    """
+    import torch
+    Ls = [int(p) + int(r) for p, r in zip(plen_c, rlen_c)]
+    offs = [0]
+    for L in Ls:
+        offs.append(offs[-1] + L)
+    vals = x.new_zeros(offs[-1])
+    for i, (L, R) in enumerate(zip(Ls, (int(r) for r in rlen_c))):
+        if R > 0:
+            base = offs[i]
+            vals[base + L - R - 1: base + L - 1] = x[i, :R]
+    offsets = torch.tensor(offs, dtype=torch.int64, device=x.device)
+    return torch.nested.nested_tensor_from_jagged(vals, offsets=offsets)
+
+
+def _concat_jagged_nosync(nts):
+    """把若干 jagged NestedTensor 拼成一个，零 GPU→CPU 同步。
+
+    verl 原写法 `[t for nt in nts for t in nt.unbind()]` + `as_nested_tensor(...)`：
+    torch nested 的 unbind 内部要 `offsets.tolist()`（64B DtoH，实测单次 144ms =
+    排空队列的等待），且拆散重拼多付一轮拷贝。等价改写：values 直接 cat，
+    offsets 在 GPU 上做累加平移（0-d GPU 标量参与加法不回 CPU）。
+    位等价由 tests/train/test_verl_patches.py 对拍原写法钉死。
+    """
+    import torch
+    values = torch.cat([nt.values() for nt in nts])
+    parts = [nts[0].offsets()]
+    base = parts[0][-1]
+    for nt in nts[1:]:
+        o = nt.offsets()
+        parts.append(o[1:] + base)
+        base = parts[-1][-1]
+    return torch.nested.nested_tensor_from_jagged(values, offsets=torch.cat(parts))
+
+
+def _patch_postprocess_concat() -> None:
+    """乒乓修理⑦b（默认开，SYNCOPATE_FIX_POSTPROC_CONCAT=0 对照）。
+
+    只动 `postprocess_batch_func` 的 micro-batch 拼接一步（unbind→重打包 ⇒ 零同步
+    拼接）；其余逻辑逐行照抄 verl 原函数。任何结构性意外 ⇒ 响一声回退原函数
+    （原函数正确只是慢，不许静默走错路）。⚠️ 消费方按名 import ⇒ utils 与
+    fsdp.transformer_impl 两处绑定都要换。
+    """
+    from verl.workers.engine import utils as _u
+    if getattr(_u, "_syncopate_pp_concat", False):
+        return
+    _orig = _u.postprocess_batch_func
+    _warned = {"done": False}
+
+    def patched(output_lst, indices, data):
+        try:
+            use_dynamic_bsz = _u.tu.get_non_tensor_data(data=data, key="use_dynamic_bsz", default=True)
+            pad_mode = _u.tu.get_non_tensor_data(data=data, key="pad_mode",
+                                                 default=_u.DatasetPadMode.NO_PADDING)
+            assert pad_mode == _u.DatasetPadMode.NO_PADDING
+            model_output, losses, aggregated_metrics = {}, [], {}
+            for o in output_lst:
+                for key, val in o.get("model_output", {}).items():
+                    model_output.setdefault(key, []).append(val)
+            for key in model_output:
+                model_output[key] = _concat_jagged_nosync(model_output[key])   # ← 唯一改动
+                if use_dynamic_bsz:
+                    model_output[key] = _u.restore_dynamic_batch(model_output[key], indices)
+            for o in output_lst:
+                if "loss" in o:
+                    losses.append(o["loss"])
+            for o in output_lst:
+                if "metrics" in o:
+                    _u.append_to_dict(aggregated_metrics, o["metrics"])
+            return {"model_output": model_output, "loss": losses, "metrics": aggregated_metrics}
+        except Exception as e:
+            if not _warned["done"]:
+                _warned["done"] = True
+                print(f"[verl-patch] ⚠️ 修理⑦b 结构意外已回退 verl 原函数（慢但对）："
+                      f"{type(e).__name__}: {e}", flush=True)
+            return _orig(output_lst, indices, data)
+
+    _u.postprocess_batch_func = patched
+    from verl.workers.engine.fsdp import transformer_impl as _ti
+    _ti.postprocess_batch_func = patched
+    _u._syncopate_pp_concat = True
+    print("[verl-patch] 乒乓修理⑦b 已装（postprocess 零同步拼接，SYNCOPATE_FIX_POSTPROC_CONCAT=0 对照）",
+          flush=True)
+
+
 def _patch_torch_prof() -> None:
     """★ E14 批2-①（探针，默认关）：torch profiler 抓 update_actor 的同步乒乓调用点。
 
@@ -1642,6 +1738,18 @@ def _patch_prefix_grouper() -> None:
         def _forward_step(self, micro_batch, loss_function, forward_only):
             from verl.utils.device import get_device_id, get_device_name
 
+            # ── 乒乓修理⑦a（08-28 二轮走查，SYNCOPATE_FIX_JAGGED_CPULEN=0 对照）──
+            # E14 修理③刻意留下的 2 次批量 .tolist()（8 元素 int64 = 64 字节 DtoH，
+            # 二轮 profile 实测单次 178ms——搬运 0.00ms，全是排空队列的等待）。
+            # 此刻 micro_batch 还在 CPU（修理⑥上卡之前）⇒ 长度在 CPU 张量上直接算，
+            # 同一公式同一数据，只是取在"数据还没过河"的时刻 ⇒ 同步彻底归零。
+            _cpulen = None
+            if os.environ.get("SYNCOPATE_FIX_JAGGED_CPULEN", "1") == "1":
+                _am_c = micro_batch.get("attention_mask", None)
+                if _am_c is not None and _am_c.device.type == "cpu":
+                    _P0 = micro_batch["prompts"].shape[1]
+                    _cpulen = (_am_c[:, :_P0].sum(1).tolist(), _am_c[:, _P0:].sum(1).tolist())
+
             # ── 乒乓修理⑥（E31-prof 走查 08-28，SYNCOPATE_FIX_MB_PIN=0 关闭做对照）──
             # tensordict 的 .to(device) 在 non_blocking=False 时内部补一次全局
             # synchronize（实测单次 119ms——搬的数据才几 MB，等待全是排空队列的钱，
@@ -1724,7 +1832,9 @@ def _patch_prefix_grouper() -> None:
             # ★ E14 §4.7-③ 乒乓修理（SYNCOPATE_FIX_JAGGED，默认开）：原写法逐行 .item()
             #   = 每 micro-batch ~32 次强制同步（全 update_actor ×96）。长度一次性 .tolist()
             #   —— 2 次同步替代 ~32 次，数值语义逐位不变（同样的整数，换个搬法）。
-            if os.environ.get("SYNCOPATE_FIX_JAGGED", "1") == "1":
+            if _cpulen is not None:
+                _plen_c, _rlen_c = _cpulen         # 修理⑦a：上卡前 CPU 算好，零 GPU 同步
+            elif os.environ.get("SYNCOPATE_FIX_JAGGED", "1") == "1":
                 _plen_c, _rlen_c = _plen.tolist(), _rlen.tolist()
             else:
                 _plen_c, _rlen_c = None, None      # A/B 对照：走旧逐行 .item() 路径
@@ -1732,12 +1842,13 @@ def _patch_prefix_grouper() -> None:
             def _to_jagged(x):
                 if x is None:
                     return None
+                if _plen_c is not None:
+                    # 修理⑦c：as_nested_tensor 构造函数内部自带同步（×2=351ms 实测）
+                    # ⇒ 用 CPU 已知长度直构（长度正是 ⑦a 在上卡前算好的那份）
+                    return _build_jagged_nosync(x, _plen_c, _rlen_c)
                 _outs = []
                 for _i in range(x.shape[0]):
-                    if _plen_c is not None:
-                        _L = int(_plen_c[_i] + _rlen_c[_i]); _R = int(_rlen_c[_i])
-                    else:
-                        _L = int(_plen[_i].item() + _rlen[_i].item()); _R = int(_rlen[_i].item())
+                    _L = int(_plen[_i].item() + _rlen[_i].item()); _R = int(_rlen[_i].item())
                     _v = x.new_zeros(_L)
                     if _R > 0:
                         _v[_L - _R - 1:_L - 1] = x[_i, :_R]

@@ -252,3 +252,43 @@ def test_convert_padding_right_nosync_bitwise_vs_library():
         got = _convert_padding_right_nosync(x, mask.long(), max_len)
         assert got.shape == ref.shape, f"trial{trial} 形状 {got.shape} vs {ref.shape}"
         assert torch.equal(got, ref), f"trial{trial} 不逐位等价"
+
+
+def test_concat_jagged_nosync_bitwise_vs_verl_writing():
+    """乒乓修理⑦b：零同步 jagged 拼接必须与 verl 原写法（unbind→as_nested_tensor）位等价。"""
+    import torch
+    from syncopate.train.verl_patches import _concat_jagged_nosync
+
+    g = torch.Generator().manual_seed(7)
+    nts = []
+    for chunk_lens in ([3, 1, 5], [2, 2], [7, 1, 1, 4]):
+        rows = [torch.randn(n, generator=g) for n in chunk_lens]
+        nts.append(torch.nested.as_nested_tensor(rows, layout=torch.jagged))
+    ref = torch.nested.as_nested_tensor(
+        [t for nt in nts for t in nt.unbind()], layout=torch.jagged)
+    got = _concat_jagged_nosync(nts)
+    assert torch.equal(got.values(), ref.values()), "values 不逐位同"
+    assert torch.equal(got.offsets(), ref.offsets()), "offsets 不同"
+    assert got._ragged_idx == ref._ragged_idx
+
+
+def test_build_jagged_nosync_bitwise_vs_as_nested_tensor():
+    """乒乓修理⑦c：直构 jagged 必须与 as_nested_tensor 老路位等价（values+offsets）。"""
+    import torch
+    from syncopate.train.verl_patches import _build_jagged_nosync
+
+    g = torch.Generator().manual_seed(9)
+    plen, rlen = [5, 3, 7, 1], [4, 0, 2, 6]      # 含 R=0 边界
+    R_max = max(rlen) + 2
+    x = torch.randn(4, R_max, generator=g)
+    ref_rows = []
+    for i in range(4):
+        L, R = plen[i] + rlen[i], rlen[i]
+        v = x.new_zeros(L)
+        if R > 0:
+            v[L - R - 1: L - 1] = x[i, :R]
+        ref_rows.append(v)
+    ref = torch.nested.as_nested_tensor(ref_rows, layout=torch.jagged)
+    got = _build_jagged_nosync(x, plen, rlen)
+    assert torch.equal(got.values(), ref.values())
+    assert torch.equal(got.offsets(), ref.offsets())
