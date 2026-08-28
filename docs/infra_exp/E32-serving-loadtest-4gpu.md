@@ -85,27 +85,37 @@ DP 自付  同一 4k system prompt 被 4 副本各缓存一份 ⇒ 前缀池稀�
 
 ## 4 · 施工步骤（S0–S5，每步预注册判据；⛔ 判据行没出现 = 机制没生效）
 
-### S0 · 立尺子（~半天）——一切对比的分母
-
-| # | 动作 | 产物 / 判据 |
-|---|---|---|
-| S0.1 | `scripts/b4_make_trace.py`：从 loadtest 四意图 + `checkpoints/grpo/*/dispatched.jsonl` 真实 prompt 采样，固定 seed 落 `_audit/b4_trace.jsonl`（含题面长度分布统计头）。⛔ 只进 `_audit/`，不进 HF/上游 | trace 文件 + 长度分布表（PD 账的输入） |
-| S0.2 | `scripts/b4_bench.sh`（骨架抄 `run_e19c_serving_ab.sh`）：参数化一臂 = 起服务→暖机→**双轨压测**→抓 `/metrics`→机读 `logs/b4/<arm>.json`→拆服务等显存归还。双轨 = ①random in4200/out650×48（与 E19-c 逐字段可比）②真实 trace 重放（cache/路由的唯一合法尺子；random 会把 prefix cache 打成零命中） | 脚本 + 首臂产物齐全 |
-| S0.3 | **新机 fp8-KV 单卡基线**：`start_vllm.sh` 原样起，跑 b4_bench 双轨 + runtime_loadtest 全量（前置照其 docstring：PG + API:8000 + **org_acme worker** + vLLM:8100；`--skip model_down` 或与主线错峰——该阶段会杀 vLLM 不自动重启） | 基线表：goodput / 饱和 tok/s / TTFT / TPOT / cache 命中 |
-| S0.4 | **噪声地板**：同配置 b4_bench 重跑 ×3，记饱和 tok/s 与 TTFT P95 的 (max−min)/median | 地板数——此后一切差异 < 2× 地板不许读（守则①） |
-
-### S1 · 单卡批调度调参（~半天–1 天）→ 填〔批调度参数〕
-
-`scripts/b4_sweep.sh` 网格（每点跑双轨，主看 goodput 侧代理 = trace 轨 TTFT P95 + 饱和 tok/s）：
+### S0 · 立尺子 ✅（08-28 上午，数据 logs/b4/base_fp8kv_{s0,r2,r3}/arm.json）
 
 ```
---max-num-batched-tokens  ∈ {2048, 8192(默认), 16384}     # chunked prefill 粒度
---max-num-seqs            ∈ {64, 128, 256}                # 并发上限 × fp8 大池的配合
---gpu-memory-utilization  ∈ {0.85, 0.90}                  # KV 池 vs 稳定性（OOM 差 0.01GB 前科）
+trace 数据集   512 条真实 episode（28,416 候选分层采样）：prompt p50 4151 tok · 输出 p50 552 ·
+              全局公共前缀 1905 tok（4409 字符）· KV 292 MB/请求（fp8）——PD 账输入齐
+新机单卡基线   （fp8 KV·生产旗子）random 轨 1406.6 tok/s·TTFT 中位 5.10s/P99 10.1s
+              —— 与 E19-c 旧机 fp8kv 臂（1409/5.0/10.0）逐位级吻合 ⇒ serving 侧新旧机同水位，
+              E19-c 五臂表在新机直接可引；trace 轨 2403 tok/s·TTFT p50 48ms·TPOT 12.5ms·
+              prefix cache 命中 98.0%（quries 2.15M=512×4193 账目自洽）
+噪声地板 ×3   trace tok/s 离散 0.02%（ignore_eos 定长红利）· random tok/s 0.6% · TTFT 2.8%
+              ⇒ 判定门槛（2×地板）= 0.05% / 1.2% / 5.6%
+★ 白捡结论    真实流量 TTFT p50 48ms = 98% 命中让 prefill 近乎免费 ⇒ PD 无可卸载物（S3 预演）
 ```
 
-判据：收益 > 2× 噪声地板才算数；**全平 = "默认已优"照实填**（P1 的预期本就如此）。
-胜出配置冻结为 per-replica config，S2 全体副本沿用。
+仪器四件（用法见各脚本头注）：`b4_make_trace.py`（trace 落 `_audit/`，不出库）·
+`b4_bench.sh`（单臂双轨：random 对齐 E19-c / trace 才是 cache 尺子）· `b4_replay.py` ·
+`b4_stack.sh`（全栈起停）。⚠️ S0.3 的全栈 goodput 基线挪到 S2.4 与 after 同 session 测
+（同尺原则）；loadtest 全量 `--skip model_down`（会杀 vLLM 不自动重启）。
+
+### S1 · 单卡批调度调参 ✅（08-28 上午；P1 命中——真实流量下默认已优）
+
+```
+五臂 OFAT 全表（trace 轨 tok/s·对基线 2403）：mnbt2048 2406 · mnbt16384 2402 · mns256 2401 ·
+util085 2403 —— 全在地板内；mns64 2341（−2.6% 真实劣化，排除）
+★ 唯一胜手 = --max-num-batched-tokens 16384：random（冷 prefill）轨 +5.3%（1483/1482 双跑
+  互证，差 0.1%）· TTFT 中位 −12.4%（4466.05/4466.41ms 逐毫秒复现）· trace 轨零代价
+⇒ 〔批调度参数〕定案：真实 98% 命中流量对批调度不敏感（chunked prefill 默认粒度已优）；
+  fleet 统一配置 = 生产旗子 + mnbt 16384（买的是冷 prefill/缓存失效场景的健壮性）
+```
+
+（OFAT 网格与判据见 `b4_sweep.sh` 头注；胜出配置已冻结为 S2 fleet 统一配置。）
 
 ### S2 · 4×DP + 路由（~1 天，主战场）→ 填〔SLO/吞吐〕〔多卡拓扑〕
 
