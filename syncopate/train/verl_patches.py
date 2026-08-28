@@ -1131,7 +1131,8 @@ def _patch_torch_prof() -> None:
         from pathlib import Path
         outdir = Path(__file__).resolve().parents[2] / "logs" / "torchprof"
         outdir.mkdir(parents=True, exist_ok=True)
-        trace = outdir / f"update_actor_call{target}.json"
+        # pid 后缀防覆盖（08-28 走查时两跑同名互踩，旧 trace 只剩对话里的数字）
+        trace = outdir / f"update_actor_call{target}_pid{os.getpid()}.json"
         prof.export_chrome_trace(str(trace))
         # ① 全局 top 表（和 SFT H0 观测仪同款口径）
         print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=12), flush=True)
@@ -1322,6 +1323,25 @@ def apply(mode: str) -> None:
 #   判据A  [prefix-grouper] 打包前向已生效  —— 路径真的被走到
 #   判据B  log_probs 与关闭时**逐位相同**   —— 论文保证训练等价，不相同就是我们接错了
 #   判据C  吞吐 / 任务尺子
+def _convert_padding_right_nosync(x: "torch.Tensor", x_mask: "torch.Tensor",
+                                  max_len: int) -> "torch.Tensor":
+    """语义 = PrefixGrouper.convert_padding(x, x_mask, "right")，但全程零 GPU→CPU 同步。
+
+    原版两处强制同步：create_padding_mask 的 max().item()（实测单次 172ms = 排空整条
+    已入队前向）+ 两个 nonzero()。此处 max_len 由调用方从 CPU 侧拿（PG 建组时已物化
+    的 int 表）；行内压缩用 cumsum+scatter（固定形状算子，无一同步）。
+    位等价由 tests/train/test_verl_patches.py 对拍库函数钉死。
+    ⚠️ 只覆盖 x 无梯度（token id）+ 目标 right padding 的形态。
+    """
+    import torch  # 本文件纪律：顶层不 import torch（早于 Ray 分卡碰 CUDA = 三 rank 挤一卡）
+    m = x_mask.bool()
+    pos = m.long().cumsum(1) - 1                      # 各有效元素压缩后的目标列
+    idx = torch.where(m, pos, torch.full_like(pos, max_len))
+    buf = x.new_zeros(x.shape[0], max_len + 1)        # 末列 = mask 外元素的垃圾桶
+    buf.scatter_(1, idx, torch.where(m, x, x.new_zeros(1)))
+    return buf[:, :max_len]
+
+
 def _patch_prefix_grouper() -> None:
     """PrefixGrouper 接线 · 整体对齐上游 #7202 的形状 + 我们独有的两处修复。
 
@@ -1568,8 +1588,21 @@ def _patch_prefix_grouper() -> None:
         _anchor = out.logits.float().sum() * 0.0
         _, _, suffix_h, suffix_mask_raw = prefix_grouper.split_output(
             hidden, include_prefix_last=include_prefix_last)
-        completion_right = prefix_grouper.convert_padding(
-            completion_ids, completion_mask, padding_mode=padding_mode)
+        # ── 乒乓修理⑤（E31-prof 走查 08-28，SYNCOPATE_FIX_PG_PAD_SYNC=0 关闭做对照）──
+        # PG 的 convert_padding 有两处强制同步：create_padding_mask 的 max().item()
+        # （实测单次 172ms = 排空整条已入队前向）+ 两个 nonzero()（现在"免费"只因队列
+        # 已被前者排空；单拔 .item() 等待会原地转移到 nonzero 头上）。零同步等价改写：
+        # max_len 从建组时已物化的 CPU int 表拿（group_info.info_list[*].suffix_lens，
+        # 与 completion_mask.sum(1) 按构造相同）；压缩用 cumsum+scatter（固定形状算子）。
+        # 只覆盖本调用点形态（x=token id 无梯度 · 目标 right padding），其余走原库。
+        if os.environ.get("SYNCOPATE_FIX_PG_PAD_SYNC", "1") == "1" and padding_mode == "right":
+            _max_suf = max(l for info in prefix_grouper.group_info.info_list
+                           for l in info.suffix_lens)
+            completion_right = _convert_padding_right_nosync(
+                completion_ids, completion_mask, _max_suf)
+        else:
+            completion_right = prefix_grouper.convert_padding(
+                completion_ids, completion_mask, padding_mode=padding_mode)
 
         # ★ reshape 在 FusedLinearForPPO **外面**做（上游 #7202 的坑：里面 flatten 会跑在
         #   no_grad 下、丢掉隐状态梯度 —— 不报错，只训歪）
@@ -1609,7 +1642,24 @@ def _patch_prefix_grouper() -> None:
         def _forward_step(self, micro_batch, loss_function, forward_only):
             from verl.utils.device import get_device_id, get_device_name
 
-            micro_batch = micro_batch.to(get_device_id())
+            # ── 乒乓修理⑥（E31-prof 走查 08-28，SYNCOPATE_FIX_MB_PIN=0 关闭做对照）──
+            # tensordict 的 .to(device) 在 non_blocking=False 时内部补一次全局
+            # synchronize（实测单次 119ms——搬的数据才几 MB，等待全是排空队列的钱，
+            # 与 .item() 同病）。改 pinned + non_blocking：流内顺序保证消费安全。
+            if os.environ.get("SYNCOPATE_FIX_MB_PIN", "1") == "1":
+                try:
+                    dev = getattr(micro_batch, "device", None)
+                    if dev is None or dev.type == "cpu":
+                        micro_batch = micro_batch.pin_memory()
+                    micro_batch = micro_batch.to(get_device_id(), non_blocking=True)
+                except Exception as _e:
+                    if not getattr(_forward_step, "_mb_pin_warned", False):
+                        _forward_step._mb_pin_warned = True
+                        print(f"[verl-patch] ⚠️ 修理⑥ pin/non_blocking 失败已回退同步搬运："
+                              f"{type(_e).__name__}: {_e}", flush=True)
+                    micro_batch = micro_batch.to(get_device_id())
+            else:
+                micro_batch = micro_batch.to(get_device_id())
             need = ("prompts", "responses", "response_mask", "attention_mask")
             # ★ PrefixGrouper 只能在**同一个 micro-batch 内**共享题面 ⇒ 一整组必须在一起。
             #   micro_batch=1 时它无组可分：判据行会打出「投影 31 个位置」这种明显不对的数，

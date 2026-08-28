@@ -222,3 +222,33 @@ def test_fsdp_align_patch_makes_every_shard_16b_aligned(monkeypatch):
         joined = torch.cat([s.reshape(-1) for s in shards])
         assert joined.numel() >= numel
         assert torch.equal(joined[:numel].float(), t.float())
+
+
+def test_convert_padding_right_nosync_bitwise_vs_library():
+    """乒乓修理⑤：零同步版 convert_padding 必须与 PG 库函数逐位等价。
+
+    覆盖三形态：右垫连续掩码（常态）· 带洞掩码（多轮工具段清零 ⇒ 需要真压缩，
+    裁剪偷懒法在这会错）· 全空行边界。max_len 按库的口径 = mask 行和的最大值。
+    """
+    import torch
+    from prefix_grouper import PrefixGrouper
+    from syncopate.train.verl_patches import _convert_padding_right_nosync
+
+    g = torch.Generator().manual_seed(28)
+    for trial in range(6):
+        b, S = 5, 40
+        x = torch.randint(1, 1000, (b, S), generator=g)
+        if trial % 3 == 0:      # 右垫连续
+            lens = torch.randint(1, S + 1, (b,), generator=g)
+            mask = torch.arange(S)[None, :] < lens[:, None]
+        elif trial % 3 == 1:    # 带洞
+            mask = torch.rand(b, S, generator=g) > 0.4
+            mask[0] = False; mask[0, 3] = True     # 近空行
+        else:                   # 洞 + 整行边界
+            mask = torch.rand(b, S, generator=g) > 0.7
+            mask[:, 0] = True                       # 保证每行非空（库要求 max>0）
+        ref = PrefixGrouper.convert_padding(x, mask.long(), padding_mode="right")
+        max_len = int(mask.sum(1).max())
+        got = _convert_padding_right_nosync(x, mask.long(), max_len)
+        assert got.shape == ref.shape, f"trial{trial} 形状 {got.shape} vs {ref.shape}"
+        assert torch.equal(got, ref), f"trial{trial} 不逐位等价"

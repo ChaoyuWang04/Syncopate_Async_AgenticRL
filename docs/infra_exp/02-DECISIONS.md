@@ -49,6 +49,7 @@
 | `ddp_save_to_cpu` 加 `if requires_grad` | E13：old_log_prob/ref 比值 1.94→1.07（≈8.5 s/步） | 3 条测试 |
 | launch_rl 启动守卫 | mini_batch×rollout_n 整除检查（列可用值 [3,6,9,12,15]）· lora-merge 拦截 · 数据默认值跟 DATA_VERSION | 都在最早能判的地方炸 |
 | 🆕 乒乓修理②③（默认开，E14 §4.7/4.9） | PG `repeat_interleave` 补 output_size（×584→0）· `_to_jagged` 批量 tolist（×96→2）；数值零算术不变；A/B 阶梯 912→236 逐级命中 | SYNCOPATE_FIX_PG_RI / FIX_JAGGED（=0 对照） |
+| 🆕 乒乓修理⑤⑥（默认开，08-28 profiler 走查） | ⑤PG `convert_padding` 零同步改写（max().item() 172ms/次 + nonzero 全消：max_len 走建组 CPU int 表 + cumsum/scatter 压缩，**位等价单测钉死**）· ⑥tensordict `.to(device)` 换 pinned+non_blocking（内部隐藏 synchronize 119ms/次）。A/B：GPU 空隙 0.64→0.49s/update_actor（忙闲比 90.2→92.6%）· sync 等待 175→47ms；⚠️ 部分等待如实记为搬家至 flash-attn 拷贝（98→209ms，队列消费点后移的物理）；剩余大额=flash-attn/nested-unbind 两处第三方深处，判"记档给上游不动手" | SYNCOPATE_FIX_PG_PAD_SYNC / FIX_MB_PIN（=0 对照）+ 位等价测试 |
 | 🆕 `--enforce-eager` 旗子（默认 True 沿现状，E14） | False=开 vLLM CUDA graph：gen −33%（sync4 档）；晋级默认欠精度闸 | 捕获判据行 ×31+ |
 | 🆕 torch-prof 探针（默认关） | SYNCOPATE_TORCH_PROF=N 抓 rank0 第 N 次 update_actor：chrome trace + 同步类算子账本（判罪按同栈 Synchronize 配对） | E12 §262 元数据搬运 |
 | 🆕 `_patch_lora_only_ckpt`（默认开，E29） | LoRA 下 ckpt 只存可训练部分：save 7.91→0.83 s（9.5×）、ckpt 18→1.5 GB；load 端合成加载；全参自动回退全量 | 5 条单测 + [ckpt-lora] 判据行 + 续跑实跑 |
