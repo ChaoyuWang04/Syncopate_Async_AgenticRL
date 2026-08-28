@@ -214,6 +214,15 @@ worker 并发 64 先不设编排瓶颈，`/tmp/b4_goodput_chain.sh`）→ 〔SLO
    修法=等待期只写 stderr，b4 产物前缀照 e14/e19 先例登记进 gpu_gate 排除表。
 ③ bash 全角括号 `）` 在 $(...) 里不闭合，静默吞掉后面整个 heredoc，报错位置在 11 行外
    （报错位置≈误导，守则②又一证）。
+④ goodput 首跑双假：(a) org_acme 日预算 10M micros 在 ~300 run 处刷爆 ⇒ 其后所有 run
+   秒失败 `daily_cost_cap`；(b) 我的判据把"到过终态"当成功——run.failed 也是终态，
+   秒失败把 P95 拉成 400ms、runs/min 623→12161 的**物理不可能**才让它显形。
+   修法：worker 加 --daily-cost-cap-micros 透传（默认不变，压测 org 抬 1000×）+
+   判据收紧为合法业务终态 {succeeded, waiting_for_user} + 终态构成入产物。
+   ★ 又是"空门槛为错误的理由通过"：判据必须能对自己失败。
+⑤ pg_isready 不在 PATH ⇒ 活着的 PG 被判死（检查器指向不存在的工具）；改 TCP 探活。
+⑥ httpx AsyncClient 默认连接池 100：C≥100 的阶梯会在客户端排队污染延迟（b4_goodput
+   与 b4_replay 都要显式给 limits）。
 ```
 
 ## 8 · 下一步 / 衍生问题

@@ -83,7 +83,9 @@ async def main() -> int:
 
     results = []
     goodput = 0
+    maxc = max(levels) + 16          # 默认池 100 会在 C≥100 时客户端排队污染延迟
     async with httpx.AsyncClient(base_url=lt.BASE, timeout=330,
+                                 limits=httpx.Limits(max_connections=maxc),
                                  headers={"Authorization": f"Bearer {lt.TOKEN_ACME}"}) as client:
         health = (await client.get("/healthz")).json()
         if health.get("status") != "ok":
