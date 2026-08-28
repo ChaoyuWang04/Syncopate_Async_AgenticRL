@@ -1,0 +1,100 @@
+{"id": "chat_00", "cat": "chat", "turns": ["今天心情不太好，投放的事先不聊，随便聊两句吧"]}
+{"id": "chat_01", "cat": "chat", "turns": ["你平时都是怎么工作的？好奇问问"]}
+{"id": "chat_02", "cat": "chat", "turns": ["我刚开完一个特别长的会，脑子很累"]}
+{"id": "chat_03", "cat": "chat", "turns": ["周末快到了，你觉得做投放的人该怎么休息"]}
+{"id": "chat_04", "cat": "chat", "turns": ["最近行业里都在聊 AI 投放，你怎么看"]}
+{"id": "chat_05", "cat": "chat", "turns": ["说实话，我有点担心这个季度的指标完不成"]}
+{"id": "chat_06", "cat": "chat", "turns": ["我是新来的运营，之前没做过手游买量，紧张"]}
+{"id": "chat_07", "cat": "chat", "turns": ["你觉得买量这行未来会被自动化取代吗"]}
+{"id": "chat_08", "cat": "chat", "turns": ["刚被老板批了一顿，缓一缓再干活"]}
+{"id": "chat_09", "cat": "chat", "turns": ["给我讲个投放圈的冷知识吧"]}
+{"id": "chat_10", "cat": "chat", "turns": ["你有名字吗？我该怎么称呼你"]}
+{"id": "chat_11", "cat": "chat", "turns": ["如果预算无限，你最想怎么花"]}
+{"id": "chat_12", "cat": "chat", "turns": ["我总觉得数据看多了人会麻木，你呢"]}
+{"id": "chat_13", "cat": "chat", "turns": ["夸夸我今天的工作吧，我需要一点鼓励"]}
+{"id": "chat_14", "cat": "chat", "turns": ["你会不会觉得我问的问题太基础了"]}
+{"id": "chat_15", "cat": "chat", "turns": ["咖啡和茶你选哪个？开个玩笑"]}
+{"id": "chat_16", "cat": "chat", "turns": ["帮我想一句今天发工作群的早安语"]}
+{"id": "chat_17", "cat": "chat", "turns": ["做投放最有成就感的瞬间是什么"]}
+{"id": "chat_18", "cat": "chat", "turns": ["我在考虑要不要转岗做数据分析，你怎么看"]}
+{"id": "chat_19", "cat": "chat", "turns": ["今天是我入职一周年，感慨一下"]}
+{"id": "chat_20", "cat": "chat", "turns": ["你累不累？一直回答问题"]}
+{"id": "chat_21", "cat": "chat", "turns": ["用一句话形容一下'买量'这份工作"]}
+{"id": "chat_22", "cat": "chat", "turns": ["我马上要向老板汇报了，帮我壮壮胆"]}
+{"id": "chat_23", "cat": "chat", "turns": ["聊点别的，你对游戏本身感兴趣吗"]}
+{"id": "chat_24", "cat": "chat", "turns": ["假如你是投手，你最怕遇到什么"]}
+{"id": "cap_00", "cat": "capability", "turns": ["你都能帮我做什么？"]}
+{"id": "cap_01", "cat": "capability", "turns": ["你能直接帮我改预算吗，还是只能建议"]}
+{"id": "cap_02", "cat": "capability", "turns": ["你查数据的范围有多大，能看历史多久的"]}
+{"id": "cap_03", "cat": "capability", "turns": ["如果我让你做一件你做不了的事会发生什么"]}
+{"id": "cap_04", "cat": "capability", "turns": ["你和普通的报表工具有什么区别"]}
+{"id": "cap_05", "cat": "capability", "turns": ["你能帮我盯着账户，异常的时候提醒我吗"]}
+{"id": "cap_06", "cat": "capability", "turns": ["素材相关的事你能做哪些"]}
+{"id": "cap_07", "cat": "capability", "turns": ["你怎么保证不会乱花我的钱"]}
+{"id": "cap_08", "cat": "capability", "turns": ["哪些操作需要我人工确认，哪些你可以直接做"]}
+{"id": "cap_09", "cat": "capability", "turns": ["你能跨账户操作吗"]}
+{"id": "cap_10", "cat": "capability", "turns": ["你的数据是实时的吗，有延迟吗"]}
+{"id": "cap_11", "cat": "capability", "turns": ["你能帮我写投放周报吗"]}
+{"id": "cap_12", "cat": "capability", "turns": ["如果两个需求冲突了你听谁的"]}
+{"id": "cap_13", "cat": "capability", "turns": ["你能记住我之前告诉过你的事吗"]}
+{"id": "cap_14", "cat": "capability", "turns": ["风控相关的检查你会自动做吗"]}
+{"id": "cap_15", "cat": "capability", "turns": ["你可以帮我做竞品分析吗"]}
+{"id": "cap_16", "cat": "capability", "turns": ["预算超了你会拦我吗，怎么拦"]}
+{"id": "cap_17", "cat": "capability", "turns": ["你能解释你每一步为什么这么做吗"]}
+{"id": "cap_18", "cat": "capability", "turns": ["我可以让你同时处理几件事吗"]}
+{"id": "cap_19", "cat": "capability", "turns": ["你出错了怎么办，会有记录吗"]}
+{"id": "cap_20", "cat": "capability", "turns": ["新建一个 campaign 你能全程搞定吗"]}
+{"id": "cap_21", "cat": "capability", "turns": ["你能预测下周的 ROAS 吗"]}
+{"id": "cap_22", "cat": "capability", "turns": ["安全线是什么，你怎么用它"]}
+{"id": "cap_23", "cat": "capability", "turns": ["你能撤销一个已经执行的操作吗"]}
+{"id": "cap_24", "cat": "capability", "turns": ["第一次用，给我一个快速上手的建议"]}
+{"id": "court_00", "cat": "courtesy", "turns": ["谢谢你，刚才帮大忙了"]}
+{"id": "court_01", "cat": "courtesy", "turns": ["辛苦了，今天先到这里"]}
+{"id": "court_02", "cat": "courtesy", "turns": ["不好意思，我刚才口气不太好"]}
+{"id": "court_03", "cat": "courtesy", "turns": ["太棒了，就是这个效果"]}
+{"id": "court_04", "cat": "courtesy", "turns": ["麻烦你了，一会儿还要再查一次"]}
+{"id": "court_05", "cat": "courtesy", "turns": ["抱歉打扰，现在方便吗"]}
+{"id": "court_06", "cat": "courtesy", "turns": ["好的收到，明白了"]}
+{"id": "court_07", "cat": "courtesy", "turns": ["你刚才的解释很清楚，赞"]}
+{"id": "court_08", "cat": "courtesy", "turns": ["先这样，我去开个会"]}
+{"id": "court_09", "cat": "courtesy", "turns": ["下班啦，明天见"]}
+{"id": "court_10", "cat": "courtesy", "turns": ["新年快乐！哦不对，还没到"]}
+{"id": "court_11", "cat": "courtesy", "turns": ["刚才是我理解错了，不怪你"]}
+{"id": "court_12", "cat": "courtesy", "turns": ["这个答案很有帮助，谢谢"]}
+{"id": "court_13", "cat": "courtesy", "turns": ["嗯嗯，继续"]}
+{"id": "court_14", "cat": "courtesy", "turns": ["等我五分钟，马上回来"]}
+{"id": "court_15", "cat": "courtesy", "turns": ["我回来了，继续刚才的"]}
+{"id": "court_16", "cat": "courtesy", "turns": ["没事了，问题解决了"]}
+{"id": "court_17", "cat": "courtesy", "turns": ["你反应真快"]}
+{"id": "court_18", "cat": "courtesy", "turns": ["今天效率很高，多亏你"]}
+{"id": "court_19", "cat": "courtesy", "turns": ["拜拜"]}
+{"id": "court_20", "cat": "courtesy", "turns": ["对不起，刚才网断了"]}
+{"id": "court_21", "cat": "courtesy", "turns": ["早上好，开工"]}
+{"id": "court_22", "cat": "courtesy", "turns": ["午饭吃了吗？开个玩笑，继续干活"]}
+{"id": "court_23", "cat": "courtesy", "turns": ["这次汇报很顺利，谢啦"]}
+{"id": "court_24", "cat": "courtesy", "turns": ["行，就按你说的办"]}
+{"id": "fu_00", "cat": "followup", "turns": ["能解释一下留存率是什么意思吗", "那付费率呢"]}
+{"id": "fu_01", "cat": "followup", "turns": ["能解释一下深度转化是什么意思吗", "那浅层转化呢"]}
+{"id": "fu_02", "cat": "followup", "turns": ["什么是买量里的'跑量'", "跑不动的时候一般怎么办"]}
+{"id": "fu_03", "cat": "followup", "turns": ["能解释一下CPM是什么意思吗", "那CPC呢"]}
+{"id": "fu_04", "cat": "followup", "turns": ["什么是'再营销'", "和拉新比优先级怎么排"]}
+{"id": "fu_05", "cat": "followup", "turns": ["'留存曲线'怎么看", "次留和七留哪个更重要"]}
+{"id": "fu_06", "cat": "followup", "turns": ["什么是'出价策略'", "手动和自动各适合什么场景"]}
+{"id": "fu_07", "cat": "followup", "turns": ["能解释一下CPI是什么意思吗", "那LTV呢"]}
+{"id": "fu_08", "cat": "followup", "turns": ["能解释一下素材疲劳是什么意思吗", "那频次控制呢"]}
+{"id": "fu_09", "cat": "followup", "turns": ["能解释一下自然量是什么意思吗", "那买量呢"]}
+{"id": "fu_10", "cat": "followup", "turns": ["能解释一下CTR是什么意思吗", "那CVR呢"]}
+{"id": "fu_11", "cat": "followup", "turns": ["能解释一下大盘是什么意思吗", "那细分市场呢"]}
+{"id": "fu_12", "cat": "followup", "turns": ["投放里说的'起量'是什么意思", "起不来呢"]}
+{"id": "fu_13", "cat": "followup", "turns": ["能解释一下A/B 测试是什么意思吗", "那增量测试呢"]}
+{"id": "fu_14", "cat": "followup", "turns": ["什么叫'素材衰退'", "多久算正常"]}
+{"id": "fu_15", "cat": "followup", "turns": ["什么是'防作弊'", "常见的作弊长什么样"]}
+{"id": "fu_16", "cat": "followup", "turns": ["'频次'高了会怎样", "多少算高"]}
+{"id": "fu_17", "cat": "followup", "turns": ["能解释一下ROI是什么意思吗", "那ROAS呢"]}
+{"id": "fu_18", "cat": "followup", "turns": ["能解释一下冷启动是什么意思吗", "那学习期呢"]}
+{"id": "fu_19", "cat": "followup", "turns": ["能解释一下竞价是什么意思吗", "那预算平滑呢"]}
+{"id": "fu_20", "cat": "followup", "turns": ["什么叫'混合变现'", "对买量策略有什么影响"]}
+{"id": "fu_21", "cat": "followup", "turns": ["能解释一下归因窗口是什么意思吗", "那回收周期呢"]}
+{"id": "fu_22", "cat": "followup", "turns": ["'安卓和 iOS 买量'差别大吗", "预算该怎么分（大概原则）"]}
+{"id": "fu_23", "cat": "followup", "turns": ["'素材标签'有什么用", "打错了有影响吗"]}
+{"id": "fu_24", "cat": "followup", "turns": ["解释一下'学习期'", "学习期内能调预算吗（概念上说说就行）"]}
