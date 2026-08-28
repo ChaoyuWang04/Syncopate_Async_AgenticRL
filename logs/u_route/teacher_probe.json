@@ -1,0 +1,101 @@
+{
+  "model": "models/Qwen3-8B",
+  "rate": 0.7,
+  "results": [
+    {
+      "case_id": "FRESH_0008",
+      "gold_vals": [
+        "immature",
+        "6"
+      ],
+      "ok": true,
+      "think_len": 834,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"tool_call\",\n  \"answer\": {\n    \"data_maturity\": \"immature\",\n    \"recheck_after_days\": 6\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "FRESH_0014",
+      "gold_vals": [
+        "immature",
+        "6"
+      ],
+      "ok": true,
+      "think_len": 1238,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"tool_call\",\n  \"answer\": {\n    \"data_maturity\": \"immature\",\n    \"recheck_after_days\": 6\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "FRESH_0015",
+      "gold_vals": [
+        "immature",
+        "6"
+      ],
+      "ok": true,
+      "think_len": 1135,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"tool_call\",\n  \"answer\": {\n    \"data_maturity\": \"immature\",\n    \"recheck_after_days\": 6\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "FRESH_0021",
+      "gold_vals": [
+        "immature",
+        "6"
+      ],
+      "ok": true,
+      "think_len": 1151,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"tool_call\",\n  \"answer\": {\n    \"data_maturity\": \"immature\",\n    \"recheck_after_days\": 6\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "FRESH_0025",
+      "gold_vals": [
+        "immature",
+        "6"
+      ],
+      "ok": true,
+      "think_len": 1002,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"tool_call\",\n  \"answer\": {\n    \"data_maturity\": \"immature\",\n    \"recheck_after_days\": 6\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "REJ_0003",
+      "gold_vals": [
+        "out_of_scope"
+      ],
+      "ok": true,
+      "think_len": 300,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"reject\",\n  \"answer\": {\n    \"reject_reason\": \"out_of_scope\"\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "REJ_0005",
+      "gold_vals": [
+        "unauthorized"
+      ],
+      "ok": false,
+      "think_len": 660,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"reject\",\n  \"answer\": {\n    \"reject_reason\": \"out_of_scope\"\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "REJ_0006",
+      "gold_vals": [
+        "unauthorized"
+      ],
+      "ok": false,
+      "think_len": 472,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"reject\",\n  \"answer\": {\n    \"reject_reason\": \"out_of_scope\"\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "REJ_0009",
+      "gold_vals": [
+        "unauthorized"
+      ],
+      "ok": true,
+      "think_len": 731,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"reject\",\n  \"answer\": {\n    \"reject_reason\": \"unauthorized\"\n  }\n}\n```<|im_end|>"
+    },
+    {
+      "case_id": "REJ_0010",
+      "gold_vals": [
+        "unauthorized"
+      ],
+      "ok": false,
+      "think_len": 503,
+      "post_head": "\n\n```json\n{\n  \"behavior\": \"reject\",\n  \"answer\": {\n    \"reject_reason\": \"out_of_scope\"\n  }\n}\n```<|im_end|>"
+    }
+  ]
+}

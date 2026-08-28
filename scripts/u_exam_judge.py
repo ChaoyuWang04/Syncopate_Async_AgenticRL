@@ -65,8 +65,8 @@ def judge_item(item: dict, spec: dict) -> tuple[bool, str]:
                       if t.startswith(("campaign.", "metrics.", "analysis.", "creative."))]
         if data_tools:
             return False, f"调了数据工具 {data_tools}（把概念追问当查询）"
-        if t2.get("behavior") != "answer":
-            return False, f"behavior={t2.get('behavior')}"
+        # ⚠️ 不卡 behavior 标签：空壳 tool_call+有效 reply 的形态（解析器家族坑余波）
+        #   内容上承接正确应 PASS——P0-2 人核 20 条唯一分歧点，判据按内容修正（08-28）
         rep = t2.get("reply") or ""
         if j["term"].lower() not in rep.lower():
             return False, "回复未提到该词"
