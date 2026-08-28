@@ -1,0 +1,18 @@
+{
+  "pass1": "logs/u_route/blind_scores_pass1.json",
+  "agree": 200,
+  "arm_means": {
+    "cand": 0.6,
+    "base": 1.14
+  },
+  "arm_cat": {
+    "cand/cap": 0.56,
+    "base/cap": 1.12,
+    "base/chat": 1.56,
+    "cand/chat": 0.72,
+    "cand/court": 0.4,
+    "base/court": 0.92,
+    "cand/fu": 0.72,
+    "base/fu": 0.96
+  }
+}
