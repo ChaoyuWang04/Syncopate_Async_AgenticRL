@@ -1,0 +1,32 @@
+{
+  "goodput_file": "logs/b5/gp_s2_routerv2.json",
+  "clock_skew_s": -0.0002,
+  "ledgers": [
+    {
+      "concurrency": 96,
+      "n": 192,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 6.66,
+      "sec_per_run": {
+        "t_queue": 0.055,
+        "llm": 6.222,
+        "tool": 0.003,
+        "db_wait": 0.032,
+        "db_tx": 0.162,
+        "t_sse_tail": 0.126,
+        "rest": 0.061
+      },
+      "share": {
+        "t_queue": 0.0082,
+        "llm": 0.9343,
+        "tool": 0.0005,
+        "db_wait": 0.0048,
+        "db_tx": 0.0243,
+        "t_sse_tail": 0.019,
+        "rest": 0.0092
+      },
+      "coverage_incl_rest": 1.0003,
+      "coverage_known": 0.9911
+    }
+  ]
+}

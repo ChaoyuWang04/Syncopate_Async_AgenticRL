@@ -3,7 +3,7 @@
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提
 - [集合通信的 16 字节对齐悬崖](collective-alignment-cliff.md) — 分块不被 16 整除，all_gather 掉 12×；「3 卡受诅咒」的真相
 - [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、只能 DDP；2+2 跨 socket、Gen5、四卡 25.6 GB/s；A6 决定「模型内并行净亏损」还剩多少力气
-- [infra 线状态与决策](infra-line-state.md) — ★收尾期·单任务制（08-28）：训练线全闭环（E31 统一 FP8 定界·占空比 31→73.4%），★全线收官（08-28）：E32 serving 单日收官（四卡拓扑 3.86×·goodput 64·PD no-go·ngram 2.3× 进默认），重开 B-5 调度层提升（E33 施工图·膝点 96→预注册 256）；入口 docs/infra_exp/00-START.md
+- [infra 线状态与决策](infra-line-state.md) — ★收尾期·单任务制（08-28）：训练线全闭环（E31 统一 FP8 定界·占空比 31→73.4%），★全线收官（08-28）：E32 serving 单日收官（四卡拓扑 3.86×·goodput 64·PD no-go·ngram 2.3× 进默认），B-5 调度层也单日收官（E33：goodput 64→192 3×·七翻案·膝点移交引擎），三案全收官；入口 docs/infra_exp/00-START.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错；★第八形态 = 测试全绿但服务**从没被真的起过**（入口/流关闭只在实跑存在）
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★判据太宽会**为错误的理由通过**；★★08-20 一天写空三次 ⇒ 固定动作：**撤掉修复确认判据会红**

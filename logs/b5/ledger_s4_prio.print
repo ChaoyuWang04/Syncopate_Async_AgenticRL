@@ -1,0 +1,32 @@
+{
+  "goodput_file": "logs/b5/gp_s4_prio.json",
+  "clock_skew_s": -0.0002,
+  "ledgers": [
+    {
+      "concurrency": 192,
+      "n": 384,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 5.536,
+      "sec_per_run": {
+        "t_queue": 0.06,
+        "llm": 5.061,
+        "tool": 0.009,
+        "db_wait": 0.034,
+        "db_tx": 0.258,
+        "t_sse_tail": 0.008,
+        "rest": 0.108
+      },
+      "share": {
+        "t_queue": 0.0108,
+        "llm": 0.914,
+        "tool": 0.0016,
+        "db_wait": 0.0062,
+        "db_tx": 0.0466,
+        "t_sse_tail": 0.0015,
+        "rest": 0.0196
+      },
+      "coverage_incl_rest": 1.0003,
+      "coverage_known": 0.9807
+    }
+  ]
+}

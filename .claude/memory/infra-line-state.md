@@ -590,3 +590,25 @@ fabricated_safety_line_cap 两处汇合（SFT +18 · E17 KL 臂 +2）⇒ 升常�
 ⇒ 四格全填·11 §5 已回填·队列空·线收官；仪器 11 件 scripts/b4_*；新机 serving 与旧机
    同水位（E19-c 逐位级复现 1406.6 vs 1409）——旧机 serving 结论全部可引
 ```
+
+## ★★★ 2026-08-28（晚）：B-5/E33 调度层单日收官 ⇒ 三案齐全线收官
+
+```
+✅ goodput@SLO 64→192（3×，三遍复核 I01 4842/4344/3906ms·吞吐 2154-2211 runs/min）
+✅ 方法=分账插桩（六桶恒等分解 e2e=排队+llm+tool+db_wait+db_tx+sse尾，覆盖率 99%+）
+   → 五刀：扩池(PG 300/2GB)×多进程(API×4+worker×4)**必须连落**·PG 触发器门铃(SSE
+   0.25s 轮询→LISTEN+2s 兜底)·router v2 零解析(v1 JSON 全解析税 2.3s/单)·SLO 优先级
+   (decider 按意图预算传 priority，vLLM 小值先跑)
+★★ 七翻案全档 E33 §6，最大一个：**E32"膝点在编排层"被自家分发计数判据翻案**——
+   亲和哈希窗对 decider 短 prompt 越界 ⇒ after 臂 1713/1713 塌单引擎（"四卡臂实为单卡"）；
+   修后 C=96 I01 6159→3030。判据行没被读=没生效，又一学费
+★ 机理两条：priority 只管 waiting→running 准入不管 batch 内分食（无队列=空操作）；
+   扩池单独做=负收益（10 条连接原是天然限流阀，单进程 GIL 下拆阀反堵）
+⛔ C=256 判死于引擎（llm 8.55s/91.3%）——调度层份额 <10%，膝点移交引擎；
+   S4 账本异步据此跳过（省 0.45s 救不了 8.55s）
+✅ 红线零妥协：杀 1/4 worker SIGKILL 24/24 零丢单（10s 内 lease 交接）· loadtest 22/22
+   （历史判据病自愈）· pytest 722 净值（10 假红=舰队占卡 CUDA launch，空卡 25/25）
+✅ 生产落地：09 §0 栈形态 · start_vllm.sh +--scheduling-policy priority · schema.sql
+   事件触发器 · runtime 四文件改动语义零变
+⇒ NARRATIVE B-5 格已填·01 队列空·MAINLINE 完成通报·infra 三案（训练/serving/调度）全收官
+```

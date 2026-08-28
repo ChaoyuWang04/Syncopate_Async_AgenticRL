@@ -1,0 +1,58 @@
+{
+  "goodput_file": "logs/b5/gp_s5_knee.json",
+  "clock_skew_s": -0.0002,
+  "ledgers": [
+    {
+      "concurrency": 128,
+      "n": 256,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 3.248,
+      "sec_per_run": {
+        "t_queue": 0.071,
+        "llm": 2.292,
+        "tool": 0.034,
+        "db_wait": 0.222,
+        "db_tx": 0.387,
+        "t_sse_tail": 0.14,
+        "rest": 0.109
+      },
+      "share": {
+        "t_queue": 0.022,
+        "llm": 0.7056,
+        "tool": 0.0106,
+        "db_wait": 0.0684,
+        "db_tx": 0.1192,
+        "t_sse_tail": 0.0432,
+        "rest": 0.0335
+      },
+      "coverage_incl_rest": 1.0025,
+      "coverage_known": 0.969
+    },
+    {
+      "concurrency": 192,
+      "n": 384,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 4.611,
+      "sec_per_run": {
+        "t_queue": 0.105,
+        "llm": 2.648,
+        "tool": 0.068,
+        "db_wait": 0.59,
+        "db_tx": 0.544,
+        "t_sse_tail": 0.5,
+        "rest": 0.176
+      },
+      "share": {
+        "t_queue": 0.0227,
+        "llm": 0.5743,
+        "tool": 0.0148,
+        "db_wait": 0.128,
+        "db_tx": 0.1179,
+        "t_sse_tail": 0.1085,
+        "rest": 0.0382
+      },
+      "coverage_incl_rest": 1.0044,
+      "coverage_known": 0.9662
+    }
+  ]
+}

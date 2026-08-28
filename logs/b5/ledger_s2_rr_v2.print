@@ -1,0 +1,84 @@
+{
+  "goodput_file": "logs/b5/gp_s2_rr_v2.json",
+  "clock_skew_s": -0.0002,
+  "ledgers": [
+    {
+      "concurrency": 8,
+      "n": 24,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 1.446,
+      "sec_per_run": {
+        "t_queue": 0.047,
+        "llm": 1.156,
+        "tool": 0.003,
+        "db_wait": 0.006,
+        "db_tx": 0.083,
+        "t_sse_tail": 0.134,
+        "rest": 0.016
+      },
+      "share": {
+        "t_queue": 0.0326,
+        "llm": 0.7995,
+        "tool": 0.0017,
+        "db_wait": 0.0045,
+        "db_tx": 0.0577,
+        "t_sse_tail": 0.0929,
+        "rest": 0.0111
+      },
+      "coverage_incl_rest": 1.0,
+      "coverage_known": 0.9889
+    },
+    {
+      "concurrency": 64,
+      "n": 128,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 2.073,
+      "sec_per_run": {
+        "t_queue": 0.025,
+        "llm": 1.715,
+        "tool": 0.004,
+        "db_wait": 0.012,
+        "db_tx": 0.133,
+        "t_sse_tail": 0.139,
+        "rest": 0.045
+      },
+      "share": {
+        "t_queue": 0.0122,
+        "llm": 0.8274,
+        "tool": 0.002,
+        "db_wait": 0.0057,
+        "db_tx": 0.0641,
+        "t_sse_tail": 0.0671,
+        "rest": 0.0219
+      },
+      "coverage_incl_rest": 1.0004,
+      "coverage_known": 0.9785
+    },
+    {
+      "concurrency": 96,
+      "n": 192,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 2.717,
+      "sec_per_run": {
+        "t_queue": 0.034,
+        "llm": 2.077,
+        "tool": 0.019,
+        "db_wait": 0.102,
+        "db_tx": 0.265,
+        "t_sse_tail": 0.128,
+        "rest": 0.097
+      },
+      "share": {
+        "t_queue": 0.0125,
+        "llm": 0.7644,
+        "tool": 0.0069,
+        "db_wait": 0.0376,
+        "db_tx": 0.0975,
+        "t_sse_tail": 0.0472,
+        "rest": 0.0359
+      },
+      "coverage_incl_rest": 1.002,
+      "coverage_known": 0.9661
+    }
+  ]
+}

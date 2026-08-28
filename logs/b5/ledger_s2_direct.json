@@ -1,0 +1,32 @@
+{
+  "goodput_file": "logs/b5/gp_s2_direct.json",
+  "clock_skew_s": -0.0002,
+  "ledgers": [
+    {
+      "concurrency": 96,
+      "n": 192,
+      "missing_stage_lines": 0,
+      "e2e_mean_s": 4.099,
+      "sec_per_run": {
+        "t_queue": 0.037,
+        "llm": 3.47,
+        "tool": 0.01,
+        "db_wait": 0.101,
+        "db_tx": 0.249,
+        "t_sse_tail": 0.121,
+        "rest": 0.111
+      },
+      "share": {
+        "t_queue": 0.0089,
+        "llm": 0.8467,
+        "tool": 0.0025,
+        "db_wait": 0.0245,
+        "db_tx": 0.0607,
+        "t_sse_tail": 0.0296,
+        "rest": 0.0272
+      },
+      "coverage_incl_rest": 1.0001,
+      "coverage_known": 0.9729
+    }
+  ]
+}

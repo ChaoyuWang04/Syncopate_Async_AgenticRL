@@ -1,0 +1,1403 @@
+{
+  "tag": "s2_routerv2",
+  "goodput_at_slo": 0,
+  "levels": [
+    {
+      "concurrency": 96,
+      "n": 192,
+      "wall_s": 15.7,
+      "runs_per_min": 735.2,
+      "intents": {
+        "I01": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 48
+          },
+          "p95_ms": 5710.0,
+          "thr_ms": 5000,
+          "pass": false
+        },
+        "I07": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 48
+          },
+          "p95_ms": 8508.0,
+          "thr_ms": 30000,
+          "pass": true
+        },
+        "I09": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.waiting_for_user": 23,
+            "run.succeeded": 25
+          },
+          "p95_ms": 10320.0,
+          "thr_ms": 60000,
+          "pass": true
+        },
+        "I11": {
+          "n": 48,
+          "succeeded": 48,
+          "terminals": {
+            "run.succeeded": 45,
+            "run.waiting_for_user": 3
+          },
+          "p95_ms": 12230.0,
+          "thr_ms": 180000,
+          "pass": true
+        }
+      },
+      "pass": false,
+      "runs": [
+        {
+          "run_id": "run_a02aad961f3f",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 2972.8,
+          "t_done": 1787923747.484326
+        },
+        {
+          "run_id": "run_a05993852979",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3404.1,
+          "t_done": 1787923747.9256365
+        },
+        {
+          "run_id": "run_7795211c037c",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3742.4,
+          "t_done": 1787923748.2612312
+        },
+        {
+          "run_id": "run_8b1a58064abb",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3943.2,
+          "t_done": 1787923748.4566872
+        },
+        {
+          "run_id": "run_d08f38b9c04e",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4055.8,
+          "t_done": 1787923748.5683954
+        },
+        {
+          "run_id": "run_d9a6da17c341",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4164.1,
+          "t_done": 1787923748.6840518
+        },
+        {
+          "run_id": "run_4d8efebb00cc",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4228.5,
+          "t_done": 1787923748.743812
+        },
+        {
+          "run_id": "run_fb23b3c96aa8",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4434.4,
+          "t_done": 1787923748.9509876
+        },
+        {
+          "run_id": "run_bb9a9e9685d3",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4442.9,
+          "t_done": 1787923748.964048
+        },
+        {
+          "run_id": "run_1afab9b3da68",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4456.4,
+          "t_done": 1787923748.9754453
+        },
+        {
+          "run_id": "run_8a8cd19cda5a",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4489.9,
+          "t_done": 1787923749.011167
+        },
+        {
+          "run_id": "run_47c94150587b",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4571.5,
+          "t_done": 1787923749.0836651
+        },
+        {
+          "run_id": "run_465158d944d1",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4670.2,
+          "t_done": 1787923749.185122
+        },
+        {
+          "run_id": "run_e663421d8c03",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4840.7,
+          "t_done": 1787923749.3562725
+        },
+        {
+          "run_id": "run_7356e4ba78fa",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4904.5,
+          "t_done": 1787923749.417584
+        },
+        {
+          "run_id": "run_24f05732c6ed",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4956.1,
+          "t_done": 1787923749.4753194
+        },
+        {
+          "run_id": "run_c0040c7fa8cd",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4962.1,
+          "t_done": 1787923749.4766176
+        },
+        {
+          "run_id": "run_e019af22f666",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5152.5,
+          "t_done": 1787923749.6686184
+        },
+        {
+          "run_id": "run_1ed72b852c35",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5182.0,
+          "t_done": 1787923749.7009044
+        },
+        {
+          "run_id": "run_8482993bb30f",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5208.6,
+          "t_done": 1787923749.724345
+        },
+        {
+          "run_id": "run_94262d3938e5",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5272.3,
+          "t_done": 1787923749.7919164
+        },
+        {
+          "run_id": "run_0b7554a642ef",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5283.3,
+          "t_done": 1787923749.80176
+        },
+        {
+          "run_id": "run_9eb26d508209",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5284.3,
+          "t_done": 1787923749.8019454
+        },
+        {
+          "run_id": "run_fe5b178be0f8",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5367.8,
+          "t_done": 1787923749.8858724
+        },
+        {
+          "run_id": "run_d96e6b8b8c50",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5455.1,
+          "t_done": 1787923749.975398
+        },
+        {
+          "run_id": "run_274bc08deaf7",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5514.6,
+          "t_done": 1787923750.0331972
+        },
+        {
+          "run_id": "run_1f79987719f1",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5666.4,
+          "t_done": 1787923750.1836975
+        },
+        {
+          "run_id": "run_e26d3b5b3c56",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5710.1,
+          "t_done": 1787923750.2266579
+        },
+        {
+          "run_id": "run_e7676dc483f3",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5928.2,
+          "t_done": 1787923750.4404933
+        },
+        {
+          "run_id": "run_15e2ebf075dc",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6190.3,
+          "t_done": 1787923750.7038603
+        },
+        {
+          "run_id": "run_de289815accb",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 6241.5,
+          "t_done": 1787923750.7547874
+        },
+        {
+          "run_id": "run_30dabc87721f",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6262.0,
+          "t_done": 1787923750.7797275
+        },
+        {
+          "run_id": "run_ac1d1f386354",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6406.1,
+          "t_done": 1787923750.9229531
+        },
+        {
+          "run_id": "run_78ee7c19194c",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6418.9,
+          "t_done": 1787923750.938139
+        },
+        {
+          "run_id": "run_a6db638dc384",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6513.7,
+          "t_done": 1787923751.026395
+        },
+        {
+          "run_id": "run_9aee243eec57",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 6530.2,
+          "t_done": 1787923751.0484402
+        },
+        {
+          "run_id": "run_6c194f3039c8",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6646.8,
+          "t_done": 1787923751.162613
+        },
+        {
+          "run_id": "run_2e80e8765f6a",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6724.6,
+          "t_done": 1787923751.2392118
+        },
+        {
+          "run_id": "run_4355f9628cad",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6724.4,
+          "t_done": 1787923751.2448275
+        },
+        {
+          "run_id": "run_ea22ec1d6538",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6759.5,
+          "t_done": 1787923751.2807016
+        },
+        {
+          "run_id": "run_9b07dcc02155",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6768.9,
+          "t_done": 1787923751.2897413
+        },
+        {
+          "run_id": "run_f726b6d316ad",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6869.8,
+          "t_done": 1787923751.3879988
+        },
+        {
+          "run_id": "run_e4eab7ce3f2f",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6924.6,
+          "t_done": 1787923751.439975
+        },
+        {
+          "run_id": "run_dc0c6b180503",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6978.2,
+          "t_done": 1787923751.493236
+        },
+        {
+          "run_id": "run_ceca67c8296c",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7038.3,
+          "t_done": 1787923751.5590198
+        },
+        {
+          "run_id": "run_8bedcb798045",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7058.7,
+          "t_done": 1787923751.5704718
+        },
+        {
+          "run_id": "run_0f063efec5e2",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 7272.7,
+          "t_done": 1787923751.7886474
+        },
+        {
+          "run_id": "run_489a8e30a85a",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7489.6,
+          "t_done": 1787923752.0106368
+        },
+        {
+          "run_id": "run_ac71534f957d",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 7616.9,
+          "t_done": 1787923752.1355705
+        },
+        {
+          "run_id": "run_eca14174089a",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7636.3,
+          "t_done": 1787923752.1559446
+        },
+        {
+          "run_id": "run_03f5af1297a1",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7787.7,
+          "t_done": 1787923752.309413
+        },
+        {
+          "run_id": "run_aa0294a397e6",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5033.6,
+          "t_done": 1787923752.5180101
+        },
+        {
+          "run_id": "run_76edd363eb0c",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8031.9,
+          "t_done": 1787923752.553496
+        },
+        {
+          "run_id": "run_9bdd6f13f560",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 8194.7,
+          "t_done": 1787923752.7070587
+        },
+        {
+          "run_id": "run_ab290e6f8723",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8250.8,
+          "t_done": 1787923752.7651744
+        },
+        {
+          "run_id": "run_501df3e5cb2d",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8267.4,
+          "t_done": 1787923752.787432
+        },
+        {
+          "run_id": "run_99c80a7657df",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8281.7,
+          "t_done": 1787923752.7986834
+        },
+        {
+          "run_id": "run_ecdbea1eadea",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 8358.1,
+          "t_done": 1787923752.8755038
+        },
+        {
+          "run_id": "run_0d8804aae26e",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8505.7,
+          "t_done": 1787923753.0203865
+        },
+        {
+          "run_id": "run_832e1cc99040",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8506.1,
+          "t_done": 1787923753.0225272
+        },
+        {
+          "run_id": "run_a50b289c2f24",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8507.8,
+          "t_done": 1787923753.0240135
+        },
+        {
+          "run_id": "run_52bd3e34393d",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8535.4,
+          "t_done": 1787923753.0551548
+        },
+        {
+          "run_id": "run_956066cadb47",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8568.3,
+          "t_done": 1787923753.08025
+        },
+        {
+          "run_id": "run_4d91a3d9146a",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4781.2,
+          "t_done": 1787923753.34965
+        },
+        {
+          "run_id": "run_1f5a0ef52ee2",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8903.0,
+          "t_done": 1787923753.4220943
+        },
+        {
+          "run_id": "run_9765e3535ca2",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4279.3,
+          "t_done": 1787923753.4644854
+        },
+        {
+          "run_id": "run_2ea7b127712f",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8985.2,
+          "t_done": 1787923753.502517
+        },
+        {
+          "run_id": "run_afbe781682bf",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9108.5,
+          "t_done": 1787923753.6237366
+        },
+        {
+          "run_id": "run_049a1e1b27c0",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 9241.4,
+          "t_done": 1787923753.761908
+        },
+        {
+          "run_id": "run_1289f5996c5a",
+          "intent": "I11",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 9272.7,
+          "t_done": 1787923753.792232
+        },
+        {
+          "run_id": "run_97d4df6c9f6e",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9400.8,
+          "t_done": 1787923753.9186609
+        },
+        {
+          "run_id": "run_7b21627506da",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6037.0,
+          "t_done": 1787923753.9627094
+        },
+        {
+          "run_id": "run_e99b14c9e780",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9454.3,
+          "t_done": 1787923753.9674494
+        },
+        {
+          "run_id": "run_ee3aaeb2d378",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 9550.1,
+          "t_done": 1787923754.0694525
+        },
+        {
+          "run_id": "run_e4777e69971f",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9549.6,
+          "t_done": 1787923754.0709934
+        },
+        {
+          "run_id": "run_e2d1bc9e6b47",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 9675.3,
+          "t_done": 1787923754.1904333
+        },
+        {
+          "run_id": "run_2b5d369986ad",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9714.7,
+          "t_done": 1787923754.2314527
+        },
+        {
+          "run_id": "run_5b77bce9c8df",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5277.2,
+          "t_done": 1787923754.241309
+        },
+        {
+          "run_id": "run_560b3c393e64",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9734.8,
+          "t_done": 1787923754.2549453
+        },
+        {
+          "run_id": "run_0f48f5ce415a",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4298.3,
+          "t_done": 1787923754.2737463
+        },
+        {
+          "run_id": "run_810921b79ca4",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9759.0,
+          "t_done": 1787923754.2753167
+        },
+        {
+          "run_id": "run_f1684e50a95f",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9780.3,
+          "t_done": 1787923754.2939699
+        },
+        {
+          "run_id": "run_b08b3396aab8",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9794.0,
+          "t_done": 1787923754.3141906
+        },
+        {
+          "run_id": "run_4ca6c89a0055",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5049.8,
+          "t_done": 1787923754.5266383
+        },
+        {
+          "run_id": "run_c9f15ccb3f03",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10045.7,
+          "t_done": 1787923754.566373
+        },
+        {
+          "run_id": "run_66516a171fa8",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6037.3,
+          "t_done": 1787923754.72141
+        },
+        {
+          "run_id": "run_6646aa8959e9",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 5023.2,
+          "t_done": 1787923754.7241592
+        },
+        {
+          "run_id": "run_bd8cde847b8c",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10235.8,
+          "t_done": 1787923754.753017
+        },
+        {
+          "run_id": "run_731e72132bfa",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5802.5,
+          "t_done": 1787923754.7780182
+        },
+        {
+          "run_id": "run_767a48e66e20",
+          "intent": "I11",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 10279.2,
+          "t_done": 1787923754.797516
+        },
+        {
+          "run_id": "run_829e6b413377",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5028.1,
+          "t_done": 1787923754.8200333
+        },
+        {
+          "run_id": "run_b917bc54c263",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10320.2,
+          "t_done": 1787923754.8330433
+        },
+        {
+          "run_id": "run_43a8f53fa0b0",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10528.0,
+          "t_done": 1787923755.0488977
+        },
+        {
+          "run_id": "run_636a1746b13b",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5028.2,
+          "t_done": 1787923755.061453
+        },
+        {
+          "run_id": "run_53b6a9272067",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 5284.3,
+          "t_done": 1787923755.0867934
+        },
+        {
+          "run_id": "run_b50d85d04f34",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10632.8,
+          "t_done": 1787923755.144845
+        },
+        {
+          "run_id": "run_a1060150a71f",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10631.4,
+          "t_done": 1787923755.1470835
+        },
+        {
+          "run_id": "run_4d069bc70a33",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4027.6,
+          "t_done": 1787923755.1902432
+        },
+        {
+          "run_id": "run_d3b2ae6f5aab",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4780.4,
+          "t_done": 1787923755.220971
+        },
+        {
+          "run_id": "run_9352c82eb29a",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10957.0,
+          "t_done": 1787923755.469973
+        },
+        {
+          "run_id": "run_37e9ad405ece",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10988.9,
+          "t_done": 1787923755.5064223
+        },
+        {
+          "run_id": "run_a546ab8cb770",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 11014.7,
+          "t_done": 1787923755.532675
+        },
+        {
+          "run_id": "run_0fda04fa8f25",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 11133.6,
+          "t_done": 1787923755.6460843
+        },
+        {
+          "run_id": "run_a17720013ad2",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4780.5,
+          "t_done": 1787923755.7034686
+        },
+        {
+          "run_id": "run_292e731b2592",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 11222.2,
+          "t_done": 1787923755.742113
+        },
+        {
+          "run_id": "run_2c4276ff5d01",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5281.7,
+          "t_done": 1787923756.2198973
+        },
+        {
+          "run_id": "run_13c1dbab69ad",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5533.6,
+          "t_done": 1787923756.2375026
+        },
+        {
+          "run_id": "run_d0b7815c63ee",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 7286.4,
+          "t_done": 1787923756.2976284
+        },
+        {
+          "run_id": "run_933cf3c7bf66",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7037.4,
+          "t_done": 1787923756.3937027
+        },
+        {
+          "run_id": "run_e05e9d99e0da",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5104.5,
+          "t_done": 1787923756.3942342
+        },
+        {
+          "run_id": "run_230ceb0fd137",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4835.6,
+          "t_done": 1787923756.3946843
+        },
+        {
+          "run_id": "run_e9970daaf371",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3853.1,
+          "t_done": 1787923756.4065952
+        },
+        {
+          "run_id": "run_8a948e5ee406",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7045.9,
+          "t_done": 1787923756.4635181
+        },
+        {
+          "run_id": "run_2ed045064964",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8038.9,
+          "t_done": 1787923756.4956417
+        },
+        {
+          "run_id": "run_74337210b138",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12034.9,
+          "t_done": 1787923756.5536149
+        },
+        {
+          "run_id": "run_5ea0ae8c2681",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12043.0,
+          "t_done": 1787923756.5647793
+        },
+        {
+          "run_id": "run_70aeb331ef34",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12200.6,
+          "t_done": 1787923756.7139957
+        },
+        {
+          "run_id": "run_a81c0de4a2b3",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12230.5,
+          "t_done": 1787923756.7472754
+        },
+        {
+          "run_id": "run_54c700b65352",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4590.6,
+          "t_done": 1787923756.9000046
+        },
+        {
+          "run_id": "run_11bb0231be04",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12394.6,
+          "t_done": 1787923756.9094198
+        },
+        {
+          "run_id": "run_8dab82d172b3",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4777.7,
+          "t_done": 1787923756.913266
+        },
+        {
+          "run_id": "run_5503a125db95",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5534.0,
+          "t_done": 1787923756.9220855
+        },
+        {
+          "run_id": "run_6c4648c1bd4e",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7297.2,
+          "t_done": 1787923756.9658108
+        },
+        {
+          "run_id": "run_52c1816a209b",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5800.3,
+          "t_done": 1787923757.039518
+        },
+        {
+          "run_id": "run_8e11e93f864a",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12539.3,
+          "t_done": 1787923757.056412
+        },
+        {
+          "run_id": "run_e8fac848f037",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8804.8,
+          "t_done": 1787923757.066126
+        },
+        {
+          "run_id": "run_902358c20f12",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4274.9,
+          "t_done": 1787923757.0736346
+        },
+        {
+          "run_id": "run_d08583147d8d",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5581.1,
+          "t_done": 1787923757.151578
+        },
+        {
+          "run_id": "run_31b168f5f50a",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3775.1,
+          "t_done": 1787923757.2395937
+        },
+        {
+          "run_id": "run_c3659adc2585",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4273.2,
+          "t_done": 1787923757.2974937
+        },
+        {
+          "run_id": "run_ab3a17182339",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7600.8,
+          "t_done": 1787923757.4027343
+        },
+        {
+          "run_id": "run_59105135aa6e",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6368.6,
+          "t_done": 1787923757.417094
+        },
+        {
+          "run_id": "run_be9cab924e1d",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3525.8,
+          "t_done": 1787923757.493258
+        },
+        {
+          "run_id": "run_7701fee00c03",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8549.3,
+          "t_done": 1787923757.500317
+        },
+        {
+          "run_id": "run_f5996c640410",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 12999.0,
+          "t_done": 1787923757.51499
+        },
+        {
+          "run_id": "run_e98e7e4650e2",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8796.2,
+          "t_done": 1787923757.5400553
+        },
+        {
+          "run_id": "run_5325e06a27d3",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5533.8,
+          "t_done": 1787923757.6897805
+        },
+        {
+          "run_id": "run_7878ad4591c2",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4279.4,
+          "t_done": 1787923757.7015383
+        },
+        {
+          "run_id": "run_86009d593411",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3526.0,
+          "t_done": 1787923757.757519
+        },
+        {
+          "run_id": "run_17f063f07e4b",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8043.1,
+          "t_done": 1787923757.7674472
+        },
+        {
+          "run_id": "run_c98c4aadf38d",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4031.3,
+          "t_done": 1787923757.7932441
+        },
+        {
+          "run_id": "run_8b24cc736ded",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 6553.7,
+          "t_done": 1787923757.7985594
+        },
+        {
+          "run_id": "run_66425266d320",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7793.5,
+          "t_done": 1787923757.9772875
+        },
+        {
+          "run_id": "run_35337d342aa2",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5281.2,
+          "t_done": 1787923757.9883182
+        },
+        {
+          "run_id": "run_3aa0a64b2741",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3273.5,
+          "t_done": 1787923758.0515528
+        },
+        {
+          "run_id": "run_1fbea2c7d1bd",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3778.8,
+          "t_done": 1787923758.0541403
+        },
+        {
+          "run_id": "run_7d221f5ab0e7",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5282.7,
+          "t_done": 1787923758.15829
+        },
+        {
+          "run_id": "run_302b88eb5263",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5119.3,
+          "t_done": 1787923758.1744473
+        },
+        {
+          "run_id": "run_10909de2fa82",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6798.6,
+          "t_done": 1787923758.2386076
+        },
+        {
+          "run_id": "run_3421a11b8b92",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8068.6,
+          "t_done": 1787923758.2952878
+        },
+        {
+          "run_id": "run_9e5e3c5c7d37",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7545.3,
+          "t_done": 1787923758.3001344
+        },
+        {
+          "run_id": "run_f73a8c9fcfbd",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3523.0,
+          "t_done": 1787923758.3205233
+        },
+        {
+          "run_id": "run_a57052db2fa2",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4027.7,
+          "t_done": 1787923758.341969
+        },
+        {
+          "run_id": "run_1a456c277e4a",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3849.2,
+          "t_done": 1787923758.4156415
+        },
+        {
+          "run_id": "run_f8b82f9f8530",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4356.7,
+          "t_done": 1787923758.4265435
+        },
+        {
+          "run_id": "run_756308220d54",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4278.0,
+          "t_done": 1787923758.5199053
+        },
+        {
+          "run_id": "run_cf41537636dc",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7798.9,
+          "t_done": 1787923758.5787191
+        },
+        {
+          "run_id": "run_2ede4c33d1f7",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4886.0,
+          "t_done": 1787923758.678285
+        },
+        {
+          "run_id": "run_bf2ddbe1f6eb",
+          "intent": "I01",
+          "terminal": "run.succeeded",
+          "e2e_ms": 3629.8,
+          "t_done": 1787923758.678722
+        },
+        {
+          "run_id": "run_9eeae9166ef3",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4777.7,
+          "t_done": 1787923758.696445
+        },
+        {
+          "run_id": "run_d7e808224ccb",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 5285.4,
+          "t_done": 1787923758.787989
+        },
+        {
+          "run_id": "run_11d6302f18d5",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6040.3,
+          "t_done": 1787923758.8055336
+        },
+        {
+          "run_id": "run_d6db950ee2b3",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4617.9,
+          "t_done": 1787923758.911881
+        },
+        {
+          "run_id": "run_1a3c1574f98a",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9044.0,
+          "t_done": 1787923758.9299433
+        },
+        {
+          "run_id": "run_29904f0edb6b",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 9545.4,
+          "t_done": 1787923759.0209374
+        },
+        {
+          "run_id": "run_94e9dd666607",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 6037.8,
+          "t_done": 1787923759.058271
+        },
+        {
+          "run_id": "run_da954b43ebb1",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7374.8,
+          "t_done": 1787923759.1635473
+        },
+        {
+          "run_id": "run_6f3030bb683a",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 10094.2,
+          "t_done": 1787923759.1778994
+        },
+        {
+          "run_id": "run_4dd17893b5b2",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6099.6,
+          "t_done": 1787923759.1799061
+        },
+        {
+          "run_id": "run_ea1727fdee23",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 5034.9,
+          "t_done": 1787923759.2898374
+        },
+        {
+          "run_id": "run_7899f7a223d6",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7292.5,
+          "t_done": 1787923759.3031504
+        },
+        {
+          "run_id": "run_278faed4ca98",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8289.9,
+          "t_done": 1787923759.3163812
+        },
+        {
+          "run_id": "run_7a1c09a108b9",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5534.9,
+          "t_done": 1787923759.4976697
+        },
+        {
+          "run_id": "run_5d8912356c45",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4783.0,
+          "t_done": 1787923759.5072117
+        },
+        {
+          "run_id": "run_2b89668c9fdb",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8047.6,
+          "t_done": 1787923759.540895
+        },
+        {
+          "run_id": "run_7190fb3944ff",
+          "intent": "I11",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 5040.2,
+          "t_done": 1787923759.567086
+        },
+        {
+          "run_id": "run_80463f1ddfa4",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6545.0,
+          "t_done": 1787923759.5678473
+        },
+        {
+          "run_id": "run_26fdcc9d758a",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4531.4,
+          "t_done": 1787923759.5928953
+        },
+        {
+          "run_id": "run_4f97e66491c8",
+          "intent": "I09",
+          "terminal": "run.waiting_for_user",
+          "e2e_ms": 4783.7,
+          "t_done": 1787923759.6037374
+        },
+        {
+          "run_id": "run_ba5eb90340b5",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 4531.6,
+          "t_done": 1787923759.618477
+        },
+        {
+          "run_id": "run_d953b1d44e08",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 8384.8,
+          "t_done": 1787923759.6654909
+        },
+        {
+          "run_id": "run_b2e87d4ba9ff",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6318.9,
+          "t_done": 1787923759.668585
+        },
+        {
+          "run_id": "run_95446e3f8eff",
+          "intent": "I09",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5608.5,
+          "t_done": 1787923759.6797585
+        },
+        {
+          "run_id": "run_3b9e040e7826",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 6057.8,
+          "t_done": 1787923759.6815786
+        },
+        {
+          "run_id": "run_665bd5ad70e3",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5542.2,
+          "t_done": 1787923759.7326775
+        },
+        {
+          "run_id": "run_47fd78022004",
+          "intent": "I07",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5038.9,
+          "t_done": 1787923759.760382
+        },
+        {
+          "run_id": "run_0f1244a5c71c",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5030.5,
+          "t_done": 1787923759.7835665
+        },
+        {
+          "run_id": "run_4f7c8cbd4856",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7292.3,
+          "t_done": 1787923759.8103426
+        },
+        {
+          "run_id": "run_b631faa5fb9e",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5538.3,
+          "t_done": 1787923759.8121226
+        },
+        {
+          "run_id": "run_a1d7bf8fd49a",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 7129.0,
+          "t_done": 1787923759.9164433
+        },
+        {
+          "run_id": "run_db32dedf71de",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5100.0,
+          "t_done": 1787923759.9330857
+        },
+        {
+          "run_id": "run_aa29b526e665",
+          "intent": "I11",
+          "terminal": "run.succeeded",
+          "e2e_ms": 5034.6,
+          "t_done": 1787923760.179457
+        }
+      ]
+    }
+  ]
+}
