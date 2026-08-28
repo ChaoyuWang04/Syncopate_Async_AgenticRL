@@ -517,10 +517,15 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=WorkerConfig.concurrency)
     parser.add_argument("--org-id", default=None,
                         help="限定只消费一个租户的队列（默认全局）")
+    parser.add_argument("--daily-cost-cap-micros", type=int,
+                        default=WorkerConfig.daily_cost_cap_micros,
+                        help="单 org 日预算（默认不变；压测 org 的阶梯会在 ~300 run 处刷爆"
+                             "默认值并让其后所有 run 秒失败——B-4 实录，E32 §7）")
     args = parser.parse_args()
     asyncio.run(_serve(WorkerConfig(worker_id=args.worker_id,
                                     concurrency=args.concurrency,
-                                    org_id=args.org_id)))
+                                    org_id=args.org_id,
+                                    daily_cost_cap_micros=args.daily_cost_cap_micros)))
 
 
 if __name__ == "__main__":

@@ -52,12 +52,21 @@ async def level(client: httpx.AsyncClient, conc: int) -> dict:
                  "runs_per_min": round(n_total / wall * 60, 1), "intents": {}, "pass": True}
     for intent in ("I01", "I07", "I09", "I11"):
         grp = [r for it, r in rows if it == intent]
-        good = [r for r in grp if r["terminal"] in lt.TERMINAL]
+        # ⛔ 判据只认合法业务终态 {succeeded, waiting_for_user}（后者=agent 判定需审批，
+        #   延迟量的是"到达判定"，08-20 §19 同口径）；run.failed/cancelled = 破线。
+        #   曾按"到过终态"判：daily_cost_cap 秒失败的 run 把 P95 拉成 400ms 假通过
+        #   （before C=64 runs/min 623→12161 的物理不可能就是这么来的，08-28 实录）
+        terms: dict[str, int] = {}
+        for r in grp:
+            terms[r["terminal"]] = terms.get(r["terminal"], 0) + 1
+        good = [r for r in grp
+                if r["terminal"] in ("run.succeeded", "run.waiting_for_user")]
         lat = [r["e2e_ms"] for r in good]
         p95 = lt.pct(lat, .95)
         thr = lt.INTENTS[intent]["p95_ms"]
         ok = bool(len(good) == len(grp) and lat and p95 <= thr)
-        out["intents"][intent] = {"n": len(grp), "terminal_ok": len(good),
+        out["intents"][intent] = {"n": len(grp), "succeeded": len(good),
+                                  "terminals": terms,
                                   "p95_ms": round(p95, 0) if lat else None,
                                   "thr_ms": thr, "pass": ok}
         out["pass"] = out["pass"] and ok

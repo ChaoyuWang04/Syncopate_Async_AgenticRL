@@ -36,9 +36,11 @@ done
 curl -sf http://127.0.0.1:8000/healthz >/dev/null || { echo "🔴 API 没起来："; tail -5 "$D/api.log"; exit 1; }
 echo "[stack] API :8000 就绪"
 
+# 压测 org 日预算抬 1000×（默认 10M micros 在 ~300 run 处刷爆 ⇒ 其后全部秒失败，
+# goodput 阶梯必须先解除这个编排层瓶颈；生产 org 的默认值不动）
 SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
   python -m syncopate.runtime.worker --org-id org_acme --worker-id b4-loadtest \
-  --concurrency "$CONC" > "$D/worker.log" 2>&1 &
+  --concurrency "$CONC" --daily-cost-cap-micros "${B4_COST_CAP:-10000000000}" > "$D/worker.log" 2>&1 &
 echo $! >> "$D/pids"
 sleep 3
 kill -0 "$(tail -1 "$D/pids")" 2>/dev/null || { echo "🔴 worker 启动即死："; tail -5 "$D/worker.log"; exit 1; }
