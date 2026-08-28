@@ -1,4 +1,7 @@
 #!/bin/bash
+# ⚠️ 单卡=让卡/后备模式（要给训练/实验腾卡时用）。
+# ★ 生产默认是四卡：bash logs/runtime/start_serving.sh（Chaoyu 08-28 裁定：serving 期整机全上；
+#   曾被误留成单卡默认——E33 收尾时的保守判断，已纠正）
 # B-4 模型端点（部署侧上限 14336，刻意 > 训练契约 7168 —— 理由见 decider.py 的长注释）
 cd /workspace/Syncopate_Async_AgenticRL
 set -a; . /workspace/.env; set +a

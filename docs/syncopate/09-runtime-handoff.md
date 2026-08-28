@@ -26,10 +26,9 @@ for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
   python -m syncopate.runtime.worker --org-id org_demo \
     --worker-id demo-$w --concurrency 16 & done          # 起 worker×4（不设 URL = 假计划）
 python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
-# B-4 模型端点（单卡）：
-CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-name sft-base \
-  --enable-lora --lora-modules candidate=checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25 \
-  --max-lora-rank 32 --max-model-len 14336 --port 8100   # 部署侧上限，见 decider.py
+# 模型端点（★ 生产默认=四卡舰队，router 顶 :8100；单卡=让卡后备）：
+bash logs/runtime/start_serving.sh          # 4×引擎+router（fp8KV·ngram·priority 全默认）
+# bash logs/runtime/start_vllm.sh           # 让卡模式：单卡 GPU0（同旗子）
 ```
 
 **怎么访问（08-20 起）**：**聊天前端在 `/app`**（F-2：assistant-ui + Vite，源码

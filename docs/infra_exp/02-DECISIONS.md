@@ -30,7 +30,7 @@
 | **thinking 开关** | `SYNCOPATE_THINK=1` **只许评测**（launch_rl 拦训练）；开关在契约模块（模板 kwarg + 预算 8192 一起切）；**裸基座 eval 臂单轮上限必须给 2048**（256 的砍断与真实弱分不开）。零训练拨开关不上生产（净 −0.057）；红利路径=带思考的 SFT 数据 | **E27** |
 | **永久基线** | eval 配对的基座参照 = `_audit/e27_base_off.json`（base think-off @2048/轮，修复后管线产）；SFT/RL 配对基线仍是 `v13_sft_*_merged` 族（E24） | E27 §5 |
 | **常驻观察** | `fabricated_safety_line_cap`：两处独立反向信号汇合（E17 KL 臂 +2 · E27 SFT vs 基座 +18）⇒ 每次 compare 必看 | E17 §9 · E27 §5 |
-| **serving 生产默认（08-28 E32/E33 收官三件）** | ① 单卡端点 `start_vllm.sh`=fp8 KV + mnbt16384 + **ngram 投机**（单流 2.3×·无损 50/50 实证）+ **--scheduling-policy priority**；② 四卡高吞吐模式=`b4_serve_4x.sh`（router v2 顶 :8100，rr 或 affinity 自适应窗；⛔ 内建 DP×LoRA 上游不支持）；③ ⛔ `--max-num-seqs 32` 判毒（C=64 db_tx 15s/单灾难回归，E33 §6⑥）别再试 | E32 · E33 |
+| **serving 生产默认（08-28 晚 Chaoyu 纠正）** | ★ **默认=四卡舰队** `logs/runtime/start_serving.sh`（4×引擎+router v2 顶 :8100·rr·fp8 KV·mnbt16384·ngram·priority——E32/E33 全部采纳项）；单卡 `start_vllm.sh` 降为**让卡/后备模式**。⚠️ 曾被误留成单卡默认（E33 收尾时的保守判断，违背"serving 期整机全上"原裁定，已纠正）。⛔ 内建 DP×LoRA 上游不支持；⛔ `--max-num-seqs 32` 判毒（E33 §6⑥）别再试 | E32 · E33 |
 | **runtime 生产栈形态（08-28 B-5）** | API `--workers 4` · worker ×4 进程 · 池走 env（SYNCOPATE_WORKER_DB_POOL/API_DB_POOL，代码默认 10 不变）· PG 300 连接/2GB · SSE 门铃默认生效（schema 触发器+LISTEN+2s 兜底）· decider 按意图传 priority。⚠️ **扩池与多进程必须连着落**（单独扩池=负收益，E33 §6②） | E33 · 09 §0 |
 
 ## 2 · 排序原则沿革
