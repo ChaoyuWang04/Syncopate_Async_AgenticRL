@@ -42,6 +42,7 @@ async def level(client: httpx.AsyncClient, conc: int) -> dict:
     async def one(intent: str) -> None:
         async with sem:
             r = await lt.run_to_terminal(client, intent, deadline=300)
+            r["t_done"] = time.time()        # B-5 分账：客户端收到终态的墙钟
             rows.append((intent, r))
 
     t0 = time.monotonic()
@@ -70,6 +71,9 @@ async def level(client: httpx.AsyncClient, conc: int) -> dict:
                                   "p95_ms": round(p95, 0) if lat else None,
                                   "thr_ms": thr, "pass": ok}
         out["pass"] = out["pass"] and ok
+    out["runs"] = [{"run_id": r["run_id"], "intent": it, "terminal": r["terminal"],
+                    "e2e_ms": round(r["e2e_ms"], 1), "t_done": r.get("t_done")}
+                   for it, r in rows]
     return out
 
 

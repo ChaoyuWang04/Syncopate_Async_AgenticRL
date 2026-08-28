@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,7 +26,38 @@ from syncopate.runtime.db import (Database, approved_action, claim_run, finish_r
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
 from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
+from syncopate.runtime import stage_timing as _st
 from syncopate.runtime.tools import PermissionDenied, ToolRuntime
+
+
+def _timed_binding(b: ToolBinding) -> ToolBinding:
+    """B-5 分账：给工具计时（含工具内 DB 的嵌套标记）。只在 _st.ENABLED 时被用。"""
+    async def invoke(**kw: Any) -> dict[str, Any]:
+        _st.tool_enter()
+        t0 = time.perf_counter()
+        try:
+            return await b.invoke(**kw)
+        finally:
+            _st.add("tool", time.perf_counter() - t0)
+            _st.tool_exit()
+    return ToolBinding(invoke=invoke)
+
+
+class _TimedDecider:
+    """B-5 分账：decider.decide 的墙钟。属性透传，不改任何语义。"""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    async def decide(self, **kw: Any) -> Any:
+        t0 = time.perf_counter()
+        try:
+            return await self._inner.decide(**kw)
+        finally:
+            _st.add("llm", time.perf_counter() - t0)
 
 
 async def emit(db: Database, *, org_id: str, run_id: str, kind: str,
@@ -216,8 +248,11 @@ class Worker:
         }
 
     def _gate(self, *, org_id: str, run_id: str) -> ActionGate:
+        bindings = self._bindings(org_id, run_id)
+        if _st.ENABLED:                      # B-5 分账：工具计时（默认关）
+            bindings = {k: _timed_binding(v) for k, v in bindings.items()}
         return ActionGate(
-            self.db, self.tools, self._bindings(org_id, run_id),
+            self.db, self.tools, bindings,
             org_id=org_id, run_id=run_id,
             over_budget=lambda: self._over_budget(org_id),
             emit=emit, audit=audit,
@@ -242,6 +277,7 @@ class Worker:
         if claimed is None:
             return None
         org_id, run_id = claimed["org_id"], claimed["run_id"]
+        _tok = _st.begin_run(run_id)         # B-5 分账（默认 no-op）
         try:
             # ⚠️ started 事件也要在兜底 try 里 —— 它炸了（如 seq 竞态耗尽重试）
             #   不该带走整个 worker 进程（2026-08-20 实测就是这么死的）。
@@ -258,6 +294,8 @@ class Worker:
             #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="failed", error=str(exc)[:500])
+        finally:
+            _st.end_run(_tok)
         return run_id
 
     async def _execute(self, *, org_id: str, run_id: str, user_message: str,
@@ -419,7 +457,8 @@ class Worker:
                                    before_run_id=run_id))
         prior_token = PRIOR_TURNS.set(turns)
         try:
-            result = await run_agent_loop(gate, self.decider, db=self.db,
+            decider = _TimedDecider(self.decider) if _st.ENABLED else self.decider
+            result = await run_agent_loop(gate, decider, db=self.db,
                                           org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
                                           resume=resumed)

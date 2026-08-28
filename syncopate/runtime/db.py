@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -79,9 +80,23 @@ class Database:
 
     @asynccontextmanager
     async def tx(self):
+        # B-5 分账插桩（stage_timing.ENABLED=False 时只多一次 bool 判断）
+        from syncopate.runtime import stage_timing as st
+        if not st.ENABLED:
+            async with self.pool.acquire() as conn:
+                async with conn.transaction():
+                    yield conn
+            return
+        t0 = time.perf_counter()
         async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                yield conn
+            st.add("db_wait", time.perf_counter() - t0)
+            t1 = time.perf_counter()
+            try:
+                async with conn.transaction():
+                    yield conn
+            finally:
+                st.add("db_in_tool" if st.in_tool() else "db_tx",
+                       time.perf_counter() - t1)
 
 
 # --------------------------------------------------------------------------
