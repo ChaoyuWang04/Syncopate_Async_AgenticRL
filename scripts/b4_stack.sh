@@ -16,7 +16,10 @@ D=logs/b4/stack; mkdir -p "$D"
 case "${1:?start|stop}" in
 stop)
   [ -f "$D/pids" ] && while read -r p; do kill "$p" 2>/dev/null; done < "$D/pids"
-  rm -f "$D/pids"; echo "[stack] 已停"; exit 0 ;;
+  rm -f "$D/pids"
+  # 等 :8000 真归还（uvicorn 父进程收尾要几秒；立刻重启会 bind 失败——08-28 r3 实录）
+  for _ in $(seq 1 15); do ss -ltn 2>/dev/null | grep -q ':8000 ' || break; sleep 1; done
+  echo "[stack] 已停"; exit 0 ;;
 start) ;;
 *) echo "用法: b4_stack.sh start|stop"; exit 1 ;;
 esac

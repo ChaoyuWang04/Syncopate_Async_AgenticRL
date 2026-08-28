@@ -41,7 +41,13 @@ async def level(client: httpx.AsyncClient, conc: int) -> dict:
 
     async def one(intent: str) -> None:
         async with sem:
-            r = await lt.run_to_terminal(client, intent, deadline=300)
+            try:
+                r = await lt.run_to_terminal(client, intent, deadline=300)
+            except Exception as exc:  # noqa: BLE001
+                # 瞬断（如 uvicorn worker 崩溃重启的窗口）记为 client_error 终态入账：
+                # 该级按失败判、阶梯不炸（08-28 一个 worker 无声死亡把整级带走的实录）
+                r = {"run_id": f"err-{time.time():.3f}", "terminal": "client_error",
+                     "e2e_ms": 0.0, "error": str(exc)[:120]}
             r["t_done"] = time.time()        # B-5 分账：客户端收到终态的墙钟
             rows.append((intent, r))
 

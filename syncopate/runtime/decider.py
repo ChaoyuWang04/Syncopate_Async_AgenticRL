@@ -217,6 +217,11 @@ class VllmDecider:
                 usage_t["prompt_truncated"] = usage_t.get("prompt_truncated", 0) + 1
         max_tokens = max(64, min(MAX_RESPONSE_LENGTH,
                                  RUNTIME_MAX_MODEL_LEN - len(ids) - 8))
+        # B-5 S4 · SLO 感知优先级（E33）：四个意图的 P95 预算差 36×（I01 5s vs I11 180s），
+        # 引擎 FIFO 让最紧的陪最松的排队 ⇒ 高并发下 I01 先破线。按预算给引擎传
+        # priority（vLLM --scheduling-policy priority 时生效，数值小者先跑；
+        # fcfs 策略下该字段被忽略 = 向后兼容零风险）。只改调度顺序，不改任何产品语义。
+        _prio = {"I01": -3, "I07": -2, "I09": -1}.get(RUN_INTENT.get() or "", 0)
         resp = await self._client.post("/v1/completions", json={
             "model": self.model,
             "prompt": prompt,
@@ -225,6 +230,7 @@ class VllmDecider:
             "top_p": SAMPLING_TOP_P,
             "top_k": SAMPLING_TOP_K,
             "stop": [ASSISTANT_TURN_END],
+            "priority": _prio,
         })
         resp.raise_for_status()
         data = resp.json()

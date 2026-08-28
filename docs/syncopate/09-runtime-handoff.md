@@ -16,10 +16,15 @@ M0–M8 造的是**训练用的东西**（数据、沙盒、判据、模型）�
 
 ```
 bash scripts/pg_bootstrap.sh                            # 起库（幂等，一条命令重建）
-python -m pytest tests/runtime/ -q                      # 195 条
-uvicorn syncopate.runtime.api:app --port 8000           # 起 API
-SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
-python -m syncopate.runtime.worker --org-id org_demo    # 起 worker（不设 URL = 假计划）
+python -m pytest tests/runtime/ -q                      # 226 条
+# B-5/E33（08-28）生产栈形态：API 多进程 + worker 多进程 + 池 env（单进程默认值未动，
+#   高并发三瓶颈=池 10 条/单进程 GIL/SSE 轮询已修——goodput 64→192 的来源，账在 E33）
+SYNCOPATE_API_DB_POOL=12 \
+uvicorn syncopate.runtime.api:app --port 8000 --workers 4          # 起 API（4 进程）
+for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
+  SYNCOPATE_WORKER_DB_POOL=32 \
+  python -m syncopate.runtime.worker --org-id org_demo \
+    --worker-id demo-$w --concurrency 16 & done          # 起 worker×4（不设 URL = 假计划）
 python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
 # B-4 模型端点（单卡）：
 CUDA_VISIBLE_DEVICES=0 vllm serve models/Qwen3-4B-sft-v13r2-e1 --served-model-name sft-base \
