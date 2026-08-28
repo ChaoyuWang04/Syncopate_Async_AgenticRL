@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 run() { bash scripts/b4_bench.sh "$1" -- "${@:2}"; }
 
-run s1_center
+# 中心臂 = base_fp8kv_s0/r2/r3（S0 噪声地板三跑与 S1 中心同配置，一鱼两吃，不重跑）
 run s1_mnbt2048   --max-num-batched-tokens 2048
 run s1_mnbt16384  --max-num-batched-tokens 16384
 run s1_mns64      --max-num-seqs 64
@@ -18,7 +18,7 @@ run s1_mns256     --max-num-seqs 256
 run s1_util085    --gpu-memory-utilization 0.85
 
 echo "==== S1 汇总 ===="
-for d in logs/b4/s1_*/arm.json; do
+for d in logs/b4/base_fp8kv_s0/arm.json logs/b4/s1_*/arm.json; do
   .venv/bin/python -c "
 import json,sys; a=json.load(open('$d'))
 t=a.get('trace',{}); r=a.get('random',{})

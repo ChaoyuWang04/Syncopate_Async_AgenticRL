@@ -93,7 +93,7 @@ check_once () {
     [ -n "$GPUS" ] && extra_excl='logs/runtime/'   # 圈卡模式：端点常驻日志不算「主线在动」
     recent="$(find "${WATCH_DIRS[@]}" -type f -mmin "-${QUIET_MIN}" \
                 -not -path '*/.git/*' -not -name '*.log.lock' 2>/dev/null \
-              | grep -Ev '(e12d_|batch2_|_timing\.json|infra_|gpu_gate|e14|e19|e29|nsys|anatomy|torchprof)' \
+              | grep -Ev '(e12d_|batch2_|_timing\.json|infra_|gpu_gate|e14|e19|e29|nsys|anatomy|torchprof|b4_|/b4/)' \
               | grep -Ev "$extra_excl" | head -5)"
     if [ -n "$recent" ]; then
         echo "🔴 ③ 最近 ${QUIET_MIN} 分钟内产物目录仍有写入（主线可能在阶段之间）："
