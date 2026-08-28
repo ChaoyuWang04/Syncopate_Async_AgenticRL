@@ -64,7 +64,10 @@ P4  全程四红线零退化（这不是预测是要求；写在这里是提醒�
 before（已在库，logs/b4/）：goodput@SLO=64 · 膝点 96（I01 5.3–5.7s）·
   C=8 I01 P95 ≈1.5s · loadtest 服务面 21/22 · 单流 TPOT 2.94ms（ngram 后）
 尺子：b4_goodput.py（只认合法业务终态，终态构成入产物）· runtime_loadtest 子集 ·
-  全量 pytest（365 passed / 0 skipped，PG 起着 = 验收口径）
+  全量 pytest（**08-28 实测基线 722 passed / 1 xfailed / 0 skipped**，PG 起着=验收口径；
+  11 §6 的 365 是 08-20 旧数，以实跑为准）
+冻结 serving 口径（全程不变）：4×亲和 fleet + mnbt16384 + ngram（=E32 后的生产高吞吐模式，
+  引擎余量确保一切变化归因调度层；S0 在此口径下重立 C=8/64/96 自基线）
 四红线专项：test_idempotency（10 条真投两次）· test_sse（断线补发）·
   phase_crash（kill -9 后 3/3 恢复）· 成本触顶降级事件链可见
 ⚠️ S0 要补的：goodput 阶梯自己的噪声地板（E32 每级只跑过一遍）
