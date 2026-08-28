@@ -186,9 +186,24 @@ def main() -> int:
                 else:
                     kl_task += s; tok_task += m; n_task += 1
             total_masked = tok_chat + tok_task
-            if total_masked == 0:
-                log(f"[opd-mask] 🔴 step {step} 全批掩码为零——分段器/生成出问题，停机自查")
-                raise RuntimeError("all-zero mask batch")
+            # ⚠️ 判据分两层（首跑 rank1 全 task 批被误杀的学费）：
+            #   chat 样本有回复却零掩码 = 分段器病 ⇒ 停机；
+            #   全批只有 task 且回复=工具 JSON（无 reply 可蒸）= 合法 ⇒ 跳步记数
+            if n_chat > 0 and tok_chat == 0:
+                log(f"[opd-mask] 🔴 step {step} chat 样本掩码为零——分段器/生成出问题，停机自查")
+                raise RuntimeError("chat-zero mask batch")
+            # 跳步必须集体决定（单 rank 跳而对端进 all_reduce = 死锁）
+            gm = torch.tensor([float(total_masked)], device=f"cuda:{rank}")
+            dist.all_reduce(gm)
+            if gm.item() == 0:
+                if rank == 0:
+                    log(f"[opd-mask] step {step} 全局无可蒸 token（全 task 工具回复），集体跳步")
+                    if wb:
+                        wb.log({"opd/skipped_steps": 1}, step=step)
+                opt.zero_grad(set_to_none=True)
+                step += 1
+                dist.barrier()
+                continue
             # DDP 梯度手动 allreduce（模型未包 DDP——逐样本 backward 与 PEFT 包装更省心）
             for p in trainables:
                 g = p.grad if p.grad is not None else torch.zeros_like(p)
