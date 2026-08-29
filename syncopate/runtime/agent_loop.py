@@ -69,6 +69,9 @@ class Proposal:
     param_source: str = "model"
     rationale: str = ""
     final_answer: dict[str, Any] | None = None
+    # CoT 观察（Chaoyu 08-29）：SYNCOPATE_RUNTIME_THINKING=1 时 decider 保留 <think> 段
+    # 供前端折叠展示；空串=无思考。只作展示，不进任何判定/持久化契约。
+    thinking: str = ""
 
 
 class Decider(Protocol):
@@ -141,6 +144,12 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
 
     while True:
         proposal = await decider.decide(user_message=user_message, history=history)
+
+        if getattr(proposal, "thinking", ""):
+            # 思考事件：独立 kind，前端折叠渲染；截 6000 字防事件超载
+            await gate.emit_info(kind="model.thinking",
+                                 payload={"step": gate.step,
+                                          "text": proposal.thinking[:6000]})
 
         if proposal.kind == "final":
             history.append({"role": "final", "answer": proposal.final_answer})

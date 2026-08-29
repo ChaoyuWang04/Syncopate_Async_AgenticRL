@@ -118,6 +118,11 @@ class ActionGate:
         self.run_id = run_id
         self._over_budget = over_budget
         self._emit = emit
+
+    async def emit_info(self, *, kind: str, payload: dict) -> None:
+        """信息型事件的公开出口（model.thinking 等展示流；不参与判定/审计语义）。"""
+        await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
+                         kind=kind, payload=payload)
         self._audit = audit
         self._record_step = record_step
         self.amount_threshold = amount_threshold

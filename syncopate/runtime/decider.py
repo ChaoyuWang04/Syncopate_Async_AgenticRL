@@ -26,6 +26,15 @@ from typing import Any
 import httpx
 
 from syncopate.core.parsing import parse_step, render_tool_call
+
+# 部署侧 CoT 观察开关（Chaoyu 08-29）：与训练契约刻意分叉（F-5 同款先例）。
+# 开 = chat 模板 enable_thinking，模型自决是否思考（v14.5 冷启过 40 条难例终答 think）。
+# ⚠️ E27 警示在案：think-on 曾伴随 acted_when_should_not 上行——本开关仅观察用，
+#   评测/考场路径不受影响（它们不设此环境变量）。
+import os as _os
+RUNTIME_THINKING = _os.environ.get("SYNCOPATE_RUNTIME_THINKING") == "1"
+import re as _re
+_THINK_RE = _re.compile(r"<think>(.*?)</think>", _re.S)
 from syncopate.prompts import load_prompt, render_prompt
 from syncopate.runtime.agent_loop import Proposal
 from syncopate.train.rollout_budget import (
@@ -199,9 +208,10 @@ class VllmDecider:
                                                             DEFAULT_MENU)
         tools = self._registry.menu(menu)
         messages = self._messages(user_message, history, PRIOR_TURNS.get())
+        _kw = ({"enable_thinking": True} if RUNTIME_THINKING else CHAT_TEMPLATE_KWARGS)
         prompt: str = self.tokenizer.apply_chat_template(
             messages, tools=tools, add_generation_prompt=True,
-            tokenize=False, **CHAT_TEMPLATE_KWARGS)
+            tokenize=False, **_kw)
         # 预算：单轮生成上限 = 评测口径（MAX_RESPONSE_LENGTH，G-8 之后 256→2048），
         # 上下文超长按训练同法**左截断**（rollout_loop 同款）——且必须计数，
         # 静默截断是记录在案的整个失效家族（budget-truncation-family）。
@@ -246,11 +256,13 @@ class VllmDecider:
     @staticmethod
     def _to_proposal(text: str) -> Proposal:
         parsed = parse_step(text)
+        m = _THINK_RE.search(text)
+        think = (m.group(1).strip() if m else "")
         if parsed.kind == "final":
             return Proposal(kind="final",
                             final_answer={"behavior": parsed.behavior,
                                           "answer": parsed.answer},
-                            rationale=parsed.behavior)
+                            rationale=parsed.behavior, thinking=think)
         if parsed.kind == "tool_calls":
             if len(parsed.tool_calls) > 1:
                 # P0-2 同法：拦在发生点，把纠正文本回灌给模型
@@ -260,7 +272,7 @@ class VllmDecider:
             call = parsed.tool_calls[0]
             return Proposal(kind="tool_call", tool=call.get("name"),
                             arguments=dict(call.get("arguments") or {}),
-                            param_source="model")
+                            param_source="model", thinking=think)
         return Proposal(kind="tool_call", tool=None,
                         rationale=f"parse_error: {parsed.error or 'unparseable'}")
 

@@ -200,6 +200,17 @@ export function useChatController(): ChatController {
               })
               break
             }
+            case 'model.thinking': {
+              const text = typeof d['text'] === 'string' ? d['text'] : ''
+              if (text) {
+                dispatch({
+                  type: 'step',
+                  id: itemId,
+                  step: { key: stepKey, kind: 'thinking', ok: true, text },
+                })
+              }
+              break
+            }
             case 'tool.result': {
               const ok = d['ok'] !== false
               const tool = typeof d['tool'] === 'string' ? d['tool'] : 'tool'

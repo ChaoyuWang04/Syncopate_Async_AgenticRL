@@ -66,7 +66,7 @@ export type ConnState = 'connected' | 'reconnecting'
 
 export interface StepEntry {
   key: string
-  kind: 'info' | 'tool' | 'retrieval' | 'degraded'
+  kind: 'info' | 'tool' | 'retrieval' | 'degraded' | 'thinking'
   text: string
   ok: boolean
 }

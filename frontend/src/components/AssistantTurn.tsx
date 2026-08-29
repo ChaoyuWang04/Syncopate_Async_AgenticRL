@@ -39,6 +39,8 @@ function stepClass(s: StepEntry): string {
       return 'text-slate-500'
     case 'info':
       return 'text-slate-400'
+    case 'thinking':
+      return 'text-neutral-500'
   }
 }
 
@@ -52,6 +54,8 @@ function stepIcon(s: StepEntry): string {
       return '·'
     case 'info':
       return '›'
+    case 'thinking':
+      return '▸'
   }
 }
 
@@ -227,12 +231,26 @@ export function AssistantTurn({
       <div className="w-full max-w-[46rem]">
         {item.steps.length > 0 && (
           <ol className="mb-2 space-y-0.5">
-            {item.steps.map((s) => (
-              <li key={s.key} className={`font-mono text-xs ${stepClass(s)}`}>
-                <span className="mr-1.5 inline-block w-3 text-center">{stepIcon(s)}</span>
-                {s.text}
-              </li>
-            ))}
+            {item.steps.map((s) =>
+              s.kind === 'thinking' ? (
+                <li key={s.key} className="text-xs">
+                  <details className="group rounded-md bg-neutral-50 ring-1 ring-neutral-200">
+                    <summary className="flex cursor-pointer select-none items-center gap-1.5 px-2 py-1 text-neutral-500 hover:text-neutral-700">
+                      <span className="inline-block w-3 text-center transition-transform group-open:rotate-90">▸</span>
+                      <span className="italic">思考过程（{s.text.length} 字）</span>
+                    </summary>
+                    <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap px-3 pb-2 pt-1 font-mono text-[11px] leading-relaxed text-neutral-600">
+                      {s.text}
+                    </pre>
+                  </details>
+                </li>
+              ) : (
+                <li key={s.key} className={`font-mono text-xs ${stepClass(s)}`}>
+                  <span className="mr-1.5 inline-block w-3 text-center">{stepIcon(s)}</span>
+                  {s.text}
+                </li>
+              ),
+            )}
           </ol>
         )}
 
