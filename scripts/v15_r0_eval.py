@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import re
 from pathlib import Path
@@ -218,13 +219,138 @@ def certify() -> int:
     return 0
 
 
+# ── prompt 构造：必须和训练时**逐字同源** ────────────────────────────────
+SCAFFOLD_CASE = "FRESH_0002"       # OOD 题用的固定脚手架（只换 user_message）
+
+
+def build_prompts(arm: str, rows: list[dict], tok, bundles) -> list[str]:
+    """两臂的 prompt：A 臂原样；B 臂把 session 工具注入 <tools> 段。
+
+    ⚠️ B 臂的注入方式必须和 `v15_r0_build.make_rows` **一模一样**（字符串替换
+    `</tools>`），否则训练分布与评测分布不一致 —— R0 结论就作废了。
+    spec 本身由 `assert_spec_frozen()` 守着（08-29 实案：顺手加两个 description 就会漂）。
+    """
+    import json as _json
+
+    from syncopate.core.contract import SESSION_TOOL_SPECS
+    from syncopate.core.tool_registry import REGISTRY
+    from syncopate.train.rollout_loop import build_messages
+
+    inject = "\n".join(_json.dumps(t["function"], ensure_ascii=False)
+                        for t in SESSION_TOOL_SPECS)
+    scaffold = bundles[SCAFFOLD_CASE]
+    out = []
+    for r in rows:
+        bd = bundles.get(r["case_id"], scaffold)
+        msgs = build_messages(bd, bd.case.tool_menu)
+        # 分布外题：脚手架不变，只把用户那句话换掉
+        msgs = [dict(m) for m in msgs]
+        for m in reversed(msgs):
+            if m["role"] == "user":
+                m["content"] = r["user_message"]
+                break
+        text = tok.apply_chat_template(
+            msgs, tools=REGISTRY.menu(bd.case.tool_menu),
+            add_generation_prompt=True, tokenize=False, enable_thinking=False)
+        if arm == "tool":
+            assert "</tools>" in text, r["case_id"]
+            text = text.replace("</tools>", inject + "\n</tools>", 1)
+        out.append(text)
+    return out
+
+
+def generate(arm: str, adapter: str, gpu: int, max_tokens: int = 512) -> dict:
+    """跑一臂：greedy 生成 80 道题（分布内 40 + 分布外 40）。"""
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    from pathlib import Path as P
+
+    from transformers import AutoTokenizer
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
+    from syncopate.pipeline.split import load_bundles
+    import syncopate.domains.adcampaign  # noqa: F401  注册工具
+
+    rows = ([dict(json.loads(l), kind_set="indist")
+             for l in open("data/v15_r0/test_indist.jsonl")] +
+            [dict(json.loads(l), kind_set="ood")
+             for l in open("data/v15_r0/test_ood.jsonl")])
+    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    bundles = load_bundles(P("data/batches/v13"))
+    prompts = build_prompts(arm, rows, tok, bundles)
+
+    llm = LLM(model="models/Qwen3-4B-sft-v14.5-epoch3", enable_lora=True,
+              max_lora_rank=32, max_model_len=8192, gpu_memory_utilization=0.85,
+              enforce_eager=False, disable_log_stats=True)
+    # greedy：R0 要的是形态判定，不是采样多样性
+    sp = SamplingParams(temperature=0.0, top_p=1.0, max_tokens=max_tokens)
+    outs = llm.generate(prompts, sp, lora_request=LoRARequest(arm, 1, adapter))
+
+    recs = []
+    for r, o in zip(rows, outs):
+        text = o.outputs[0].text
+        shape, ev = classify(text, arm)
+        recs.append({**r, "arm": arm, "adapter": adapter, "text": text,
+                     "shape": shape, "evidence": ev,
+                     "correct": is_correct(shape, r["behavior"], arm),
+                     "syntax_ok": signal_syntax_ok(text)})
+    OUT.mkdir(parents=True, exist_ok=True)
+    tag = f"{arm}_{P(adapter).name}"
+    (OUT / f"gen_{tag}.jsonl").write_text(
+        "\n".join(json.dumps(x, ensure_ascii=False) for x in recs))
+    return summarize(recs, tag)
+
+
+def summarize(recs: list[dict], tag: str) -> dict:
+    def rate(sub):
+        return round(sum(r["correct"] for r in sub) / max(1, len(sub)), 4)
+
+    ind = [r for r in recs if r["kind_set"] == "indist"]
+    ood = [r for r in recs if r["kind_set"] == "ood"]
+    syn = [r["syntax_ok"] for r in recs if r["syntax_ok"] is not None]
+    by_beh = {}
+    for b in ("defer", "clarify", "reject", "answer"):
+        s = [r for r in ood if r["behavior"] == b]
+        if s:
+            by_beh[b] = rate(s)
+    # ②b 语义读数：形态不对，但人话里表达了该行为（Chaoyu 的"自然语言也该得分"）
+    KW = {"defer": ["再观察", "等", "过几天", "还太新", "不够成熟", "复查"],
+          "clarify": ["请问", "哪条", "补充", "需要知道", "是哪"],
+          "reject": ["无法", "不能", "超出", "越权", "不支持"]}
+    sem = 0
+    for r in ood:
+        if r["correct"] or r["behavior"] not in KW:
+            continue
+        if any(k in r["text"] for k in KW[r["behavior"]]):
+            sem += 1
+    return {"tag": tag, "n": len(recs),
+            "indist_correct": rate(ind), "ood_correct": rate(ood),
+            "ood_by_behavior": by_beh,
+            "signal_syntax_ok": round(sum(syn) / max(1, len(syn)), 4) if syn else None,
+            "signal_calls_seen": len(syn),
+            "semantic_but_wrong_shape_ood": sem,
+            "shapes": dict(collections.Counter(r["shape"] for r in recs))}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--certify", action="store_true")
+    ap.add_argument("--arm", choices=["shell", "tool"])
+    ap.add_argument("--adapter")
+    ap.add_argument("--gpu", type=int, default=0)
     args = ap.parse_args()
     if args.certify:
         return certify()
-    ap.error("生成与汇总在 --certify 通过后接入（见 R0 runner）")
+    if args.arm and args.adapter:
+        if certify() != 0:
+            return 1
+        s = generate(args.arm, args.adapter, args.gpu)
+        print(json.dumps(s, ensure_ascii=False, indent=2))
+        (OUT / f"summary_{s['tag']}.json").write_text(
+            json.dumps(s, ensure_ascii=False, indent=2))
+        return 0
+    ap.error("要么 --certify，要么 --arm/--adapter")
     return 0
 
 
