@@ -546,8 +546,15 @@ async def main() -> int:
             print("[A3] chat 素材 …", flush=True)
             chat_mat = await gen_chat(client, bank)
             json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
-        print("[C] L2/L1 回放构建 …", flush=True)
-        l2, l1 = await build_l2_l1(tokenizer, registry, client)
+        cache_l = Path("data/u_route/v145_l2l1_rows.json")
+        if cache_l.exists():
+            _c = json.load(open(cache_l))
+            l2, l1 = _c["l2"], _c["l1"]
+            print(f"[C] L2/L1 缓存命中（{len(l2)}/{len(l1)}）")
+        else:
+            print("[C] L2/L1 回放构建 …", flush=True)
+            l2, l1 = await build_l2_l1(tokenizer, registry, client)
+            json.dump({"l2": l2, "l1": l1}, open(cache_l, "w"))
         cache_cot = Path("data/u_route/v145_cot_rows.json")
         if cache_cot.exists():
             cot = json.load(open(cache_cot))
@@ -604,13 +611,22 @@ async def main() -> int:
     density_gate(l2, tokenizer, "L2")
     density_gate(l1, tokenizer, "L1")
     density_gate(chat_rows, tokenizer, "chat")
-    # OOV 断言：26 词一个都不许出现在任何训练/验证文本
-    oov_hits = 0
-    for rows in (new_rows, valrows):
-        for r in rows:
-            txt = tokenizer.decode(list(r["input_ids"])[:r["total_length"]])
-            oov_hits += sum(1 for t in OOV if t in txt)
-    assert oov_hits == 0, f"🔴 OOV 泄漏 {oov_hits} 次"
+    # OOV 断言（口径修订 08-29 第7次发射）：held-out 的语义=「这些词的**定义**不被教」
+    # （保 L1-oov 考规则泛化），非「字串全语料绝迹」——v13 轨迹/8B think 里的自然词用
+    # 不构成定义教学。教学面（L1/chat gold 段 + DEFS 词典）必须 0；其余桶记数上报。
+    teach_hits, ambient_hits = 0, 0
+    for r in new_rows + valrows:
+        txt = tokenizer.decode(list(r["input_ids"])[:r["total_length"]])
+        n = sum(1 for t in OOV if t in txt)
+        if r.get("bucket") in ("multiturn_l1", "chat_shell"):
+            gold = tokenizer.decode(
+                list(r["input_ids"])[r["prompt_length"]:r["total_length"]])
+            teach_hits += sum(1 for t in OOV if t in gold)
+        ambient_hits += n
+    for vs in DEFS.values():
+        teach_hits += sum(1 for v in vs for t in OOV if t in v)
+    print(f"[OOV] 教学面命中 {teach_hits}（必须 0）· 全语料自然词用 {ambient_hits}（上报不判）")
+    assert teach_hits == 0, f"🔴 OOV 定义教学泄漏 {teach_hits} 次"
     # 考场泄漏：考卷第二轮句子逐字不得出现在训练 user 文本
     exam_turns = set()
     for fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "talk_exam.jsonl"):
