@@ -78,10 +78,20 @@ while kill -0 $RLPID 2>/dev/null; do
   tail -1 logs/u_route/p3_rl.log | cut -c1-120
 done
 say "RL 进程退出，逐存点评测（每 global25=RL-100 一个点）"
-for d in "$CKDIR"/adapter_global_step_*; do
+for d in "$CKDIR"/adapter_global_step_* "$CKDIR"/global_step_*; do
   [ -d "$d" ] || continue
   s=$(basename "$d" | grep -oE '[0-9]+$')
-  say "  评 step_$s（=RL-$((s*4)) 步）"
+  # 全量 ckpt（global_step_N/actor）要先提取成 adapter 才能评（A-4 同法；
+  # rolling_prune 会提历史点，最新全量与漏网的在这里兜底提取）
+  if [ -d "$d/actor" ]; then
+    ad="$CKDIR/adapter_global_step_$s"
+    [ -d "$ad" ] || .venv/bin/python scripts/rl_ckpt_to_adapter.py "$d/actor" --out "$ad" \
+      || { echo "  提取失败 step_$s"; continue; }
+    d="$ad"
+  fi
+  case " ${EVALED:-} " in *" $s "*) continue;; esac
+  EVALED="${EVALED:-} $s"
+  say "  评 step_$s（≈RL-$((s*16)) rollout 步）"
   rm -f "_audit/v145_rl_s$s.json.done"
   MODEL=$BASE bash scripts/eval_parallel.sh "$d" "_audit/v145_rl_s$s.json" 4 \
     || { echo "EVAL-s$s-FAIL"; continue; }
