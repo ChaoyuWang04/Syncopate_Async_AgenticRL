@@ -170,6 +170,7 @@ class Worker:
         # B-4：真模型 Decider。None = 写死三步计划（老行为，测试都在它上面）。
         # ⚠️ 显式传入才生效，且入口会打判据行 —— 静默切换是第一失效形状。
         self.decider = decider
+        self.alt_deciders: dict = {}   # dev mode：{'sft':…, 'base':…}
 
     # ---- 工具名 → 真正打外部世界的那个协程 --------------------------------
     #
@@ -456,8 +457,24 @@ class Worker:
                                    conversation_id=conversation_id,
                                    before_run_id=run_id))
         prior_token = PRIOR_TURNS.set(turns)
+        # dev mode 模型路由（Chaoyu 08-29）：会话建时锁定的 model 标签选 decider；
+        # 无标签/无对应端点 ⇒ 默认 decider（rl）。判据行必打——静默回退是记录在案的失效家族。
+        chosen = self.decider
+        if conversation_id and self.alt_deciders:
+            async with self.db.tx() as _c:
+                _row = await _c.fetchrow(
+                    "SELECT model FROM conversations WHERE org_id=$1 AND conversation_id=$2",
+                    org_id, conversation_id)
+            _tag = (_row and _row["model"]) or "rl"
+            if _tag != "rl":
+                if _tag in self.alt_deciders:
+                    chosen = self.alt_deciders[_tag]
+                    print(f"[decider-route] run={run_id} model={_tag}", flush=True)
+                else:
+                    print(f"[decider-route] 🔴 run={run_id} 请求 model={_tag} 但无端点，回退 rl",
+                          flush=True)
         try:
-            decider = _TimedDecider(self.decider) if _st.ENABLED else self.decider
+            decider = _TimedDecider(chosen) if _st.ENABLED else chosen
             result = await run_agent_loop(gate, decider, db=self.db,
                                           org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
@@ -534,14 +551,18 @@ async def _serve(config: WorkerConfig) -> None:
         # 收到信号只置位，不 sys.exit —— 让在飞的 run 走完当前动作再放 lease。
         loop.add_signal_handler(sig, stop.set)
     # B-4：SYNCOPATE_DECIDER_URL 显式设了才接真模型；判据行必打（没有 = 没接上）。
-    from syncopate.runtime.decider import build_decider_from_env
+    from syncopate.runtime.decider import build_decider_from_env, build_alt_deciders_from_env
     decider = build_decider_from_env()
+    alt_deciders = build_alt_deciders_from_env()   # dev mode：{"sft":…, "base":…}（可空）
     if decider is not None:
         print(f"[decider] vllm model={decider.model} tools={len(decider.tools)} "
               f"—— agent_loop 驱动", flush=True)
     else:
         print("[decider] 未配置（SYNCOPATE_DECIDER_URL 空）⇒ 写死三步计划", flush=True)
     worker = Worker(db, FakeAdPlatform.from_fixture(), config, decider=decider)
+    worker.alt_deciders = alt_deciders
+    if alt_deciders:
+        print(f"[decider] dev mode 多模型：{sorted(alt_deciders)}（会话级锁定）", flush=True)
     try:
         await worker.serve(stop=stop)
     finally:

@@ -98,7 +98,7 @@ export interface ChatController {
   dismissBanner: () => void
   refreshConversations: () => Promise<void>
   selectConversation: (cid: string) => Promise<void>
-  newConversation: () => Promise<void>
+  newConversation: (model?: string) => Promise<void>
   send: (text: string) => Promise<void>
   decide: (itemId: string, decision: 'approved' | 'rejected') => Promise<void>
 }
@@ -354,9 +354,9 @@ export function useChatController(): ChatController {
     [abortAllStreams, attachApproval, openStream],
   )
 
-  const newConversation = useCallback(async () => {
+  const newConversation = useCallback(async (model?: string) => {
     try {
-      const created = await api.createConversation()
+      const created = await api.createConversation(undefined, model)
       await refreshConversations()
       await selectConversation(created.conversation_id)
     } catch (e) {

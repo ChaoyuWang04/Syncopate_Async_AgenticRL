@@ -296,6 +296,25 @@ def build_decider_from_env() -> VllmDecider | None:
     )
 
 
+def build_alt_deciders_from_env() -> dict[str, "VllmDecider"]:
+    """dev mode 备选端点：SYNCOPATE_DECIDER_URL_SFT / _BASE（存在才建，各配 tokenizer）。"""
+    import os
+
+    out: dict[str, VllmDecider] = {}
+    for tag, url_env, tok_env, tok_default in (
+        ("sft", "SYNCOPATE_DECIDER_URL_SFT", "SYNCOPATE_DECIDER_TOKENIZER_SFT",
+         "models/Qwen3-4B-sft-v14.5-epoch3"),
+        ("base", "SYNCOPATE_DECIDER_URL_BASE", "SYNCOPATE_DECIDER_TOKENIZER_BASE",
+         "models/Qwen3-4B"),
+    ):
+        url = os.environ.get(url_env)
+        if url:
+            out[tag] = VllmDecider(base_url=url, model="candidate",
+                                   tokenizer_path=os.environ.get(tok_env, tok_default),
+                                   context=_demo_context())
+    return out
+
+
 def _demo_context() -> dict[str, Any]:
     """渲染进 prompt 的「当前投放任务」上下文。
 

@@ -417,6 +417,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     id              BIGSERIAL   PRIMARY KEY,
     conversation_id TEXT        NOT NULL,
     org_id          TEXT        NOT NULL,      -- ★ 同 run_id：只在 org 内唯一
+    model text NOT NULL DEFAULT 'rl',
     title           TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (org_id, conversation_id)

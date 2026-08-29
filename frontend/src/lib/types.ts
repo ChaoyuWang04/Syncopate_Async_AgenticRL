@@ -15,9 +15,12 @@ export interface RunResult {
   answer: Record<string, unknown>
 }
 
+export type ModelTag = 'rl' | 'sft' | 'base'
+
 export interface ConversationMeta {
   conversation_id: string
   title: string | null
+  model?: ModelTag
   runs: number
   last_activity: string | null
 }

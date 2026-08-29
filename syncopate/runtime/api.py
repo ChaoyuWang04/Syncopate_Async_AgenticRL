@@ -23,7 +23,7 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator
+from typing import Literal, Annotated, Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
@@ -125,6 +125,8 @@ class ApprovalDecision(BaseModel):
 
 class ConversationCreate(BaseModel):
     title: str | None = Field(default=None, max_length=120)
+    # dev mode 模型选择（Chaoyu 08-29）：会话创建即锁定，不提供修改接口
+    model: Literal["rl", "sft", "base"] = "rl"
 
 
 class ConversationView(BaseModel):
@@ -132,6 +134,8 @@ class ConversationView(BaseModel):
     title: str | None = None
     runs: int = 0
     last_activity: str | None = None
+    model: str = "rl"
+
 
 
 class MessageCreate(BaseModel):
@@ -331,15 +335,15 @@ def create_app(db: Database | None = None) -> FastAPI:
                                            db: DB) -> ConversationView:
         cid = f"conv_{uuid.uuid4().hex[:12]}"
         await create_conversation(db, org_id=org_id, conversation_id=cid,
-                                  title=body.title)
-        return ConversationView(conversation_id=cid, title=body.title)
+                                  title=body.title, model=body.model)
+        return ConversationView(conversation_id=cid, title=body.title, model=body.model)
 
     @app.get("/conversations", response_model=list[ConversationView])
     async def list_conversations(org_id: OrgId, db: DB) -> list[ConversationView]:
         async with db.tx() as conn:
             rows = await conn.fetch(
                 """
-                SELECT c.conversation_id, c.title,
+                SELECT c.conversation_id, c.title, c.model,
                        count(r.run_id) AS runs,
                        to_char(max(coalesce(r.created_at, c.created_at)),
                                'YYYY-MM-DD"T"HH24:MI:SSZ') AS last_activity
@@ -347,7 +351,7 @@ def create_app(db: Database | None = None) -> FastAPI:
                 LEFT JOIN agent_runs r ON r.org_id = c.org_id
                      AND r.conversation_id = c.conversation_id
                 WHERE c.org_id = $1
-                GROUP BY c.conversation_id, c.title, c.created_at
+                GROUP BY c.conversation_id, c.title, c.model, c.created_at
                 ORDER BY max(coalesce(r.created_at, c.created_at)) DESC
                 """, org_id)
         return [ConversationView(**dict(r)) for r in rows]

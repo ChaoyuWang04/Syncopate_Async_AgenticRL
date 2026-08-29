@@ -34,7 +34,7 @@ export default function App() {
         conversations={controller.conversations}
         activeCid={controller.activeCid}
         onSelect={(cid) => void controller.selectConversation(cid)}
-        onNew={() => void controller.newConversation()}
+        onNew={(m) => void controller.newConversation(m)}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-3">

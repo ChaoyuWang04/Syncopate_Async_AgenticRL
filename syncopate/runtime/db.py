@@ -116,12 +116,13 @@ class RunHandle:
 
 
 async def create_conversation(db: Database, *, org_id: str, conversation_id: str,
-                              title: str | None = None) -> None:
+                              title: str | None = None, model: str = "rl") -> None:
+    # model：dev mode 的会话级模型锁定（rl/sft/base，Chaoyu 08-29）。创建即定，永不 UPDATE。
     async with db.tx() as conn:
         await conn.execute(
-            "INSERT INTO conversations (conversation_id, org_id, title) "
-            "VALUES ($1, $2, $3) ON CONFLICT (org_id, conversation_id) DO NOTHING",
-            conversation_id, org_id, title)
+            "INSERT INTO conversations (conversation_id, org_id, title, model) "
+            "VALUES ($1, $2, $3, $4) ON CONFLICT (org_id, conversation_id) DO NOTHING",
+            conversation_id, org_id, title, model)
 
 
 async def prior_turns(db: Database, *, org_id: str, conversation_id: str,

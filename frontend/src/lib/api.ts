@@ -72,10 +72,10 @@ export const api = {
     return request<ConversationMeta[]>('/conversations')
   },
 
-  createConversation(title?: string): Promise<{ conversation_id: string; title: string | null }> {
+  createConversation(title?: string, model?: string): Promise<{ conversation_id: string; title: string | null }> {
     return request('/conversations', {
       method: 'POST',
-      body: title === undefined ? {} : { title },
+      body: { ...(title !== undefined ? { title } : {}), ...(model ? { model } : {}) },
     })
   },
 
