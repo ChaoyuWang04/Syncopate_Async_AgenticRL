@@ -359,9 +359,13 @@ aha 口径   不评 think 内容（process reward=Goodhart 高发区）；评三
    考场 REJ 8/8 过但只覆盖 out_of_scope 形态，**「业务内越权」是考题盲区** ⇒ exam v3 待办。
 ③ summary 通道污染：L1 行的「X 释义」summary 模板外溢成万能 summary（「CMP_2 释义」
    「闲聊 释义」）——密度闸只查了 reply 没查 summary，闸的盲区，v14.6 修。
-④ CoT 触发被压制实锤：SFT/RL 对话与考场几乎零思考（Base 原生爱思考）——850/890 行空
-   think 块的监督信号把触发阈压死，40 条难例终答 think 不足以维持混合思考。响应速度快
-   是副证。P4/下轮：提高 CoT 配比或全轨迹 think。
+④ CoT 触发被压制实锤：SFT/RL 对话与考场几乎零思考（Base 原生爱思考）。响应速度快是副证。
+   ⛔ **归因已被 08-29 探针推翻，别再引用"850/890 行空 think 监督"这个说法**
+   （`scripts/v15_probes.py`）：那 849 行的空块在**提示段、没有梯度**；监督段只有 41 行，
+   且其内部 88% 的 think 块是空的。真机理 = think-off 模板把 think 块**预先关闭**
+   （结构性剥夺）+ CoT 行内部反向监督。⇒ 修法**不是**"提高 CoT 配比"，
+   而是 think-on + gold 每轮显式产出 think 段（两件缺一更糟）。全文见 `25 §3.2`，
+   门槛见 `25 §R2⑤`。
 ⑤ 当天 run.failed 批次=ActionGate __init__ 被文本替换拦腰事故的牺牲品（已修复），非模型问题。
 ```
 

@@ -1,0 +1,55 @@
+{
+  "P1_P2_think_placement": {
+    "rows_total": 890,
+    "rows_think_in_prompt_segment": 849,
+    "rows_think_in_supervised_segment": 41,
+    "rows_with_nonempty_supervised_think": 41,
+    "supervised_blocks_empty": 295,
+    "supervised_blocks_nonempty": 41,
+    "supervised_empty_share": 0.878,
+    "buckets_of_supervised_think_rows": {
+      "cot_hard": 41
+    }
+  },
+  "P3_template_shape": {
+    "enable_thinking=False": "_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "enable_thinking=True": "m_start|>user\nU<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "P5_session_tool_budget": {
+    "n_cases": 120,
+    "prompt_before_median": 4293.0,
+    "prompt_before_max": 4309,
+    "delta_median": 445.0,
+    "delta_max": 445,
+    "prompt_after_max": 4754,
+    "max_prompt_length": 5120,
+    "headroom_after": 366,
+    "deploy_regime_full_menu_prompt": 6734
+  },
+  "P6_behavior_derivation": {
+    "turns_total": 1325,
+    "turns_signal_behaviors_unmappable": 411,
+    "turns_mappable": 822,
+    "mappable_agreement": 0.9574,
+    "naive_agreement_all_turns": 0.594,
+    "cross_tab": {
+      "tool_call->tool_call": 596,
+      "clarify->answer": 213,
+      "answer->answer": 191,
+      "reject->answer": 135,
+      "(none)->tool_call": 65,
+      "clarify->tool_call": 34,
+      "tool_call->answer": 34,
+      "(none)->answer": 27,
+      "reject->tool_call": 14,
+      "defer->tool_call": 9,
+      "defer->answer": 6,
+      "answer->tool_call": 1
+    }
+  },
+  "P7_constrained_decoding_wired": {
+    "definition_found": true,
+    "call_sites": 0,
+    "lines": []
+  }
+}
