@@ -22,6 +22,7 @@ import functools
 import json
 import math
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,30 @@ def collate(batch: list[dict[str, Any]], pad_token_id: int) -> dict[str, torch.T
     }
 
 
+def _free_gpus(threshold_mib: int = 2048) -> list[str]:
+    """空闲 GPU 的物理编号（nvidia-smi 口径：显存占用 < threshold 视为空闲）。
+
+    尊重已设的 CUDA_VISIBLE_DEVICES（只在可见集合内数）；查询失败返回 []（回退单卡）。
+    """
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,memory.used", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10, check=True)
+    except Exception:
+        return []
+    free = []
+    for line in out.stdout.strip().splitlines():
+        parts = line.split(",")
+        if len(parts) == 2 and int(parts[1]) < threshold_mib:
+            free.append(parts[0].strip())
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None:
+        vis = {x.strip() for x in visible.split(",")}
+        free = [i for i in free if i in vis]
+    return free
+
+
 def _unwrap(model) -> tuple[Any, Any]:
     """拿到 (transformer 主干, lm_head)。
 
@@ -178,13 +203,21 @@ def token_losses(model, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, t
     return losses, rows
 
 
-def build_model(model_path: str, lora_rank: int, lora_alpha: int, dtype: torch.dtype):
+def build_model(model_path: str, lora_rank: int, lora_alpha: int, dtype: torch.dtype,
+                resume_adapter: str | None = None):
     from transformers import AutoModelForCausalLM
 
     model = AutoModelForCausalLM.from_pretrained(
         model_path, dtype=dtype, attn_implementation="sdpa",
     )
     model.config.use_cache = False
+    if resume_adapter:
+        # 续训：LoRA 结构与权重整体从存档重建（不走 get_peft_model 再灌权重的两步路——
+        # 一步构造消灭「结构建了、权重没灌上」的静默半成品）。加载是否真生效由
+        # main 里的起点 ΔW 断言验证（「adapter 没推送」家族的针对性防御）
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, str(ROOT / resume_adapter), is_trainable=True)
+        return model, None
     if lora_rank <= 0:
         return model, None
 
@@ -306,15 +339,16 @@ def main(argv: list[str] | None = None) -> int:
     # 训练脚本的默认值必须是「跑完就有记录」，要关得显式说。
     parser.add_argument("--wandb-project", default="syncopate")
     parser.add_argument("--no-wandb", action="store_true", help="显式关掉上报（调试/跑测试用）")
-    # ★★ 选点定式（Chaoyu 2026-08-19，依据 v13r2 五点一次性验证，全程见 22 §H）：
-    #   **e1 是默认起点，<1 epoch 的打点彻底废除** —— 0.25 遍格式都没学会
-    #   （parse_err 0.50/条），0.5/0.75 遍在熵、格子、行为上全面被 e1 压制。
-    #   以后若要再选，测 **1–2 epoch 之间**的三个点（默认 1.25/1.5/1.75 遍，
-    #   即总步数的 0.625/0.75/0.875，epochs=2 时）。
+    # ★★ 选点定式（Chaoyu 2026-08-19 立、08-29 修订单位，全程见 22 §H）：
+    #   **<1 epoch 的打点彻底废除** —— 0.25 遍格式都没学会（parse_err 0.50/条）。
+    #   08-29 修订（Chaoyu；v14 实测最优点右移：e1 −0.105 vs e2 +0.058）：打点单位从
+    #   「总步数比例」改成 **epoch 位置**——老单位是按 epochs=2 设计的，epochs=3 下会
+    #   落到 1.875/2.25/2.625 这种没人要的位置（注释与现实脱节）。默认 1.5,2.5 配合
+    #   整 epoch 存档 ⇒ **e1 / e1.5 / e2 / e2.5 / e3 五点谱**，评测选点一遍扫完。
     #   ⚠️ 落在第 1 个 epoch 之前的打点会被**硬过滤**（不是靠默认值挡）。
-    parser.add_argument("--save-fractions", default="0.625,0.75,0.875",
-                        help="在训练总步数的这些比例处额外存点（epochs=2 时 = 1.25/1.5/1.75 遍）。"
-                             "设成空串关掉。⚠️ 落在 epoch1 之前的点会被过滤掉（选点定式，22 §H）。"
+    parser.add_argument("--save-epochs", default="1.5,2.5",
+                        help="在这些 epoch 位置额外存选点 ckpt（整数位置由整 epoch 存档天然覆盖，"
+                             "传了也跳过；<1 epoch 硬过滤）。空串关掉。"
                              "★ 临时选点产物，选完就删（跑完会打印清理命令）")
     parser.add_argument("--profile-steps", type=int, default=0,
                         help="H0 观测仪：抓 N 个 micro-step 的 torch.profiler 时间线后自动收工"
@@ -322,7 +356,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
     parser.add_argument("--wandb-run", default=None)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--resume-adapter", default=None,
+                        help="从已存的 epoch adapter 续训（例 checkpoints/sft/v14_r2/epoch2）。"
+                             "lr 调度按 --resume-epochs 快进到断点位置（总步数语义与连续训练一致）；"
+                             "⚠️ AdamW 动量**新起**——epoch 存档只有 adapter 没有优化器状态，"
+                             "与连续训练略有差异，验收判定时如实记")
+    parser.add_argument("--resume-epochs", type=int, default=0,
+                        help="已完成的 epoch 数（配 --resume-adapter，从第 N+1 个 epoch 续到 --epochs）")
     args = parser.parse_args(argv)
+
+    # ---- 默认四卡（Chaoyu 08-29）：CLI 直跑且 ≥4 张空闲卡 ⇒ 自动升格 torchrun×4；
+    #      不足 4 张空闲 ⇒ 单卡回退。显式单卡：SYNCOPATE_SFT_SINGLE=1。
+    #      只在 CLI 路径（argv is None）触发——程序化调 main([...])（测试/负向认证）不升格。
+    if (argv is None and int(os.environ.get("WORLD_SIZE", "1")) == 1
+            and not os.environ.get("SYNCOPATE_SFT_SINGLE")
+            and torch.cuda.is_available()):
+        free = _free_gpus()
+        if len(free) >= 4:
+            new_argv = list(sys.argv[1:])
+            if not any(a == "--grad-accum" or a.startswith("--grad-accum=") for a in new_argv):
+                # 单卡配方 2×8=16 ⇒ 四卡等效 2×2×4；不自动降会静默变 64（连 lr 语义一起变）
+                new_argv += ["--grad-accum", str(max(1, args.grad_accum // 4))]
+            os.environ.setdefault("CUDA_VISIBLE_DEVICES", ",".join(free[:4]))
+            cmd = ["torchrun", "--standalone", "--nproc_per_node=4",
+                   "-m", "syncopate.train.sft", *new_argv]
+            print(f"[DDP] {len(free)} 张空闲卡 ⇒ 默认四卡升格：{' '.join(cmd)}")
+            os.execvpe("torchrun", cmd, dict(os.environ))
+        print(f"[DDP] 空闲卡 {len(free)} 张 < 4 ⇒ 单卡回退（SYNCOPATE_SFT_SINGLE=1 可显式压单卡）")
 
     # ---- DDP 数据并行（torchrun 启动时自动生效；单进程跑 = 原语义分毫不动）----
     #
@@ -380,7 +440,8 @@ def main(argv: list[str] | None = None) -> int:
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                   collate_fn=collate_fn, drop_last=False)
 
-    model, _ = build_model(model_path, args.lora_rank, args.lora_alpha, dtype)
+    model, _ = build_model(model_path, args.lora_rank, args.lora_alpha, dtype,
+                           resume_adapter=args.resume_adapter)
     model.to(device)
     # ★ LoRA + gradient checkpointing 必须配这两行，否则 backward 直接报
     #   "element 0 of tensors does not require grad"。
@@ -416,6 +477,17 @@ def main(argv: list[str] | None = None) -> int:
     scheduler = get_cosine_schedule_with_warmup(
         optimizer, int(total_steps * args.warmup_ratio), total_steps)
 
+    start_epoch = 0
+    if args.resume_adapter:
+        start_epoch = args.resume_epochs
+        assert 0 < start_epoch < args.epochs, \
+            f"续训要求 0 < --resume-epochs({start_epoch}) < --epochs({args.epochs})"
+        # lr 轨迹快进到断点：总步数/调度形状与连续训练完全一致（AdamW 动量除外，见参数说明）
+        for _ in range(steps_per_epoch * start_epoch):
+            scheduler.step()
+        print(f"[续训] {args.resume_adapter}（已完成 {start_epoch} epoch）"
+              f"lr 快进到 step {steps_per_epoch * start_epoch}：{scheduler.get_last_lr()[0]:.2e}")
+
     run = None
     if args.wandb_project and not args.no_wandb:
         import wandb
@@ -443,7 +515,8 @@ def main(argv: list[str] | None = None) -> int:
             run.log(payload, step=step)
 
     base = evaluate(model, val_set, device, pad_id, args.batch_size)
-    print(f"[eval] epoch 0 (未训练)  val_loss={base['val_loss']:.4f}  "
+    base_label = f"断点起点 (e{start_epoch})" if args.resume_adapter else "epoch 0 (未训练)"
+    print(f"[eval] {base_label}  val_loss={base['val_loss']:.4f}  "
           f"ppl={base['val_ppl']:.2f}  监督 token={base['val_tokens']}")
     for group, stat in base["by_group"].items():
         print(f"        {group:<10} loss={stat['loss']:.4f}  ppl={stat['ppl']:.2f}")
@@ -504,26 +577,37 @@ def main(argv: list[str] | None = None) -> int:
                 den_sq += float(torch.linalg.matrix_norm(base)) ** 2
         return (num_sq ** 0.5) / max(den_sq ** 0.5, 1e-12)
 
-    # 选点：把比例换算成绝对步号。⚠️ 用 round 而不是 int —— 0.999*total 会被截成 total-1，
-    #      看起来"少存了一个点"，而那是最容易被读成 bug 的那种静默偏移。
-    sel_fracs = [float(x) for x in args.save_fractions.split(",") if x.strip()]
-    sel_steps = {max(1, round(f * total_steps)): f for f in sel_fracs}
+    if args.resume_adapter:
+        # ★「adapter 没推送」家族的针对性防御：断点起点的 ΔW 必须非零（真加载了），
+        #   且断点 val_loss 应远低于裸基座（上面 [eval] 行人肉可核）。ΔW≈0 = 在空跑基座。
+        r0 = _delta_w_ratio()
+        print(f"[续训] 起点 ||ΔW||/||W|| = {r0*100:.4f}%（应 ≈ 断点 epoch 存档时的值）")
+        assert r0 > 1e-4, ("🔴 续训 adapter 没真正加载（起点 ΔW≈0 = 空跑基座）"
+                           "——「adapter 没推送」家族，拒绝启动")
+
+    # 选点：epoch 位置 × steps_per_epoch 换算成绝对步号。⚠️ 用 round 而不是 int ——
+    #      截断会"少存一个点"，那是最容易被读成 bug 的那种静默偏移。
+    sel_fracs = [float(x) for x in args.save_epochs.split(",") if x.strip()]
+    sel_steps = {max(1, round(f * steps_per_epoch)): f
+                 for f in sel_fracs if abs(f - round(f)) > 1e-9}   # 整数位=整 epoch 存档已覆盖
     # ★ 选点定式（22 §H）：<1 epoch 的打点**硬过滤**，传了也不存 —— 0.25 遍连格式都
     #   没学会，那些点只会浪费评测预算、诱惑人去选（v13r2 五点验证的实测结论）。
-    dropped = {s: f for s, f in sel_steps.items() if s < steps_per_epoch}
+    #   续训时断点之前的位置同样过滤（那些步数已经过去了，存不到）。
+    dropped = {s: f for s, f in sel_steps.items()
+               if s < steps_per_epoch or s <= steps_per_epoch * start_epoch}
     if dropped:
-        sel_steps = {s: f for s, f in sel_steps.items() if s >= steps_per_epoch}
-        print(f"[选点] ⛔ 过滤掉 epoch1 之前的打点 {sorted(dropped)}"
-              f"（选点定式：<1 epoch 不再采样，见 22 §H）")
+        sel_steps = {s: f for s, f in sel_steps.items() if s not in dropped}
+        print(f"[选点] ⛔ 过滤掉不可达的打点 {sorted(dropped)}"
+              f"（<1 epoch 是选点定式 22 §H；续训时断点之前的步数已经过去，存不到）")
     if sel_steps:
         print(f"[选点] 将在 step {sorted(sel_steps)} 额外存点"
               f"（总步数 {total_steps}）—— **临时产物，选完就删**")
 
-    global_step = 0
+    global_step = steps_per_epoch * start_epoch
     skipped = 0                 # ★ 没有监督 token 被跳过的 micro-step 数
     sup_tokens = 0              # ★ 真正参与 loss 的 token 数（不是序列 token 数）
     started = time.time()
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1 + start_epoch, args.epochs + 1):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)   # 不设的话每个 epoch 洗牌顺序相同
         running, seen = 0.0, 0
@@ -572,7 +656,9 @@ def main(argv: list[str] | None = None) -> int:
                      "health/skipped_micro_steps": skipped,
                      "health/supervised_tokens": sup_tokens,
                      "perf/supervised_tokens_per_sec": sup_tokens / elapsed,
-                     "perf/steps_per_sec": global_step / elapsed}, step=global_step)
+                     "perf/steps_per_sec":
+                         (global_step - steps_per_epoch * start_epoch) / elapsed},
+                    step=global_step)
             if prof is not None:
                 prof.step()
                 prof_left -= 1

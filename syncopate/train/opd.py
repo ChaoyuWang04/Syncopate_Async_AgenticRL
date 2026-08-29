@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -117,9 +118,16 @@ def main() -> int:
     rank, world = dist.get_rank(), dist.get_world_size()
     torch.cuda.set_device(rank)
     aux_gpus = os.environ.get("OPD_AUX_GPUS", "2,3").split(",")
-    aux_dev = f"cuda:{aux_gpus[rank]}"
     # ⚠️ 卡号是 CUDA_VISIBLE 重映射后的索引：启动令 CUDA_VISIBLE_DEVICES=0,3,1,2 下
     #   可见 0=物理0(rank0 学生) 1=物理3(rank1 学生) 2=物理1(rank0 教师) 3=物理2(rank1 教师)
+    # 卡数回退（08-29 审计补）：可见卡不足教师独立卡时，教师/锚与学生同挤一张
+    # （4B bf16 学生+教师+锚 ≈ 24GB，5090 32GB 放得下——慢但能跑，单/双卡应急档）
+    n_vis = torch.cuda.device_count()
+    if rank < len(aux_gpus) and int(aux_gpus[rank]) < n_vis:
+        aux_dev = f"cuda:{aux_gpus[rank]}"
+    else:
+        aux_dev = f"cuda:{rank}"
+        log(f"⚠️ 可见 GPU {n_vis} 张不足教师独立卡 ⇒ 教师/锚与学生同卡 cuda:{rank}（回退档）")
 
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -145,7 +153,11 @@ def main() -> int:
                                        is_trainable=False).eval()
 
     rows = [json.loads(x) for x in open(args.prompts)]
-    rows = rows[rank::world]               # rank 分片
+    # ★ 等长分片（08-29 审计修复）：原 rows[rank::world] 在特定条数下各 rank 批次数
+    #   不等 ⇒ 集合通信次数错位 = 死锁（P1 的 419 条恰好 27/27 躲过；209 条就是
+    #   14/13 卡死）。DistributedSampler 同法：循环补齐到等长再切块。
+    n_per = math.ceil(len(rows) / world)
+    rows = (rows * world)[: n_per * world][rank * n_per:(rank + 1) * n_per]
     trainables = [p for p in student.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(trainables, lr=args.lr)
 
@@ -256,6 +268,19 @@ def main() -> int:
                     shutil.rmtree(saved.pop(0), ignore_errors=True)
                 log(f"[opd-ckpt] {pth}（adapter-only，保留最近 3）")
             dist.barrier()
+        # ★ epoch 末：rank 间学生权重一致性硬断言（08-29 审计补，与 sft.py 同款防线）
+        #   手动梯度同步 + 各 rank 同步后独立 opt.step()，权重应逐位一致；
+        #   发散 = 同步静默失效（「adapter 没推送」家族），宁可停机不带病训完。
+        fp = torch.tensor(
+            [sum(float(p.detach().float().norm()) ** 2 for p in trainables)],
+            device=f"cuda:{rank}")
+        got = [torch.zeros_like(fp) for _ in range(world)]
+        dist.all_gather(got, fp)
+        vals = [float(x) for x in got]
+        assert max(vals) - min(vals) < 1e-4, \
+            f"🔴 [opd-sync] rank 间权重发散 {vals} —— 梯度同步失效，停机"
+        if rank == 0:
+            log(f"[opd-sync] ep{ep} 权重一致性通过（fp={vals[0]:.4f}）")
     if rank == 0:
         pth = Path(args.out) / "final"
         student.save_pretrained(pth)
