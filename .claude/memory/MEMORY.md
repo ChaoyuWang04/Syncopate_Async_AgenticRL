@@ -1,3 +1,4 @@
+- [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★08-29 立项：行为进强通道（壳→session 工具族），施工图 25，R0 假说验证先行
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么；★含「章节验收怎么做」的五步（M8 立、M9 照做）
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提

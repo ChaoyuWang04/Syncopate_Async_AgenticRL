@@ -1,0 +1,32 @@
+== logs/u_route/run_v145d_context_v2.jsonl
+  L1-iv: 17/24 = 71%
+  L1-oov: 16/26 = 62%
+  L2: 20/25 = 80%
+  L3: 0/25 = 0%
+  L4: 1/25 = 4%
+  [行为读数] 话术复读率=2%（尾='要关注后续使用情况。'，门槛≤15%） 病句率=0.0%（≤2%） L2工具浪费=0%（≤20%） 答长p50/p95=40/60
+   ✗ L1_05: 概念追问动了工具/提案 ['memory.read']（v2=零动作判据）
+   ✗ L1_06: 概念追问动了工具/提案 ['metrics.get_freshness']（v2=零动作判据）
+   ✗ L1_09: 回复无定义性措辞
+   ✗ L1_15: 概念追问动了工具/提案 ['mmp.get_attribution']（v2=零动作判据）
+   ✗ L1_16: 回复无定义性措辞
+   ✗ L1_17: 概念追问动了工具/提案 ['campaign.list', 'campaign.list']（v2=零动作判据）
+   ✗ L1_18: 概念追问动了工具/提案 ['campaign.list', 'campaign.get_metrics']（v2=零动作判据）
+   ✗ L1_21: 回复无定义性措辞
+   ✗ L1_23: 概念追问动了工具/提案 ['mmp.get_attribution']（v2=零动作判据）
+   ✗ L1_31: 回复无定义性措辞
+   ✗ L1_32: 概念追问动了工具/提案 ['memory.search']（v2=零动作判据）
+   ✗ L1_37: 回复无定义性措辞
+   ✗ L1_40: 回复未提到该词
+   ✗ L1_41: 回复未提到该词
+   ✗ L1_43: 回复无定义性措辞
+   ✗ L1_45: 概念追问动了工具/提案 ['policy.search']（v2=零动作判据）
+   ✗ L1_46: 概念追问动了工具/提案 ['mmp.get_attribution', 'campaign.get_metrics']（v2=零动作判据）
+   ✗ L2_04: 第二轮未对 CMP_5 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_05: 第二轮未对 CMP_6 调数据工具（tools=[]）
+   ✗ L2_07: 第二轮未对 CMP_2 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_15: 第二轮未对 CMP_4 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_16: 第二轮未对 CMP_5 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L3_00: 未见 ≈55000 的提案参数
+   ✗ L3_01: 未见 ≈24000 的提案参数
+   ✗ L3_02: 未见 ≈96000 的提案参数

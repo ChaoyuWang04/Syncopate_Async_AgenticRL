@@ -1,26 +1,26 @@
 {
-  "version": "v14.1",
+  "version": "v14.2",
   "seed": 1409,
   "sources": {
     "v13_train": 419,
     "l2_multiturn": 200,
     "chat_distill": 74,
     "cot_distill": 59,
-    "l1_concept": 100
+    "l1_concept": 250
   },
-  "total": 852,
-  "supervised_tokens": 151607,
+  "total": 1002,
+  "supervised_tokens": 159196,
   "behavior_counts": {
     "tool_call": 568,
-    "answer": 153,
-    "reject": 46,
-    "clarify": 43,
+    "answer": 199,
+    "reject": 106,
+    "clarify": 87,
     "defer": 42
   },
   "bucket_counts": {
+    "multiturn_l1": 250,
     "multiturn": 200,
     "critical_args": 169,
-    "multiturn_l1": 100,
     "sequential_dependency": 87,
     "chat_distill": 74,
     "reasoning": 69,

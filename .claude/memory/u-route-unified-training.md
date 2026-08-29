@@ -1,23 +1,18 @@
 ---
 name: u-route-unified-training
-description: 主线唯一队首=U 路（OPD+多轮+CoT 三合一，施工图 docs/syncopate/24）；08-29 现场=P2 验收链在跑，接手人从这里继续
-metadata: 
-  node_type: memory
+description: U 路（OPD+多轮+CoT）P0-P2 已收官、P3 首跑判定完；P3/P4 并入 v15（见 v15-contract-refactor）；本文=v14 世代终态与坑清单
+metadata:
   type: project
-  originSessionId: 57f8d3ca-0848-5dc0-847c-d137e8824067
-  modified: 2026-08-29T02:44:33.091Z
 ---
 
-U 路（2026-08-28 Chaoyu 融合裁定）= 主线唯一队首：OPD 闲聊 + 多轮承接 + CoT 合成一条 v14 管线，「数据合一、监督分家」（NL 段←OPD 教师=裸底座 · 工具段←SFT gold+RL · think 段←8B 蒸馏冷启+RL）。施工图与全部数字在 `docs/syncopate/24`，进度行在 `01-TASKS §U`。
+U 路（Chaoyu 08-28 融合裁定）=「数据合一、监督分家」的 v14 世代主线。**08-29 终态**：P0 ✅ P1 ✅（说人话 1.37 超底座）P2 ✅ v14.5 收官（六过一改期：四遍考场聚合 L1-iv 68.8/90 线改期 P3 出口·L1-oov 71.2 ✓·L2 78 ✓·盲评 1.460 vs P1 1.141·话术复读 66%→1%）；P3 首跑判定=任务分 +0.068 但**行为标签通道漂移**（defer 9/9→0/9、L2 78→52，机理=标签寄生自研壳弱通道+训练分布外无锚）不晋级 ⇒ **P3/P4 并入 [[v15-contract-refactor]] 的 R6/R5**。判定全史与教训在 docs/syncopate/24 §4/§7。
 
-**08-29 02:40 现场**：P0 ✅ P1 ✅（任务分 +0.022 显著、说人话 1.37 超底座；两红旗 L2=36 / acted_on_bad_data+18 已升格为 P2 门槛⑤⑦）；P2 数据 752 行 ✅ + SFT v14_r1 ✅，**验收链在跑**：`scripts/u_p2_accept.sh`（e1/e2 各 4 卡评 → compare vs `_audit/v13_sft_v13r2_e1_merged.json` → 选优 → merge_adapter 合并 → 服务化跑 talk/context 考场 → 判七门槛）。之后 P3 多轮 RL（fully_async，会话级 GRPO+分段 KL 参照）→ P4 抛光 → 终验含 Chaoyu 真人 10 段会话。
+**v14 世代沉淀的方法论（v15 继续用）**：
+- 数据：程序造事实·教师穿语言·判据把关；五闸（份额=监督token口径带宽·密度=收尾句/病句/distinct·OOV教学面·被判句泄漏·冻结）；对照对（判别行为的数据必须成对）；外部语料只走 模式A题库注入/模式B模式抽取（S1 题库 120/S2 句式库 42 模板/S3 revision 正则 14 条全在 data/u_route/ 可复用）。
+- 评测：考场单遍方差实测 29pp ⇒ 四遍聚合口径；iv/oov 双词表测规则泛化vs记忆；机判首用必人核；判据必须负向认证「会红」；盲评闭卷带钥匙。
+- 训练：SFT 默认四卡 DDP（手动 all_reduce+rank 权重一致断言+负向认证）·断点续训·epoch 谱选点 e1/1.5/2/2.5/3（老口径只评 e1/e2 在 v14 会错选）。
+- RL 机理库：动态池 WEIGHT_FLOOR 保「再见到」但 GRPO 零方差保「见到也学不回」⇒ 起点越好无锚漂移越危险；fully_async save_freq 挂 param_version（16 步/版）非训练步；--test-freq 触发 verl 内置 validate 的翻倍断言 bug 勿开；守卫杀 launcher 必须连 ray stop --force 清集群（91 孤儿进程事故）；D 族连零门槛在新采样制度失配（真仪器=defer 题 ema_reward 从饱和位下跌）。
 
-**接手人易踩的坑（都付过学费）**：
-- eval_parallel 必须显式 `MODEL=`（SFT ckpt 贴 `models/Qwen3-4B` 裸基座；RL adapter 才贴 SFT 合并基座）。
-- pkill -f 全面禁用（三次自杀）；杀进程用 pidfile / `nvidia-smi --query-compute-apps=pid` 精确 PID。
-- 考场 worker 必须带 `--daily-cost-cap-micros 10000000000`（org_demo 默认 cap 会污染考试，P0 吃过 cand 全灭）。
-- OPD 训练器（syncopate/train/opd.py）的 mask 判据是三版校准出来的：只对 `"reply"` 在文本里但没被 mask 的样本报错（仪器坏）；全零 batch 走集合跳步（先 all_reduce mask 数再决定，防 DDP 死锁）。
-- 分段器用 [[project-mechanism-not-wired]] 里那类静默死法验过：token 级 BPE 对不齐会让 mask 永远为空，必须用 segment_text（offset_mapping）+ reply 值白名单。
-- 无人值守常设纪律：[[blank-thresholds-are-not-passes]]（判据要能对自己失败）、每步过门槛才进下一步、随步更新 24/01、按路径 commit+push。
+**接手人坑清单（沿用）**：eval_parallel 必须显式 MODEL=（SFT 贴裸基座/RL 贴 SFT 合并基座）；RL adapter 不许 merge（增量 0.05% 被 bf16 舍入淹没，保持 adapter 形态 serve=--enable-lora）；pkill -f 禁用（第四次自杀在案）；考场 worker 带 cost-cap；编辑运行中的 bash 脚本=字节偏移错乱（watch 换独立进程接管）；文本替换插方法可能拦腰截断 __init__（ast 抓不到，要结构断言）。
 
-Chaoyu 常设指令（08-28）：无人值守跑到 v14 OPD 训练完毕；ckpt 只存 adapter；4 卡吃满；每重大节点跑 eval 看任务能力+梯度信息；OPD 指标进 wandb（还欠：编辑 sft/rl 两个 view + 加 OPD view）；本地 MoE 模型与 >1GB torchprof 文件已删。
+**dev mode 三模型栈**（Chaoyu 实测用，保持服务）：GPU0=RL-s12@8100·GPU1=base@8101·GPU2=sft-e3@8102；会话级模型锁定（conversations.model 列）+CoT 折叠（SYNCOPATE_RUNTIME_THINKING=1）+前端三段选择器。真人实测五发现（标签漂移/false_claim 空头支票/考卷越权盲区/summary 污染/CoT 触发压死）在 24 §4-P3。
