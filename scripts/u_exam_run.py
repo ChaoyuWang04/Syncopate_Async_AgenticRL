@@ -85,7 +85,7 @@ async def one_item(c, pg, sem, item, out, arm):
 
 async def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exam", choices=["talk", "context"], required=True)
+    ap.add_argument("--exam", choices=["talk", "context", "context_v2"], required=True)
     ap.add_argument("--arm", required=True)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=4)
