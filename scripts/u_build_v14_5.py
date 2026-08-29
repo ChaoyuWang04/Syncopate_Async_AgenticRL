@@ -48,9 +48,14 @@ from u_build_v14 import GLOSSARY  # noqa: E402  61 词（定义要点作教师�
 STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 
 
+_SEED = [0]
+
+
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
+    _SEED[0] += 1     # ⚠️ vllm serve 默认 seed=0 ⇒ 同请求采样确定性；逐请求换 seed 才有多样性
     r = await client.post(f"{base}/chat/completions", json={
         "model": "t", "temperature": temp, "top_p": 0.95, "max_tokens": max_tokens,
+        "seed": _SEED[0],
         "messages": ([{"role": "system", "content": sys_prompt}] if sys_prompt else [])
         + [{"role": "user", "content": prompt}],
         "chat_template_kwargs": {"enable_thinking": False},
@@ -93,14 +98,22 @@ async def gen_defs(client) -> dict[str, list[str]]:
     out = {}
     for term, hint in GLOSSARY.items():
         versions = []
+        angles = [
+            f"用一句自然的中文向运营同事解释投放术语「{term}」（参考要点：{hint}）。"
+            f"要求：以「{term}」开头、一句话说完、不要列条目。直接输出这句话。",
+            f"换一种说法，用大白话向新人解释「{term}」是什么（背景知识：{hint}）。"
+            f"不要照抄背景知识的原句，一句话，以「{term}」开头，直接输出。",
+            f"用一个具体例子帮同事理解「{term}」（它的含义：{hint}）。"
+            f"一句话说完，以「{term}」开头，不要照抄含义原文，直接输出。",
+            f"如果同事把「{term}」理解错了，你会怎么一句话纠正并讲清它？"
+            f"（正确含义：{hint}）以「{term}」开头，直接输出这句话。",
+            f"向老板汇报时顺口解释一下「{term}」（含义：{hint}），一句话，"
+            f"以「{term}」开头，措辞和书面定义不同，直接输出。",
+        ]
         for i in range(5):
             if len(versions) >= 3:
                 break
-            t = await teach(client, T4B,
-                            f"用一句自然的中文向运营同事解释投放术语「{term}」"
-                            f"（参考要点：{hint}）。要求：以「{term}」开头、一句话说完、"
-                            f"不要列条目、不要重复「要点」二字。直接输出这句话。",
-                            temp=0.9)
+            t = await teach(client, T4B, angles[i], temp=0.9)
             t = clean_reply(t)
             if (term in t and 12 <= len(t) <= 90 and not SICK.search(t)
                     and not has_oov(t) and t not in versions and "{" not in t):
@@ -174,9 +187,10 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     out, tried = [], 0
 
     async def one_step_think(ctx: str):
+        _SEED[0] += 1
         r = await client.post(f"{T8B}/completions", json={
             "model": "t", "prompt": ctx + "<think>\n", "max_tokens": 1100,
-            "temperature": 0.7, "top_p": 0.95})
+            "seed": _SEED[0], "temperature": 0.7, "top_p": 0.95})
         r.raise_for_status()
         return r.json()["choices"][0]["text"]
 
