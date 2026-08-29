@@ -200,6 +200,7 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     rng.shuffle(cases)
     print(f"[CoT] 难例池 {len(cases)}（族内限额 30）")
     out, tried = [], 0
+    reject_step = Counter()
 
     async def one_step_think(ctx: str):
         _SEED[0] += 1
@@ -208,6 +209,23 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
             "seed": _SEED[0], "temperature": 0.7, "top_p": 0.95})
         r.raise_for_status()
         return r.json()["choices"][0]["text"]
+
+    async def step_rejection_sample(ctx: str, gold_kind, gold_act, n=6):
+        """R1 式 rejection sampling：并发 n 条思考路径，收教师自己也选了 gold 动作的
+        那条（思行一致构造性成立——不是给 gold 编理由，是从真决策里选对的）。"""
+        gens = await asyncio.gather(*[one_step_think(ctx) for _ in range(n)],
+                                    return_exceptions=True)
+        for gen in gens:
+            if isinstance(gen, Exception) or "</think>" not in gen:
+                continue
+            think, post = gen.split("</think>", 1)
+            think = think.strip()
+            cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
+            if not think or len(think) > 4096 or cjk < 0.5:
+                continue
+            if first_action(post) == (gold_kind, gold_act):
+                return think
+        return None
 
     def first_action(text: str):
         m = re.search(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.S)
@@ -227,38 +245,31 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
         segs = full.split(ASST)
         if len(segs) < 2:
             continue
-        prefix_ok, thinks = True, []
-        for si in range(1, len(segs)):
-            ctx = ASST.join(segs[:si]) + ASST + "\n"
-            gold_seg = segs[si]
-            g_kind, g_act = first_action(gold_seg)
-            tried += 1
-            gen = await one_step_think(ctx)
-            if "</think>" not in gen:
-                prefix_ok = False
-                break
-            think, post = gen.split("</think>", 1)
-            think = think.strip()
-            t_kind, t_act = first_action(post)
-            cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
-            # 承诺闸：教师思考后自己选的动作必须与 gold 一致；语言闸：中文为主
-            if not think or len(think) > 4096 or cjk < 0.5 \
-                    or (g_kind, g_act) != (t_kind, t_act):
-                prefix_ok = False
-                break
-            thinks.append(think)
-        if not prefix_ok:
+        # v2 设计（08-29 第二迭代）：think 只插**终答步**——上下文已含全部工具观测，
+        # 思考集中在「看完数据怎么判」（难例的难点=终判：cap 权衡/预算数学/证据取舍）；
+        # 中间步保持原样。理由：gold 工具序非唯一合理序，逐步全等在深轨迹指数衰减
+        # （6 采样实测 104 案全灭：弃1步45·2步48）；终答行为匹配率高且思行一致依旧
+        # 构造性成立。全轨迹自主 rollout 版（R1 正统）记 P3 后增强项。
+        si_last = len(segs) - 1
+        ctx = ASST.join(segs[:si_last]) + ASST + "\n"
+        g_kind, g_act = first_action(segs[si_last])
+        tried += 1
+        think = await step_rejection_sample(ctx, g_kind, g_act, n=8)
+        if think is None:
+            reject_step[si_last] += 1
             continue
+        thinks = {si_last: think}
         vals = gold_values(segs[-1])
         # 末答闸沿用：终段 gold 值仍是原 gold（我们只插 think 不改答案）
         new_segs = [segs[0]]
         for si in range(1, len(segs)):
             body = segs[si]
-            if "<think>\n\n</think>" in body[:30]:
-                body = body.replace("<think>\n\n</think>",
-                                    f"<think>\n{thinks[si-1]}\n</think>", 1)
-            else:
-                body = f"\n<think>\n{thinks[si-1]}\n</think>" + body
+            if si in thinks:
+                if "<think>\n\n</think>" in body[:30]:
+                    body = body.replace("<think>\n\n</think>",
+                                        f"<think>\n{thinks[si]}\n</think>", 1)
+                else:
+                    body = f"\n<think>\n{thinks[si]}\n</think>" + body
             new_segs.append(body)
         new_full = ASST.join(new_segs)
         cut = new_full.find(ASST)          # prompt = 首个 assistant 头之前
@@ -280,11 +291,11 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
                     "prompt_length": len(ids_p), "total_length": len(ids_all),
                     "supervised_tokens": sum(mask),
                     "behavior": r.behavior, "bucket": "cot_hard",
-                    "sub_axis": f"{r.case_id.split('_')[0]}|steps{len(thinks)}",
+                    "sub_axis": f"{r.case_id.split('_')[0]}|laststep{si_last}",
                     "signal_class": "graded", "split": "train",
                     "index": 95000 + len(out), "n_vals": len(vals)})
         print(f"  [CoT] 收 {r.case_id}（{len(thinks)} 步）→ {len(out)}/{max_rows}", flush=True)
-    print(f"[CoT] 保留 {len(out)}，尝试步数 {tried}")
+    print(f"[CoT] 保留 {len(out)}，尝试步数 {tried}，弃于第 N 步分布 {dict(reject_step)}")
     return out
 
 
@@ -508,7 +519,7 @@ async def main() -> int:
         print("[C] L2/L1 回放构建 …", flush=True)
         l2, l1 = await build_l2_l1(tokenizer, registry, client)
         print("[B] CoT 难例（8B）…", flush=True)
-        cot = await gen_cot(client, tokenizer, max_rows=100)
+        cot = await gen_cot(client, tokenizer, max_rows=60)
 
     # held-out val 切分（每桶尾部拿走）
     l2, l2v = l2[:200], l2[200:210]
@@ -535,7 +546,20 @@ async def main() -> int:
     total = sum(tok_by.values())
     share = {k: v / total for k, v in tok_by.items()}
     print("sup-tok 份额:", {k: f"{v:.1%}" for k, v in share.items()})
-    assert len(cot) >= 50, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥50）"
+    # CoT 预算截断：sup-tok ≤20% 硬上限（行大 ⇒ 行数闸与份额闸要联动，先按预算截）
+    non_cot_tok = int(t13.supervised_tokens.sum()) + \
+        sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows)
+    budget = int(non_cot_tok * 0.20 / 0.80)
+    acc, kept = 0, []
+    for r in cot:
+        if acc + r["supervised_tokens"] > budget:
+            break
+        acc += r["supervised_tokens"]
+        kept.append(r)
+    if len(kept) < len(cot):
+        print(f"[CoT] 预算截断 {len(cot)}→{len(kept)}（sup-tok 预算 {budget}）")
+    cot = kept
+    assert len(cot) >= 40, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥40）"
     bands = {"v13": (0.52, 0.66), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
              "chat": (0.01, 0.07), "cot": (0.05, 0.20)}
     for k, (lo, hi) in bands.items():
