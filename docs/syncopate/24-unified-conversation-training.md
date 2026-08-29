@@ -150,8 +150,8 @@ r2  v14.1=852 行。训法改制随场落地：SFT 四卡 DDP（默认升格+单
 融合三模式（外部语料只许走 A/B）
   A 题库注入   外部只出 user 侧文本（中文过滤+安全+与考场逐字去重）→ 我方教师作答
               + 契约装壳 → 回放入库。gold 永远是我们的。
-  B 模式抽取   外部数据一个字不入库，只抽分布形状：省略句式模板（Restoration-200k/
-              Rewrite-20k 聚类出 ≥30 种换掉手写 REF_FORMS）· L3/L4 难度分类学
+  B 模式抽取   外部数据一个字不入库，只抽分布形状：省略句式模板（WildChat-zh 多轮自挖
+              聚类 ≥30 种换掉手写 REF_FORMS；Rewrite-20k GitHub 库可增补）· L3/L4 难度分类学
               （BFCL v4 multi-turn 四子集：missing-function/parameter ↔ clarify/缺参）·
               revision 模式正则（R1 中文 110k，只喂给承诺闸与 aha 观测器）。
   C 直接混入   ⛔ 默认禁止（契约不匹配·引入第三种文风·B-5 语义对齐·license）。
@@ -169,8 +169,8 @@ r2  v14.1=852 行。训法改制随场落地：SFT 四卡 DDP（默认升格+单
   L1 概念追问（与 L2 成对照对）         ~150     ~6%           61 词×定义教师改写 3 版×句式 8；
                                                              scaffold=runtime 同款最小
                                                              answer_fields（去标签泄漏）
-  chat 契约壳                          ~80      ~4%           题库=smoltalk-chinese/LMSYS-zh
-                                                             （模式A）×3 语域×1–3 轮。
+  chat 契约壳                          ~80      ~4%           题库=smoltalk-chinese/WildChat-zh
+                                                             （模式A，见下方 S1）×3 语域×1–3 轮。
                                                              ★定位=教契约壳不是教说话——
                                                              说话归 OPD（CHAT e1 即饱和
                                                              +0.27，74 条已够量，不因外部
@@ -197,8 +197,62 @@ CoT/RL 联动
              不加长度惩罚，think 预算由契约封顶。
   RL 起点    双判据：任务分距最优 <MDE 的点中，选有梯度格子最多者（在 v14.2 新谱上终选）。
 
-License 线  外部语料仅题库/模式层（LMSYS/WildChat 有使用条款·BELLE 仅研究·LCCC MIT）；
-            商用/灰测放量前过一遍 license 审计。
+外部源定案（08-29 逐一实探 HF/GitHub，非猜测；❌ 者从计划除名）
+  ✅ smoltalk-chinese    Apache-2.0·未 gated·字段 classify/score/difficulty/n_turn 可精筛
+  ✅ WildChat-1M         odc-by（署名即可）·未 gated·中文 21.4%≈21 万段·带 toxic 过滤字段
+  ✅ Congliu R1中文110k  Apache-2.0·未 gated（只挖 revision 正则，不混训）
+  ⚠️ Rewrite-20k         GitHub 公开（chin-gyou/dialogue-utterance-rewriter），仅作句式增补
+  ❌ LMSYS-Chat-1M       gated=auto 需交互接受条款，非交互环境拿不到——弃用
+  ❌ BELLE multiturn     GPL-3.0 传染面不清——弃用
+  ❌ Restoration-200k    HF 与 GitHub 均无公开库——弃用（省略句式改 WildChat-zh 自挖）
+  商用/灰测放量前统一过一遍 license 审计（odc-by 需署名）。
+
+落地步骤 S1–S4（顺序执行，每步产出+门槛，不过不进下一步）
+  S1 chat 题库 v2（模式A）  smoltalk 按 classify∈闲聊族∧score≥高分线抽 500 候选
+     + WildChat-zh（language=Chinese∧toxic=false∧首轮≤60 字）抽 500 候选
+     → 互去重+与两考场逐字去重+MinHash 近重 → 教师质检抽 50 条合格率 ≥90%
+     → 采 120 条（3 语域×40）落 data/u_route/chat_bank_v2.jsonl
+     门槛：120 条足额 · 考场重叠 =0 · 病句正则命中 =0
+  S2 省略句式模式库（模式B）  WildChat-zh 多轮段第二轮 user ≤15 字且含
+     {呢|那|它|这|又|还} → 原始 ≥2000 条 → 实体占位归一化+聚类 → 模板 ≥30 种
+     门槛：模板 ≥30 · 与手写 REF_FORMS 重叠 ≤4 · 人核 30 条语法合格率 ≥95%
+     产出：data/u_route/ellipsis_patterns.json（含 70/30 训练-考场切分标记）
+  S3 revision 正则库（模式B）  Congliu-110k 流式统计修正标记（等等/不对/重新/换个思路…）
+     → 正则 ≥8 条，在现有 59 条 8B think 上试跑并报命中率 → revision_patterns.py
+  S4 生成器重写+建库  按上表配比产 v14.2 ≈1030 行
+     门槛：份额闸 ±3pp · 密度闸全过 · 冻结校验（v13 桶逐行不动）· 健全性断言全过
+```
+
+**考卷 v2（08-29 考场审计定案——只改数据不改考卷 = 用错尺子量对错）**
+
+```
+审计结论（对 u_make_exams.py / u_exam_judge.py 逐行核查）
+  ① L1 判据黑名单只含 campaign./metrics./analysis./creative. 前缀——漏 mmp./memory./
+     policy./calendar./benchmark.（实证：L1_12 五连 mmp.get_attribution 被判 PASS）
+     ⇒ 现行 L1=60% 是**高估值**
+  ② def_regex 含单字「指」⇒「指指」病句照样过闸（定义性措辞判据失义）
+  ③ L1 的 25 个考词将全部落入 v14.2 训练词表 ⇒ 考卷退化为记忆测验，测不出规则泛化
+  ④ L2 judge 完全不看 reply 内容 ⇒「查了不读数」「话术复读」在 92% 高分下隐形
+  ⑤ 无任何 cap 类行为读数（对照：单轮沙盒考场有 23 个 cap）
+  ⑥ 单次采样（temp 0.6）方差未量：25 题/层 ⇒ 1 题=4pp，门槛 85 在噪声边缘
+  ⑦ 考题句式单调：L1 仅 2 个模板族（与训练数据同病）
+  ⑧ talk 盲评机制健康（P0-1 自一致 100%）但缺复核闸
+
+升级设计（exam_v2 生成后冻结；老考卷双跑两轮做跨版本对照后退役）
+  L1 判据    概念题=**零工具调用**（任何 tool/proposal 即挂，与零动作 gold 对齐）；
+             定义判据=正面词表+病句负正则（「指指」类命中即挂）
+  L1 词表    50 题拆双份：in-vocab 24 + **OOV held-out 26**（held-out 词永不进训练词表，
+             写进 L-族门禁锁死）；分报 L1-iv / L1-oov
+  L1 门槛    **L1-iv ≥90% 且 L1-oov ≥70%**（规则泛化线，取代原单一 L1≥85）
+  L2 判据    原判据 + **读数在场**（reply 须含所查指标的沙盒真值）；L2 ≥70 不变，
+             另报 L2-读数率（首轮观察后定线）
+  行为读数   四件套随判随报（不进 pass/fail，同 compare 的 cap 表地位）：
+             话术复读率（最高频收尾句占比，现状 66% → 门槛 ≤15%）· 病句率 ≤2% ·
+             工具浪费率（L2 每题 >2 次调用占比 ≤20%）· 回复长度分布
+  句式来源   L1/L2 考题从 S2 模式库的 **held-out 30% 模板**生成（训练只许用 70%）
+             ——模板级切分让考卷天然测泛化而不是测记忆
+  方差闸    考场每次双遍跑，各层两遍通过率差 ≤8pp 才许判（超了加采样重判）
+  talk 复核  每次盲评抽 20 条双评，一致率 ≥90% 才开钥匙
 ```
 
 ### P3 · 多轮 RL（~3–5 天跑批，fully_async 现成栈）
