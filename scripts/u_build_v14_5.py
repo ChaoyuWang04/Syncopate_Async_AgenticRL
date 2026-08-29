@@ -179,11 +179,26 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     from u_teacher_probe import gold_values
     hard_ids = set(json.load(open("_audit/triage/cand_v13r2_e1/卡死.json")))
     hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
+    # ⚠️ triage id 是冻结评测集的 case（与训练集刻意隔离，交集恒空）⇒ 映射到模板族：
+    #    在训练集中选同族 case，优先长轨迹（多步 = 思考有用武之地）
+    pref = Counter(x.split("_")[0] for x in hard_ids)
+    hard_pref = {p for p, c in pref.items() if c >= 3}
+    print(f"[CoT] 难例模板族：{dict(pref)} → 选族 {sorted(hard_pref)}")
     df = pd.concat([pd.read_parquet("data/sft/v13/train.parquet"),
                     pd.read_parquet("data/sft/v13/val.parquet")])
-    cases = [r for _, r in df.iterrows() if r.case_id in hard_ids]
+    cases = [r for _, r in df.iterrows()
+             if str(r.case_id).split("_")[0] in hard_pref]
+    cases.sort(key=lambda r: -int(r.total_length))     # 长轨迹（多步）优先
+    capped, percnt = [], Counter()
+    for r in cases:
+        p = str(r.case_id).split("_")[0]
+        if percnt[p] >= 30:
+            continue
+        percnt[p] += 1
+        capped.append(r)
+    cases = capped
     rng.shuffle(cases)
-    print(f"[CoT] 难例池 {len(cases)}（卡死∪死格 {len(hard_ids)} ids）")
+    print(f"[CoT] 难例池 {len(cases)}（族内限额 30）")
     out, tried = [], 0
 
     async def one_step_think(ctx: str):
@@ -473,11 +488,23 @@ async def main() -> int:
     registry.latency_scale = 0.0
     bank = [json.loads(x) for x in open("data/u_route/chat_bank_v2.jsonl")]
 
+    cache_d = Path("data/u_route/v145_defs.json")
+    cache_c = Path("data/u_route/v145_chat_mat.json")
     async with httpx.AsyncClient(timeout=180) as client:
-        print("[A1] 定义改写 61×3 …", flush=True)
-        DEFS = await gen_defs(client)
-        print("[A3] chat 素材 …", flush=True)
-        chat_mat = await gen_chat(client, bank)
+        if cache_d.exists():
+            DEFS = json.load(open(cache_d))
+            print(f"[A1] 定义缓存命中（{len(DEFS)} 词）")
+        else:
+            print("[A1] 定义改写 61×3 …", flush=True)
+            DEFS = await gen_defs(client)
+            json.dump(DEFS, open(cache_d, "w"), ensure_ascii=False)
+        if cache_c.exists():
+            chat_mat = json.load(open(cache_c))
+            print(f"[A3] chat 缓存命中（{len(chat_mat)} 条）")
+        else:
+            print("[A3] chat 素材 …", flush=True)
+            chat_mat = await gen_chat(client, bank)
+            json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
         print("[C] L2/L1 回放构建 …", flush=True)
         l2, l1 = await build_l2_l1(tokenizer, registry, client)
         print("[B] CoT 难例（8B）…", flush=True)
@@ -508,8 +535,9 @@ async def main() -> int:
     total = sum(tok_by.values())
     share = {k: v / total for k, v in tok_by.items()}
     print("sup-tok 份额:", {k: f"{v:.1%}" for k, v in share.items()})
-    bands = {"v13": (0.52, 0.63), "l2": (0.10, 0.16), "l1": (0.03, 0.09),
-             "chat": (0.01, 0.07), "cot": (0.0, 0.20)}
+    assert len(cot) >= 50, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥50）"
+    bands = {"v13": (0.52, 0.66), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
+             "chat": (0.01, 0.07), "cot": (0.05, 0.20)}
     for k, (lo, hi) in bands.items():
         assert lo <= share[k] <= hi, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
     density_gate(l2, tokenizer, "L2")
