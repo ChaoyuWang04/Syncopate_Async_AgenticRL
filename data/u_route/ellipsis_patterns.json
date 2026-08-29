@@ -1,0 +1,278 @@
+{
+ "source": "WildChat-1M zh (mode-B pattern mining, no raw text)",
+ "scanned_dialogs": 119302,
+ "raw_candidates": 3845,
+ "templates": [
+  {
+   "template": "还有吗",
+   "freq": 165,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有吗？",
+   "freq": 48,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有呢",
+   "freq": 38,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有么",
+   "freq": 15,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有哪些",
+   "freq": 11,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有呢？",
+   "freq": 11,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有其他的吗",
+   "freq": 11,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "{X} 呢",
+   "freq": 11,
+   "split": "exam",
+   "kind": "substitution"
+  },
+  {
+   "template": "还有别的方法吗",
+   "freq": 10,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "{X}呢？",
+   "freq": 10,
+   "split": "train",
+   "kind": "substitution"
+  },
+  {
+   "template": "{X}还是{X}",
+   "freq": 10,
+   "split": "train",
+   "kind": "choice"
+  },
+  {
+   "template": "这{X}个不满意，请再想{X}个",
+   "freq": 7,
+   "split": "train",
+   "kind": "redo"
+  },
+  {
+   "template": "那{X}呢",
+   "freq": 6,
+   "split": "train",
+   "kind": "substitution"
+  },
+  {
+   "template": "你是{X}还是{X}",
+   "freq": 6,
+   "split": "train",
+   "kind": "choice"
+  },
+  {
+   "template": "还有其他方式吗",
+   "freq": 6,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有其它方式吗",
+   "freq": 5,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "它的{X}变量呢",
+   "freq": 5,
+   "split": "train",
+   "kind": "substitution"
+  },
+  {
+   "template": "还有其他的吗？",
+   "freq": 5,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有其他方法吗",
+   "freq": 5,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "这个不行，再写{X}个",
+   "freq": 5,
+   "split": "exam",
+   "kind": "redo"
+  },
+  {
+   "template": "还有其他翻译方式吗",
+   "freq": 5,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "{X}还是{X}？",
+   "freq": 4,
+   "split": "train",
+   "kind": "choice"
+  },
+  {
+   "template": "还有其他方法吗？",
+   "freq": 4,
+   "split": "exam",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有其他吗",
+   "freq": 4,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "是{X}还是{X}",
+   "freq": 4,
+   "split": "train",
+   "kind": "choice"
+  },
+  {
+   "template": "还有更多吗",
+   "freq": 4,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有没有其他的",
+   "freq": 4,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "你是{X}还是{X}？",
+   "freq": 4,
+   "split": "exam",
+   "kind": "choice"
+  },
+  {
+   "template": "还有其他翻译形式吗",
+   "freq": 4,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "{X}中呢",
+   "freq": 3,
+   "split": "exam",
+   "kind": "substitution"
+  },
+  {
+   "template": "还有没有其他办法",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "{X}年呢",
+   "freq": 3,
+   "split": "exam",
+   "kind": "substitution"
+  },
+  {
+   "template": "还有别的方式吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有更好的吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "这个不行",
+   "freq": 3,
+   "split": "exam",
+   "kind": "redo"
+  },
+  {
+   "template": "{X} {X}呢",
+   "freq": 3,
+   "split": "train",
+   "kind": "substitution"
+  },
+  {
+   "template": "还有",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有其他字段吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有别的翻译吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有别的吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有别的吗？",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  },
+  {
+   "template": "还有别的办法吗",
+   "freq": 3,
+   "split": "train",
+   "kind": "continuation"
+  }
+ ],
+ "seed": 1405,
+ "split_ratio": {
+  "train": 31,
+  "exam": 13
+ },
+ "human_audit": {
+  "date": "2026-08-29",
+  "grammar_pass": "43/44=97.7%（门槛≥95%）",
+  "dropped": [
+   "{X} {X};呢",
+   "这样程序是否会报错"
+  ],
+  "kinds": {
+   "substitution": 7,
+   "continuation": 27,
+   "choice": 5,
+   "redo": 3
+  }
+ }
+}
