@@ -529,6 +529,21 @@ async def main() -> int:
 
     t13 = pd.read_parquet("data/sft/v13/train.parquet")
     v13v = pd.read_parquet("data/sft/v13/val.parquet")
+    # ★ CoT 预算截断必须发生在装配之前（第 5 次发射的教训：截断放在份额计算之后
+    #   = 截了个寂寞——train 里还是全量、闸读的还是旧份额）
+    non_cot_tok = int(t13.supervised_tokens.sum()) + \
+        sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows)
+    budget = int(non_cot_tok * 0.19 / 0.81)
+    acc, kept = 0, []
+    for r in cot:
+        if acc + r["supervised_tokens"] > budget:
+            break
+        acc += r["supervised_tokens"]
+        kept.append(r)
+    if len(kept) < len(cot):
+        print(f"[CoT] 预算截断 {len(cot)}→{len(kept)}（sup-tok 预算 {budget}）")
+    cot = kept
+    assert len(cot) >= 40, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥40）"
     new_rows = l2 + l1 + chat_rows + cot
     train = pd.concat([t13, pd.DataFrame(new_rows)], ignore_index=True)
     valrows = l2v + l1v + chatv
@@ -546,20 +561,6 @@ async def main() -> int:
     total = sum(tok_by.values())
     share = {k: v / total for k, v in tok_by.items()}
     print("sup-tok 份额:", {k: f"{v:.1%}" for k, v in share.items()})
-    # CoT 预算截断：sup-tok ≤20% 硬上限（行大 ⇒ 行数闸与份额闸要联动，先按预算截）
-    non_cot_tok = int(t13.supervised_tokens.sum()) + \
-        sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows)
-    budget = int(non_cot_tok * 0.20 / 0.80)
-    acc, kept = 0, []
-    for r in cot:
-        if acc + r["supervised_tokens"] > budget:
-            break
-        acc += r["supervised_tokens"]
-        kept.append(r)
-    if len(kept) < len(cot):
-        print(f"[CoT] 预算截断 {len(cot)}→{len(kept)}（sup-tok 预算 {budget}）")
-    cot = kept
-    assert len(cot) >= 40, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥40）"
     bands = {"v13": (0.52, 0.66), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
              "chat": (0.01, 0.07), "cot": (0.05, 0.20)}
     for k, (lo, hi) in bands.items():
