@@ -214,6 +214,19 @@ class ToolRegistry:
         故意抽掉必需工具，看模型怎么绕。
         """
         selected = self.names() if names is None else [n for n in names if n in self._tools]
+        # ★ v15：session.* 信令族是**契约级**的，不受 case 菜单裁剪。
+        #
+        # ⛔ 2026-08-29 实案（R0 评测第二次作废的根因）：信令已经注册进表了，但
+        #   `menu(case.tool_menu)` 按 case 的受限菜单一过滤就把它们滤掉 ⇒
+        #   **模型的 prompt 里根本看不到 session.defer**，于是在 get_freshness → wait
+        #   之间死循环直到轮数用尽（80 条里 55 条截断）。典型的「登记了 ≠ 接上了」。
+        #   ⚠️ tool_missing 类 case 靠裁剪菜单制造"缺工具"场景——但那是**业务**工具的事，
+        #     信令族不参与（"我要等/我要问/我要拒"任何时候都必须能表达）。
+        if names is not None:
+            from syncopate.core.contract import IS_V15, SESSION_TOOL_NAMES
+            if IS_V15:
+                selected = selected + [n for n in sorted(SESSION_TOOL_NAMES)
+                                       if n in self._tools and n not in selected]
         return [self._tools[n].openai_schema() for n in selected]
 
     # ---------------------------------------------------------------- 执行

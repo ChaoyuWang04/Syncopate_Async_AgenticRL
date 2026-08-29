@@ -259,8 +259,18 @@ def build_prompts(arm: str, rows: list[dict], tok, bundles) -> list[str]:
     return out
 
 
-def generate(arm: str, adapter: str, gpu: int, max_tokens: int = 512) -> dict:
-    """跑一臂：greedy 生成 80 道题（分布内 40 + 分布外 40）。"""
+def generate(arm: str, adapter: str, gpu: int, max_turns: int = 8) -> dict:
+    """跑一臂：80 道题走**完整多轮 rollout**，再判终止形态。
+
+    ⛔ 首版做的是**单轮生成**，结果两臂在全部 7 道分布外 defer 题上都判 0% ——
+       查原文才发现两臂都**正确地先调业务工具**（campaign.list / get_metrics），
+       而 defer 的 gold 本来就要先查数据成熟度再决定等不等。
+       单轮生成把这正确的第一步判成"形态错"，−2.5pp 的主假说读数**整个作废**。
+       （「归因之前先查输入」第 N 次兑现；仪器坏了不能拿它宣布假说失败。）
+    ⇒ 本版用**训练/评测那一份** `run_rollout`（N5 一份契约，不另抄一个循环），
+       并发跑 80 条，靠一个批处理器把同一轮的请求合并成一次 vLLM 调用。
+    """
+    import asyncio
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
     from pathlib import Path as P
@@ -269,8 +279,10 @@ def generate(arm: str, adapter: str, gpu: int, max_tokens: int = 512) -> dict:
     from vllm import LLM, SamplingParams
     from vllm.lora.request import LoRARequest
 
+    import syncopate.domains.adcampaign  # noqa: F401
+    from syncopate.domains.adcampaign import build_domain
     from syncopate.pipeline.split import load_bundles
-    import syncopate.domains.adcampaign  # noqa: F401  注册工具
+    from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
     rows = ([dict(json.loads(l), kind_set="indist")
              for l in open("data/v15_r0/test_indist.jsonl")] +
@@ -278,19 +290,67 @@ def generate(arm: str, adapter: str, gpu: int, max_tokens: int = 512) -> dict:
              for l in open("data/v15_r0/test_ood.jsonl")])
     tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
     bundles = load_bundles(P("data/batches/v13"))
-    prompts = build_prompts(arm, rows, tok, bundles)
+    reg = build_domain().registry
+    reg.latency_scale = 0.0
 
     llm = LLM(model="models/Qwen3-4B-sft-v14.5-epoch3", enable_lora=True,
               max_lora_rank=32, max_model_len=8192, gpu_memory_utilization=0.85,
-              enforce_eager=False, disable_log_stats=True)
-    # greedy：R0 要的是形态判定，不是采样多样性
-    sp = SamplingParams(temperature=0.0, top_p=1.0, max_tokens=max_tokens)
-    outs = llm.generate(prompts, sp, lora_request=LoRARequest(arm, 1, adapter))
+              disable_log_stats=True)
+    lora = LoRARequest(arm, 1, adapter)
+    sp = SamplingParams(temperature=0.0, top_p=1.0, max_tokens=512)
+
+    # ── 批处理器：把同一轮里各条 rollout 的请求攒成一次 vLLM 调用 ──────────
+    pending: list[tuple[list[int], asyncio.Future]] = []
+    lock = asyncio.Lock()
+
+    async def flusher(stop: asyncio.Event):
+        while not stop.is_set():
+            await asyncio.sleep(0.15)
+            async with lock:
+                batch, pending[:] = list(pending), []
+            if not batch:
+                continue
+            outs = llm.generate([{"prompt_token_ids": ids} for ids, _ in batch],
+                                sp, lora_request=lora, use_tqdm=False)
+            for (_, fut), o in zip(batch, outs):
+                if not fut.done():
+                    fut.set_result(list(o.outputs[0].token_ids))
+
+    async def gen(prompt_ids, sampling_params):
+        fut = asyncio.get_running_loop().create_future()
+        async with lock:
+            pending.append((list(prompt_ids), fut))
+        return await fut
+
+    async def drive():
+        stop = asyncio.Event()
+        task = asyncio.create_task(flusher(stop))
+        try:
+            async def one(r):
+                bd = bundles.get(r["case_id"], bundles[SCAFFOLD_CASE])
+                # 分布外题：脚手架 case 不变，只把用户那句话换掉
+                bd = _with_user_message(bd, r["user_message"])
+                out = await run_rollout(bd, registry=reg, tokenizer=tok, generate=gen,
+                                        config=RolloutConfig(max_assistant_turns=max_turns),
+                                        rollout_id="r0", run_id=arm)
+                return out
+            return await asyncio.gather(*[one(r) for r in rows])
+        finally:
+            stop.set()
+            await asyncio.sleep(0)
+            task.cancel()
+
+    outs = asyncio.run(drive())
 
     recs = []
-    for r, o in zip(rows, outs):
-        text = o.outputs[0].text
+    for r, out in zip(rows, outs):
+        text = out.trajectory.final_text or ""
         shape, ev = classify(text, arm)
+        # 轨迹级：调过业务工具后以纯文本收尾 ⇒ tool_call（不是 answer）
+        if shape == "answer" and out.trajectory.business_actions:
+            shape = "tool_call"
+        ev["business_tools"] = [a.name for a in out.trajectory.business_actions]
+        ev["truncated"] = out.trajectory.truncated
         recs.append({**r, "arm": arm, "adapter": adapter, "text": text,
                      "shape": shape, "evidence": ev,
                      "correct": is_correct(shape, r["behavior"], arm),
@@ -300,6 +360,16 @@ def generate(arm: str, adapter: str, gpu: int, max_tokens: int = 512) -> dict:
     (OUT / f"gen_{tag}.jsonl").write_text(
         "\n".join(json.dumps(x, ensure_ascii=False) for x in recs))
     return summarize(recs, tag)
+
+
+def _with_user_message(bundle, message: str):
+    """换掉 case 的用户那句话，其余（工具菜单/沙盒/世界状态）全不动。"""
+    import copy
+    if bundle.case.user_message == message:
+        return bundle
+    b = copy.deepcopy(bundle)
+    b.case.user_message = message
+    return b
 
 
 def summarize(recs: list[dict], tag: str) -> dict:

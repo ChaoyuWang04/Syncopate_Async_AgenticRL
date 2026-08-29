@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import sys
@@ -83,52 +84,36 @@ def rebuild_tail(behavior: str, fa: dict) -> str:
     raise ValueError(behavior)
 
 
-def make_rows(tokenizer, src_rows, arm: str) -> list[dict]:
-    """从 v13 行产两臂训练行。A=原样复制；B=终答重铸+tools 注入+分段 mask。"""
-    out = []
-    for i, r in enumerate(src_rows):
-        if arm == "shell":
-            d = {k: r[k] for k in ("case_id", "input_ids", "loss_mask", "prompt_length",
-                                   "total_length", "supervised_tokens", "behavior")}
-            d.update({"split": "train", "index": 80000 + i, "signal_class": "graded",
-                      "input_ids": list(r["input_ids"]), "loss_mask": list(r["loss_mask"])})
-            out.append(d)
-            continue
-        full = tokenizer.decode(list(r["input_ids"])[: r["total_length"]])
-        # ① tools 段注入 session 工具（hermes：<tools> 内一行一个 JSON）
-        assert "</tools>" in full, r["case_id"]
-        inject = "\n".join(json.dumps(t["function"], ensure_ascii=False)
-                           for t in SESSION_TOOLS)
-        full = full.replace("</tools>", inject + "\n</tools>", 1)
-        # ② 终答壳替换（最后一个 ```json 块）
-        shells = list(SHELL_RE.finditer(full))
-        assert shells, r["case_id"]
-        last = shells[-1]
-        payload = json.loads(re.sub(r"^```json\s*|\s*```$", "", last.group(0), flags=re.S))
-        behavior = payload.get("behavior", r["behavior"])
-        fa = payload.get("answer") or {}
-        new_tail = rebuild_tail(r["behavior"], fa)
-        full = full[: last.start()] + new_tail + full[last.end():]
-        # ③ 重新分词 + 分段 mask（<|im_start|>user…<|im_end|> 与首段 prompt = 0）
-        asst = "<|im_start|>assistant"
-        cut = full.find(asst)
-        head = full[: cut + len(asst) + 1]
-        tail = full[len(head):]
-        ids = tokenizer(head, add_special_tokens=False).input_ids
-        mask = [0] * len(ids)
-        for part in re.split(r"(<\|im_start\|>user.*?<\|im_end\|>)", tail, flags=re.S):
-            if not part:
-                continue
-            pids = tokenizer(part, add_special_tokens=False).input_ids
-            flag = 0 if part.startswith("<|im_start|>user") else 1
-            ids += pids
-            mask += [flag] * len(pids)
-        out.append({"case_id": f"{r['case_id']}_T", "input_ids": ids, "loss_mask": mask,
-                    "prompt_length": len(tokenizer(head, add_special_tokens=False).input_ids),
-                    "total_length": len(ids), "supervised_tokens": sum(mask),
-                    "behavior": r["behavior"], "split": "train",
-                    "index": 81000 + i, "signal_class": "graded"})
-    return out
+async def make_rows(tokenizer, chosen, arm: str) -> list[dict]:
+    """两臂各走**同一条**构建路径 `build_sft_sample`，只切契约开关。
+
+    ⛔ 2026-08-29 重建的原因（R0 第三次作废的根因，`25 §7⑧`）：
+      旧版是"拿 v14 的行 → 解码 → 字符串注入 session 工具 → 重新分词"。
+      `full.replace("</tools>", inject, 1)` 替换的是**第一个** `</tools>` ——
+      而那个在 Qwen3 模板的样板句
+      「You are provided with function signatures within <tools></tools> XML tags:」里。
+      于是 session 工具被塞进了**说明句**，不是真正的工具区。
+      ⇒ 拿「工具不在强通道标准位置」的数据去验证「强通道更好」，等于把假说自己拆了。
+    ⇒ 现在两臂都由 `build_sft_sample` 产出（=评测用的同一个 run_rollout + menu），
+      训练 prompt 与评测 prompt **构造上就不可能不一致**（N5 一份契约）。
+    """
+    from syncopate.core.tool_registry import REGISTRY
+    from syncopate.pipeline.sft_replay import build_sft_sample
+    import syncopate.domains.adcampaign  # noqa: F401
+    REGISTRY.latency_scale = 0.0
+
+    rows = []
+    for i, b in enumerate(chosen):
+        smp = await build_sft_sample(b, tokenizer=tokenizer, registry=REGISTRY)
+        rows.append({"case_id": f"{b.case_id}_T" if arm == "tool" else b.case_id,
+                     "input_ids": smp.input_ids, "loss_mask": smp.loss_mask,
+                     "prompt_length": smp.prompt_length,
+                     "total_length": smp.total_length,
+                     "supervised_tokens": smp.supervised_tokens,
+                     "behavior": b.verifier.expected_behavior,
+                     "split": "train", "index": (81000 if arm == "tool" else 80000) + i,
+                     "signal_class": "graded"})
+    return rows
 
 
 async def replay_rows(tok, chosen) -> list[dict]:
@@ -167,21 +152,20 @@ def main() -> int:
         print(f"{b}: 可用 {len(p)}")
         assert len(p) >= 40, f"{b} 不足 40（训练 30+测试 10）"
     train_bundles = [bd for b in pools for bd in pools[b][:30]]
-    train_src = asyncio.run(replay_rows(tok, train_bundles))
     test_src = {b: pools[b][30:40] for b in pools}
 
     out = Path("data/v15_r0")
-    for arm in ("shell", "tool"):
-        rows = make_rows(tok, train_src, arm)
-        for r in rows:
-            assert r["supervised_tokens"] > 0 and \
-                len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"]
-        d = out / f"arm_{arm}"
-        d.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(rows).to_parquet(d / "train.parquet")
-        pd.DataFrame(rows[:12]).to_parquet(d / "val.parquet")   # 形式 val（选点不用）
-        tok_sum = sum(r["supervised_tokens"] for r in rows)
-        print(f"臂 {arm}: {len(rows)} 行 · 监督 {tok_sum} tok")
+    arm = os.environ.get("SYNCOPATE_CONTRACT", "v14")
+    arm_name = "tool" if arm == "v15" else "shell"
+    rows = asyncio.run(make_rows(tok, train_bundles, arm_name))
+    for r in rows:
+        assert r["supervised_tokens"] > 0 and \
+            len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"]
+    d = out / f"arm_{arm_name}"
+    d.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_parquet(d / "train.parquet")
+    pd.DataFrame(rows[:12]).to_parquet(d / "val.parquet")
+    print(f"臂 {arm_name}: {len(rows)} 行 · 监督 {sum(r['supervised_tokens'] for r in rows)} tok")
 
     # ── 测试集（两臂共用 prompt；臂内各自渲染 tools 段） ──────────────────
     # 分布内 40：留出 case 的 user_message 原样
