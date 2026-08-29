@@ -47,6 +47,11 @@ from u_build_v14 import GLOSSARY  # noqa: E402  61 词（定义要点作教师�
 
 STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 
+EXAM_LAST = set()          # 考卷被判轮句（训练构造时逐字规避）
+for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "talk_exam.jsonl"):
+    for _x in open(f"data/u_route/{_fn}"):
+        EXAM_LAST.add(json.loads(_x)["turns"][-1])
+
 
 _SEED = [0]
 
@@ -377,6 +382,11 @@ async def build_l2_l1(tokenizer, registry, client):
                 ask = f"对比下它和 {cid2} 的{mname}" if cid2 != cid else f"它的{mname}前后对比下"
         else:
             ask = pat.replace("{X}", "它的归因情况") if "{X}" in pat else "它的归因呢"
+        if ask in EXAM_LAST:               # 与考卷被判句逐字撞车 ⇒ 换模板重构
+            alt = rng.choice([p for p in SUB_TRAIN if p != pat] or SUB_TRAIN)
+            ask = alt.replace("{X}", f"这条的{mname}")
+            if ask in EXAM_LAST:
+                ask = f"顺手把{mname}也拉一下"
         b2.case.user_message = (f"[上一轮] 用户：{b.case.user_message}\n"
                                 f"[上一轮] 助手：{str(prev)[:120]}\n\n{ask}")
         b2.case.case_id = f"{b.case_id}_MT5"
@@ -439,6 +449,8 @@ async def build_l2_l1(tokenizer, registry, client):
         a, t2 = rng.sample(terms, 2)
         pat = rng.choice(all_forms)
         ask = pat.replace("{X}", t2)
+        if ask in EXAM_LAST:
+            continue                        # 撞被判句直接换对（li 循环量足够）
         b2 = copy.deepcopy(b_src)
         if kind == "concept_hist":
             hist = (f"[上一轮] 用户：{a}是什么意思？\n"
@@ -628,15 +640,19 @@ async def main() -> int:
     print(f"[OOV] 教学面命中 {teach_hits}（必须 0）· 全语料自然词用 {ambient_hits}（上报不判）")
     assert teach_hits == 0, f"🔴 OOV 定义教学泄漏 {teach_hits} 次"
     # 考场泄漏：考卷第二轮句子逐字不得出现在训练 user 文本
-    exam_turns = set()
+    # 泄漏闸口径（第8次发射修订）：**被判轮**逐字必 0（防背答案）；铺垫轮是公共
+    # 自然句式（「X是什么意思？」），逐字禁会禁掉整类表达 ⇒ 记数上报不判死
+    first_turns = set()
     for fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "talk_exam.jsonl"):
         for x in open(f"data/u_route/{fn}"):
-            exam_turns.update(json.loads(x)["turns"])
-    leak = 0
+            first_turns.update(json.loads(x)["turns"][:-1])
+    leak_last, leak_first = 0, 0
     for r in new_rows:
         txt = tokenizer.decode(list(r["input_ids"])[:r["prompt_length"]])
-        leak += sum(1 for t in exam_turns if len(t) >= 8 and t in txt)
-    assert leak == 0, f"🔴 考场句泄漏 {leak}"
+        leak_last += sum(1 for t in EXAM_LAST if len(t) >= 8 and t in txt)
+        leak_first += sum(1 for t in first_turns if len(t) >= 8 and t in txt)
+    print(f"[泄漏] 被判轮命中 {leak_last}（必须 0）· 铺垫轮 {leak_first}（上报）")
+    assert leak_last == 0, f"🔴 考场被判句泄漏 {leak_last}"
     for r in new_rows + valrows:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
