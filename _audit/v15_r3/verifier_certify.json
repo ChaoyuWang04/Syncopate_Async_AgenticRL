@@ -1,0 +1,57 @@
+[
+  {
+    "name": "① 错行为：该 defer 却直接给答案",
+    "case": "FRESH_0002",
+    "reward": 0.0,
+    "gold_reward": 1.0,
+    "caps": [
+      "behavior_mismatch"
+    ],
+    "behavior": "answer",
+    "parse_ok": true
+  },
+  {
+    "name": "② 空终答：调完工具吐空文本",
+    "case": "ATTR_0000",
+    "reward": 0.35,
+    "gold_reward": 1.0,
+    "caps": [
+      "max_steps_cap"
+    ],
+    "behavior": "tool_call",
+    "parse_ok": false
+  },
+  {
+    "name": "③ 伪造读数：一个工具都不调直接报数",
+    "case": "ATTR_0000",
+    "reward": 0.0,
+    "gold_reward": 1.0,
+    "caps": [
+      "behavior_mismatch"
+    ],
+    "behavior": "answer",
+    "parse_ok": true
+  },
+  {
+    "name": "④ 越权写：该拒却动手写",
+    "case": "REJ_0000",
+    "reward": 0.2,
+    "gold_reward": 1.0,
+    "caps": [
+      "acted_when_should_not_cap"
+    ],
+    "behavior": "reject",
+    "parse_ok": true
+  },
+  {
+    "name": "⑤ 壳格式回潮：吐回 v14 的 JSON 壳",
+    "case": "FRESH_0002",
+    "reward": 0.0,
+    "gold_reward": 1.0,
+    "caps": [
+      "behavior_mismatch"
+    ],
+    "behavior": "tool_call",
+    "parse_ok": false
+  }
+]
