@@ -23,13 +23,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from syncopate.core.contract import IS_V15
 from syncopate.core.parsing import render_final_answer, render_tool_call
+from syncopate.core.parsing_v15 import render_report, render_signal
+from syncopate.train.rollout_budget import ENABLE_THINKING
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.tool_registry import ToolRegistry
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
 
-def gold_script(bundle: CaseBundle, behavior: str | None = None) -> list[str]:
+def gold_script(bundle: CaseBundle, behavior: str | None = None,
+                thinking: dict[int, str] | None = None) -> list[str]:
     """把 gold 轨迹翻译成「模型每一步该输出什么文本」。
 
     这个函数是 SFT 和测试共用的——保证「SFT 教的格式」和「RL 解析的格式」
@@ -51,8 +55,86 @@ def gold_script(bundle: CaseBundle, behavior: str | None = None) -> list[str]:
     assert bundle.gold is not None, f"{bundle.case_id} 没有 gold"
     resolved = behavior or bundle.verifier.expected_behavior
     steps = [render_tool_call(a["tool"], a.get("arguments", {})) for a in bundle.gold.actions]
-    steps.append(render_final_answer(resolved, bundle.gold.final_answer))
+    if IS_V15:
+        steps.extend(_v15_tail(bundle, resolved))
+    else:
+        steps.append(render_final_answer(resolved, bundle.gold.final_answer))
+    if ENABLE_THINKING:
+        steps = attach_think(steps, thinking or {})
     return steps
+
+
+def _machine_fields(bundle: CaseBundle) -> dict:
+    """判分器真正会核对的字段（= 必填字段里非「只查存在」的那些）。
+
+    ★ 这些字段**一律走 session.report**，不管本轮的行为是什么 —— 包括 defer/clarify/
+      reject。理由（R1 门槛⑤ 实测逼出来的）：
+        · 信令 schema 装不下它们。`defer` 要报 `data_maturity`，但
+          `session.defer{reason, recheck_after_days}` 里没有这一格；
+          而 R0 双臂数据是按现 schema 冻结的，改 schema 就得重建 R0。
+        · 硬做字段名映射（missing_fields→missing_field、reason_code→reject_reason）
+          等于在契约里再加一层翻译表 —— 多一处会漂的副本。
+      ⇒ **分工写死：session.* 管编排语义（挂起/等补充/终止），session.report 管判分字段。**
+      两者在 `recheck_after_days` 上有意重叠：编排要它挂复查、判分要它核数值，
+      各取各的，不是副本。
+    """
+    fa = dict(bundle.gold.final_answer or {})
+    return {f.key: fa[f.key] for f in bundle.verifier.required_answer_fields
+            if f.key in fa and f.value_source != "any"}
+
+
+def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:
+    """v15 终答段：机器字段 → session.report（单独一步）；行为 → 信令调用或纯文本。
+
+    ⚠️ report 之所以**单独一步**（而不是和信令/收尾话挤一步）：解析器把
+    「信令 + 别的工具同一步」判成混合形态（`25 §6③`），把「有 tool_call」读成轨迹继续。
+    代价（多一步）已在判分侧抵消 —— `trajectory.num_business_steps` 排除 session.*
+    （R1 门槛⑤ 实测：不排除的话 120/120 条 gold 的 efficiency 全变）。
+    """
+    fa = dict(bundle.gold.final_answer or {})
+    machine = _machine_fields(bundle)
+    head = [render_report(machine)] if machine else []
+    if behavior == "defer":
+        return head + [render_signal("session.defer", {
+            "reason": str(fa.get("defer_reason") or "数据还不足以支撑结论"),
+            "recheck_after_days": int(fa.get("recheck_after_days") or 5)})]
+    if behavior == "clarify":
+        mf = fa.get("missing_field") or "campaign_id"
+        return head + [render_signal("session.clarify",
+                                     {"question": f"请补充 {mf} 后我再继续。",
+                                      "missing_fields": [mf]})]
+    if behavior == "reject":
+        rr = {"unauthorized": "unauthorized", "policy": "policy"}.get(
+            fa.get("reject_reason"), "out_of_scope")
+        expl = {"unauthorized": "该操作超出当前授权范围，无法执行。",
+                "out_of_scope": "这超出投放助手的职责范围，无法处理。",
+                "policy": "该请求与平台政策冲突，无法执行。"}[rr]
+        return head + [render_signal("session.reject",
+                                     {"reason_code": rr, "explanation": expl})]
+    # tool_call / answer：机器字段已在 head 的 report 里，这里只剩一句人话。
+    # ★ 人话字段（value_source=="any"，实测 60/4100 全是 CHAT 的 reply）**不进 report** ——
+    #   否则等于逼模型把同一句人话在机器通道里再抄一遍（「summary 污染」同族）。
+    return head + [str(fa.get("reply") or "已经按上面的结果处理完了。")]
+
+
+EMPTY_THINK = "<think>\n\n</think>\n\n"
+
+
+def attach_think(steps: list[str], thinking: dict[int, str]) -> list[str]:
+    """★ think-on 下**每个** assistant 轮都要显式写出 think 段（`25 §3.2` 修法 B）。
+
+    ⚠️ 只做 A（切 think-on）不做 B 的后果是实测过的：监督段直接以 <tool_call> 开头、
+    一个 think 块都不出现 ⇒ 变成**主动训练"永不思考"**，比 think-off 更糟。
+
+    `thinking` = {步号: 推理文本}；没给的步填**显式空块**（= 教"这步不用想"）。
+    空块与非空块的比例就是 N3「按需思考」的旋钮。
+    """
+    out = []
+    for i, body in enumerate(steps):
+        content = (thinking.get(i) or "").strip()
+        prefix = f"<think>\n{content}\n</think>\n\n" if content else EMPTY_THINK
+        out.append(prefix + body)
+    return out
 
 
 class _ScriptedEngine:

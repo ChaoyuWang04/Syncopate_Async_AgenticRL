@@ -70,72 +70,99 @@ async def score_one(bundle, *, tokenizer, registry, v15: bool):
             "parse_ok": out.trajectory.parse_ok}
 
 
+def score_batch(case_ids: list[str], v15: bool) -> dict:
+    """★ 在**独立子进程**里跑一个契约。
+
+    ⚠️ 不用 importlib.reload：契约值在 import 时被多个模块吃进去
+    （sft_replay / rollout_loop / verifier / 域注册），只 reload 其中几个会留下
+    **混合状态**，制造假红 —— 实测过一次（v15 下 CHAT 被误判成 0.25，
+    干净进程里其实是 1.0）。子进程 + 起手就设环境变量才是真实跑法。
+    """
+    import os
+    import subprocess
+    import sys
+    code = f"""
+import asyncio, json, sys
+sys.path.insert(0, ".")
+from pathlib import Path
+from transformers import AutoTokenizer
+from syncopate.domains.adcampaign import build_domain
+from syncopate.domains.adcampaign.policies import compute_decision, score_policy
+from syncopate.pipeline.split import load_bundles
+from syncopate.pipeline.sft_replay import gold_script, _ScriptedEngine
+from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.core.verifier_engine import score_trajectory
+tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+reg = build_domain().registry; reg.latency_scale = 0.0
+bundles = load_bundles(Path("data/batches/v13"))
+out = {{}}
+for cid in {case_ids!r}:
+    b = bundles[cid]
+    script = gold_script(b)
+    o = asyncio.run(run_rollout(b, registry=reg, tokenizer=tok,
+                                generate=_ScriptedEngine(tok, script),
+                                config=RolloutConfig(max_assistant_turns=max(12, len(script) + 4)),
+                                rollout_id="x", run_id="cc"))
+    r = score_trajectory(b, o.trajectory, o.sandbox,
+                         policy_scorer=score_policy, decision_fn=compute_decision)
+    out[cid] = {{"reward": r.reward, "subscores": r.subscores,
+                "caps": sorted(h.name for h in r.cap_hits),
+                "behavior": o.trajectory.behavior,
+                "num_steps": o.trajectory.num_business_steps}}
+print("@@JSON@@" + json.dumps(out))
+"""
+    env = dict(os.environ, SYNCOPATE_CONTRACT="v15" if v15 else "v14")
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    if "@@JSON@@" not in p.stdout:
+        raise SystemExit(f"🔴 子进程失败:\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}")
+    return json.loads(p.stdout.split("@@JSON@@", 1)[1].strip())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=120)
+    ap.add_argument("--n", type=int, default=150)
     args = ap.parse_args()
 
-    from transformers import AutoTokenizer
-    from syncopate.domains.adcampaign import build_domain
     from syncopate.pipeline.split import load_bundles
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
-    registry = build_domain().registry
-    registry.latency_scale = 0.0
-    bundles = [b for b in load_bundles(Path("data/batches/v13")).values() if b.gold]
-    bundles = bundles[: args.n]
+    allb = [b for b in load_bundles(Path("data/batches/v13")).values() if b.gold]
+    # ★ 按行为分层取样：不分层的话前 N 条全是 tool_call，
+    #   CHAT 的 reply 这条路径根本测不到（判据覆盖不到的分支 = 没有判据）。
+    by: dict[str, list] = {}
+    for b in allb:
+        by.setdefault(b.verifier.expected_behavior, []).append(b)
+    per = max(1, args.n // max(1, len(by)))
+    ids = [b.case_id for beh in sorted(by) for b in by[beh][:per]]
+    print("分层取样:", {k: min(per, len(v)) for k, v in sorted(by.items())})
 
-    rows, errs = [], []
-    for b in bundles:
-        try:
-            os.environ["SYNCOPATE_CONTRACT"] = "v14"
-            import importlib, syncopate.core.contract as C
-            importlib.reload(C)
-            a = asyncio.run(score_one(b, tokenizer=tok, registry=registry, v15=False))
-            os.environ["SYNCOPATE_CONTRACT"] = "v15"
-            importlib.reload(C)
-            import syncopate.train.rollout_loop as RL
-            importlib.reload(RL)
-            bb = asyncio.run(score_one(b, tokenizer=tok, registry=registry, v15=True))
-        except Exception as exc:
-            errs.append({"case_id": b.case_id, "error": f"{type(exc).__name__}: {exc}"})
-            continue
-        finally:
-            os.environ["SYNCOPATE_CONTRACT"] = "v14"
-            import importlib, syncopate.core.contract as C2
-            importlib.reload(C2)
-            import syncopate.train.rollout_loop as RL2
-            importlib.reload(RL2)
-        rows.append({"case_id": b.case_id, "expected": b.verifier.expected_behavior,
-                     "v14": a, "v15": bb})
+    a = score_batch(ids, v15=False)
+    b2 = score_batch(ids, v15=True)
 
-    same_reward = [r for r in rows if abs(r["v14"]["reward"] - r["v15"]["reward"]) < 1e-9]
-    diff = [r for r in rows if r not in same_reward]
+    rows = [{"case_id": c, "v14": a[c], "v15": b2[c]} for c in ids if c in a and c in b2]
+    same = [r for r in rows if abs(r["v14"]["reward"] - r["v15"]["reward"]) < 1e-9]
+    diff = [r for r in rows if r not in same]
     sub_diff = Counter()
     for r in diff:
         for k in r["v14"]["subscores"]:
             if abs(r["v14"]["subscores"][k] - r["v15"]["subscores"][k]) > 1e-9:
                 sub_diff[k] += 1
     beh_ok = sum(1 for r in rows if r["v14"]["behavior"] == r["v15"]["behavior"])
+    cap_ok = sum(1 for r in rows if r["v14"]["caps"] == r["v15"]["caps"])
 
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "score_crosscheck.json").write_text(json.dumps(
-        {"n": len(rows), "errors": errs, "diff": diff[:40]}, ensure_ascii=False, indent=2))
+    (OUT / "score_crosscheck.json").write_text(
+        json.dumps({"n": len(rows), "diff": diff[:40]}, ensure_ascii=False, indent=2))
 
-    print("════ R1 门槛⑤ 判分对拍（同一批 gold，新旧两路判分）════")
-    print(f"样本 {len(rows)} 条（要求 ≥100）  解析失败 {len(errs)} 条")
-    print(f"逐 case 同分: {len(same_reward)}/{len(rows)} = "
-          f"{len(same_reward)/max(1,len(rows)):.2%}   门槛 =100%  "
-          f"{'✅' if len(diff) == 0 else '🔴'}")
-    print(f"行为推导一致: {beh_ok}/{len(rows)} = {beh_ok/max(1,len(rows)):.2%}")
+    print("════ R1 门槛⑤ 判分对拍（同一批 gold，新旧两路判分，各自独立子进程）════")
+    print(f"样本 {len(rows)} 条（要求 ≥100）")
+    print(f"逐 case 同分   : {len(same)}/{len(rows)} = {len(same)/max(1,len(rows)):.2%}"
+          f"   门槛 =100%  {'✅' if not diff else '🔴'}")
+    print(f"行为推导一致   : {beh_ok}/{len(rows)} = {beh_ok/max(1,len(rows)):.2%}")
+    print(f"cap 命中一致   : {cap_ok}/{len(rows)} = {cap_ok/max(1,len(rows)):.2%}")
     if sub_diff:
-        print(f"不同分的子分分布: {dict(sub_diff)}")
-        print("前 5 条明细：")
-        for r in diff[:5]:
-            print(f"  {r['case_id']:12s} 期望={r['expected']:9s} "
-                  f"v14 r={r['v14']['reward']:.4f} steps={r['v14']['num_steps']} | "
-                  f"v15 r={r['v15']['reward']:.4f} steps={r['v15']['num_steps']}")
-    if errs:
-        print(f"错误样例: {errs[:3]}")
+        print(f"不同分的子分   : {dict(sub_diff)}")
+        for r in diff[:6]:
+            print(f"  {r['case_id']:12s} v14 r={r['v14']['reward']:.4f} caps={r['v14']['caps']} | "
+                  f"v15 r={r['v15']['reward']:.4f} caps={r['v15']['caps']}")
     return 0
 
 

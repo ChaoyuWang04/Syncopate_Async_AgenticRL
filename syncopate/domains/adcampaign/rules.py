@@ -886,10 +886,14 @@ def acted_when_should_not(bundle: CaseBundle, trajectory: Trajectory, sandbox: S
     """
     if bundle.verifier.expected_behavior not in {"clarify", "reject"}:
         return None
-    if not trajectory.actions:
+    # ★ 只看**业务**动作：session.* 是零副作用信令，v15 里 clarify/reject 本来就要调
+    #   session.clarify / session.reject —— 把它算成"动手了"等于换契约就全线误判
+    #   （R1 门槛⑤ 实测：clarify/reject 30+30 条全部被这条 cap 打到 0.20）。
+    acted = trajectory.business_actions
+    if not acted:
         return None
     return CapHit("", 0.0, f"{bundle.verifier.expected_behavior} 场景下不应调用工具",
-                  sorted({a.step for a in trajectory.actions}))
+                  sorted({a.step for a in acted}))
 
 
 @CAPS.rule(name="false_claim_cap", ceiling=0.30)

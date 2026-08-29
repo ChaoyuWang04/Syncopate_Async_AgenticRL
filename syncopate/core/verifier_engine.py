@@ -252,9 +252,19 @@ def _score_answer_fields(
     if not trajectory.parse_ok:
         return 0.0, [{"error": "final_answer_unparseable"}]
 
+    from syncopate.core.contract import IS_V15
+
     passed, detail = 0, []
     for field_spec in spec.required_answer_fields:
         stated = trajectory.final_answer.get(field_spec.key)
+        # ★ v15：`value_source == "any"` 的字段**只查存在**，而 v15 的人话就是终答文本本身
+        #   ⇒ 去终答文本里看，而不是逼模型把同一句话抄进 session.report。
+        #   ⚠️ 爆炸半径已实测：这类字段 60/4100 = 1.5%，全是 CHAT 的 `reply`，
+        #     且它们在 v14 里**本来就只查存在** —— 改的是「去哪看」，不是「查多松」。
+        #     空终答在 v15 是解析错误（empty_final_text），刷分下限与 v14 相同。
+        if (IS_V15 and stated is None and field_spec.value_source == "any"
+                and (trajectory.final_text or "").strip()):
+            stated = trajectory.final_text
         present = stated is not None and str(stated).strip() != ""
         expected = resolve_value_source(field_spec.value_source, bundle, decision) if field_spec.value_source else None
         ok = present and (expected is None or values_equal(stated, expected))

@@ -81,6 +81,18 @@ class Trajectory:
         return max((a.step for a in self.actions), default=0)
 
     @property
+    def business_actions(self) -> list["Action"]:
+        """排除 session.* 信令后的动作 —— 「模型有没有对世界动手」的唯一口径。
+
+        信令族是**零副作用**的：它们只是把"我要等/我要问/我要拒/我要报数"变成
+        一个可被编排的动作。把它们算成"动手了"，等于换个契约就凭空触发
+        `acted_when_should_not` 这类 cap（R1 门槛⑤ 实测：clarify/reject 全线误判）。
+        ⚠️ v14 轨迹里没有 session.* action ⇒ 与 actions 恒等，旧判据逐位不变。
+        """
+        from syncopate.core.contract import SESSION_TOOL_NAMES
+        return [a for a in self.actions if a.name not in SESSION_TOOL_NAMES]
+
+    @property
     def num_business_steps(self) -> int:
         """★ 只数**业务**工具占用的步数，排除 session.* 信令族。
 
@@ -89,9 +101,7 @@ class Trajectory:
         实测（R1 门槛⑤ 判分对拍）：不排除的话 120/120 条 gold 的 efficiency 全部变化。
         ⚠️ v14 轨迹里没有 session.* action ⇒ 本属性与 num_steps 恒等，**旧分不动**。
         """
-        from syncopate.core.contract import SESSION_TOOL_NAMES
-        return max((a.step for a in self.actions if a.name not in SESSION_TOOL_NAMES),
-                   default=0)
+        return max((a.step for a in self.business_actions), default=0)
 
     def called_tools(self) -> list[str]:
         return [a.name for a in self.actions]
