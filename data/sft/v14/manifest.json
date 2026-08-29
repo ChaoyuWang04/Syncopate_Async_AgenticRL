@@ -1,0 +1,35 @@
+{
+  "version": "v14.1",
+  "seed": 1409,
+  "sources": {
+    "v13_train": 419,
+    "l2_multiturn": 200,
+    "chat_distill": 74,
+    "cot_distill": 59,
+    "l1_concept": 100
+  },
+  "total": 852,
+  "supervised_tokens": 151607,
+  "behavior_counts": {
+    "tool_call": 568,
+    "answer": 153,
+    "reject": 46,
+    "clarify": 43,
+    "defer": 42
+  },
+  "bucket_counts": {
+    "multiturn": 200,
+    "critical_args": 169,
+    "multiturn_l1": 100,
+    "sequential_dependency": 87,
+    "chat_distill": 74,
+    "reasoning": 69,
+    "cot_distill": 59,
+    "rag_policy": 33,
+    "tool_confusion": 18,
+    "rag_insight": 12,
+    "no_call": 11,
+    "clarify_boundary": 10,
+    "reject_boundary": 10
+  }
+}

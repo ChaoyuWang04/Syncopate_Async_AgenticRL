@@ -84,6 +84,76 @@ async def build_l2_rows(tokenizer, registry, max_rows: int = 200) -> list[dict]:
     return rows
 
 
+GLOSSARY = {
+    "ROI": "投资回报率，衡量投入产出比的指标，计算方式是收益除以成本",
+    "CPI": "单次安装成本，指平均每带来一个应用安装所花的钱",
+    "CPM": "千次曝光成本，指广告每展示一千次所花的费用",
+    "CPC": "单次点击成本，指用户每点击一次广告所花的费用",
+    "CVR": "转化率，指从点击到完成目标行为（如安装、付费）的比例",
+    "转化": "指用户完成了我们期望的目标行为，比如安装、注册或付费",
+    "留存": "指用户在安装后的第 N 天仍然活跃的比例，是衡量质量的核心指标",
+    "LTV": "用户生命周期价值，指一个用户在整个生命周期内预计带来的总收入",
+    "ARPU": "每用户平均收入，用总收入除以活跃用户数得到",
+    "出价": "指在竞价系统里为一次展示或转化愿意支付的价格",
+    "定向": "指投放时圈定目标人群的条件，比如地区、年龄、兴趣",
+    "素材": "指广告展示给用户的创意内容，包括图片、视频和文案",
+    "归因": "指判断一次转化应该算在哪个渠道或广告头上的规则",
+    "自然量": "指不靠付费广告、用户自发下载带来的量",
+    "冷启动": "指新计划刚投放时系统还没学到足够数据的探索阶段",
+    "学习期": "指投放系统为新计划积累转化数据、模型逐步稳定的阶段",
+    "放量": "指在效果达标后逐步提高预算扩大投放规模的操作",
+    "付费率": "指活跃用户中产生付费行为的比例",
+    "次留": "即次日留存率，指安装次日仍活跃的用户比例",
+    "买量": "指通过付费广告渠道获取新用户的投放行为",
+}
+L1_FORMS = ["那{b}呢？", "{b}又是什么", "那{b}是什么意思", "顺便讲下{b}", "{b}呢"]
+
+
+async def build_l1_rows(tokenizer, registry, max_rows: int = 100) -> list[dict]:
+    """概念追问行（L1 正枪，v14.1 增补）：第二轮省略式追问概念 ⇒ gold=零动作纯文字
+    定义（与 L2 的「数据追问⇒调工具」构成判别对照，教会二者的分界）。"""
+    from syncopate.pipeline.build_dataset import build_sft_row
+    from syncopate.pipeline.split import load_bundles
+    rng1 = random.Random(1410)
+    bundles = load_bundles(Path("data/batches/v13"))
+    scaffolds = [b for b in bundles.values() if b.gold and not b.gold.actions]
+    # 考场逐字去重（术语可重叠——能力是「概念⇒答」不是背题；原句不得出现）
+    exam_turns = set()
+    for f in ("talk_exam.jsonl", "context_exam.jsonl"):
+        for x in open(f"data/u_route/{f}"):
+            exam_turns.update(json.loads(x)["turns"])
+    terms = list(GLOSSARY)
+    pairs = [(a, b) for a in terms for b in terms if a != b]
+    rng1.shuffle(pairs)
+    rows, skipped = [], 0
+    for a, b in pairs:
+        if len(rows) >= max_rows:
+            break
+        ask = rng1.choice(L1_FORMS).format(b=b)
+        if ask in exam_turns:
+            continue
+        sc = copy.deepcopy(rng1.choice(scaffolds))
+        sc.case.user_message = (
+            f"[上一轮] 用户：{a}是什么意思？\n"
+            f"[上一轮] 助手：{a} 指{GLOSSARY[a][:60]}。\n\n{ask}")
+        sc.case.case_id = f"L1C_{len(rows)+skipped:04d}"
+        sc.gold.actions = []
+        sc.gold.final_answer = {"reply": f"{b} 指{GLOSSARY[b]}。"}
+        try:
+            row = await build_sft_row(sc, tokenizer=tokenizer, registry=registry,
+                                      index=93000 + len(rows), split="train",
+                                      config=None)
+        except Exception as e:  # noqa: BLE001
+            skipped += 1
+            if skipped <= 3:
+                print(f"  ⚠️ {sc.case.case_id} 回放失败：{str(e)[:120]}")
+            continue
+        row["bucket"] = "multiturn_l1"
+        rows.append(row)
+    print(f"L1 概念行 {len(rows)}（回放失败丢 {skipped}）")
+    return rows
+
+
 def build_chat_rows(tokenizer, start_idx: int) -> list[dict]:
     sys.path.insert(0, "scripts")
     from probe_opd_divergence import render_prompt_text
@@ -150,15 +220,17 @@ async def main() -> int:
     l2 = await build_l2_rows(tokenizer, registry)
     chat = build_chat_rows(tokenizer, 91000)
     cot = build_cot_rows(tokenizer, 92000)
-    new = pd.DataFrame(l2 + chat + cot)
+    l1 = await build_l1_rows(tokenizer, registry)   # v14.1：L1 概念追问正枪
+    new = pd.DataFrame(l2 + chat + cot + l1)
     train = pd.concat([t13, new], ignore_index=True)
     out = Path("data/sft/v14"); out.mkdir(parents=True, exist_ok=True)
     train.to_parquet(out / "train.parquet")
     v13.to_parquet(out / "val.parquet")
     manifest = {
-        "version": "v14", "seed": 1409,
+        "version": "v14.1", "seed": 1409,
         "sources": {"v13_train": len(t13), "l2_multiturn": len(l2),
-                    "chat_distill": len(chat), "cot_distill": len(cot)},
+                    "chat_distill": len(chat), "cot_distill": len(cot),
+                    "l1_concept": len(l1)},
         "total": len(train),
         "supervised_tokens": int(train.supervised_tokens.sum()),
         "behavior_counts": train.behavior.value_counts().to_dict(),
@@ -167,7 +239,7 @@ async def main() -> int:
     json.dump(manifest, open(out / "manifest.json", "w"), ensure_ascii=False, indent=2)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
     # 健全性断言：所有新行监督 token > 0、mask 与长度一致
-    for r in l2 + chat + cot:
+    for r in l2 + chat + cot + l1:
         assert r["supervised_tokens"] > 0, r["case_id"]
         assert len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
     print("✅ v14 构建完成，健全性断言全过")

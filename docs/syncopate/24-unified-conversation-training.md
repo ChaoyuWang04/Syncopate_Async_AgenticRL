@@ -136,6 +136,14 @@ SFT    checkpoints/sft/v14_r1 训完（141 步×3 epoch·五点存档·adapter-o
 验收   链 = scripts/u_p2_accept.sh（e1/e2 各 4 卡评 → compare vs _audit/v13_sft_v13r2_e1_merged.json）
        → 选优 merge_adapter 合并 → 服务化跑 talk/context 两考场 → 判七门槛（尤其 ⑤L2≥70 ⑦bad_data≤+5）
        ⚠️ eval_parallel 必须 MODEL=models/Qwen3-4B（SFT ckpt 贴裸基座；RL 时才换合并基座）
+
+r1 判定（08-29 02:53）：任务分 e2 +0.058（t=+4.7 过⑤任务线；e1 −0.105 淘汰——多轮数据
+  吃一个 epoch 不够）· **L2 92%**（36→92，200 条多轮行正枪命中）· 首步 50/50 ✓
+  · **L1 28% 不过线（门槛 85）** ⇒ 数据缺口显形：200 条 L2 行全是「第二轮→调工具」，
+  零条「第二轮是概念追问→纯文字答」的判别对照，把 L1 教反了（失败形态清一色
+  「把概念追问当查询」）。处置=v14.1 增补 build_l1_rows：100 条概念追问行
+  （21 词表互为上下文对·gold=零动作定义句·考场逐字去重·真回放）→ 852 行重训 v14_r2
+  → 全链重验（scripts/u_p2_r2_chain.sh，含 e1/e2 自动选优）。
 ```
 
 ### P3 · 多轮 RL（~3–5 天跑批，fully_async 现成栈）
