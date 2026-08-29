@@ -183,6 +183,13 @@ P2-DIV 处置方案（08-29 提案，⬜ 待 Chaoyu 裁定后动工）：总原�
   承诺级一致构造性保证；RL 阶段一致率只观测不进 reward）⑤ RL aha 观测量=**卡死格子
   翻开率**（全组失败格首次成功且 think 含修正模式，wandb 曲线+逐例 dump）；不加长度惩罚。
   连带：RL 起点改双判据=任务分距最优 <MDE 的点里选**有梯度格子最多**者。
+  外部语料（08-29 检索，**只进题库/句式层，不直接 SFT**；进题库前照旧与考场逐字去重）：
+  闲聊题库=opencsg/smoltalk-chinese + LMSYS-Chat-1M/WildChat 中文子集（真实口语分布）；
+  省略句式库=Restoration-200k/Rewrite-20k（中文不完整话语改写，与 L1/L2 精确同题，
+  换掉手写 REF_FORMS）；L3/L4 难度谱校准=BFCL v4 multi-turn 四子集分类学
+  （missing-function/missing-parameter ↔ 我们的 clarify/缺参）；CoT 公开集
+  （Congliu R1 中文 110k）只挖 revision 模式正则不混训（R1-Distill 丢 agentic 前车之鉴）。
+  ⚠️ 商用/灰测放量前过 license 审计（LMSYS/WildChat 有条款、BELLE 仅研究）。
 ```
 
 ### P3 · 多轮 RL（~3–5 天跑批，fully_async 现成栈）
