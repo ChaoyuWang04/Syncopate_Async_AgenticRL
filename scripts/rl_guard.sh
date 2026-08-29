@@ -50,6 +50,12 @@ stop () {
   say "🔴 触发停机：$*"
   if [ "$KILL" = "--kill" ] && [ -f "$PIDFILE" ]; then
     kill "$(cat "$PIDFILE")" 2>/dev/null && say "   已发 SIGTERM 给 $(cat "$PIDFILE")"
+    # ⚠️ 只杀 launcher 会留下孤儿 Ray 集群继续吃满四卡（08-29 实测：守卫杀后引擎
+    #    仍 2284 tok/s 空转，下一跑撞残留集群当场死）——停机必须连集群一起收
+    sleep 10; ray stop --force >/dev/null 2>&1
+    sleep 5; nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null \
+      | while read -r p; do kill -9 "$p" 2>/dev/null; done
+    say "   Ray 集群与 GPU 进程已随停机清收"
   else
     say "   （未加 --kill，只报警不停机）"
   fi

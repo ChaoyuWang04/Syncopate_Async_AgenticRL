@@ -9,7 +9,10 @@ say(){ echo "[P3 $(date +%H:%M:%S)] $*"; }
 BASE=models/Qwen3-4B-sft-v14.5-epoch3
 EXP=cand_v145_e3
 
-say "⓪ 清废跑残留（放在检查器之前——残留的 dispatched.jsonl 会让检查器量废跑不量现场）"
+say "⓪ 清废跑残留（含孤儿 Ray 集群——守卫只杀 launcher 会留集群吃卡）"
+ray stop --force >/dev/null 2>&1; sleep 5
+nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | while read -r p; do kill -9 "$p" 2>/dev/null; done
+sleep 3
 rm -rf checkpoints/grpo/smoke
 mkdir -p checkpoints/grpo/smoke
 
