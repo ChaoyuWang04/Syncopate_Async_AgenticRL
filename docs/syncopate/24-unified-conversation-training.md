@@ -124,6 +124,20 @@ P0-5 ✅ 教师 Qwen3-8B think 70% 压线过（defer 5/5 带真实思考 800-120
 | ⑥ think 行为闸 | `acted_when_should_not` ≤ think-off 基线（E27 反例，一票否决） |
 | ⑦ P1 红旗回归线 | L2 ≥ 70%（承 P2-⑤）且 `acted_on_bad_data_cap` ≤ 基线+5（P1 遗留 +18 必须收回） |
 
+**P2 进度（08-29 02:40 快照，数据 ✅ + SFT ✅ + 验收在途 🔴）**
+
+```
+数据   v14 = 752 行落库（data/sft/v14 + manifest·seed 1409）：v13 419 原样继承
+       + L2 多轮 200（真回放 build_sft_row，回放失败显式计数=门槛②内置）
+       + 闲聊蒸馏 74（chat_gold 质量闸）+ CoT 59（8B think 留存 78%·p95 1337 字符=门槛③过）
+       范围注记：L3/L4 多轮行刻意不造（gold 派生碰写权限语义，教错比不教危险，归 P3 RL）
+SFT    checkpoints/sft/v14_r1 训完（141 步×3 epoch·五点存档·adapter-only·wandb sft_v14_r1）
+       行为分组 loss 健康：defer 0.30 / tool_call 0.69 / answer 2.89（闲聊蒸馏新分布，正常起点）
+验收   链 = scripts/u_p2_accept.sh（e1/e2 各 4 卡评 → compare vs _audit/v13_sft_v13r2_e1_merged.json）
+       → 选优 merge_adapter 合并 → 服务化跑 talk/context 两考场 → 判七门槛（尤其 ⑤L2≥70 ⑦bad_data≤+5）
+       ⚠️ eval_parallel 必须 MODEL=models/Qwen3-4B（SFT ckpt 贴裸基座；RL 时才换合并基座）
+```
+
 ### P3 · 多轮 RL（~3–5 天跑批，fully_async 现成栈）
 
 会话级 GRPO 起步（逐轮 reward 求和为会话分；turn-level credit 留作进阶不阻塞）。
