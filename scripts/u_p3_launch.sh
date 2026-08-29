@@ -33,24 +33,28 @@ grep -E "配对差值|结论" logs/u_route/p3_base_cmp.txt | head -2
 
 # ⚠️ fully_async 语义（08-29 实测）：save_freq 挂在 param_version（每 16 global step
 #    同步一次）而非训练步——save_freq=25 会恰好只存终点；6 ⇒ 每 ~96 步一存 = 4-5 个点
-say "③ 起 RL（fully_async 3+1 · candidate · 守卫+瘦身挂载）"
+# ⚠️ 不传 --test-freq：verl 内置 validate 在 fully_async 下 reward 聚合翻倍断言炸
+#    （len(lst)=330 vs 165，10:56 实证）；评测走外部冻结 EVAL，内置验证纯冗余
+say "③ 起 RL（fully_async 3+1 · candidate）——先清废跑残留（dispatched/pool_state 污染守卫判读）"
+rm -rf checkpoints/grpo/smoke
+mkdir -p checkpoints/grpo/smoke
 SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.378174 \
 SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
 nohup .venv/bin/python -m syncopate.train.launch_rl --model "$BASE" \
   --lora-rank 32 --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
   --train-file data/rl/v13/train.parquet --val-file data/rl/v13/val.parquet \
   --steps 400 --purpose candidate --experiment "$EXP" \
-  --save-freq 6 --test-freq 6 > logs/u_route/p3_rl.log 2>&1 &
+  --save-freq 6 > logs/u_route/p3_rl.log 2>&1 &
 RLPID=$!
 echo $RLPID > /tmp/p3_rl.pid
 sleep 30
 kill -0 $RLPID 2>/dev/null || { tail -20 logs/u_route/p3_rl.log; echo RL-DEAD-EARLY; exit 1; }
 CKDIR=checkpoints/grpo/smoke
-nohup bash scripts/rl_guard.sh logs/u_route/p3_rl.log "$CKDIR" --kill > logs/u_route/p3_guard.log 2>&1 &
 nohup bash scripts/rl_ckpt_rolling_prune.sh "$CKDIR" > logs/u_route/p3_prune.log 2>&1 &
 
-say "④ 起跑后 10 分钟判据行自查"
+say "④ 起跑后 10 分钟判据行自查（守卫在自查后挂载——冷启动窗口会误触 defer 连零）"
 sleep 600
+RL_PIDFILE=/tmp/p3_rl.pid nohup bash scripts/rl_guard.sh logs/u_route/p3_rl.log "$CKDIR" --kill > logs/u_route/p3_guard.log 2>&1 &
 for pat in "\[pool\]" "\[agent-loop\]" "\[lora-probe\]" "\[sync-payload\]"; do
   if grep -q "$pat" logs/u_route/p3_rl.log; then echo "  ✅ $pat"; else echo "  🔴 缺判据行 $pat"; fi
 done
