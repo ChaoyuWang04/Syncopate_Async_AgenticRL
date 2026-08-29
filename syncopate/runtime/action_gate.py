@@ -118,11 +118,6 @@ class ActionGate:
         self.run_id = run_id
         self._over_budget = over_budget
         self._emit = emit
-
-    async def emit_info(self, *, kind: str, payload: dict) -> None:
-        """信息型事件的公开出口（model.thinking 等展示流；不参与判定/审计语义）。"""
-        await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
-                         kind=kind, payload=payload)
         self._audit = audit
         self._record_step = record_step
         self.amount_threshold = amount_threshold
@@ -132,6 +127,11 @@ class ActionGate:
         # ★ 已裁决的动作不再过网关（否则刚批准就又被同一个触发器拦下来，
         #   run 会在 waiting_for_user 和 queued 之间来回弹，永远跑不完）
         self.skip_triggers = False
+
+    async def emit_info(self, *, kind: str, payload: dict) -> None:
+        """信息型事件的公开出口（model.thinking 等展示流；不参与判定/审计语义）。"""
+        await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
+                         kind=kind, payload=payload)
 
     # ── 内部：把"给模型看的那一份"和内部字段切开 ──────────────────────────
     @staticmethod
