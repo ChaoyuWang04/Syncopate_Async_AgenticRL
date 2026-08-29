@@ -19,7 +19,9 @@ import json
 import re
 from collections import Counter, defaultdict
 
-DEF_WORDS = r"是指|指的是|表示|衡量|用于|含义|意思是|定义|计算|叫做|就是"
+# 单字「指」可安全保留：病句负正则（SICK）在其之前单独拦「指指」——
+# 08-29 人核：删掉它误杀 6 条正常定义句（「内购指用户…」）
+DEF_WORDS = r"是指|指的是|指|表示|衡量|用于|含义|意思是|定义|计算|叫做|就是|即|是[一让用将按把]"
 SICK = re.compile(r"指指|的的|是是|了了")
 
 
@@ -92,7 +94,7 @@ def judge_item(item, spec):
                   for tool, args in _tool_args(t2))
         if not hit:
             return False, f"第二轮未对 {j['campaign']} 调数据工具（tools={[t for t, _ in _tool_args(t2)]}）"
-        clean = rep.replace(",", "").replace("，", "")
+        clean = rep.replace(",", "").replace("，", "").replace(" ", "")
         if not any(f in clean for f in value_forms(j["expect_value"])):
             return False, f"查了不读数（回复未含 {j['metric_name']}≈{j['expect_value']}）"
         return True, "ok"
