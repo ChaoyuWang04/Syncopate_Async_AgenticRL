@@ -9,6 +9,10 @@ say(){ echo "[P3 $(date +%H:%M:%S)] $*"; }
 BASE=models/Qwen3-4B-sft-v14.5-epoch3
 EXP=cand_v145_e3
 
+say "⓪ 清废跑残留（放在检查器之前——残留的 dispatched.jsonl 会让检查器量废跑不量现场）"
+rm -rf checkpoints/grpo/smoke
+mkdir -p checkpoints/grpo/smoke
+
 say "① 静态检查器 + 磁盘"
 python scripts/check_pipeline_invariants.py > logs/u_route/p3_invariants.log 2>&1 || true
 # 遗留红白名单（06 §1「只剩登记在案的遗留红」；均为 08-27 历史审计，与 v14.5 无关）：
