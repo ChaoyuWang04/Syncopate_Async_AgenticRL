@@ -19,12 +19,12 @@
     "n_cases": 120,
     "prompt_before_median": 4293.0,
     "prompt_before_max": 4309,
-    "delta_median": 445.0,
-    "delta_max": 445,
-    "prompt_after_max": 4754,
+    "delta_median": 428.0,
+    "delta_max": 428,
+    "prompt_after_max": 4737,
     "max_prompt_length": 5120,
-    "headroom_after": 366,
-    "deploy_regime_full_menu_prompt": 6734
+    "headroom_after": 383,
+    "deploy_regime_full_menu_prompt": 6717
   },
   "P6_behavior_derivation": {
     "turns_total": 1325,

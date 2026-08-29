@@ -25,30 +25,28 @@ sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 rng = random.Random(1500)
 
-SESSION_TOOLS = [
-    {"type": "function", "function": {
-        "name": "session.defer",
-        "description": "数据尚不成熟、需等待后复查时调用（终止本轮任务并可挂起复查）",
-        "parameters": {"type": "object", "properties": {
-            "reason": {"type": "string", "description": "为什么现在不能下结论"},
-            "recheck_after_days": {"type": "integer", "description": "建议几天后复查"}},
-            "required": ["reason", "recheck_after_days"]}}},
-    {"type": "function", "function": {
-        "name": "session.clarify",
-        "description": "信息不足需要用户补充时调用（终止本轮，等待用户回答）",
-        "parameters": {"type": "object", "properties": {
-            "question": {"type": "string", "description": "向用户提出的具体问题"},
-            "missing_fields": {"type": "array", "items": {"type": "string"}}},
-            "required": ["question", "missing_fields"]}}},
-    {"type": "function", "function": {
-        "name": "session.reject",
-        "description": "请求越权、离题或违反政策时调用（终止本轮并说明）",
-        "parameters": {"type": "object", "properties": {
-            "reason_code": {"type": "string",
-                            "enum": ["out_of_scope", "unauthorized", "policy"]},
-            "explanation": {"type": "string"}},
-            "required": ["reason_code", "explanation"]}}},
-]
+# ★ spec 从契约模块取，不留副本（守则⑨）。⚠️ R0 双臂数据是用**这份 spec 的当时值**
+# 冻结出来的；日后改 spec 不会回改已冻结的 parquet —— 重建 R0 数据才会生效。
+from syncopate.core.contract import SESSION_TOOL_SPECS as SESSION_TOOLS
+
+# ★ 冻结指纹：data/v15_r0/ 是用下面这个 spec 哈希建出来的。改了 spec 而不重建数据 ⇒
+#   评测 prompt 与训练 prompt 不一致，R0 结论作废。判据写在发生点，不靠人记得检查。
+FROZEN_SPEC_SHA = "6a5c2fd5a8868a10"
+
+
+def _spec_fingerprint() -> str:
+    import hashlib
+    blob = json.dumps(SESSION_TOOLS, ensure_ascii=False, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def assert_spec_frozen() -> None:
+    got = _spec_fingerprint()
+    if got != FROZEN_SPEC_SHA:
+        raise SystemExit(
+            f"🔴 session 工具 spec 变了（{got} ≠ 冻结值 {FROZEN_SPEC_SHA}）。\n"
+            "   data/v15_r0/ 是用旧 spec 冻的 ⇒ 要么改回 spec，要么重建 R0 数据并更新本常量。\n"
+            "   （2026-08-29 实案：顺手加两个 description 就会走到这里，见 25 §7）")
 
 DEFER_REASONS = {"immature": "数据观察期还不够，指标尚未收敛",
                  "borderline": "数据刚到观察边界，波动仍大"}

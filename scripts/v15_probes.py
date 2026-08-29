@@ -23,30 +23,9 @@ import statistics
 from pathlib import Path
 
 OUT = Path("_audit/v15_probes")
-SESSION_TOOLS = [
-    {"type": "function", "function": {
-        "name": "session.defer",
-        "description": "数据尚不成熟、需等待后复查时调用（终止本轮任务并可挂起复查）",
-        "parameters": {"type": "object", "properties": {
-            "reason": {"type": "string", "description": "为什么现在不能下结论"},
-            "recheck_after_days": {"type": "integer", "description": "建议几天后复查"}},
-            "required": ["reason", "recheck_after_days"]}}},
-    {"type": "function", "function": {
-        "name": "session.clarify",
-        "description": "信息不足需要用户补充时调用（终止本轮，等待用户回答）",
-        "parameters": {"type": "object", "properties": {
-            "question": {"type": "string", "description": "向用户提出的具体问题"},
-            "missing_fields": {"type": "array", "items": {"type": "string"},
-                               "description": "缺哪些信息"}},
-            "required": ["question", "missing_fields"]}}},
-    {"type": "function", "function": {
-        "name": "session.reject",
-        "description": "请求越权、离题或违反政策时调用（终止本轮并说明）",
-        "parameters": {"type": "object", "properties": {
-            "reason_code": {"type": "string", "enum": ["out_of_scope", "unauthorized", "policy"]},
-            "explanation": {"type": "string", "description": "向用户解释原因"}},
-            "required": ["reason_code", "explanation"]}}},
-]
+# ★ spec 从契约模块取，不留副本（守则⑨：这里根本不该有第二份）
+from syncopate.core.contract import SESSION_TOOL_SPECS as SESSION_TOOLS  # noqa: E402
+
 REPORT_TOOL = [{"type": "function", "function": {
     "name": "session.report",
     "description": "给出本轮结论里机器需要核对的结构化字段",
