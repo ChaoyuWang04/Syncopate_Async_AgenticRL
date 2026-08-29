@@ -1,0 +1,32 @@
+== logs/u_route/run_v145_context_v2.jsonl
+  L1-iv: 20/24 = 83%
+  L1-oov: 21/26 = 81%
+  L2: 17/25 = 68%
+  L3: 0/25 = 0%
+  L4: 2/25 = 8%
+  [行为读数] 话术复读率=1%（尾='进一步优化投放策略。'，门槛≤15%） 病句率=0.0%（≤2%） L2工具浪费=0%（≤20%） 答长p50/p95=40/63
+   ✗ L1_05: 回复未提到该词
+   ✗ L1_12: 概念追问动了工具/提案 ['mmp.get_attribution']（v2=零动作判据）
+   ✗ L1_15: 概念追问动了工具/提案 ['mmp.get_attribution']（v2=零动作判据）
+   ✗ L1_17: 概念追问动了工具/提案 ['memory.search']（v2=零动作判据）
+   ✗ L1_20: 回复无定义性措辞
+   ✗ L1_40: 概念追问动了工具/提案 ['calendar.get_seasonal_context']（v2=零动作判据）
+   ✗ L1_41: 概念追问动了工具/提案 ['analysis.geo_breakdown', 'analysis.feature_lift']（v2=零动作判据）
+   ✗ L1_42: 回复无定义性措辞
+   ✗ L1_46: 概念追问动了工具/提案 ['creative.poll_review']（v2=零动作判据）
+   ✗ L2_04: 第二轮未对 CMP_5 调数据工具（tools=['campaign.list', 'campaign.get_metrics']）
+   ✗ L2_05: 第二轮未对 CMP_6 调数据工具（tools=['campaign.list']）
+   ✗ L2_07: 第二轮未对 CMP_2 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_09: 第二轮未对 CMP_4 调数据工具（tools=['campaign.list', 'campaign.get_metrics']）
+   ✗ L2_10: 第二轮未对 CMP_5 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_13: 第二轮未对 CMP_2 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_15: 第二轮未对 CMP_4 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L2_16: 第二轮未对 CMP_5 调数据工具（tools=['campaign.get_metrics']）
+   ✗ L3_00: 未见 ≈55000 的提案参数
+   ✗ L3_01: 未见 ≈24000 的提案参数
+   ✗ L3_02: 未见 ≈96000 的提案参数
+   ✗ L3_03: 未见 ≈42000 的提案参数
+   ✗ L3_04: 未见 ≈0 的提案参数
+   ✗ L3_05: 未见 ≈66000 的提案参数
+   ✗ L3_06: 未见 ≈55000 的提案参数
+   ✗ L3_07: 未见 ≈23000 的提案参数
