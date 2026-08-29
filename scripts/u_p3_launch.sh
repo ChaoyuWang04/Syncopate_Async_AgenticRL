@@ -58,7 +58,11 @@ nohup bash scripts/rl_ckpt_rolling_prune.sh "$CKDIR" > logs/u_route/p3_prune.log
 
 say "④ 起跑后 10 分钟判据行自查（守卫在自查后挂载——冷启动窗口会误触 defer 连零）"
 sleep 600
-RL_PIDFILE=/tmp/p3_rl.pid nohup bash scripts/rl_guard.sh logs/u_route/p3_rl.log "$CKDIR" --kill > logs/u_route/p3_guard.log 2>&1 &
+# ⚠️ D 族连零门槛 25 是旧采样制度反填值——fully_async 动态分池会把已学好的题排出
+#    有效池（659→~400），defer 题学好即被排除 ⇒ 自然连零远超旧上界（11:09 误杀实测
+#    streak=67 而模型行为健康：defer 终答在、该 defer 100%）。defer_watch 注释自己
+#    预警过要按新制度反填。本跑 D 族观察模式（999=只记录），跑完用 dump 实测反填新门槛。
+MAX_DEFER_ZERO_STREAK=999 RL_PIDFILE=/tmp/p3_rl.pid nohup bash scripts/rl_guard.sh logs/u_route/p3_rl.log "$CKDIR" --kill > logs/u_route/p3_guard.log 2>&1 &
 for pat in "\[pool\]" "\[agent-loop\]" "\[lora-probe\]" "\[sync-payload\]"; do
   if grep -q "$pat" logs/u_route/p3_rl.log; then echo "  ✅ $pat"; else echo "  🔴 缺判据行 $pat"; fi
 done
