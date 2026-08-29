@@ -156,18 +156,38 @@ async def gen_chat(client, bank) -> list[dict]:
     return out
 
 
+L2_TAILS: Counter = Counter()
+TAIL_CAP = 10          # 200 行里同尾 ≤5%，给 10% 密度闸留一半余量
+
+
+def _tail_ok(rep: str) -> bool:
+    return L2_TAILS[rep[-10:]] < TAIL_CAP
+
+
+def _tail_note(rep: str) -> None:
+    L2_TAILS[rep[-10:]] += 1
+
+
+ANGLES_L2 = ["可附一句简短观察", "顺带说一句这个数是高是低",
+             "用口头汇报的口气说", "顺带提示下一步可以看什么"]
+
+
 async def gen_l2_reply(client, cid, mname, val) -> str:
-    for _ in range(3):
+    for k in range(4):
         rep = clean_reply(await teach(
             client, T4B,
             f"你查到了 {cid} 的{mname}是 {val}。用一两句自然中文把这个结果告诉用户，"
-            f"必须包含数值 {val}（可换算写法），可附一句简短观察，不要用固定套话。",
+            f"必须包含数值 {val}（可换算写法），{ANGLES_L2[k % 4]}，不要用固定套话，"
+            f"收尾方式不要千篇一律。",
             temp=0.9, max_tokens=120))
         clean = rep.replace(",", "").replace("，", "")
         if any(f in clean for f in value_forms(val)) and 10 <= len(rep) <= 160 \
-                and not SICK.search(rep) and not has_oov(rep):
+                and not SICK.search(rep) and not has_oov(rep) and _tail_ok(rep):
+            _tail_note(rep)
             return rep
-    return f"{cid} 的{mname}是 {val}，需要进一步对比随时说。"   # 兜底（计数）
+    rep = f"{cid} 的{mname}是 {val}，需要进一步对比随时说。"   # 兜底（计数）
+    _tail_note(rep)
+    return rep
 
 
 # ═══════════ Stage B · CoT 难例（8B 逐步 think + 承诺闸）═══════════
@@ -382,10 +402,20 @@ async def build_l2_l1(tokenizer, registry, client):
             b2.gold.final_answer = {"summary": f"{cid2} {mkey}={val}", "reply": rep}
         else:
             b2.gold.actions = [{"tool": tool, "arguments": {"campaign_id": cid}}]
-            rep = clean_reply(await teach(
-                client, T4B,
-                f"你刚核对了 {cid} 的 MMP 归因数据。用一两句自然中文告诉用户核对结论"
-                f"（口径一致或有差异需再看），不要用固定套话。", temp=0.9, max_tokens=100))
+            rep = None
+            for k in range(4):
+                cand_rep = clean_reply(await teach(
+                    client, T4B,
+                    f"你刚核对了 {cid} 的 MMP 归因数据。用一两句自然中文告诉用户核对结论"
+                    f"（{rng.choice(['口径基本一致', '和平台数有小差异要再看', '归因窗口正常', '部分安装未被归因'])}），"
+                    f"{ANGLES_L2[k % 4]}，收尾方式不要千篇一律。", temp=0.95, max_tokens=100))
+                if 10 <= len(cand_rep) <= 160 and not SICK.search(cand_rep) \
+                        and not has_oov(cand_rep) and _tail_ok(cand_rep):
+                    rep = cand_rep
+                    break
+            if rep is None:
+                rep = f"{cid} 的归因数据核对完毕，细节口径我再核一轮。"
+            _tail_note(rep)
             b2.gold.final_answer = {"summary": f"{cid} 归因已核", "reply": rep}
         try:
             row = await replay(b2, 91000 + len(l2_rows))
@@ -518,8 +548,14 @@ async def main() -> int:
             json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
         print("[C] L2/L1 回放构建 …", flush=True)
         l2, l1 = await build_l2_l1(tokenizer, registry, client)
-        print("[B] CoT 难例（8B）…", flush=True)
-        cot = await gen_cot(client, tokenizer, max_rows=60)
+        cache_cot = Path("data/u_route/v145_cot_rows.json")
+        if cache_cot.exists():
+            cot = json.load(open(cache_cot))
+            print(f"[B] CoT 缓存命中（{len(cot)} 行）")
+        else:
+            print("[B] CoT 难例（8B）…", flush=True)
+            cot = await gen_cot(client, tokenizer, max_rows=60)
+            json.dump(cot, open(cache_cot, "w"))
 
     # held-out val 切分（每桶尾部拿走）
     l2, l2v = l2[:200], l2[200:210]
