@@ -96,9 +96,11 @@ check_once () {
               | grep -Ev '(e12d_|batch2_|_timing\.json|infra_|gpu_gate|e14|e19|e29|nsys|anatomy|torchprof|b4_|/b4/)' \
               | grep -Ev "$extra_excl" | head -5)"
     if [ -n "$recent" ]; then
-        echo "🔴 ③ 最近 ${QUIET_MIN} 分钟内产物目录仍有写入（主线可能在阶段之间）："
+        # ⚠️ Chaoyu 2026-08-29 裁定：③ 降为**只报告不拦截**——单实验体制下不存在
+        #    两跑抢卡；原始理由（阶段间隙里 ①② 双绿但主线未完 ⇒ 第二批抢卡 OOM，
+        #    eval_parallel 头注②的事故）保留在案，若恢复多实验并行要把 ok=0 加回来。
+        echo "🟡 ③ 最近 ${QUIET_MIN} 分钟内产物目录有写入（仅提示，不拦截）："
         echo "$recent" | sed 's/^/      /'
-        ok=0
     else
         echo "🟢 ③ 产物目录静默 ≥ ${QUIET_MIN} 分钟"
     fi
