@@ -225,3 +225,39 @@ def test_v14_parser_untouched_by_v15_module():
     from syncopate.core.parsing import parse_step
     p = parse_step('```json\n{"behavior": "defer", "answer": {"a": 1}}\n```')
     assert p.kind == "final" and p.behavior == "defer" and p.answer == {"a": 1}
+
+
+# ── 门槛③：往返逐字节一致（渲染 → 解析 → 重渲染）─────────────────────────
+@pytest.mark.parametrize("name,args", [
+    ("session.defer", {"reason": "数据太新", "recheck_after_days": 3}),
+    ("session.clarify", {"question": "哪条计划?", "missing_fields": ["campaign_id", "region"]}),
+    ("session.reject", {"reason_code": "unauthorized", "explanation": "越权，无法执行。"}),
+    ("session.report", {"decision": "hold", "approved_budget": 1200, "cpi": 2.1}),
+    ("session.report", {"note": "含中文与「引号」和 \\ 反斜杠"}),
+    ("session.defer", {"reason": "", "recheck_after_days": 0}),
+])
+def test_render_parse_render_is_byte_identical(name, args):
+    """★ 往返判据：渲染出的文本 → 解析 → 再渲染，必须**逐字节**相等。
+
+    这条守的是"渲染与解析是同一份契约的两面"。任何一边偷偷规范化了什么
+    （改引号、丢字段、重排 key），往返就会不等 —— 而那种偏差在训练里是静默的。
+    """
+    text1 = render_signal(name, args)
+    p = parse_step_v15(text1)
+    got_args = p.signal_args if p.kind == "signal" else p.tool_calls[0]["arguments"]
+    text2 = render_signal(name, got_args)
+    assert text1 == text2, f"往返不等\n第一次: {text1!r}\n第二次: {text2!r}"
+
+
+def test_roundtrip_preserves_argument_types():
+    """int 不许在往返里变成 str（recheck_after_days 是 int，判据②a 会查类型）。"""
+    p = parse_step_v15(render_signal("session.defer",
+                                     {"reason": "x", "recheck_after_days": 7}))
+    assert isinstance(p.signal_args["recheck_after_days"], int)
+
+
+def test_roundtrip_with_think_prefix():
+    """带 think 前缀时，剥掉 think 后的往返仍要逐字节相等。"""
+    text1 = render_signal("session.defer", {"reason": "x", "recheck_after_days": 1})
+    p = parse_step_v15("<think>先想一下</think>" + text1)
+    assert render_signal("session.defer", p.signal_args) == text1

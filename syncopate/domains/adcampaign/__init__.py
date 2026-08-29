@@ -23,6 +23,12 @@ from syncopate.domains.adcampaign.tools import (  # noqa: F401
     playbook, system_tools,
 )
 from syncopate.domains.adcampaign import rules  # noqa: F401
+from syncopate.core.contract import IS_V15
+from syncopate.core.session_signals import register_session_tools
+
+# v15：信令族进工具表（不注册 = 模型看不到 schema 且调用会被判 tool_not_available）
+if IS_V15:
+    register_session_tools()
 from syncopate.domains.adcampaign.policies import compute_decision, score_policy
 
 DOMAIN_NAME = "adcampaign"

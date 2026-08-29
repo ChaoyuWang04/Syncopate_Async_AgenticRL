@@ -80,6 +80,19 @@ class Trajectory:
     def num_steps(self) -> int:
         return max((a.step for a in self.actions), default=0)
 
+    @property
+    def num_business_steps(self) -> int:
+        """★ 只数**业务**工具占用的步数，排除 session.* 信令族。
+
+        效率子分问的是「办这件事有没有绕路」。v15 里 `session.report` 是**契约要求的
+        报数动作**，不是绕路；把它算进去等于换个契约就凭空扣 5% ——
+        实测（R1 门槛⑤ 判分对拍）：不排除的话 120/120 条 gold 的 efficiency 全部变化。
+        ⚠️ v14 轨迹里没有 session.* action ⇒ 本属性与 num_steps 恒等，**旧分不动**。
+        """
+        from syncopate.core.contract import SESSION_TOOL_NAMES
+        return max((a.step for a in self.actions if a.name not in SESSION_TOOL_NAMES),
+                   default=0)
+
     def called_tools(self) -> list[str]:
         return [a.name for a in self.actions]
 

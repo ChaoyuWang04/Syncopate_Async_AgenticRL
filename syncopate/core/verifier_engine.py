@@ -270,7 +270,9 @@ def score_efficiency(spec: VerifierSpec, trajectory: Trajectory) -> tuple[float,
     expected = 必查读工具数 + 必做写动作数。gold 走的就是这个步数。
     """
     expected = len(spec.required_read_tools) + len(spec.required_side_effects)
-    actual = trajectory.num_steps
+    # ★ 只数业务步：session.* 是契约要求的动作，不是绕路（见 num_business_steps 的注释）。
+    #   v14 轨迹里没有 session.* ⇒ 与 num_steps 恒等，旧分逐位不变。
+    actual = trajectory.num_business_steps
     overshoot = max(0, actual - expected)
     return max(0.0, 1.0 - 0.05 * overshoot), {"expected": expected, "actual": actual, "overshoot": overshoot}
 

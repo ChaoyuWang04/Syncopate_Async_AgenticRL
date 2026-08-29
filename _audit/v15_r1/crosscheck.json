@@ -1,0 +1,215 @@
+{
+  "trajectory": {
+    "files": 15,
+    "rollouts_total": 20580,
+    "mappable_n": 18335,
+    "mappable_agree": 18111,
+    "mappable_rate": 0.9878,
+    "signal_rows_n": 2245,
+    "signal_rows_all_underivable": true,
+    "cross_tab": {
+      "tool_call->tool_call": 16772,
+      "answer->answer": 1339,
+      "defer->tool_call": 889,
+      "clarify->answer": 511,
+      "reject->answer": 457,
+      "reject->tool_call": 249,
+      "tool_call->answer": 205,
+      "clarify->tool_call": 131,
+      "answer->tool_call": 19,
+      "defer->answer": 8
+    },
+    "mismatch_sample": [
+      {
+        "case_id": "CHAT_0055",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CONF_0019",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CONF_0019",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CONF_0067",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "FAIL_0006",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "FAIL_0011",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "FAIL_0022",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "INJ_0007",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "INJ_0011",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "INJ_0040",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "INJ_0045",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "INJ_0050",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "POLM_0010",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "RAG_0003",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "REJ_0007",
+        "file": "v145_sft_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CONF_0088",
+        "file": "v145_sft_epoch2.json",
+        "old": "answer",
+        "derived": "tool_call",
+        "tool_seq": [
+          "campaign.get_metrics",
+          "memory.search",
+          "insight.search_claims",
+          "memory.conflict_resolve",
+          "memory.write_proposal"
+        ]
+      },
+      {
+        "case_id": "INJ_0010",
+        "file": "v145_sft_sel_f1_5.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "RAG_0009",
+        "file": "v145_sft_sel_f1_5.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "SCALE_0070",
+        "file": "v145_sft_sel_f2_5.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0000",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0000",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0001",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0002",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0002",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      },
+      {
+        "case_id": "CHAT_0003",
+        "file": "v13_eval_v13r2_epoch1.json",
+        "old": "tool_call",
+        "derived": "answer",
+        "tool_seq": []
+      }
+    ],
+    "mismatch_n": 224
+  },
+  "switch": {
+    "raw_outputs_scanned": 500,
+    "v14_final_steps": 72,
+    "v15_caught_as_shell_residue": 72,
+    "v15_leaked": 0,
+    "catch_rate": 1.0,
+    "leak_samples": []
+  }
+}

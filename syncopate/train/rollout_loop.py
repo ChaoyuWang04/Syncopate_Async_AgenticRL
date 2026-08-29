@@ -23,7 +23,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol
 
+from syncopate.core.contract import IS_V15, REPORT_TOOL, TERMINAL_SIGNALS
 from syncopate.core.parsing import ParsedStep, parse_step
+from syncopate.core.parsing_v15 import derive_behavior, parse_step_v15
 from syncopate.core.sandbox import Sandbox
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.tool_registry import ToolContext, ToolRegistry
@@ -215,6 +217,10 @@ async def run_rollout(
     step = 0
     tool_errors = 0
     parse_errors = 0
+    # v15 轨迹级状态：行为推导要知道"这条轨迹调过业务工具没有"；
+    # session.report 的字段沿途累积（可能分多步报）
+    business_tools_used = False
+    report_fields: dict[str, Any] = {}
     started = time.monotonic()
     generate_seconds = 0.0
     tool_seconds = 0.0
@@ -277,15 +283,41 @@ async def run_rollout(
         placeholder_logprobs += missing
         response_logprobs.extend(new_logprobs + [0.0] * missing)
         segments.append({"type": "assistant", "step": step, "token_count": len(new_ids), "mask": 1})
-        parsed: ParsedStep = parse_step(text)
+        # ---- 2. 解析（契约二选一；v14 分支逐字节不变）----
+        if IS_V15:
+            p15 = parse_step_v15(text)
+            # 终止性信令 / 纯文本终答 ⇒ 收工。行为在**轨迹级**推导：
+            # 「调过业务工具 + 纯文本收尾 → tool_call」光看这一步是判不出来的。
+            if p15.kind in ("signal", "final_text"):
+                trajectory.behavior = derive_behavior(
+                    terminal=p15, business_tools_used=business_tools_used)
+                # ★ session.report 的参数**沿途累积**进 final_answer ⇒
+                #   判分器 `_score_answer_fields` 与三条读终答的 cap **一行都不用改**
+                #   （`25 §3.3` 第 2/3 行：换的是取数来源，不是比对逻辑）。
+                trajectory.final_answer = dict(report_fields)
+                trajectory.final_text = p15.text
+                trajectory.parse_ok = True
+                break
+            parsed = ParsedStep(
+                kind="error" if p15.kind == "error" else "tool_calls",
+                tool_calls=p15.tool_calls, error=p15.error,
+                had_thinking=p15.had_thinking, raw_text=text)
+            if parsed.kind == "tool_calls":
+                for c in p15.tool_calls:
+                    if c["name"] == REPORT_TOOL:
+                        report_fields.update(c["arguments"])
+                    elif c["name"] not in TERMINAL_SIGNALS:
+                        business_tools_used = True
+        else:
+            parsed = parse_step(text)
 
-        # ---- 2. 终答：循环结束 ----
-        if parsed.kind == "final":
-            trajectory.behavior = parsed.behavior
-            trajectory.final_answer = parsed.answer
-            trajectory.final_text = text
-            trajectory.parse_ok = True
-            break
+            # ---- 2b. v14 终答：循环结束 ----
+            if parsed.kind == "final":
+                trajectory.behavior = parsed.behavior
+                trajectory.final_answer = parsed.answer
+                trajectory.final_text = text
+                trajectory.parse_ok = True
+                break
 
         # ---- 3. 解析失败：把错误喂回去让它自己修 ----
         if parsed.kind == "error":
