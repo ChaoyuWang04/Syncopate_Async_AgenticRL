@@ -31,6 +31,8 @@ fi
   > logs/u_route/p3_base_cmp.txt 2>&1
 grep -E "配对差值|结论" logs/u_route/p3_base_cmp.txt | head -2
 
+# ⚠️ fully_async 语义（08-29 实测）：save_freq 挂在 param_version（每 16 global step
+#    同步一次）而非训练步——save_freq=25 会恰好只存终点；6 ⇒ 每 ~96 步一存 = 4-5 个点
 say "③ 起 RL（fully_async 3+1 · candidate · 守卫+瘦身挂载）"
 SYNCOPATE_SYNC_PAYLOAD=1 SYNCOPATE_SYNC_REF=75.378174 \
 SYNCOPATE_SYNC_WATCH="model.layers.0.self_attn.q_proj.base_layer.weight" \
@@ -38,12 +40,12 @@ nohup .venv/bin/python -m syncopate.train.launch_rl --model "$BASE" \
   --lora-rank 32 --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
   --train-file data/rl/v13/train.parquet --val-file data/rl/v13/val.parquet \
   --steps 400 --purpose candidate --experiment "$EXP" \
-  --save-freq 25 --test-freq 25 > logs/u_route/p3_rl.log 2>&1 &
+  --save-freq 6 --test-freq 6 > logs/u_route/p3_rl.log 2>&1 &
 RLPID=$!
 echo $RLPID > /tmp/p3_rl.pid
 sleep 30
 kill -0 $RLPID 2>/dev/null || { tail -20 logs/u_route/p3_rl.log; echo RL-DEAD-EARLY; exit 1; }
-CKDIR=checkpoints/grpo/$EXP
+CKDIR=checkpoints/grpo/smoke
 nohup bash scripts/rl_guard.sh logs/u_route/p3_rl.log "$CKDIR" --kill > logs/u_route/p3_guard.log 2>&1 &
 nohup bash scripts/rl_ckpt_rolling_prune.sh "$CKDIR" > logs/u_route/p3_prune.log 2>&1 &
 
