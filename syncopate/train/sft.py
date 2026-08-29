@@ -21,11 +21,13 @@ import builtins
 import functools
 import json
 import math
+import os
 import time
 from pathlib import Path
 from typing import Any
 
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
@@ -80,6 +82,12 @@ class PretokenizedDataset(Dataset):
             }
             for _, row in frame.iterrows()
         ]
+        # ★ 零监督样本硬报错：单卡路径会静默跳过它（有计数），多卡路径会摊进
+        #   一个零梯度——两种语义不同 ⇒ 从数据层面禁止这种样本存在，分叉即消失
+        zero_sup = [r["case_id"] for r in self.rows if sum(r["loss_mask"]) == 0]
+        if zero_sup:
+            raise SystemExit(f"🔴 {path} 有 {len(zero_sup)} 条零监督样本（loss_mask 全 0）："
+                             f"{zero_sup[:5]} —— 造数据的 bug，拒绝启动")
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -316,8 +324,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
 
+    # ---- DDP 数据并行（torchrun 启动时自动生效；单进程跑 = 原语义分毫不动）----
+    #
+    # ★★ 刻意**不用** DistributedDataParallel 包装器，用手动梯度 all_reduce：
+    #    token_losses 为了稀疏投影直调主干（trunk/lm_head），绕过包装器的 forward
+    #    ⇒ DDP 的 reducer 收不到 prepare_for_backward，梯度会**静默不同步**
+    #    （两基石 bug 之一「三个 rank 没同步梯度」的同族死法）。
+    #    手动路径 = opd.py 已实战的模式：累积窗口末尾对每个可训练梯度 all_reduce(AVG)，
+    #    LoRA 只有 ~66M 参数（fp32 梯度 ~264 MB），四卡 PCIe 上一次 <0.1s，开销可忽略。
+    #    正确性由每 epoch 的「rank 间权重一致」硬断言兜底（见 epoch 尾）。
+    world = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    if world > 1:
+        local_rank = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(local_rank)
+        dist.init_process_group("nccl")
+        if rank != 0:
+            # 非 rank0 静默：打印/评测/存盘/wandb 全部只归 rank0
+            globals()["print"] = lambda *a, **k: None  # noqa: A001
+            args.no_wandb = True
+
     torch.manual_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if world > 1:
+        device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
 
     from transformers import AutoTokenizer
@@ -335,8 +366,19 @@ def main(argv: list[str] | None = None) -> int:
     val_set = PretokenizedDataset(ROOT / args.val_file, SFT_MAX_LENGTH, "behavior")
     collate_fn = lambda batch: collate(batch, pad_id)  # noqa: E731
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
-                              collate_fn=collate_fn, drop_last=False)
+    if world > 1:
+        from torch.utils.data.distributed import DistributedSampler
+
+        # drop_last=False：DistributedSampler 会补齐到各 rank 等长 ⇒
+        # 每个 rank 的 micro-step 数相同 ⇒ 累积窗口边界的 all_reduce 次数天然对齐（无死锁）
+        train_sampler = DistributedSampler(train_set, num_replicas=world, rank=rank,
+                                           shuffle=True, seed=args.seed, drop_last=False)
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler,
+                                  collate_fn=collate_fn, drop_last=False)
+    else:
+        train_sampler = None
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
+                                  collate_fn=collate_fn, drop_last=False)
 
     model, _ = build_model(model_path, args.lora_rank, args.lora_alpha, dtype)
     model.to(device)
@@ -349,9 +391,21 @@ def main(argv: list[str] | None = None) -> int:
         model.enable_input_require_grads()
     model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.train()
+    if world > 1:
+        # 确定性双保险：seed 相同理论上各 rank 初始化一致，但仍从 rank0 广播一次
+        # 可训练参数——起点一致是手动梯度同步正确性的前提，不赌初始化的确定性
+        for p in model.parameters():
+            if p.requires_grad:
+                dist.broadcast(p.data, src=0)
     print(f"[模型] {args.model}  {trainable_summary(model)}")
+    eff_batch = args.batch_size * args.grad_accum * world
     print(f"[数据] train={len(train_set)} val={len(val_set)}  "
-          f"有效 batch = {args.batch_size}×{args.grad_accum} = {args.batch_size * args.grad_accum}")
+          f"有效 batch = {args.batch_size}×{args.grad_accum}×{world} = {eff_batch}")
+    if world > 1 and eff_batch != 16:
+        # 现行配方的有效 batch = 16（2×8 单卡）。torchrun 起多卡时忘了把 --grad-accum
+        # 降下来会静默改配方（16→64 连 lr 语义一起变）——必须喊出来
+        print(f"⚠️⚠️ 有效 batch {eff_batch} ≠ 现行配方 16 —— 多卡时请配 "
+              f"--grad-accum {max(1, 16 // (args.batch_size * world))}（除非有意改配方）")
 
     steps_per_epoch = math.ceil(len(train_loader) / args.grad_accum)
     total_steps = steps_per_epoch * args.epochs
@@ -364,8 +418,6 @@ def main(argv: list[str] | None = None) -> int:
 
     run = None
     if args.wandb_project and not args.no_wandb:
-        import os
-
         import wandb
 
         os.environ.setdefault("WANDB_MODE", args.wandb_mode)
@@ -472,6 +524,8 @@ def main(argv: list[str] | None = None) -> int:
     sup_tokens = 0              # ★ 真正参与 loss 的 token 数（不是序列 token 数）
     started = time.time()
     for epoch in range(1, args.epochs + 1):
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)   # 不设的话每个 epoch 洗牌顺序相同
         running, seen = 0.0, 0
         epoch_started = time.time()
         optimizer.zero_grad(set_to_none=True)
@@ -490,13 +544,22 @@ def main(argv: list[str] | None = None) -> int:
             running += float(loss) * args.grad_accum
             seen += 1
             if micro_step % args.grad_accum == 0 or micro_step == len(train_loader):
+                if world > 1:
+                    # ★ 手动梯度同步（见文件头 DDP 注释）。grad 为 None 的补零参与
+                    #   ——保证所有 rank 的集合通信次数逐参数一致（单 rank 少一次
+                    #   all_reduce = 死锁，opd.py 跳步改集体决定的同一课）
+                    for p in model.parameters():
+                        if p.requires_grad:
+                            if p.grad is None:
+                                p.grad = torch.zeros_like(p)
+                            dist.all_reduce(p.grad, op=dist.ReduceOp.AVG)
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     [p for p in model.parameters() if p.requires_grad], 1.0)
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
-                if global_step in sel_steps:
+                if global_step in sel_steps and rank == 0:
                     _save_selection_point(model, ROOT / args.out, sel_steps[global_step],
                                           global_step)
                 elapsed = max(1e-6, time.time() - started)
@@ -516,10 +579,15 @@ def main(argv: list[str] | None = None) -> int:
                 if prof_left <= 0:     # 抓够就收工，不给后面的步数留开销
                     prof.stop()
                     prof = None
+        if world > 1:
+            # epoch 均值跨 rank 汇总——否则打印的只是 rank0 那 1/world 份数据的 loss
+            agg = torch.tensor([running, float(seen)], device=device)
+            dist.all_reduce(agg)
+            running, seen = float(agg[0]), int(agg[1])
         train_loss = running / max(1, seen)
         line = (f"[epoch {epoch}] train_loss={train_loss:.4f}  lr={scheduler.get_last_lr()[0]:.2e}  "
                 f"step={global_step}/{total_steps}  用时={time.time()-started:.0f}s")
-        if epoch % args.eval_every == 0 or epoch == args.epochs:
+        if rank == 0 and (epoch % args.eval_every == 0 or epoch == args.epochs):
             stats = evaluate(model, val_set, device, pad_id, args.batch_size)
             line += f"  val_loss={stats['val_loss']:.4f}  ppl={stats['val_ppl']:.2f}"
             history.append({"epoch": epoch, "train_loss": train_loss, **stats})
@@ -535,6 +603,18 @@ def main(argv: list[str] | None = None) -> int:
             print(line)
         # ★★★ 位移：||ΔW||/||W||。**这是判断"到底训没训动"的唯一直接证据。**
         ratio = _delta_w_ratio()
+        if world > 1:
+            # ★ 每 epoch 硬断言：各 rank 权重必须一致。梯度 all_reduce 的结果全 rank
+            #   相同 + 优化器状态起点相同 ⇒ 权重应逐位一致 ⇒ ratio 逐位一致。
+            #   发散 = 手动同步失效（[silent-degradation-fsdp-nosync] 那类静默死法），
+            #   宁可停机也不许带病训完。
+            gathered = [torch.zeros(1, device=device) for _ in range(world)]
+            dist.all_gather(gathered, torch.tensor([ratio], device=device))
+            vals = [float(g) for g in gathered]
+            spread = max(vals) - min(vals)
+            assert spread < 1e-7, (
+                f"🔴 rank 间权重发散：ΔW ratio spread={spread:.3e}（{vals}）"
+                f"—— 梯度同步失效，停机检查")
         print(f"          ||ΔW||/||W|| = {ratio*100:.4f}%  "
               f"（正常 LoRA 0.5%–5%；M7 那次只有 0.0093% ⇒ 白训）")
         log({"health/delta_w_ratio": ratio,
@@ -550,19 +630,21 @@ def main(argv: list[str] | None = None) -> int:
         # 接上 GRPO 就探索不动了。我们已经踩过一次：选了 val loss 最低的那个，
         # 结果零梯度格子 63%。要选的是「格式学会了但行为还没定型」的那一版，
         # 而那一版只有在**每个 epoch 都存下来**的前提下才选得到。
-        epoch_dir = ROOT / args.out / f"epoch{epoch}"
-        epoch_dir.mkdir(parents=True, exist_ok=True)
-        model.save_pretrained(epoch_dir)
+        if rank == 0:
+            epoch_dir = ROOT / args.out / f"epoch{epoch}"
+            epoch_dir.mkdir(parents=True, exist_ok=True)
+            model.save_pretrained(epoch_dir)
 
     out_dir = ROOT / args.out
-    out_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(out_dir)          # LoRA 只存 adapter，几十 MB
-    tokenizer.save_pretrained(out_dir)
-    (out_dir / "training_history.json").write_text(
-        json.dumps({"args": {**vars(args), "max_length": SFT_MAX_LENGTH},
-                    "history": history}, ensure_ascii=False, indent=1),
-        encoding="utf-8")
-    print(f"[OK] adapter -> {out_dir}")
+    if rank == 0:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(out_dir)          # LoRA 只存 adapter，几十 MB
+        tokenizer.save_pretrained(out_dir)
+        (out_dir / "training_history.json").write_text(
+            json.dumps({"args": {**vars(args), "max_length": SFT_MAX_LENGTH},
+                        "history": history}, ensure_ascii=False, indent=1),
+            encoding="utf-8")
+        print(f"[OK] adapter -> {out_dir}")
     sel_dirs = sorted(out_dir.glob("sel_f*"))
     if sel_dirs:
         total_mb = sum(f.stat().st_size for d in sel_dirs for f in d.glob("*")) / 1048576
@@ -572,6 +654,9 @@ def main(argv: list[str] | None = None) -> int:
         print("       ⚠️ 别手动删 —— 手动的步骤一定会被忘（本项目第一失效形状）")
     if run is not None:
         run.finish()
+    if world > 1:
+        dist.barrier()
+        dist.destroy_process_group()
     return 0
 
 
