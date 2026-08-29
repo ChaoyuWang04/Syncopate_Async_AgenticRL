@@ -25,7 +25,9 @@ from typing import Any
 
 import httpx
 
+from syncopate.core.contract import IS_V15, TERMINAL_SIGNALS
 from syncopate.core.parsing import parse_step, render_tool_call
+from syncopate.core.parsing_v15 import parse_step_v15
 
 # 部署侧 CoT 观察开关（Chaoyu 08-29）：与训练契约刻意分叉（F-5 同款先例）。
 # 开 = chat 模板 enable_thinking，模型自决是否思考（v14.5 冷启过 40 条难例终答 think）。
@@ -255,9 +257,11 @@ class VllmDecider:
 
     @staticmethod
     def _to_proposal(text: str) -> Proposal:
-        parsed = parse_step(text)
         m = _THINK_RE.search(text)
         think = (m.group(1).strip() if m else "")
+        if IS_V15:
+            return VllmDecider._to_proposal_v15(text, think)
+        parsed = parse_step(text)
         if parsed.kind == "final":
             return Proposal(kind="final",
                             final_answer={"behavior": parsed.behavior,
@@ -275,6 +279,41 @@ class VllmDecider:
                             param_source="model", thinking=think)
         return Proposal(kind="tool_call", tool=None,
                         rationale=f"parse_error: {parsed.error or 'unparseable'}")
+
+
+    @staticmethod
+    def _to_proposal_v15(text: str, think: str) -> Proposal:
+        """v15：行为是**显式动作**，runtime 直接拿信令去驱动状态机（N4）。
+
+        ⚠️ 这里刻意**不复制**一份解析逻辑 —— 用的就是训练/评测那一份
+        `parse_step_v15`（N5 一份契约）。runtime 另抄一份是本项目的老病
+        （decider.py 抬头那段注释记的就是这件事）。
+        """
+        p = parse_step_v15(text)
+        if p.kind == "signal":
+            # 终止性信令 → 状态机触发器（defer 挂起复查 / clarify 等补充 / reject 终止）
+            return Proposal(kind="final",
+                            final_answer={"behavior": p.signal,
+                                          "signal": p.signal,
+                                          "arguments": dict(p.signal_args),
+                                          "text": p.text},
+                            rationale=p.signal, thinking=think)
+        if p.kind == "final_text":
+            # 纯自然语言终答；行为（tool_call / answer）由轨迹级推导，worker 掌握全程
+            return Proposal(kind="final",
+                            final_answer={"behavior": None, "text": p.text},
+                            rationale="final_text", thinking=think)
+        if p.kind == "tool_calls":
+            if len(p.tool_calls) > 1:
+                return Proposal(kind="tool_call", tool=None,
+                                rationale="每步只输出一个 tool call，"
+                                          "请等上一个 observation 返回后再决定下一步。")
+            call = p.tool_calls[0]
+            return Proposal(kind="tool_call", tool=call.get("name"),
+                            arguments=dict(call.get("arguments") or {}),
+                            param_source="model", thinking=think)
+        return Proposal(kind="tool_call", tool=None,
+                        rationale=f"parse_error: {p.error or 'unparseable'}")
 
 
 def build_decider_from_env() -> VllmDecider | None:
