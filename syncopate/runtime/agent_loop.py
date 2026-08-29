@@ -155,6 +155,24 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
             history.append({"role": "final", "answer": proposal.final_answer})
             await save_transcript(db, org_id=org_id, run_id=run_id,
                                   step=gate.step, history=history)
+            # ★ v15：三条信令各有**不同的**终止语义（`25 §R4` 门槛①，N4 行为即动作）。
+            #   v14 下 signal 恒为 None ⇒ 走原来那条 finished 路径，逐字节不变。
+            signal = (proposal.final_answer or {}).get("signal")
+            if signal:
+                await gate.emit_info(kind=f"session.{signal}",
+                                     payload={"step": gate.step,
+                                              "arguments": (proposal.final_answer or {})
+                                              .get("arguments", {}),
+                                              "text": (proposal.final_answer or {})
+                                              .get("text", "")})
+            if signal == "clarify":
+                # 等用户补充 —— 和"开审批单等人"同一族的挂起，不是成功也不是失败
+                return LoopResult(status="halted", final_answer=proposal.final_answer,
+                                  case_ref=None, history=history)
+            if signal == "reject":
+                return LoopResult(status="exhausted", final_answer=proposal.final_answer,
+                                  error="session_reject", history=history)
+            # defer 与纯文本终答都算本轮正常收工（defer 的复查靠 recheck_after_days 另行调度）
             return LoopResult(status="finished", final_answer=proposal.final_answer,
                               history=history)
 

@@ -499,8 +499,11 @@ class Worker:
             return                              # 审批单已开、事件已发，等人
         elif result.status == "exhausted":
             # 收口的 refused 有两族：政策性拒绝（灰测/成本）= 取消；步数上限 = 失败
+            # ★ session_reject 是模型**做对了**（越权/离题该拒），归"取消"不归"失败" ——
+            #   归失败会让线上尺子（人工修正率、失败率）把正确的拒绝算成事故。
             status = ("cancelled" if result.error in
-                      ("release_gate", "daily_cost_cap_exceeded") else "failed")
+                      ("release_gate", "daily_cost_cap_exceeded", "session_reject")
+                      else "failed")
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status=status, error=result.error)
         else:                                   # failed（连续解析失败等）
