@@ -112,12 +112,36 @@ function ResultCard({ item }: { item: ChatItem }) {
         {style.label}
       </span>
       {result.behavior === 'defer' && (
-        <p className="mb-2 text-sm text-amber-800">Agent 建议当前不执行操作，先等待。</p>
+        <p className="mb-2 text-sm text-amber-800">
+          Agent 建议当前不执行操作，先等待。
+          {typeof result.signalArgs?.['recheck_after_days'] === 'number' && (
+            <> 建议 <strong>{String(result.signalArgs['recheck_after_days'])}</strong> 天后复查。</>
+          )}
+        </p>
+      )}
+      {result.behavior === 'clarify' && (
+        <p className="mb-2 text-sm text-sky-800">
+          Agent 需要补充信息才能继续。
+          {Array.isArray(result.signalArgs?.['missing_fields']) &&
+            (result.signalArgs['missing_fields'] as unknown[]).length > 0 && (
+              <> 缺少：<strong>{(result.signalArgs['missing_fields'] as unknown[]).join('、')}</strong></>
+            )}
+        </p>
       )}
       {result.behavior === 'reject' && (
-        <p className="mb-2 text-sm text-rose-800">Agent 拒绝执行该请求。</p>
+        <p className="mb-2 text-sm text-rose-800">
+          Agent 拒绝执行该请求。
+          {typeof result.signalArgs?.['reason_code'] === 'string' && (
+            <> 原因类别：<strong>{String(result.signalArgs['reason_code'])}</strong></>
+          )}
+        </p>
       )}
-      <AnswerKV answer={result.answer} />
+      {/* ★ N1 纯净终答：v15 的人话**直显**，不塞进 KV 面板（那是机器字段的地方） */}
+      {result.text ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{result.text}</p>
+      ) : (
+        <AnswerKV answer={result.answer} />
+      )}
     </div>
   )
 }

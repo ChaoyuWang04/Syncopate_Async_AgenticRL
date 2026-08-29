@@ -13,6 +13,10 @@ export const BEHAVIOR_VALUES: readonly Behavior[] = [
 export interface RunResult {
   behavior: Behavior
   answer: Record<string, unknown>
+  /** v15：终答的自然语言部分（N1 纯净终答——直显，不进 KV 面板） */
+  text?: string
+  /** v15：信令调用的参数（defer 的 recheck_after_days / clarify 的 missing_fields …） */
+  signalArgs?: Record<string, unknown>
 }
 
 export type ModelTag = 'rl' | 'sft' | 'base'
@@ -113,6 +117,21 @@ export function isBehavior(v: unknown): v is Behavior {
 /** 把终态/历史里的 result 归一成 {behavior, answer} */
 export function normalizeResult(data: unknown): RunResult {
   if (!isRecord(data)) return { behavior: 'answer', answer: { value: data ?? null } }
+  // ★ v15：行为是显式信令，人话在 text 里。
+  //   `signal` 存在 ⇒ 直接用它当 behavior（不再从自研壳的 behavior 字段猜）。
+  const signal = data['signal']
+  if (isBehavior(signal)) {
+    return {
+      behavior: signal,
+      answer: {},
+      text: typeof data['text'] === 'string' ? data['text'] : undefined,
+      signalArgs: isRecord(data['arguments']) ? data['arguments'] : {},
+    }
+  }
+  // v15 纯文本终答：behavior 为 null，只有一句人话
+  if (data['behavior'] === null && typeof data['text'] === 'string') {
+    return { behavior: 'answer', answer: {}, text: data['text'] }
+  }
   const behavior = isBehavior(data['behavior']) ? data['behavior'] : 'answer'
   const rawAnswer = data['answer']
   let answer: Record<string, unknown>
