@@ -273,9 +273,32 @@ rollout KV >50% 池时按 02 预留案重验 fp8 KV（判据=kl/IS 三红线重�
 | ③ 晋级（全要过） | 承接考场 **L2 ≥ 90% · L3 ≥ 75% · L4 ≥ 60%**；单轮任务分 Δ ≥ −MDE；cap 全线不劣化；defer 行为判据门槛内（`06` H 部分） |
 | ④ think 行为闸 | 同 P2-⑥，每次 compare 必看 `fabricated_safety_line_cap`（常驻观察沿用） |
 
+**P3 落地件·RL 数据与 aha 观测（08-29 定案，机理先写死再开工）**
+
+```
+RL 数据    v13 现状=659 train/165 val（verl 格式，18 模板 FRESH86…MISS7，行带
+           difficulty/topology/gold_reward_min）。P3 v14 增量：① 会话级 session 从
+           case 库组合（L2/L3/L4 混合，C-6 val 并入）② triage 死格过采样（A-5 名单
+           + r2 的卡死 32 格）③ 多样性沿用模板配比 + 新增会话结构轴（轮数/指代类型）。
+死格机理   GRPO 组内零方差 ⇒ advantage 恒零 ⇒ **全灭/卡死格在数学上学不动**——
+           这就是 CoT 冷启的存在意义：把死格的组内成功率从 ~0 抬到非零，
+           首条成功 rollout 出现后 advantage 满偏置，格子几步内翻开=格子级阶跃。
+aha 口径   不评 think 内容（process reward=Goodhart 高发区）；评三层效果：
+           ① rl/dead_cell_open_rate（冻结难例子集每 N 步采 G 条报成功率）
+           ② rl/first_success_events（死格首次成功即整条 rollout dump+revision 命中标记）
+           ③ rl/think_len_p50 + rl/commit_consistency（承诺一致率，只观测不奖励）。
+           ⚠️ 预注册预测：**聚合分不会也不需要出现「大跌再暴涨」**——KL 锚+小 lr 限制
+           策略重构幅度、343 格平均摊薄单格阶跃；聚合大跌历史上=事故（RL-400 过训）。
+           真 aha 签名=格子级 0→1 阶跃、聚合层平滑爬升。若 400 步翻开率=0 ⇒ §6-③
+           预案：加 gold 补课，不加步数。
+```
+
 ### P4 · OPD 抛光（~1–2 天）
 
 对 P3 产物再蒸一遍自然语言段（Qwen3 配方最后一步：RL 后表达会再机械化）。
+OPD prompt 集 v2：P1 的 419 条骨架保留（本就是最健康的桶），题库层升级=闲聊题从
+S1 的 chat_bank_v2 抽（与 SFT chat 桶共享池、切分不重叠）、概念对句式从 S2 模式库
+训练侧 70% 抽、多轮占比 14%→30%（抛光重点=RL 后的多轮表达机械化）。
 门槛 = P1 的①②③④原样重跑，全部 ≥ P1 达成值。
 
 ### 最终验收（总闸，缺一不可）
