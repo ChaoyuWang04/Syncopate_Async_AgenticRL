@@ -31,10 +31,28 @@ T4B = "http://127.0.0.1:8210/v1"
 T8B = "http://127.0.0.1:8211/v1"
 SICK = re.compile(r"指指|的的|是是|了了")
 PERSONA_LEAK = re.compile(r"我(每天)?(喝|吃|睡觉|跑步|锻炼|健身)|我的身体")
+# ⛔ 2026-08-30：这里原本是**字典**列表，而 `required_answer_fields` 全项目都按对象属性读
+#   （`.key` / `.value_source`）。v14 从来没有代码路径读过它 ⇒ 类型错了两个月没人知道；
+#   v15 的 `_machine_fields` 一读就 AttributeError，被 L1 循环的 `except Exception` 吞掉
+#   ⇒ **L1 桶 0/150 行，静默**。典型的「类型不一致只在新路径上才显形」+「异常被吞」。
+#   ⇒ 修法：用真正的 AnswerField；同时把 L1 循环的裸 except 改成记录首个异常（见下）。
+from syncopate.core.schemas import AnswerField  # noqa: E402
+
 MIN_FIELDS = [
-    {"key": "summary", "description": "结论的机器可校验形式（简短标签或数值）"},
-    {"key": "reply", "description": "给用户读的完整回复：一到三句自然语言，说清结论和依据"},
+    AnswerField(key="summary", description="结论的机器可校验形式（简短标签或数值）"),
+    AnswerField(key="reply", description="给用户读的完整回复：一到三句自然语言，说清结论和依据"),
 ]
+# ★ v15 契约分支（Chaoyu 08-29 立项，25 号）：**同一份脚本、两个契约**，不复制第二份。
+#   副本会漂——R0 已经为「spec 三份副本」付过一次学费（25 §7⑥）。
+from syncopate.core.contract import IS_V15  # noqa: E402
+
+# v14.5 的教师物料里**与契约无关**的部分（reply / think 文本）可直接复用，
+# 省掉几小时教师生成。⚠️ 但不复用 summary：v15 已废除该字段，且它正是
+# 08-29 真人实测发现③「summary 被『X 释义』模板污染」的病灶。
+_MAT = Path("data/u_route/v15_materials.json")
+MATERIALS = json.load(open(_MAT)) if (IS_V15 and _MAT.exists()) else {
+    "l2_replies": {}, "l1_replies": {}, "cot_think": {}}
+
 OOV = json.load(open("data/u_route/oov_holdout_terms.json"))["terms"]
 PATTERNS = json.load(open("data/u_route/ellipsis_patterns.json"))["templates"]
 SUB_TRAIN = [t["template"] for t in PATTERNS
@@ -324,6 +342,128 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     return out
 
 
+# ═══════════ Stage B-v15 · 难例逐步思考 ═══════════
+
+
+async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
+    """v15 难例 CoT：**逐步**接受的 rejection sampling（Chaoyu 08-30 裁定的做法）。
+
+    和 v14.5 的差别，以及为什么必须差：
+      v14.5 只在**终答步**插 think —— 因为它要求「整条轨迹逐步全等」，
+      6 采样实测 104 案全灭（弃 1 步 45 · 2 步 48）。
+      但 v15 里**每个** assistant 轮都有 think 块 ⇒ 只插终答步 = 全库非空占比 1.8%，
+      而门槛⑤⒝ 要难例桶 ≥60%。
+    ⇒ 改成**逐步接受**：哪一步教师独立选中了 gold 动作，就收哪一步的思考；
+      收不到的步留显式空块。不要求整条全等 —— 那条路已经实测走不通。
+    ★ 思行一致仍然是**构造性**的：只收「教师自己也选了 gold 动作」的那条思考，
+      不是给 gold 编理由（Goodhart 那条线不能越）。
+    """
+    from syncopate.pipeline.build_dataset import build_sft_row
+    from syncopate.pipeline.split import load_bundles
+
+    hard_ids = set(json.load(open("_audit/triage/cand_v13r2_e1/卡死.json")))
+    hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
+    pref = Counter(x.split("_")[0] for x in hard_ids)
+    hard_pref = {p for p, c in pref.items() if c >= 3}
+    df = pd.concat([pd.read_parquet("data/sft/v13/train.parquet"),
+                    pd.read_parquet("data/sft/v13/val.parquet")])
+    bundles = load_bundles(Path("data/batches/v13"))
+    cands = [str(r.case_id) for _, r in df.iterrows()
+             if str(r.case_id).split("_")[0] in hard_pref and str(r.case_id) in bundles]
+    cands.sort(key=lambda c: -len(bundles[c].gold.actions))     # 长轨迹优先（多步=思考有用武之地）
+    percnt, capped = Counter(), []
+    for c in cands:
+        fam = c.split("_")[0]
+        if percnt[fam] >= 30:
+            continue
+        percnt[fam] += 1
+        capped.append(c)
+    rng.shuffle(capped)
+    print(f"[CoT-v15] 难例池 {len(capped)}（族 {sorted(hard_pref)}，族内限额 30）")
+
+    async def one_think(ctx: str):
+        _SEED[0] += 1
+        r = await client.post(f"{T8B}/completions", json={
+            "model": "t", "prompt": ctx + "<think>\n", "max_tokens": 900,
+            "seed": _SEED[0], "temperature": 0.7, "top_p": 0.95})
+        r.raise_for_status()
+        return r.json()["choices"][0]["text"]
+
+    def first_action(text: str):
+        m = re.search(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.S)
+        if m:
+            try:
+                return json.loads(m.group(1)).get("name")
+            except json.JSONDecodeError:
+                return None
+        return "__text__"           # v15 的纯文本终答也是一种"动作"
+
+    async def step_sample(ctx: str, want: str, n=8):
+        gens = await asyncio.gather(*[one_think(ctx) for _ in range(n)],
+                                    return_exceptions=True)
+        for g in gens:
+            if isinstance(g, Exception) or "</think>" not in g:
+                continue
+            think, post = g.split("</think>", 1)
+            think = think.strip()
+            cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
+            if not think or len(think) > 4096 or cjk < 0.5:
+                continue
+            if first_action(post) == want:
+                return think
+        return None
+
+    out, tried, hit = [], 0, 0
+    for cid in capped:
+        if len(out) >= max_rows:
+            break
+        b = bundles[cid]
+        base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
+                                   index=0, split="train", config=None)
+        full = tokenizer.decode(list(base["input_ids"])[:base["total_length"]])
+        segs = full.split(ASST)
+        n_steps = len(segs) - 1
+        if n_steps < 2:
+            continue
+        # ★ session.report 步**不参与采样**：它是机械序列化（把数字填进 schema），
+        #   不需要思考，空块正是对的。而且实测教师（裸 8B，没学过我们的信令契约）
+        #   在这一步 0/6 命中 —— 强行采样只会白烧几十分钟。
+        eligible = [i for i in range(n_steps)
+                    if first_action(segs[i + 1]) != "session.report"]
+        want_n = max(1, int(round(n_steps * target)))
+        if len(eligible) < want_n:
+            continue
+        # 复用 v14.5 已有的终答步思考（物料键是 1-based 的 segs 下标）
+        reuse = MATERIALS["cot_think"].get(f"{cid}_COT5", {})
+        thinking = {int(k) - 1: v for k, v in reuse.items() if 0 <= int(k) - 1 < n_steps}
+        for si in sorted(eligible, reverse=True):     # 从终答步往回收（终判最难、最值钱）
+            if len(thinking) >= want_n:
+                break
+            if si in thinking:
+                continue
+            ctx = ASST.join(segs[:si + 1]) + ASST + "\n"
+            want = first_action(segs[si + 1])
+            tried += 1
+            th = await step_sample(ctx, want)
+            if th:
+                thinking[si] = th
+                hit += 1
+        if len(thinking) < want_n:
+            continue                                  # 达不到 60% 的行不要（宁缺勿滥）
+        row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
+                                  index=95000 + len(out), split="train", config=None,
+                                  thinking=thinking)
+        row["case_id"] = f"{cid}_COT15"
+        row["bucket"] = "cot_hard"
+        row["sub_axis"] = f"{cid.split('_')[0]}|steps{n_steps}|think{len(thinking)}"
+        out.append(row)
+        print(f"  [CoT-v15] 收 {cid}（{len(thinking)}/{n_steps} 步有思考）→ "
+              f"{len(out)}/{max_rows}", flush=True)
+    print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
+          f"（命中率 {hit/max(1,tried):.0%}）")
+    return out
+
+
 # ═══════════ Stage C · 结构桶（回放）═══════════
 
 async def build_l2_l1(tokenizer, registry, client):
@@ -355,7 +495,8 @@ async def build_l2_l1(tokenizer, registry, client):
             return None
 
     defs = DEFS  # 全局（Stage A 产物）
-    l2_rows, l1_rows, skipped, fallback = [], [], 0, 0
+    l2_rows, l1_rows, skipped, fallback, reused = [], [], 0, 0, 0
+    l1_err: list[str] = []
     # ---- L2 ~200 + 10 val：句式×工具×对象 ----
     obj_seq = (["same"] * 60 + ["switch"] * 25 + ["compare"] * 15)
     tool_seq = (["campaign.get_metrics"] * 70 + ["mmp.get_attribution"] * 30)
@@ -406,7 +547,11 @@ async def build_l2_l1(tokenizer, registry, client):
             if val is None:
                 skipped += 1
                 continue
-            rep = await gen_l2_reply(client, cid2, mname, val)
+            rep = MATERIALS["l2_replies"].get(f"{b.case_id}_MT5")
+            if rep is None:                       # 物料没有 ⇒ 现调教师（4B）
+                rep = await gen_l2_reply(client, cid2, mname, val)
+            else:
+                reused += 1
             if rep.endswith("随时说。"):
                 fallback += 1
             b2.gold.final_answer = {"summary": f"{cid2} {mkey}={val}", "reply": rep}
@@ -432,7 +577,7 @@ async def build_l2_l1(tokenizer, registry, client):
         except Exception as e:
             skipped += 1
             if skipped <= 3:
-                print(f"  ⚠️ L2 回放失败 {b.case_id}: {str(e)[:100]}")
+                print(f"  ⚠️ L2 回放失败 {b.case_id}: {type(e).__name__}: {str(e)[:160]}")
             continue
         row["bucket"] = "multiturn_l2"
         row["sub_axis"] = f"{tool.split('.')[-1]}|{obj}|{pat[:6]}"
@@ -468,13 +613,18 @@ async def build_l2_l1(tokenizer, registry, client):
         b2.verifier.required_answer_fields = MIN_FIELDS       # 去标签泄漏
         try:
             row = await replay(b2, 92000 + len(l1_rows))
-        except Exception:
+        except Exception as e:
             skipped += 1
+            if not l1_err:
+                l1_err.append(f"{type(e).__name__}: {str(e)[:200]}")
             continue
         row["bucket"] = "multiturn_l1"
         row["sub_axis"] = f"{kind}|{t2}|{pat[:6]}"
         l1_rows.append(row)
-    print(f"[L2] {len(l2_rows)}（回放丢 {skipped}·读数兜底 {fallback}） [L1] {len(l1_rows)}")
+    print(f"[L2] {len(l2_rows)}（回放丢 {skipped}·读数兜底 {fallback}·物料复用 {reused}）"
+          f" [L1] {len(l1_rows)}")
+    if l1_err:
+        print(f"  ⚠️ L1 首个回放异常：{l1_err[0]}")
     return l2_rows, l1_rows
 
 
@@ -484,15 +634,22 @@ def build_chat_rows(tokenizer, chat_mat):
     for i, c in enumerate(chat_mat):
         if c["turns"] == 1:
             user = c["prompt"]
-            gold = {"behavior": "answer",
-                    "answer": {"summary": c["summary"], "reply": c["reply"]}}
+            reply = c["reply"]
         else:
             user = (f"[上一轮] 用户：{c['prompt']}\n[上一轮] 助手：{c['reply'][:120]}"
                     f"\n\n{c['followup']}")
-            gold = {"behavior": "answer",
-                    "answer": {"summary": c["summary"], "reply": c["reply2"]}}
+            reply = c["reply2"]
         prompt = render_prompt_text(tokenizer, user, tools=None)
-        gtext = json.dumps(gold, ensure_ascii=False) + "<|im_end|>"
+        if IS_V15:
+            # v15：闲聊没有机器可核字段 ⇒ 不发 session.report，终答就是一句人话。
+            # ★ 但 think 段必须显式写出来（门槛⑤⒜=100%）——闲聊属"简单题"，
+            #   填**空块**正是在教「这种题不用想」（N3 按需思考的负样本那一半）。
+            from syncopate.pipeline.sft_replay import EMPTY_THINK
+            gtext = EMPTY_THINK + reply + "<|im_end|>"
+        else:
+            gold = {"behavior": "answer",
+                    "answer": {"summary": c["summary"], "reply": reply}}
+            gtext = json.dumps(gold, ensure_ascii=False) + "<|im_end|>"
         ids_p = tokenizer(prompt, add_special_tokens=False).input_ids
         ids_g = tokenizer(gtext, add_special_tokens=False).input_ids
         rows.append({"case_id": f"CHAT5_{i:04d}", "input_ids": ids_p + ids_g,
@@ -507,13 +664,34 @@ def build_chat_rows(tokenizer, chat_mat):
 
 # ═══════════ 门禁 ═══════════
 
+_TC_RE = re.compile(r"<tool_call>.*?</tool_call>", re.S)
+_TH_RE = re.compile(r"<think>.*?</think>", re.S)
+
+
+def _final_text_v15(txt: str) -> str:
+    """v15 的"人话终答" = 监督段里剥掉 think 与全部 tool_call 之后剩下的文本。"""
+    body = _TC_RE.sub("", _TH_RE.sub("", txt))
+    return body.replace("<|im_end|>", "").strip()
+
+
 def density_gate(rows, tokenizer, name):
-    reps = []
+    reps, reports = [], []
     for r in rows:
         txt = tokenizer.decode(list(r["input_ids"])[r["prompt_length"]:r["total_length"]])
-        m = re.search(r'"reply"\s*:\s*"([^"]+)"', txt)
-        if m:
-            reps.append(m.group(1))
+        if IS_V15:
+            t = _final_text_v15(txt)
+            if t:
+                reps.append(t)
+            # ★ v14.6 唯一在册的修正项：密度闸此前**只查 reply 没查 summary**，
+            #   于是「X 释义」模板外溢成万能 summary 没被闸住（08-29 真人实测发现③）。
+            #   v15 里 summary 没了，接它班的是 session.report ⇒ 一起查。
+            for m in re.finditer(r'"name":\s*"session\.report",\s*"arguments":\s*(\{.*?\})',
+                                 txt, re.S):
+                reports.append(m.group(1))
+        else:
+            m = re.search(r'"reply"\s*:\s*"([^"]+)"', txt)
+            if m:
+                reps.append(m.group(1))
     if not reps:
         return
     tails = Counter(x[-10:] for x in reps if len(x) >= 10)
@@ -530,6 +708,37 @@ def density_gate(rows, tokenizer, name):
           f"({top[0]!r}) · 病句 {sick} · distinct3={dist3:.2f}")
     assert top[1] / len(reps) <= 0.10, f"🔴 {name} 话术密度超标"
     assert sick == 0, f"🔴 {name} 病句 {sick} 条"
+    if reports:
+        rtails = Counter(reports)
+        rtop = rtails.most_common(1)[0]
+        print(f"  [密度:{name}/report] 最高频参数组 {rtop[1]}/{len(reports)}="
+              f"{rtop[1]/len(reports):.0%}")
+        assert rtop[1] / len(reports) <= 0.10, (
+            f"🔴 {name} 的 session.report 参数模板化超标（{rtop[0][:80]}）")
+
+
+async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int):
+    """把冻结桶的 case **按当前契约重放**成行（v15 用）。
+
+    ★ 冻结的是**语义**不是字节：换壳之后逐字节冻结在物理上不可能，
+      所以判据改成「同一批 case、同样的工具动作序、同样的机器字段」
+      —— 全量 419 条已由 scripts/v15_r2_migrate.py 证过（25 §R2①）。
+    """
+    from syncopate.pipeline.build_dataset import build_sft_row
+    from syncopate.pipeline.split import load_bundles
+    df = pd.read_parquet(parquet_path)
+    bundles = load_bundles(Path("data/batches/v13"))
+    rows = []
+    for i, cid in enumerate(df.case_id):
+        b = bundles.get(cid)
+        if b is None or not b.gold:
+            raise AssertionError(f"🔴 冻结桶的 case 找不到 bundle：{cid}")
+        row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
+                                  index=base_index + i,
+                                  split=str(df.iloc[i]["split"]), config=None)
+        rows.append(row)
+    print(f"[冻结桶] {parquet_path} → v15 重放 {len(rows)} 行")
+    return pd.DataFrame(rows)
 
 
 async def main() -> int:
@@ -558,7 +767,8 @@ async def main() -> int:
             print("[A3] chat 素材 …", flush=True)
             chat_mat = await gen_chat(client, bank)
             json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
-        cache_l = Path("data/u_route/v145_l2l1_rows.json")
+        cache_l = Path("data/u_route/v15_l2l1_rows.json" if IS_V15
+                       else "data/u_route/v145_l2l1_rows.json")
         if cache_l.exists():
             _c = json.load(open(cache_l))
             l2, l1 = _c["l2"], _c["l1"]
@@ -567,14 +777,22 @@ async def main() -> int:
             print("[C] L2/L1 回放构建 …", flush=True)
             l2, l1 = await build_l2_l1(tokenizer, registry, client)
             json.dump({"l2": l2, "l1": l1}, open(cache_l, "w"))
-        cache_cot = Path("data/u_route/v145_cot_rows.json")
+        cache_cot = Path("data/u_route/v15_cot_rows.json" if IS_V15
+                         else "data/u_route/v145_cot_rows.json")
         if cache_cot.exists():
             cot = json.load(open(cache_cot))
             print(f"[B] CoT 缓存命中（{len(cot)} 行）")
         else:
             print("[B] CoT 难例（8B）…", flush=True)
-            cot = await gen_cot(client, tokenizer, max_rows=60)
+            cot = await (gen_cot_v15(client, tokenizer, registry, max_rows=60) if IS_V15
+                         else gen_cot(client, tokenizer, max_rows=60))
             json.dump(cot, open(cache_cot, "w"))
+
+    # ★ 桶下限闸放在**这里**（用数据的地方），不放在生产者内部。
+    #   ⛔ 2026-08-30 实案：闸写在 build_l2_l1 里，结果上一轮把 L1=0 的坏结果**写进了缓存**，
+    #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
+    assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
+    assert len(l2) >= 200, f"🔴 L2 桶下限闸：仅 {len(l2)} 行（要 ≥200）"
 
     # held-out val 切分（每桶尾部拿走）
     l2, l2v = l2[:200], l2[200:210]
@@ -582,8 +800,15 @@ async def main() -> int:
     chat_rows = build_chat_rows(tokenizer, chat_mat)
     chat_rows, chatv = chat_rows[:80], chat_rows[80:90]
 
-    t13 = pd.read_parquet("data/sft/v13/train.parquet")
-    v13v = pd.read_parquet("data/sft/v13/val.parquet")
+    if IS_V15:
+        # ★ 压舱石 419 行**不能直接沿用 v13 的 parquet**（那是 v14 壳的 token）。
+        #   语义冻结的做法是**同一批 case 用 v15 契约重放一遍**——
+        #   等价性已由 scripts/v15_r2_migrate.py 全量证过（419/419 四项全等）。
+        t13 = await _replay_frozen(tokenizer, registry, "data/sft/v13/train.parquet", 0)
+        v13v = await _replay_frozen(tokenizer, registry, "data/sft/v13/val.parquet", 80000)
+    else:
+        t13 = pd.read_parquet("data/sft/v13/train.parquet")
+        v13v = pd.read_parquet("data/sft/v13/val.parquet")
     # ★ CoT 预算截断必须发生在装配之前（第 5 次发射的教训：截断放在份额计算之后
     #   = 截了个寂寞——train 里还是全量、闸读的还是旧份额）
     non_cot_tok = int(t13.supervised_tokens.sum()) + \
@@ -657,12 +882,12 @@ async def main() -> int:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
-    out = Path("data/sft/v14_5")
+    out = Path("data/sft/v15" if IS_V15 else "data/sft/v14_5")
     out.mkdir(parents=True, exist_ok=True)
     train.to_parquet(out / "train.parquet")
     val.to_parquet(out / "val.parquet")
     axes = Counter(r.get("sub_axis", "?").split("|")[0] for r in new_rows)
-    manifest = {"version": "v14.5", "seed": 1455,
+    manifest = {"version": "v15" if IS_V15 else "v14.5", "seed": 1455,
                 "sources": {"v13_train": len(t13), "multiturn_l2": len(l2),
                             "multiturn_l1": len(l1), "chat_shell": len(chat_rows),
                             "cot_hard": len(cot)},
@@ -672,7 +897,7 @@ async def main() -> int:
                 "gates": "份额±带宽 · 密度 · OOV=0 · 泄漏=0 · 冻结419 全过"}
     json.dump(manifest, open(out / "manifest.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(manifest, ensure_ascii=False, indent=1))
-    print("✅ v14.5 构建完成，全部门禁通过")
+    print(f"✅ {'v15' if IS_V15 else 'v14.5'} 构建完成，全部门禁通过")
     return 0
 
 

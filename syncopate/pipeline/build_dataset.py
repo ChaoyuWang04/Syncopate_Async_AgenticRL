@@ -110,10 +110,18 @@ def build_rl_row(bundle: CaseBundle, batch_dir: Path, index: int, split: str,
 
 
 async def build_sft_row(bundle: CaseBundle, tokenizer: Any, registry: ToolRegistry,
-                        index: int, split: str, config: RolloutConfig) -> dict[str, Any]:
+                        index: int, split: str, config: RolloutConfig,
+                        thinking: dict[int, str] | None = None) -> dict[str, Any]:
+    """回放 gold 产一行 SFT 样本。
+
+    `thinking` = {步号: 教师推理}（v15 修法 B，`25 §3.2`）——没给的步填**显式空块**。
+    ★ 走的是 gold_script 那一条路径，不在 token 上做手术：think 段是**契约的一部分**，
+      不是事后拼进去的装饰（v14.5 那版是解码后正则替换，换契约就得重写一遍）。
+    """
     from syncopate.pipeline.sft_replay import build_sft_sample
 
-    sample = await build_sft_sample(bundle, tokenizer=tokenizer, registry=registry, config=config)
+    sample = await build_sft_sample(bundle, tokenizer=tokenizer, registry=registry,
+                                    config=config, thinking=thinking)
     if sample.supervised_tokens == 0:
         raise ValueError(f"{bundle.case_id}: 监督 token 为 0，gold 回放出了问题")
     return {

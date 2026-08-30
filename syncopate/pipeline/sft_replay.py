@@ -178,6 +178,7 @@ async def build_sft_sample(
     tokenizer: Any,
     registry: ToolRegistry,
     config: RolloutConfig | None = None,
+    thinking: dict[int, str] | None = None,
 ) -> SFTSample:
     """回放 gold，产出一条 SFT 样本。
 
@@ -193,7 +194,7 @@ async def build_sft_sample(
         max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
     output = await run_rollout(
         bundle, registry=registry, tokenizer=tokenizer,
-        generate=_ScriptedEngine(tokenizer, gold_script(bundle)),
+        generate=_ScriptedEngine(tokenizer, gold_script(bundle, thinking=thinking)),
         config=config,
         rollout_id="gold", run_id="sft",
     )
