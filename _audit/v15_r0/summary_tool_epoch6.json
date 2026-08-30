@@ -1,0 +1,21 @@
+{
+  "tag": "tool_epoch6",
+  "n": 80,
+  "indist_correct": 1.0,
+  "ood_correct": 0.175,
+  "ood_by_behavior": {
+    "defer": 1.0,
+    "clarify": 0.0,
+    "reject": 0.0,
+    "answer": 0.0
+  },
+  "signal_syntax_ok": 1.0,
+  "signal_calls_seen": 70,
+  "semantic_but_wrong_shape_ood": 0,
+  "shapes": {
+    "defer": 42,
+    "reject": 10,
+    "clarify": 18,
+    "answer": 10
+  }
+}

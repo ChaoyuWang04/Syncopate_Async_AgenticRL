@@ -72,6 +72,11 @@ class Trajectory:
     # 每个 token 属于第几步。token→step 的映射表，步级信用分配要用。
     token_trace: dict[str, Any] = field(default_factory=dict)
 
+    # ★ 终答那一步的**原始**文本（含 <tool_call> 标记）。
+    # final_text 在 v15 下是"剥掉 tool_call 之后的人话"（给人看/判人话字段用），
+    # 审计与评测要判**形态**就必须拿原始文本 —— 否则信令被剥掉后永远统计不到
+    # （2026-08-29 实案：R0 评测信令计数恒为 0，就是拿剥过的文本去分类）。
+    final_raw_text: str = ""
     truncated: bool = False   # 撞上 max_steps 被截断
 
     # ------------------------------------------------------------------

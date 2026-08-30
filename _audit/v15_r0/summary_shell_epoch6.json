@@ -1,0 +1,21 @@
+{
+  "tag": "shell_epoch6",
+  "n": 80,
+  "indist_correct": 1.0,
+  "ood_correct": 0.175,
+  "ood_by_behavior": {
+    "defer": 1.0,
+    "clarify": 0.0,
+    "reject": 0.0,
+    "answer": 0.0
+  },
+  "signal_syntax_ok": null,
+  "signal_calls_seen": 0,
+  "semantic_but_wrong_shape_ood": 0,
+  "shapes": {
+    "shell:defer": 50,
+    "shell:reject": 10,
+    "shell:clarify": 10,
+    "shell:answer": 10
+  }
+}

@@ -344,12 +344,16 @@ def generate(arm: str, adapter: str, gpu: int, max_turns: int = 8) -> dict:
 
     recs = []
     for r, out in zip(rows, outs):
-        text = out.trajectory.final_text or ""
+        # ★ 必须用**原始**终答文本：final_text 在 v15 下已被剥掉 <tool_call>，
+        #   拿它分类会让信令统计恒为 0（08-29 实案，`25 §7⑧`⒟）。
+        text = out.trajectory.final_raw_text or out.trajectory.final_text or ""
         shape, ev = classify(text, arm)
         # 轨迹级：调过业务工具后以纯文本收尾 ⇒ tool_call（不是 answer）
         if shape == "answer" and out.trajectory.business_actions:
             shape = "tool_call"
         ev["business_tools"] = [a.name for a in out.trajectory.business_actions]
+        # 对照读数：判定器（独立实现）vs 轨迹推导（被测实现）。两者不一致要人核。
+        ev["derived_behavior"] = out.trajectory.behavior
         ev["truncated"] = out.trajectory.truncated
         recs.append({**r, "arm": arm, "adapter": adapter, "text": text,
                      "shape": shape, "evidence": ev,
@@ -403,17 +407,73 @@ def summarize(recs: list[dict], tag: str) -> dict:
             "shapes": dict(collections.Counter(r["shape"] for r in recs))}
 
 
+def selfcheck_on_gold(arm: str, per: int = 6) -> int:
+    """★ 闭环自检：把 **gold 轨迹**喂给判定器，形态必须 100% 判对。
+
+    这是"判据能不能对自己失败"的正向那一半（负向认证是 --certify）。
+    ⛔ 2026-08-29 教训：R0 评测连着三次读数作废，第三次的根因是
+       判定器拿的是**被剥掉 <tool_call> 的** final_text ⇒ 信令统计恒为 0，
+       而 --certify 只用手写字符串测过判定器，从没端到端喂过一条真轨迹。
+       ⇒ 负向认证 + 闭环自检**两个都要**：一个证明它会红，一个证明它认得出对的。
+    """
+    import asyncio
+    from pathlib import Path as P
+
+    from transformers import AutoTokenizer
+
+    from syncopate.domains.adcampaign import build_domain
+    from syncopate.pipeline.sft_replay import _ScriptedEngine, gold_script
+    from syncopate.pipeline.split import load_bundles
+    from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+
+    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    reg = build_domain().registry
+    reg.latency_scale = 0.0
+    by: dict[str, list] = {}
+    for b in load_bundles(P("data/batches/v13")).values():
+        if b.gold:
+            by.setdefault(b.verifier.expected_behavior, []).append(b)
+    ok = tot = 0
+    bad = []
+    for beh in sorted(by):
+        for b in by[beh][:per]:
+            out = asyncio.run(run_rollout(
+                b, registry=reg, tokenizer=tok,
+                generate=_ScriptedEngine(tok, gold_script(b)),
+                config=RolloutConfig(max_assistant_turns=14),
+                rollout_id="sc", run_id="selfcheck"))
+            raw = out.trajectory.final_raw_text or ""
+            shape, _ = classify(raw, arm)
+            if shape == "answer" and out.trajectory.business_actions:
+                shape = "tool_call"
+            good = is_correct(shape, beh, arm)
+            tot += 1
+            ok += int(good)
+            if not good:
+                bad.append((b.case_id, beh, shape))
+    print(f"★ 闭环自检（gold 轨迹形态判定）: {ok}/{tot} = {ok/max(1,tot):.1%}  应为 100%")
+    for x in bad[:8]:
+        print("    ✗", x)
+    return 0 if ok == tot else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--certify", action="store_true")
     ap.add_argument("--arm", choices=["shell", "tool"])
     ap.add_argument("--adapter")
     ap.add_argument("--gpu", type=int, default=0)
+    ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
     if args.certify:
         return certify()
+    if args.selfcheck:
+        return selfcheck_on_gold(args.arm or "tool")
     if args.arm and args.adapter:
         if certify() != 0:
+            return 1
+        if selfcheck_on_gold(args.arm) != 0:
+            print("🔴 闭环自检没过 —— 判定器认不出 gold，不许拿它去判模型输出")
             return 1
         s = generate(args.arm, args.adapter, args.gpu)
         print(json.dumps(s, ensure_ascii=False, indent=2))

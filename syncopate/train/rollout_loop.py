@@ -296,6 +296,7 @@ async def run_rollout(
                 #   （`25 §3.3` 第 2/3 行：换的是取数来源，不是比对逻辑）。
                 trajectory.final_answer = dict(report_fields)
                 trajectory.final_text = p15.text
+                trajectory.final_raw_text = text      # 形态判定要原文（信令在这里）
                 trajectory.parse_ok = True
                 break
             parsed = ParsedStep(
@@ -316,6 +317,7 @@ async def run_rollout(
                 trajectory.behavior = parsed.behavior
                 trajectory.final_answer = parsed.answer
                 trajectory.final_text = text
+                trajectory.final_raw_text = text
                 trajectory.parse_ok = True
                 break
 
