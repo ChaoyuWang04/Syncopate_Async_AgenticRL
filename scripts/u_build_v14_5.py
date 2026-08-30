@@ -66,7 +66,10 @@ from u_build_v14 import GLOSSARY  # noqa: E402  61 词（定义要点作教师�
 STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 
 EXAM_LAST = set()          # 考卷被判轮句（训练构造时逐字规避）
-for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "talk_exam.jsonl"):
+# ⚠️ 考卷 v3 也要进泄漏闸 —— 新增的 REJ 题（业务内越权）一旦漏进训练集，
+#   考场就从"测能力"退化成"测记忆"（考卷审计第③条的同族）。
+for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "context_v3_exam.jsonl",
+            "talk_exam.jsonl"):
     for _x in open(f"data/u_route/{_fn}"):
         EXAM_LAST.add(json.loads(_x)["turns"][-1])
 

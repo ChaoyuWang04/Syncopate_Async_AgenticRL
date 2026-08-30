@@ -47,6 +47,13 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
     tools = await pg.fetch(
         "SELECT tool, arguments FROM tool_calls WHERE org_id='org_demo' AND run_id=$1 "
         "ORDER BY id", rid)
+    # ★ v15：三条信令各有**不同的终止语义**（R4①）⇒ clarify 走挂起（waiting_for_user）、
+    #   reject 走终止，**状态不再都是 succeeded**，而 finish_run 的终态事件表里没有
+    #   waiting_for_user 这一项 ⇒ 只看终态事件会把这些题读成空值（实测 17 题）。
+    #   ⇒ 权威记录是 agent_loop 发的 `session.*` 事件，优先读它。
+    sig_ev = await pg.fetchrow(
+        """SELECT kind, payload FROM run_events WHERE org_id='org_demo' AND run_id=$1
+           AND kind LIKE 'session.%' ORDER BY seq DESC LIMIT 1""", rid)
     prop = await pg.fetchrow(
         "SELECT proposed_params, action_type AS tool FROM approval_cases "
         "WHERE org_id='org_demo' AND run_id=$1 ORDER BY created_at DESC LIMIT 1", rid)
@@ -62,7 +69,21 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
     # ★ 契约感知：v15 的终态 payload 是 {signal, arguments, text}，**没有 behavior/answer**。
     #   ⛔ 2026-08-30：不适配的话考场会把每一题都读成 behavior=None / reply=""，
     #     判分器全线判错 —— 而且不报错（「机制在但没接上」的考场版）。
-    if "signal" in payload or "text" in payload:
+    if sig_ev is not None:
+        sp = sig_ev["payload"]
+        if isinstance(sp, str):
+            try:
+                sp = json.loads(sp)
+            except json.JSONDecodeError:
+                sp = {}
+        sp = sp or {}
+        beh = sig_ev["kind"].split(".", 1)[1]          # session.defer → defer
+        args = sp.get("arguments") or {}
+        rep = sp.get("text") or ""
+        clar = (args.get("question") or "") if isinstance(args, dict) else ""
+        summ = ""
+        extra = {"signal_arguments": args}
+    elif "signal" in payload or "text" in payload:
         sig = payload.get("signal")
         args = payload.get("arguments") or {}
         beh = sig or ("tool_call" if any(not t.startswith("session.") for t in tool_names)
@@ -106,7 +127,8 @@ async def one_item(c, pg, sem, item, out, arm):
 
 async def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exam", choices=["talk", "context", "context_v2"], required=True)
+    ap.add_argument("--exam", choices=["talk", "context", "context_v2", "context_v3"],
+                    required=True)
     ap.add_argument("--arm", required=True)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=4)

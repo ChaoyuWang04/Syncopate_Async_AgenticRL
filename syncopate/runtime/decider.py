@@ -326,13 +326,20 @@ def build_decider_from_env() -> VllmDecider | None:
     base_url = os.environ.get("SYNCOPATE_DECIDER_URL")
     if not base_url:
         return None
-    return VllmDecider(
-        base_url=base_url,
-        model=os.environ.get("SYNCOPATE_DECIDER_MODEL", "candidate"),
-        tokenizer_path=os.environ.get("SYNCOPATE_DECIDER_TOKENIZER",
-                                      "models/Qwen3-4B-sft-v13r2-e1"),
-        context=_demo_context(),
-    )
+    # ⛔ 2026-08-30：tokenizer 原本默认 "models/Qwen3-4B-sft-v13r2-e1" —— **v13 世代的模型**。
+    #   起 v15 考场时忘了传，于是渲染用的是**另一个模型的分词器**，而且不报错。
+    #   这正是「默认值指向了另一件事且不报错」那一形态（memory: project-mechanism-not-wired 第七形态），
+    #   也是 eval_parallel 的 MODEL 早就立过规矩的同一类：**给错了宁可报错**。
+    tok = os.environ.get("SYNCOPATE_DECIDER_TOKENIZER")
+    if not tok:
+        raise SystemExit(
+            "🔴 设了 SYNCOPATE_DECIDER_URL 就必须显式给 SYNCOPATE_DECIDER_TOKENIZER —— "
+            "它必须是**正在被 serve 的那个模型**的路径。\n"
+            "   留默认值 = 用另一个模型的分词器渲染 prompt，且不会报错。")
+    model = os.environ.get("SYNCOPATE_DECIDER_MODEL", "candidate")
+    print(f"[decider] base_url={base_url} model={model} tokenizer={tok}", flush=True)
+    return VllmDecider(base_url=base_url, model=model, tokenizer_path=tok,
+                       context=_demo_context())
 
 
 def build_alt_deciders_from_env() -> dict[str, "VllmDecider"]:

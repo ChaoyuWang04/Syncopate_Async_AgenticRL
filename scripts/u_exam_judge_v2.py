@@ -151,8 +151,14 @@ def main() -> int:
     args = ap.parse_args()
     import sys
     sys.path.insert(0, "scripts")
+    # ★ 考卷版本从**答卷文件名**推，不写死。
+    #   ⛔ 2026-08-30：判分器写死读 v2 考卷 ⇒ 拿 v3 答卷来判直接 KeyError('REJ_00')。
+    #     幸好是 KeyError 不是静默判 0 —— 但下一个版本未必这么好运，所以改成显式解析。
+    _exam = "context_v3_exam.jsonl" if "context_v3" in args.context else \
+            "context_exam_v2.jsonl"
+    print(f"[judge] 考卷 = data/u_route/{_exam}")
     spec = {json.loads(x)["id"]: json.loads(x)
-            for x in open("data/u_route/context_exam_v2.jsonl")}
+            for x in open(f"data/u_route/{_exam}")}
     rows = [json.loads(x) for x in open(args.context)]
     by = defaultdict(lambda: [0, 0])
     fails = []

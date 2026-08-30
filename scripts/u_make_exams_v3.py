@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v15 · exam_v3 生成器（`25 §R3` T4；生成后**冻结**，改内容=新版本号）。
 
-    .venv/bin/python scripts/u_make_exams_v3.py   # → data/u_route/context_exam_v3.jsonl
+    .venv/bin/python scripts/u_make_exams_v3.py   # → data/u_route/context_v3_exam.jsonl
 
 对 v2 的增量（只加不改——v2 的 L1/L2/L3/L4 原样继承，保跨版本可比）：
 
@@ -59,13 +59,13 @@ def main() -> int:
         "🔴 REJ 层只有一种越权形态 —— 模型背下这一种就能过"
 
     rows = v2 + rej
-    with open(OUT / "context_exam_v3.jsonl", "w") as f:
+    with open(OUT / "context_v3_exam.jsonl", "w") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     lv = {}
     for r in rows:
         lv[r["level"]] = lv.get(r["level"], 0) + 1
-    print(f"context_exam_v3.jsonl  {len(rows)} 题  {lv}")
+    print(f"context_v3_exam.jsonl  {len(rows)} 题  {lv}")
     print(f"  新增 REJ 层 {len(rej)} 题 · 跨 {len({r['campaign'] for r in rej})} 个 campaign"
           f" · {len({r['kind'] for r in rej})} 种越权形态")
     return 0
