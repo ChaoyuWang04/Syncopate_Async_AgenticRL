@@ -374,7 +374,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     percnt, capped = Counter(), []
     for c in cands:
         fam = c.split("_")[0]
-        if percnt[fam] >= 30:
+        if percnt[fam] >= 40:
             continue
         percnt[fam] += 1
         capped.append(c)
@@ -413,15 +413,33 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
                 return think
         return None
 
-    out, tried, hit = [], 0, 0
+    out, tried, hit, trimmed = [], 0, 0, 0
     sem = asyncio.Semaphore(3)
 
+    inc = Path("data/u_route/v15_cot_partial.jsonl")
+    done = {}
+    if inc.exists():
+        for line in inc.open():
+            r = json.loads(line)
+            done[r["case_id"]] = r
+        print(f"[CoT-v15] 增量缓存命中 {len(done)} 行（重启不从零开始）")
+
     async def one_row(cid):
+        if f"{cid}_COT15" in done:
+            return done[f"{cid}_COT15"]
         async with sem:
-            return await _row(cid)
+            try:
+                r = await _row(cid)
+            except Exception as e:       # 单行失败不许带走整批（gather 会连坐）
+                print(f"  ⚠️ CoT 行失败 {cid}: {type(e).__name__}: {str(e)[:120]}", flush=True)
+                return None
+            if r:
+                with inc.open("a") as f:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            return r
 
     async def _row(cid):
-        nonlocal tried, hit
+        nonlocal tried, hit, trimmed
         b = bundles[cid]
         base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                    index=0, split="train", config=None)
@@ -452,23 +470,57 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
             if th:
                 thinking[si] = th
                 hit += 1
-        if len(thinking) < want_n:
-            return None                               # 达不到 60% 的行不要（宁缺勿滥）
-        row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
-                                  index=95000, split="train", config=None,
-                                  thinking=thinking)
+        # ⛔ 2026-08-30：这里原本"单行不足 60% 就丢"——**比判据本身还严**。
+        #   门槛⑤⒝ 判的是**难例桶的聚合占比**，不是逐行占比 ⇒ 逐行丢会把已经生成好的
+        #   思考白扔掉（实测收率掉到 ~25%，会撞 CoT 桶下限 40 行）。
+        #   ⇒ 改为：拿到思考的行**都留**，在装配时按覆盖率降序选到**聚合 ≥60%**。
+        #     判据没放宽（聚合口径一字未动），放宽的是我自己多加的那一道。
+        if not thinking:
+            return None
+        # ★ 预算内自适应裁剪（门槛⑤⒟：think-on 下 gold 回放截断率 **=0**）
+        #   ⛔ 2026-08-30 实案：插了 5–6 段教师推理后，长轨迹撑破 8192 的 response 预算
+        #     （truncation_reason="observation"）⇒ 建库整个崩掉。
+        #   ⇒ **让数据适配预算，不是反过来**：撑破就丢掉最长的那一段 think 再试，
+        #     直到装得下。丢的是覆盖率（聚合口径还有余量），保住的是"零截断"这条硬判据。
+        #   ⚠️ 裁剪次数要**报出来**——静默裁剪等于偷偷降覆盖率。
+        row = None
+        while thinking:
+            try:
+                row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
+                                          index=95000, split="train", config=None,
+                                          thinking=thinking)
+                break
+            except ValueError as e:
+                if "被截断" not in str(e):
+                    raise
+                longest = max(thinking, key=lambda k: len(thinking[k]))
+                del thinking[longest]
+                trimmed += 1
+        if row is None or not thinking:
+            return None
         row["case_id"] = f"{cid}_COT15"
         row["bucket"] = "cot_hard"
         row["sub_axis"] = f"{cid.split('_')[0]}|steps{n_steps}|think{len(thinking)}"
+        row["_think"], row["_blocks"] = len(thinking), n_steps
         print(f"  [CoT-v15] 收 {cid}（{len(thinking)}/{n_steps} 步有思考）", flush=True)
         return row
 
-    got = await asyncio.gather(*[one_row(c) for c in capped[:max_rows * 2]])
-    for i, r in enumerate(x for x in got if x):
+    got = [x for x in await asyncio.gather(*[one_row(c) for c in capped]) if x]
+    # ★ 按覆盖率降序选，选到**聚合 ≥60%** 为止（= 门槛⑤⒝-难 的口径，一字不差）
+    got.sort(key=lambda r: -(r["_think"] / max(1, r["_blocks"])))
+    ne = bl = 0
+    for i, r in enumerate(got):
         if len(out) >= max_rows:
             break
+        if bl and (ne + r["_think"]) / (bl + r["_blocks"]) < 0.60:
+            break                                    # 再加就压到 60% 以下了，停
+        ne += r["_think"]
+        bl += r["_blocks"]
         r["index"] = 95000 + i
-        out.append(r)
+        out.append({k: v for k, v in r.items() if not k.startswith("_")})
+    print(f"[CoT-v15] 候选 {len(got)} 行 → 选中 {len(out)} 行，"
+          f"聚合非空 think {ne}/{bl} = {ne/max(1,bl):.1%}（门槛 ≥60%）")
+    print(f"[CoT-v15] 预算裁剪 {trimmed} 段 think（撑破 8192 response 预算的长轨迹）")
     print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
           f"（命中率 {hit/max(1,tried):.0%}）")
     return out
@@ -511,8 +563,14 @@ async def build_l2_l1(tokenizer, registry, client):
     obj_seq = (["same"] * 60 + ["switch"] * 25 + ["compare"] * 15)
     tool_seq = (["campaign.get_metrics"] * 70 + ["mmp.get_attribution"] * 30)
     i = 0
+    # ★ v15 下 L2 要更多行：换契约后每轮多一个 think 块、每条多一个 report 步，
+    #   而**v13 压舱石桶轨迹最长、涨得最多** ⇒ 同一份数据的份额会系统性偏移，
+    #   实测 L2 从带内掉到 8.3%（带宽 [10%,17%]）。
+    #   ⇒ 抬的是**行数**不是带宽 —— 带宽表达的是「数据追问该拿多少梯度预算」，
+    #     这个设计意图与契约无关，不该因为换了承载通道就放宽（守则③）。
+    l2_cap = 290 if IS_V15 else 210
     for b in q_bundles:
-        if len(l2_rows) >= 210:
+        if len(l2_rows) >= l2_cap:
             break
         cid = b.case.context["campaign_id"]
         mname, mkey = METRICS[i % len(METRICS)]
@@ -597,7 +655,7 @@ async def build_l2_l1(tokenizer, registry, client):
     terms = list(GLOSSARY)
     li = 0
     all_forms = SUB_TRAIN + ["那{X}呢", "{X}又是什么", "什么是{X}？", "再说说{X}"]
-    while len(l1_rows) < 160 and li < 600:
+    while len(l1_rows) < 160 and li < 900:
         li += 1
         b_src = rng.choice(z_bundles) if li % 2 == 0 else rng.choice(q_bundles)
         kind = "concept_hist" if li % 2 == 0 else "query_hist"
@@ -802,10 +860,11 @@ async def main() -> int:
     #   ⛔ 2026-08-30 实案：闸写在 build_l2_l1 里，结果上一轮把 L1=0 的坏结果**写进了缓存**，
     #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
     assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
-    assert len(l2) >= 200, f"🔴 L2 桶下限闸：仅 {len(l2)} 行（要 ≥200）"
+    assert len(l2) >= (280 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行"
 
     # held-out val 切分（每桶尾部拿走）
-    l2, l2v = l2[:200], l2[200:210]
+    _l2_train = 280 if IS_V15 else 200
+    l2, l2v = l2[:_l2_train], l2[_l2_train:_l2_train + 10]
     l1, l1v = l1[:150], l1[150:160]
     chat_rows = build_chat_rows(tokenizer, chat_mat)
     chat_rows, chatv = chat_rows[:80], chat_rows[80:90]
