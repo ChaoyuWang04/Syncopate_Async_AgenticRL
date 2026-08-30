@@ -308,6 +308,64 @@ v13 419 行经**语义迁移器**重铸（壳终答→纯文本+report；行为�
 | ⑥ 三桶切分 | 数据切分走 `pipeline/split.py`（`DATA_VERSION` 只改这一行）；重切后必跑 `scripts/check_data_gates.py`：D 族多样性 D1–D11 + 三桶泄露 L1/L2 全绿（`13`） |
 | ⑤ think 段（按 §3.2 改写） | **A+B 两件都做完**才算过：⒜ 渲染切 think-on 且 `launch_rl` 拦截显式解除；⒝ `gold_script` 每个 assistant 轮都显式产出 think 段。**判据（换掉初稿的"不含空块"）**：⒜ 监督段里 think 块出现率 **=100%**（每个 assistant 轮都有，空/非空都算——为 0 说明只做了 A，是更坏的状态）；⒝ **非空** think 块占监督 think 块 **20%–35%**（现状 12.2%，即 41/336）；⒞ 非空块的难度来源 ≥3 类；⒟ think-on 下 gold 回放截断率 **=0**（`truncation_reason="tokens"` 计数） |
 
+**落地步骤 S0–S5（08-30 定，守则⑬：每步产物+读数位置+阈值写死；不过不进下一步）**
+
+```
+前置（已在手，不必重做）
+  契约开关 SYNCOPATE_CONTRACT=v15 已收口 core/contract.py，7 处模块接上（唯一真相源）
+  sft_replay.gold_script 的 v15 分支 + attach_think 已实现
+  门槛检查器 scripts/v15_r2_gates.py（--dry-run 不吃 GPU / --parquet 正式判）
+  素材库 S1/S2/S3 全在 data/u_route/（chat_bank_v2 · ellipsis_patterns · revision）
+  建库脚本 scripts/u_build_v14_5.py（v14 壳硬编码在 ANSWER_FIELDS 的 summary/reply）
+
+S0 闭环自检（0.5h·0 GPU）   v15_r2_gates.py --dry-run 12
+   产物 _audit/v15_r2/dryrun.json
+   判据 四种行为各 12/12 产出可判形态 · 壳残留=0 · 信令 schema 合法=100%
+   ⚠️ 负向认证同步做：手工删一条 gold 的 report 必填字段 ⇒ 检查器必须红（守则③）
+
+S1 v13 419 行语义迁移 = 门槛①（2h·0 GPU）   新增 scripts/v15_r2_migrate.py
+   做法 同一批 gold 在 v14/v15 两个开关下各回放一遍，**全量 419 不取样**（R1 分层取样教训）
+   判据 ⒜case 集合 419/419 ⒝业务工具动作序（name+arguments）逐步一致
+        ⒞session.report 参数 vs 原 answer 逐字段相等（summary 除外=v15 废除）
+        ⒟v14 behavior == v15 形态推导结果 —— 四项全 419/419，不一致逐条归因入档
+   产物 _audit/v15_r2/migrate_419.json
+
+S2 think 段 A+B = 门槛⑤（3h·B 需教师端点）
+   A rollout_budget 在 v15 下 ENABLE_THINKING 默认 on；解除 launch_rl.py:1053 训练路径
+     拦截（改成「v14 仍拦 · v15 放行」并打判据行——它的前置条件"要等带思考的 SFT 数据"
+     到 R2 才成立）
+   B gold_script 的 thinking 来源接上：难例填教师推理（v145_cot_rows.json 59 条 + 本轮新产），
+     其余轮填显式空块
+   判据 ⒜think 出现率=100%（为 0 = 只做了 A，比现状更糟）⒝非空占比 20–35%
+        ⒞非空块难度来源 ≥3 类 ⒟think-on 下 gold 回放截断率=0
+   读数 v15_r2_gates.py --parquet 的 rows_with_think / think_nonempty / think_blocks
+   ⚠️ 预算联动：think-on ⇒ MAX_RESPONSE_LENGTH 8192；prompt max 4737+8192=12929 ≤14336
+      服务侧不用改，但 SFT 长度上限从契约重算、超长硬报错（P3-2 纪律）
+
+S3 五桶生成器切 v15（6h·教师端点吃 1–2 卡）   u_build_v14_5.py **就地加契约分支**
+   ⛔ 不复制成第二份脚本（守则⑨：副本立刻就漂，R0 已付过一次学费）
+   改四处 ①ANSWER_FIELDS：summary 废除、reply→纯文本终答 ②L1/L2/chat gold 组装改
+          「(可选)session.report + 纯文本」③行为类行改产信令调用 ④密度闸补查 report 参数
+          （= v14.6 唯一在册的修正项：密度闸只查 reply 没查 summary，08-29 真人实测发现③）
+   判据 份额闸 ±3pp（v13 55–60 · L2 ~13 · L1 ~6 · chat ~4 · CoT ≤20）· 密度闸全过
+        （最高频收尾句 ≤10% · distinct-3gram 下限 · 病句正则 0 · report 参数不得复读终答首句）
+        · OOV 教学面=0 · 被判句泄漏=0 · 冻结 419 逐条不动（复跑 S1 断言）
+   产物 data/sft/v15/ + manifest（按桶报 sup-tok 份额）
+
+S4 门槛③④⑥（2h·0 GPU）
+   ③ 训练全文本 ```json…"behavior" 命中=0 且 summary 字段出现=0
+   ④ 信令 gold 调用 schema 合法率=100%
+   ⑥ split.py 的 DATA_VERSION 改一行 → v15；scripts/check_data_gates.py 的
+     D1–D11 + L1/L2 全绿（`13`）
+   产物 data/splits/v15/ + _audit/v15_r2/gates.json
+
+S5 影子重建（1h·0 GPU）   同配置重跑一遍，产物逐字节一致（P4-1 同法）
+   ⚠️ 这一步是「数据可复现」的唯一证据，不许因为赶时间跳过
+
+合计 ~1.5 天（不含教师生成等待）。刹车：预算余量仅 383 ⇒ 任何加长 system/工具描述的改动
+必须重跑探针 P5（§6②）；gold 混合形态（既调信令又长篇终答）必须为 0（§6③）。
+```
+
 ### R3 · 评测层（~1.5 天；⚠️ 本阶段起旧基线全体作废，21 号大登记）
 
 内容：verifier 行为推导来源切换（322 行为闸逻辑不动）· 冻结 EVAL v15 重建（343 case 语义
