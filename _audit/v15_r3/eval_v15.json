@@ -1,0 +1,1017 @@
+{
+  "n": 343,
+  "scope": "eval",
+  "counts": {
+    "case_set": 0,
+    "actions": 0,
+    "final_answer": 0,
+    "behavior": 0,
+    "truncated": 0
+  },
+  "bad": {
+    "case_set": [],
+    "actions": [],
+    "final_answer": [],
+    "behavior": [],
+    "truncated": []
+  },
+  "dropped_nonscored_fields": [
+    {
+      "case_id": "ATTR_0000",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0001",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0002",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0004",
+      "extra": {
+        "sample_size": 13
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0006",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0007",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0016",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0017",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0018",
+      "extra": {
+        "sample_size": 13
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0045",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0048",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0054",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0058",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0060",
+      "extra": {
+        "sample_size": 13
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0074",
+      "extra": {
+        "sample_size": 13
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0082",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0090",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "CHAT_0000",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0001",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0002",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0003",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0005",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0006",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0007",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0010",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0012",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0014",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0018",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0020",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0021",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0022",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0025",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0029",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0035",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0041",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0045",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0049",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0050",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0052",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0054",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0055",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0056",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CONF_0000",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0001",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0002",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0003",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0004",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0005",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0008",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0009",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0014",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0018",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0019",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0022",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0025",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0027",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0028",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0029",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0036",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0038",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0044",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0045",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0048",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0051",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0054",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0064",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0067",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0068",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0070",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0071",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0073",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0075",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0083",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0087",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0088",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "GEO_0000",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0001",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0002",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0003",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0004",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0005",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0006",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0010",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0012",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0016",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0018",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0022",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "SCALE_0000",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0001",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0002",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0003",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0009",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0019",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0020",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0022",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0028",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0038",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0045",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0051",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0065",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0070",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0071",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0077",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0087",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    }
+  ]
+}

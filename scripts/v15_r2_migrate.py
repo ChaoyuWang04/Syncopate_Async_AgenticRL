@@ -35,9 +35,15 @@ reg = build_domain().registry
 reg.latency_scale = 0.0
 bundles = {k: v for k, v in load_bundles(Path("data/batches/v13")).items() if v.gold}
 import os as _os
-if _os.environ.get("MIGRATE_SCOPE") == "frozen419":
+_scope = _os.environ.get("MIGRATE_SCOPE")
+if _scope == "frozen419":
     import pandas as _pd
     keep = set(_pd.read_parquet("data/sft/v13/train.parquet").case_id)
+    bundles = {k: v for k, v in bundles.items() if k in keep}
+elif _scope == "eval":
+    # 冻结 EVAL：v15 **不重建 case**，只是判分走新契约 ⇒ 判据是「这批 case 在 v15 下
+    # gold 回放零截断、零工具报错、行为推导与 v14 一致」（`25 §R3` T2）。
+    keep = set(json.load(open("data/splits/v13/eval_cases.json"))["case_ids"])
     bundles = {k: v for k, v in bundles.items() if k in keep}
 out = {}
 for cid, b in bundles.items():
@@ -76,7 +82,7 @@ def replay(v15: bool, scope: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="_audit/v15_r2/migrate_419.json")
-    ap.add_argument("--scope", choices=["frozen419", "all"], default="frozen419",
+    ap.add_argument("--scope", choices=["frozen419", "eval", "all"], default="frozen419",
                     help="frozen419=data/sft/v13/train.parquet 的 419 个冻结 case（门槛①口径）；"
                          "all=data/batches/v13 全部 gold case（更宽的扫描）")
     args = ap.parse_args()
@@ -111,13 +117,17 @@ def main() -> int:
             txt = (y.get("final_text") or "")
             survived = {k: (str(v) in txt) for k, v in extra.items()}
             dropped.append({"case_id": cid, "extra": extra, "in_v15_prose": survived})
+        if y.get("truncated"):
+            bad.setdefault("truncated", []).append(cid)
         if x["behavior"] != y["behavior"]:
             bad["behavior"].append({"case_id": cid, "v14": x["behavior"], "v15": y["behavior"],
                                     "expected": x["expected_behavior"]})
 
     n = len(ids)
     print("\n════ R2 门槛① 语义冻结（全量，不取样）════")
+    bad.setdefault("truncated", [])
     rows = [("⒜ case 集合一致", n - len(bad["case_set"]), n),
+            ("⒠ v15 回放零截断", n - len(bad["truncated"]), n),
             ("⒝ 业务工具动作序逐条一致", n - len(bad["actions"]), n),
             ("⒞ 终答机器字段逐字段一致", n - len(bad["final_answer"]), n),
             ("⒟ 行为推导与 v14 一致", n - len(bad["behavior"]), n)]
