@@ -186,9 +186,26 @@ def main() -> int:
     ap.add_argument("--dry-run", type=int, default=0)
     ap.add_argument("--certify", action="store_true")
     ap.add_argument("--out", help="把审计数与逐条判定落盘（留证）")
+    ap.add_argument("--prompt-budget", help="查这份 parquet 的 prompt 是否在契约预算内")
     args = ap.parse_args()
     if args.certify:
         return certify()
+    if args.prompt_budget:
+        # ★ 常驻判据：**训练数据的 prompt 必须装得进契约预算**，且留 ≥300 余量。
+        #   ⛔ 2026-08-30：R1④ 当时量的是 R0 的单轮数据（4737/余量 383），而 R2 的多轮行
+        #     把它撑到 5430 —— 判据量的是**另一批数据**，所以没红。
+        #   ⇒ 判据要挂在**真正要训的那份 parquet** 上，不是挂在当初量过的那份上。
+        import pandas as pd
+        from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH
+        d = pd.read_parquet(args.prompt_budget)
+        mx = int(d.prompt_length.max())
+        room = MAX_PROMPT_LENGTH - mx
+        over = int((d.prompt_length > MAX_PROMPT_LENGTH).sum())
+        ok = over == 0 and room >= 300
+        print(f"════ prompt 预算 ════\n  实测 max {mx} · 上限 {MAX_PROMPT_LENGTH} · "
+              f"余量 {room}（门槛 ≥300）· 超限行 {over}（门槛 =0）  {'✅' if ok else '🔴'}")
+        return 0 if ok else 1
+
     buckets = None
     if args.parquet:
         import pandas as pd

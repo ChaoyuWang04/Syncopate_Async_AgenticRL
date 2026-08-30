@@ -75,7 +75,16 @@ def assistant_turn_budget(max_steps: int) -> int:
 ENABLE_THINKING = THINK_ON
 
 # 首轮 prompt 超过这个长度就左截断（不是"整条轨迹的上限"）
-MAX_PROMPT_LENGTH = 5120
+#
+# ⛔ 2026-08-30（Chaoyu 裁定 5120→5760）：v15 的 R2 数据实测 prompt max **5430**，
+#   65 行（critical_args 桶）撑破 5120。根因是叠加的：v13 case 本身长 + 信令族 428 tok。
+#   ★ 处置顺序按 `25 §6②`：先看能不能精简 schema —— 实测**整个信令块才 428**，
+#     而满足"余量 ≥300"需要省 610 ⇒ 精简到底也不够，必须抬上限。
+#   ★ 抬到 5760 的依据是**真实约束**：服务侧 max_model_len 14336。
+#     5760 + 8192 = 13952 ≤ 14336（余量 384）⇒ **服务侧不用改**。
+#   ⚠️ 余量仍然薄（数据侧 5760−5430=330）：R2 之后任何加长 system/工具描述的改动
+#     都必须重量一次 prompt max —— 判据见 scripts/v15_r2_gates.py 的 --prompt-budget。
+MAX_PROMPT_LENGTH = 5760
 
 # 一条轨迹里**模型生成 + 工具返回**加起来的 token 预算
 MAX_RESPONSE_LENGTH = 8192 if THINK_ON else 2048
