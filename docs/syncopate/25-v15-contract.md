@@ -483,6 +483,42 @@ CoT 折叠沿用 · dev mode 三模型沿用。
 | ⑤ 按需思考 | 难例集思考触发率 ≥ **50%** 且简单集（CHAT/HIGH 类）≤ **10%**（N3 量化带；前提是 R2⑤ 已把 think-on + 显式 think 段做完，否则本条无意义）。数字为首标，跑完按实测反填并登记 |
 | ⑥ 行为红线 | defer/reject/clarify 表达率各 ≥90%（该行为的题上信令调用率）；cap 无新增恶化。⚠️ **旧的「defer 99%」红线已废弃**（Chaoyu 08-29：那只是 9 道题的做对率，样本太小且不等于业务实义）——替代判据 = 本表② 形态正确率 ≥97% + R6 的 `ema_reward` 下跌仪器（`24 §4-P3 修复`） |
 
+**落地步骤 U1–U5（08-30 定，守则⑬）**
+
+```
+U0 起训自查（0.5h·0 GPU）= `06 §1` 清单逐条勾
+   ⚠️ v15 专属四条（旧清单没有，这次必须加）：
+     ⒜ SYNCOPATE_CONTRACT=v15 显式可见（判据行 [contract] 必打）
+     ⒝ think-on 生效且训练路径放行（判据行 [think-mode] + [think-train] 必打）
+     ⒞ 长度预算：prompt max 4737 ≤5120 · response 8192 ⇒ SFT 长度上限从契约推、超长硬报错
+     ⒟ 起点=裸基座 models/Qwen3-4B（⛔ 不是 v14.5——那是另一个契约练出来的）
+
+U1 四卡 SFT 五点谱（~40min·四卡）
+   命令 SYNCOPATE_CONTRACT=v15 python -m syncopate.train.sft --model models/Qwen3-4B \
+        --train-file data/sft/v15/train.parquet --val-file data/sft/v15/val.parquet \
+        --out checkpoints/sft/v15_r1 --epochs 3
+   产物 checkpoints/sft/v15_r1/epoch{1,1.5,2,2.5,3}
+   判据 训练健康：曲线不发散 · ΔW 位移打印 · val_loss 按行为分组可见 · 零截断
+   ⛔ 契约参数一个都不许在命令行传（守则⑨）——长度/采样只能来自 rollout_budget
+
+U2 五点谱评测（~2h·四卡）= 门槛①
+   命令 MODEL=models/Qwen3-4B bash scripts/eval_parallel.sh <adapter> <out.json> 4
+   ⚠️ MODEL 必须显式给裸基座（SFT adapter 贴裸基座；给错=分数暴跌但不报错，坑清单第一条）
+   判据 五点用**同一把 v15 尺子**互比，打印绝对值 + 三计数；**MDE 在这一步自打印**
+        ⇒ 顺带补上 R3③（08-30 改期到这里的那条）
+
+U3 选点（0.5h）：双判据沿用 v14.5 —— 任务分距最优 <MDE 的点里选**有梯度格子最多**的
+   ⛔ 不许只按任务分选（v14.1 前例：e3 任务分最优但有梯度格 277→182）
+
+U4 考场 v3 四遍聚合（~3h·四卡）= 门槛②③⑤⑥
+   命令 scripts/u_exam_run.py --exam context_v3 --arm v15sft（四遍）→ u_exam_judge_v2
+   判据 ②形态正确率 ≥97% ·③L1-iv ≥90/L1-oov ≥70/L2 ≥70 ·⑤难例思考率 ≥50%/简单 ≤10%
+        ·⑥ defer/reject/clarify 表达率各 ≥90% · REJ 层（新增）
+        ★ 方差闸：双遍各层差 ≤8pp 才许判，超了加采样 —— 这条同时补上 R3④ 的剩余读数
+
+U5 盲评（~1h）= 门槛④：闭卷同口径，≥ v14.5-SFT 的 1.46；N1 纯净终答正则零命中
+```
+
 ### R6 · RL v15（P3 重跑合并解决；~3 天）
 
 内容：多轮会话池（24 §4-P3 原设计：会话级 session 从 case 库组合 + C-6 并入 + defer 等
