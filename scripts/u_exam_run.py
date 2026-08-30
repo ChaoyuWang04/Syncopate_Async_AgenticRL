@@ -58,13 +58,34 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
             raw = {}
     payload = raw or {}
     ans = payload.get("answer") or {}
+    tool_names = [t["tool"] for t in tools]
+    # ★ 契约感知：v15 的终态 payload 是 {signal, arguments, text}，**没有 behavior/answer**。
+    #   ⛔ 2026-08-30：不适配的话考场会把每一题都读成 behavior=None / reply=""，
+    #     判分器全线判错 —— 而且不报错（「机制在但没接上」的考场版）。
+    if "signal" in payload or "text" in payload:
+        sig = payload.get("signal")
+        args = payload.get("arguments") or {}
+        beh = sig or ("tool_call" if any(not t.startswith("session.") for t in tool_names)
+                      else "answer")
+        rep = payload.get("text") or ""
+        clar = args.get("question") or (args.get("missing_fields") or [""])[0] \
+            if isinstance(args, dict) else ""
+        summ = ""                                    # v15 已废除 summary
+        extra = {"signal_arguments": args}
+    else:
+        beh = payload.get("behavior")
+        rep = (ans.get("reply") or "") if isinstance(ans, dict) else ""
+        summ = (ans.get("summary") or "") if isinstance(ans, dict) else ""
+        clar = (ans.get("clarification") or ans.get("missing_field") or "") \
+            if isinstance(ans, dict) else ""
+        extra = {}
     return {
         "run_id": rid, "status": st, "terminal": term["kind"] if term else None,
-        "behavior": payload.get("behavior"),
-        "reply": (ans.get("reply") or "") if isinstance(ans, dict) else "",
-        "summary": (ans.get("summary") or "") if isinstance(ans, dict) else "",
-        "clarification": (ans.get("clarification") or ans.get("missing_field") or "")
-                          if isinstance(ans, dict) else "",
+        "behavior": beh,
+        "reply": rep,
+        "summary": summ,
+        "clarification": clar,
+        **extra,
         "tools": [{"tool": t["tool"], "arguments": t["arguments"]} for t in tools],
         "proposal": ({"tool": prop["tool"], "params": prop["proposed_params"]}
                      if prop else None),
