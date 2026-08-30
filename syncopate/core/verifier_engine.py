@@ -331,7 +331,20 @@ def score_trajectory(
     decision = decision_fn(bundle) if decision_fn else None
 
     # ---- 顶层行为不对，直接零分。clarify 该问却动手、reject 该拒却执行，都属于这类 ----
+    # ★ v15 例外（Chaoyu 08-30 裁定）：**只说了人话也算表达了该行为**，封顶 0.85。
+    #   ⇒ 「用人话拒绝」不再被判 0；但调了信令的仍然分更高（信令保留正向激励）。
+    #   ⛔ 只对「期望三信令、实际纯文本终答」放宽 —— 该拒却**动手写**、该问却**办了事**
+    #     仍然 0 分（那是行为错，不是表达方式不同）。
+    _prose_ok = False
     if trajectory.behavior != spec.expected_behavior:
+        from syncopate.core.contract import (IS_V15, PROSE_ONLY_CEILING,
+                                             prose_expresses)
+        _prose_ok = (IS_V15
+                     and spec.expected_behavior in ("defer", "clarify", "reject")
+                     and trajectory.behavior == "answer"
+                     and prose_expresses(spec.expected_behavior,
+                                         trajectory.final_text or ""))
+    if trajectory.behavior != spec.expected_behavior and not _prose_ok:
         return ScoreResult(
             reward=0.0,
             raw_reward=0.0,
@@ -356,6 +369,11 @@ def score_trajectory(
     # ---- caps：取所有命中里最狠的那个上限 ----
     # spec.active_caps 为 None 表示全启用，空列表表示全关闭——原样透传，不要用 `or None`
     hits = caps.evaluate(bundle, trajectory, sandbox, enabled=spec.active_caps)
+    if _prose_ok:
+        # ★ 只说人话没调信令 ⇒ 算表达了行为，但封顶（信令保留正向激励，`contract.py` 那段）
+        from syncopate.core.contract import PROSE_ONLY_CEILING
+        hits = list(hits) + [CapHit("prose_only_signal", PROSE_ONLY_CEILING,
+                                    f"人话表达了 {spec.expected_behavior} 但没调 session.*", [])]
     reward = raw_reward
     if hits:
         reward = min(raw_reward, min(hit.ceiling for hit in hits))

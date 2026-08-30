@@ -1,32 +1,17 @@
 // assistant 回合：工具步骤行 → （审批卡）→ 终态结果卡
 import type { Behavior, ChatItem, StepEntry } from '../lib/types'
 
-const BEHAVIOR_STYLE: Record<Behavior, { label: string; card: string; badge: string }> = {
-  answer: {
-    label: '结论',
-    card: 'border-slate-200 bg-white',
-    badge: 'bg-slate-100 text-slate-700',
-  },
-  tool_call: {
-    label: '执行完成',
-    card: 'border-slate-200 bg-white',
-    badge: 'bg-indigo-100 text-indigo-700',
-  },
-  defer: {
-    label: '建议等待',
-    card: 'border-amber-300 bg-amber-50',
-    badge: 'bg-amber-100 text-amber-800',
-  },
-  clarify: {
-    label: '需要澄清',
-    card: 'border-sky-300 bg-sky-50',
-    badge: 'bg-sky-100 text-sky-800',
-  },
-  reject: {
-    label: '拒绝执行',
-    card: 'border-rose-300 bg-rose-50',
-    badge: 'bg-rose-100 text-rose-800',
-  },
+// ★ 2026-08-30 Chaoyu 裁定：**前端不因内部行为标签换渲染**。
+//   人话拒绝 / 人话建议等待 都是合法表达（信令只是可选的编排触发器，见 25 §R4）。
+//   ⇒ 五种行为**同一张卡、同一种渲染**，不再有黄卡/蓝卡/红卡与差异化提示框。
+//   ⛔ 别再加回来：识别标签换样式 = 把"模型用了哪条内部通道"暴露给用户，
+//     而用户该看到的只有"它说了什么"。
+const BEHAVIOR_LABEL: Record<Behavior, string> = {
+  answer: '结论',
+  tool_call: '执行完成',
+  defer: '结论',
+  clarify: '结论',
+  reject: '结论',
 }
 
 function stepClass(s: StepEntry): string {
@@ -103,40 +88,13 @@ function AnswerKV({ answer }: { answer: Record<string, unknown> }) {
 function ResultCard({ item }: { item: ChatItem }) {
   const result = item.result
   if (!result) return null
-  const style = BEHAVIOR_STYLE[result.behavior]
   return (
-    <div className={`rounded-xl border p-4 shadow-sm ${style.card}`}>
-      <span
-        className={`mb-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${style.badge}`}
-      >
-        {style.label}
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <span className="mb-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+        {BEHAVIOR_LABEL[result.behavior]}
       </span>
-      {result.behavior === 'defer' && (
-        <p className="mb-2 text-sm text-amber-800">
-          Agent 建议当前不执行操作，先等待。
-          {typeof result.signalArgs?.['recheck_after_days'] === 'number' && (
-            <> 建议 <strong>{String(result.signalArgs['recheck_after_days'])}</strong> 天后复查。</>
-          )}
-        </p>
-      )}
-      {result.behavior === 'clarify' && (
-        <p className="mb-2 text-sm text-sky-800">
-          Agent 需要补充信息才能继续。
-          {Array.isArray(result.signalArgs?.['missing_fields']) &&
-            (result.signalArgs['missing_fields'] as unknown[]).length > 0 && (
-              <> 缺少：<strong>{(result.signalArgs['missing_fields'] as unknown[]).join('、')}</strong></>
-            )}
-        </p>
-      )}
-      {result.behavior === 'reject' && (
-        <p className="mb-2 text-sm text-rose-800">
-          Agent 拒绝执行该请求。
-          {typeof result.signalArgs?.['reason_code'] === 'string' && (
-            <> 原因类别：<strong>{String(result.signalArgs['reason_code'])}</strong></>
-          )}
-        </p>
-      )}
-      {/* ★ N1 纯净终答：v15 的人话**直显**，不塞进 KV 面板（那是机器字段的地方） */}
+      {/* ★ N1 纯净终答：人话**直显**。v15 里 defer/clarify/reject 的解释本来就在这段人话里，
+          不需要再由前端复述一遍（复述 = 把内部标签讲给用户听）。 */}
       {result.text ? (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{result.text}</p>
       ) : (
@@ -253,29 +211,41 @@ export function AssistantTurn({
   return (
     <div className="mb-6 flex justify-start">
       <div className="w-full max-w-[46rem]">
+        {/* ★ 2026-08-30 Chaoyu 裁定：**思考与工具调用合并进同一个折叠箭头**。
+            展开 = 这一轮的全部过程（历次 CoT + 历次工具调用及其结果），收起 = 只见人话。
+            ⇒ 用户默认看到的是「它说了什么」，想看「它怎么做的」再点开。 */}
         {item.steps.length > 0 && (
-          <ol className="mb-2 space-y-0.5">
-            {item.steps.map((s) =>
-              s.kind === 'thinking' ? (
-                <li key={s.key} className="text-xs">
-                  <details className="group rounded-md bg-neutral-50 ring-1 ring-neutral-200">
-                    <summary className="flex cursor-pointer select-none items-center gap-1.5 px-2 py-1 text-neutral-500 hover:text-neutral-700">
-                      <span className="inline-block w-3 text-center transition-transform group-open:rotate-90">▸</span>
-                      <span className="italic">思考过程（{s.text.length} 字）</span>
-                    </summary>
-                    <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap px-3 pb-2 pt-1 font-mono text-[11px] leading-relaxed text-neutral-600">
+          <details className="group mb-2 rounded-md bg-neutral-50 ring-1 ring-neutral-200">
+            <summary className="flex cursor-pointer select-none items-center gap-1.5 px-2 py-1 text-xs text-neutral-500 hover:text-neutral-700">
+              <span className="inline-block w-3 text-center transition-transform group-open:rotate-90">
+                ▸
+              </span>
+              <span className="italic">
+                过程（{item.steps.length} 步
+                {(() => {
+                  const t = item.steps.filter((x) => x.kind === 'thinking').length
+                  return t > 0 ? `，含 ${t} 段思考` : ''
+                })()}
+                ）
+              </span>
+            </summary>
+            <ol className="max-h-96 space-y-0.5 overflow-y-auto px-3 pb-2 pt-1">
+              {item.steps.map((s) =>
+                s.kind === 'thinking' ? (
+                  <li key={s.key} className="text-xs">
+                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-600">
                       {s.text}
                     </pre>
-                  </details>
-                </li>
-              ) : (
-                <li key={s.key} className={`font-mono text-xs ${stepClass(s)}`}>
-                  <span className="mr-1.5 inline-block w-3 text-center">{stepIcon(s)}</span>
-                  {s.text}
-                </li>
-              ),
-            )}
-          </ol>
+                  </li>
+                ) : (
+                  <li key={s.key} className={`font-mono text-xs ${stepClass(s)}`}>
+                    <span className="mr-1.5 inline-block w-3 text-center">{stepIcon(s)}</span>
+                    {s.text}
+                  </li>
+                ),
+              )}
+            </ol>
+          </details>
         )}
 
         {item.conn === 'reconnecting' && (

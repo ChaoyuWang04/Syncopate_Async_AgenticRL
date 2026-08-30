@@ -70,3 +70,39 @@ TERMINAL_SIGNALS: dict[str, str] = {
 # 非终止性：机器可核字段的结构化通道（承接 v14 的 answer_fields）
 REPORT_TOOL = "session.report"
 SESSION_TOOL_NAMES = frozenset(TERMINAL_SIGNALS) | {REPORT_TOOL}
+
+
+# ── ★ 人话也算表达了行为（Chaoyu 2026-08-30 裁定）────────────────────────────
+#
+# 原话：「用人话拒绝我觉得是可以接受的，包括 defer 这些，掉了相应的 session 也可以，
+#        人话说出来也可以。」
+#
+# ⚠️ 但**信令不是装饰**：它承载两个真实需求（`25 §1`）——判分可验证 + runtime 可编排。
+#   如果人话算数、而 `trajectory.behavior` 仍按形态推成 `answer`，
+#   那 verifier 的行为闸会给 0 分 ⇒ **RL 会用错误的信号去训**（这是最贵的那种错）。
+# ⇒ 改成**两段式**（形状取自 `25 §1.1③` 的 Abstain-R1，本就是 R0 ②b 的备选）：
+#     调了信令      → 正常判分（结构 + 语义都对）
+#     只说了人话    → 也算表达了该行为，但**封顶 0.85**（信令保留正向激励）
+#     两样都没有    → 仍然 0 分（行为闸不变松）
+# ★ 规则判分，不引入 LLM judge：便宜、精确、不可刷、可负向认证。
+import re as _re
+
+PROSE_ONLY_CEILING = 0.85
+
+_PROSE_SIGNAL = {
+    "defer": _re.compile(
+        r"再(观察|等|看)|等(几天|一等|数据)|数据(还)?(不|没)(够|足|成熟|稳)|"
+        r"暂(时)?(不|别)|先(不|别)|不宜(现在|立即)|过几天|尚(未|不)成熟|观察期"),
+    "clarify": _re.compile(
+        r"请(问|补充|提供|告知|确认)|需要(你|您)?(补充|提供|确认|指定)|"
+        r"能否(告诉|提供|说明)|想(先)?确认|是哪(个|条|种)|缺少.*信息|方便(告诉|提供)"),
+    "reject": _re.compile(
+        r"无法(执行|处理|完成|帮|操作)|不能(执行|处理|帮|操作)|超出.*(授权|范围|职责|权限)|"
+        r"越权|不(予|能)(执行|受理)|没有(权限|授权)|恕难|不在.*范围内"),
+}
+
+
+def prose_expresses(behavior: str, text: str) -> bool:
+    """终答的人话里有没有把这个行为**说出来**（只对三条信令行为有意义）。"""
+    pat = _PROSE_SIGNAL.get(behavior)
+    return bool(pat and text and pat.search(text))
