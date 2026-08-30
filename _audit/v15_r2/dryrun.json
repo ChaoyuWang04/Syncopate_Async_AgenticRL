@@ -1,0 +1,35 @@
+{
+  "audit": {
+    "rows": 60,
+    "shell_residue_rows": 0,
+    "summary_rows": 0,
+    "rows_with_think": 60,
+    "think_blocks": 180,
+    "think_nonempty": 0,
+    "signal_calls": 36,
+    "signal_schema_ok": 36
+  },
+  "gates": [
+    {
+      "label": "③ 壳残留 ```json+behavior : 0 行   门槛 =0",
+      "pass": true
+    },
+    {
+      "label": "③ summary 字段出现        : 0 行   门槛 =0",
+      "pass": true
+    },
+    {
+      "label": "④ 信令 schema 合法率      : 36/36 = 100.0%   门槛 =100%",
+      "pass": true
+    },
+    {
+      "label": "⑤⒜ 监督段含 think 的行    : 60/60 = 100.0%   门槛 =100%",
+      "pass": true
+    },
+    {
+      "label": "⑤⒝ 非空 think 块占比      : 0/180 = 0.0%   门槛 20–35%",
+      "pass": false
+    }
+  ],
+  "failed": 1
+}

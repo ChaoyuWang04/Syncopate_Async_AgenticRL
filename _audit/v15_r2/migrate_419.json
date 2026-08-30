@@ -1,0 +1,1640 @@
+{
+  "n": 419,
+  "scope": "frozen419",
+  "counts": {
+    "case_set": 0,
+    "actions": 0,
+    "final_answer": 0,
+    "behavior": 0
+  },
+  "bad": {
+    "case_set": [],
+    "actions": [],
+    "final_answer": [],
+    "behavior": []
+  },
+  "dropped_nonscored_fields": [
+    {
+      "case_id": "ATTR_0005",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0008",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0009",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0010",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0011",
+      "extra": {
+        "feature": "dark_palette",
+        "region": "JP"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0013",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0014",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0015",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0019",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0020",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0022",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0023",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0024",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0025",
+      "extra": {
+        "feature": "dark_palette",
+        "region": "JP"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0026",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0028",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0029",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0030",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0031",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0032",
+      "extra": {
+        "sample_size": 13
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0034",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0035",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0036",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0037",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0038",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0040",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0041",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0042",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0043",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0044",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0047",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0049",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0050",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0051",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0052",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0055",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0056",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0057",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0059",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0061",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0063",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0064",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0065",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0066",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0067",
+      "extra": {
+        "feature": "dark_palette",
+        "region": "JP"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0069",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0070",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0071",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0072",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0073",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0076",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0077",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0078",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0079",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0080",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0083",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0084",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0085",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0086",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0087",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0089",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0091",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0092",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0093",
+      "extra": {
+        "sample_size": 20
+      },
+      "in_v15_prose": {
+        "sample_size": false
+      }
+    },
+    {
+      "case_id": "ATTR_0094",
+      "extra": {
+        "reason": "only_4_creatives"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "ATTR_0096",
+      "extra": {
+        "feature": "fast_cut",
+        "region": "BR"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0097",
+      "extra": {
+        "feature": "before_after",
+        "region": "DE"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0098",
+      "extra": {
+        "feature": "real_person",
+        "region": "US"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "ATTR_0099",
+      "extra": {
+        "feature": "real_person",
+        "region": "GB"
+      },
+      "in_v15_prose": {
+        "feature": false,
+        "region": false
+      }
+    },
+    {
+      "case_id": "CHAT_0004",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0009",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0011",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0013",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0015",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0016",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0019",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0023",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0024",
+      "extra": {
+        "reply": "小幅调整可自动执行；超出政策阈值或近期改动过于频繁的会转审批单。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0026",
+      "extra": {
+        "reply": "可以改，但超出自动执行区间的会先开审批单等人确认。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CHAT_0030",
+      "extra": {
+        "reply": "谢谢，有需要看数据或调预算随时说。"
+      },
+      "in_v15_prose": {
+        "reply": true
+      }
+    },
+    {
+      "case_id": "CONF_0006",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0007",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0010",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0011",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0012",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0015",
+      "extra": {
+        "recommendation": "reduce_real_person"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0016",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0017",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0020",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0021",
+      "extra": {
+        "conflict_record_ids": [
+          "MEM_BUS_0001",
+          "MEM_BUS_0002"
+        ]
+      },
+      "in_v15_prose": {
+        "conflict_record_ids": false
+      }
+    },
+    {
+      "case_id": "CONF_0024",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "CONF_0031",
+      "extra": {
+        "recommendation": "follow_current_data"
+      },
+      "in_v15_prose": {
+        "recommendation": false
+      }
+    },
+    {
+      "case_id": "GEO_0007",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0009",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0011",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0013",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0014",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0015",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0019",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0020",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0021",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0023",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0024",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0026",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0027",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0028",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0029",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0030",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0032",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0033",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0034",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0035",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0036",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0038",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0039",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0040",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0041",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0042",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0044",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0045",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0046",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0047",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0048",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0050",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0051",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0052",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0053",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0054",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0056",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0057",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0058",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0059",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0060",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0062",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0063",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0064",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0065",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0066",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0068",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0069",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0070",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0071",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0072",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0074",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0075",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0076",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0077",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0078",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0080",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0081",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "GEO_0082",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0083",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0084",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0086",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0087",
+      "extra": {
+        "excluded": "US,GB,JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0088",
+      "extra": {
+        "excluded": "JP"
+      },
+      "in_v15_prose": {
+        "excluded": false
+      }
+    },
+    {
+      "case_id": "GEO_0089",
+      "extra": {
+        "excluded": ""
+      },
+      "in_v15_prose": {
+        "excluded": true
+      }
+    },
+    {
+      "case_id": "SCALE_0004",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0005",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0006",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0008",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0010",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0011",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0013",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0017",
+      "extra": {
+        "reason": "limited_by_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0079",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0082",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0083",
+      "extra": {
+        "reason": "cpi_above_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    },
+    {
+      "case_id": "SCALE_0086",
+      "extra": {
+        "reason": "within_safety_line"
+      },
+      "in_v15_prose": {
+        "reason": false
+      }
+    }
+  ]
+}

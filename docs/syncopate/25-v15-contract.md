@@ -347,6 +347,13 @@ S3 五桶生成器切 v15（6h·教师端点吃 1–2 卡）   u_build_v14_5.py 
    改四处 ①ANSWER_FIELDS：summary 废除、reply→纯文本终答 ②L1/L2/chat gold 组装改
           「(可选)session.report + 纯文本」③行为类行改产信令调用 ④密度闸补查 report 参数
           （= v14.6 唯一在册的修正项：密度闸只查 reply 没查 summary，08-29 真人实测发现③）
+   ★ S1 挖出的必办项：**非判分字段不许凭空消失**。v14 终答里有 215 个字段（169 case：
+     excluded 65 · feature 46 · region 46 · reason 27 …）不在 required_answer_fields ⇒
+     判分器从没读过 ⇒ v15 的 session.report 不装它们（设计如此），但实测**只有 14%
+     的值还出现在 v15 人话终答里** ⇒ **答案会变笼统**，而跨代对比已取消、没有数字会报警。
+     ⇒ 教师改写 gold 人话时把这些字段喂进去。判据：**同族字段的人话留存率 ≥80%**
+     （读数=v15_r2_migrate.py 的 in_v15_prose 比例，现状 14%）。
+     ⛔ 不许改走"塞进 report"那条路——那是把人话抄进机器通道（summary 污染同族）。
    判据 份额闸 ±3pp（v13 55–60 · L2 ~13 · L1 ~6 · chat ~4 · CoT ≤20）· 密度闸全过
         （最高频收尾句 ≤10% · distinct-3gram 下限 · 病句正则 0 · report 参数不得复读终答首句）
         · OOV 教学面=0 · 被判句泄漏=0 · 冻结 419 逐条不动（复跑 S1 断言）
