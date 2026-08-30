@@ -78,9 +78,13 @@ def _machine_fields(bundle: CaseBundle) -> dict:
       两者在 `recheck_after_days` 上有意重叠：编排要它挂复查、判分要它核数值，
       各取各的，不是副本。
     """
+    # ⛔ `summary` 在 v15 是**已废除的字段**（`25 §3.1`）——它不能因为出现在某些 case 的
+    #   required_answer_fields 里就混进 session.report。08-30 实案：L1 桶 150 行的 report
+    #   里带着 "summary"，门槛③（summary 出现 =0）当场红。
+    #   ⇒ 契约级的废除要写在**取数的地方**，不能指望每个数据构造器记得不传。
     fa = dict(bundle.gold.final_answer or {})
     return {f.key: fa[f.key] for f in bundle.verifier.required_answer_fields
-            if f.key in fa and f.value_source != "any"}
+            if f.key in fa and f.value_source != "any" and f.key != "summary"}
 
 
 def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:

@@ -1,0 +1,47 @@
+{
+  "audit": {
+    "rows": 948,
+    "shell_residue_rows": 0,
+    "summary_rows": 0,
+    "rows_with_think": 948,
+    "think_blocks": 4039,
+    "think_nonempty": 84,
+    "signal_calls": 91,
+    "signal_schema_ok": 91,
+    "hard_nonempty": 84,
+    "hard_blocks": 140,
+    "easy_nonempty": 0,
+    "easy_blocks": 3899
+  },
+  "gates": [
+    {
+      "label": "③ 壳残留 ```json+behavior : 0 行   门槛 =0",
+      "pass": true
+    },
+    {
+      "label": "③ summary 字段出现        : 0 行   门槛 =0",
+      "pass": true
+    },
+    {
+      "label": "④ 信令 schema 合法率      : 91/91 = 100.0%   门槛 =100%",
+      "pass": true
+    },
+    {
+      "label": "⑤⒜ 监督段含 think 的行    : 948/948 = 100.0%   门槛 =100%",
+      "pass": true
+    },
+    {
+      "label": "⑤⒝-难 难例桶非空 think    : 84/140 = 60.0%   门槛 ≥60%",
+      "pass": true
+    },
+    {
+      "label": "⑤⒝-易 非难例桶非空 think  : 0/3899 = 0.0%   门槛 ≤10%",
+      "pass": true
+    },
+    {
+      "label": "   （报告项）全库非空占比   : 84/4039 = 2.1%   由上两条推出，不作门槛",
+      "pass": true
+    }
+  ],
+  "failed": 0
+}

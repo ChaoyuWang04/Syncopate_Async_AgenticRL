@@ -26,7 +26,11 @@ _THINK = re.compile(r"<think>(.*?)</think>", re.S)
 _TC = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.S)
 
 
-HARD_BUCKETS = {"cot_hard", "cot_distill", "reasoning"}   # 难例桶（think 该撑在这里）
+# ⚠️ 难例桶 = **教师思考桶**（我们主动教了思考的那些行），不是"题目难的桶"。
+#   ⛔ 2026-08-30：初版把 v13 的 `reasoning`（推理类 case 家族，69 行，从来没教过思考）
+#     也算进分母 ⇒ 实测 16.2% 假红；只算 cot_hard 是 84/140 = 60.0%，与选择环节一致。
+#   ★ 判据的**分母定义**和判据本身一样重要——分母错了，量的就是另一件事。
+HARD_BUCKETS = {"cot_hard", "cot_distill"}
 
 
 def audit(supervised_texts: list[str], buckets: list[str] | None = None) -> dict:

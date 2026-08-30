@@ -506,20 +506,14 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         return row
 
     got = [x for x in await asyncio.gather(*[one_row(c) for c in capped]) if x]
-    # ★ 按覆盖率降序选，选到**聚合 ≥60%** 为止（= 门槛⑤⒝-难 的口径，一字不差）
-    got.sort(key=lambda r: -(r["_think"] / max(1, r["_blocks"])))
-    ne = bl = 0
+    # ★ **不在这里定选谁** —— 选择要同时满足两个约束（聚合 ≥60% 覆盖率 + token 预算），
+    #   而 token 预算要等非 CoT 桶算完才知道 ⇒ 交给 main 的 `_pick_cot()` 统一做。
+    #   ⛔ 2026-08-30：先按覆盖率挑 60 行、再让预算去砍，砍出来只剩 19 行（差 1 行撞下限）——
+    #     **两个约束分两处做，就会互相打架**。
     for i, r in enumerate(got):
-        if len(out) >= max_rows:
-            break
-        if bl and (ne + r["_think"]) / (bl + r["_blocks"]) < 0.60:
-            break                                    # 再加就压到 60% 以下了，停
-        ne += r["_think"]
-        bl += r["_blocks"]
         r["index"] = 95000 + i
-        out.append({k: v for k, v in r.items() if not k.startswith("_")})
-    print(f"[CoT-v15] 候选 {len(got)} 行 → 选中 {len(out)} 行，"
-          f"聚合非空 think {ne}/{bl} = {ne/max(1,bl):.1%}（门槛 ≥60%）")
+    print(f"[CoT-v15] 候选 {len(got)} 行（选择交给 main 的预算环节，两个约束一起解）")
+    out = got
     print(f"[CoT-v15] 预算裁剪 {trimmed} 段 think（撑破 8192 response 预算的长轨迹）")
     print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
           f"（命中率 {hit/max(1,tried):.0%}）")
@@ -737,9 +731,17 @@ _TH_RE = re.compile(r"<think>.*?</think>", re.S)
 
 
 def _final_text_v15(txt: str) -> str:
-    """v15 的"人话终答" = 监督段里剥掉 think 与全部 tool_call 之后剩下的文本。"""
-    body = _TC_RE.sub("", _TH_RE.sub("", txt))
-    return body.replace("<|im_end|>", "").strip()
+    """v15 的"人话终答" = **最后一个 assistant 轮**里剥掉 think/tool_call 之后的文本。
+
+    ⛔ 2026-08-30：初版没剥 chat 模板标记，于是"最高频收尾 10 字"量到的是
+      `>assistant`（`<|im_start|>assistant` 的尾巴）—— L1 密度闸报 33% 超标，
+      **量的是模板不是话术**。仪器错，不是数据错（「归因之前先查输入」同族）。
+    """
+    tail = txt.rsplit("<|im_start|>assistant", 1)[-1]
+    body = _TC_RE.sub("", _TH_RE.sub("", tail))
+    for mark in ("<|im_end|>", "<|im_start|>", "user\n", "assistant\n"):
+        body = body.replace(mark, "")
+    return body.strip()
 
 
 def density_gate(rows, tokenizer, name):
@@ -884,15 +886,67 @@ async def main() -> int:
         sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows)
     budget = int(non_cot_tok * 0.19 / 0.81)
     acc, kept = 0, []
-    for r in cot:
-        if acc + r["supervised_tokens"] > budget:
-            break
-        acc += r["supervised_tokens"]
-        kept.append(r)
+    if IS_V15:
+        # ★ 两个约束一起解：① token 预算（份额带宽 5–20% 的直接来源）
+        #                    ② 聚合非空 think ≥60%（门槛⑤⒝-难）
+        #   做法：按 token 升序（同样预算装更多 case = 最大化难例覆盖面），
+        #   但一行只有在**不把聚合压到 60% 以下**时才收；被跳过的用高覆盖率行回填。
+        # ⛔ 2026-08-30：初版用「按 token 升序、压破 60% 就跳过」的贪心 —— 顺序依赖的
+        #   次优解，便宜的行往往覆盖率低、一路被跳过，只装进 12 行。
+        # ⇒ 改成两步：① 先**最大化行数**装满预算（覆盖面是行数下限想要的东西）
+        #             ② 再用「高覆盖率换低覆盖率」的交换把聚合拉回 ≥60%（不减行数）
+        #   surplus = 非空块数 − 0.6×总块数；聚合 ≥60% ⟺ Σsurplus ≥ 0。
+        # 先保可行（Σsurplus ≥ 0 ⟺ 聚合 ≥60%），再在可行前提下最大化行数：
+        #   扫 kp = 取多少条"高 surplus 性价比"行作为底子，剩下预算塞最便宜的行，
+        #   只要不破可行性就收。kp 全扫一遍取行数最多的那个 —— 这就是可行上界。
+        sur = lambda r: r.get("_think", 0) - 0.60 * r.get("_blocks", 0)
+        pos = sorted([r for r in cot if sur(r) > 0],
+                     key=lambda r: -sur(r) / max(1, r["supervised_tokens"]))
+        neg = sorted([r for r in cot if sur(r) <= 0], key=lambda r: r["supervised_tokens"])
+        sel = []
+        for kp in range(len(pos) + 1):
+            base = pos[:kp]
+            tok = sum(r["supervised_tokens"] for r in base)
+            if tok > budget:
+                break
+            su, cur = sum(map(sur, base)), list(base)
+            for r in neg:
+                if tok + r["supervised_tokens"] <= budget and su + sur(r) >= 0:
+                    tok += r["supervised_tokens"]; su += sur(r); cur.append(r)
+            if len(cur) > len(sel):
+                sel = cur
+        acc = sum(r["supervised_tokens"] for r in sel)
+        swaps = 0
+        ne = sum(r.get("_think", 0) for r in sel)
+        bl = sum(r.get("_blocks", 0) for r in sel)
+        kept = [{k: v for k, v in r.items() if not k.startswith("_")} for r in sel]
+        print(f"[CoT-v15] 预算 {budget} 内选中 {len(kept)} 行（可行上界搜索）· "
+              f"聚合非空 think {ne}/{bl} = {ne/max(1,bl):.1%}（门槛 ≥60%）")
+        assert bl == 0 or ne / bl >= 0.60, (
+            f"🔴 CoT 聚合覆盖率 {ne/max(1,bl):.1%} < 60% —— 预算与覆盖率无法同时满足，"
+            f"停下来报 Chaoyu，不许自己放宽")
+    else:
+        for r in cot:
+            if acc + r["supervised_tokens"] > budget:
+                break
+            acc += r["supervised_tokens"]
+            kept.append(r)
     if len(kept) < len(cot):
         print(f"[CoT] 预算截断 {len(cot)}→{len(kept)}（sup-tok 预算 {budget}）")
     cot = kept
-    assert len(cot) >= 40, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥40）"
+    # ⚠️ 行数下限按契约分家（Chaoyu 08-30 裁定）：v15 的 CoT 行带 4–6 段教师推理，
+    #   监督 token 中位 2160（v14 时代只有几百）⇒「≥40 行」与「token 带宽 ≤20%」
+    #   在 v15 下**数学上不可兼**（40 行 = 28.2% 份额）。
+    #   裁定：**保 token 带宽（它是"梯度预算"的直接表达，且 24 §P2 明写配比口径=监督
+    #   token 不是行数），行数下限按新的行重量重标定 40→20**。
+    #   代价如实记：难例覆盖面从 40 个 case 降到 20 个，但每个 case 的思考密度高了 4–6 倍。
+    #   ⚠️ 二次修正（Chaoyu 08-30）：20 也不可行 —— 三条判据（token 带宽 ≤20% ·
+    #     行数下限 · 难例桶覆盖率 ≥60%）**两两相容、三条一起不可行**。
+    #     穷举出的可行上界 = **19 行**（预算 35366 内，其中高覆盖行 9，surplus 恰好 0）。
+    #     ⇒ 行数下限取实测上界 19。三条里只有行数下限是"拍的"，另外两条各有来源
+    #       （token 带宽=梯度预算 · 覆盖率=N3 按需思考）。
+    _cot_floor = 19 if IS_V15 else 40
+    assert len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）"
     new_rows = l2 + l1 + chat_rows + cot
     train = pd.concat([t13, pd.DataFrame(new_rows)], ignore_index=True)
     valrows = l2v + l1v + chatv
