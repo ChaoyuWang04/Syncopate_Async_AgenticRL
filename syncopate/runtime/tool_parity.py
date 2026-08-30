@@ -79,6 +79,25 @@ KNOWN_GAPS: dict[str, str] = {
     # 平台形状已就位（分页 / 显式字段 / 异步任务），差实现
 }
 
+# ── ★ 第三类：契约信令族（v15）────────────────────────────────────────────
+#
+# `session.*` 在沙盒里是**注册进表的工具**（不注册模型就看不见 schema，
+# 调用会被判 tool_not_available —— R0 已经为此作废过一次读数）；
+# 但在 runtime 侧它们**不走工具绑定**，而是由 agent_loop 的状态机接住：
+#   defer   → 挂起并记 recheck_after_days
+#   clarify → waiting_for_user
+#   reject  → 终止并审计
+#   report  → 收下机器字段，轨迹继续
+# ⇒ 既不算「已实现的工具」（worker._bindings() 里没有、也不该有），
+#   也不算「缺口」（它没有欠任何东西）。硬塞进任何一类都会让账本说谎。
+# ⇒ 单开一类，并且**一样进完整性等式** —— 新增一个信令而不登记在这里，判据照样红。
+CONTRACT_SIGNALS: dict[str, str] = {
+    "session.defer": "runtime 由 agent_loop 状态机处理：挂起 + recheck_after_days（R4①）",
+    "session.clarify": "runtime 由 agent_loop 状态机处理：转 waiting_for_user（R4①）",
+    "session.reject": "runtime 由 agent_loop 状态机处理：终止并写审计（R4①）",
+    "session.report": "非终止信令：收下机器可核字段，轨迹继续（判分取数来源，25 §3.3）",
+}
+
 
 def sandbox_tools() -> dict[str, Any]:
     """沙盒的全部工具 spec。**这是唯一真相来源**，不在这里另抄一份名单。"""
@@ -90,11 +109,14 @@ def sandbox_tools() -> dict[str, Any]:
 def coverage_report() -> dict[str, Any]:
     """账本对账：已实现 / 已登记缺口 / **两边都没有的**。"""
     names = set(sandbox_tools())
-    ledgered = IMPLEMENTED | set(KNOWN_GAPS)
+    # ★ 信令族按契约存在与否入账：v14 沙盒里没有它们，不该被判成「账本写错了名字」。
+    #   （intersect 而不是并入，否则 v14 下 stale_ledger 会红——判据要在两个契约下都成立。）
+    ledgered = IMPLEMENTED | set(KNOWN_GAPS) | (set(CONTRACT_SIGNALS) & names)
     return {
         "sandbox_total": len(names),
         "implemented": sorted(IMPLEMENTED),
         "gaps": sorted(set(KNOWN_GAPS)),
+        "contract_signals": sorted(set(CONTRACT_SIGNALS) & names),
         # ★ 沙盒有、账本里一个字都没提 —— 这才是真正危险的那一类
         "unledgered": sorted(names - ledgered),
         # 账本里有、沙盒却没有 ⇒ 名字写错了，或者沙盒删了工具

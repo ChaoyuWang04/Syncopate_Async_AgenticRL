@@ -184,10 +184,17 @@ async def build_sft_sample(
     副作用是顺带验证了 gold 走得通——工具报错会体现在 observation 里，
     进而污染后续 token。所以构造 SFT 数据这一步本身就是一次 gold 健全性检查。
     """
+    # ★ 默认预算也必须**从契约派生**，不能落在 RolloutConfig 的魔数 8 上。
+    #   ⛔ 2026-08-30：v15 的 report 多占一步，用满 max_steps 的 case（SIG_LOW_001）
+    #     在默认配置下直接被截断——而 P3-1 那次（131/503 条）的修法只修了 build_dataset
+    #     的调用方，**这里的默认值还是 8**。判据写在发生点，不靠调用方记得传参。
+    from syncopate.train.rollout_budget import assistant_turn_budget
+    config = config or RolloutConfig(
+        max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
     output = await run_rollout(
         bundle, registry=registry, tokenizer=tokenizer,
         generate=_ScriptedEngine(tokenizer, gold_script(bundle)),
-        config=config or RolloutConfig(),
+        config=config,
         rollout_id="gold", run_id="sft",
     )
     # ★ gold 回放**不许截断**——被截掉的一定是轨迹结尾（终答那段），
@@ -197,7 +204,7 @@ async def build_sft_sample(
         raise ValueError(
             f"{bundle.case_id}: gold 回放被截断（原因 {output.trajectory.truncation_reason}，"
             f"需要 {len(bundle.gold.actions) + 1} 个 assistant 轮，"
-            f"上限 {(config or RolloutConfig()).max_assistant_turns}）——"
+            f"上限 {config.max_assistant_turns}）——"
             "SFT 样本必须是完整轨迹；轮数上限应取 case.max_steps（见 build_dataset）"
         )
     return SFTSample(

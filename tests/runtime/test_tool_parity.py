@@ -20,7 +20,8 @@ from __future__ import annotations
 import pytest
 
 from syncopate.runtime.tool_parity import (
-    IMPLEMENTED, KNOWN_GAPS, coverage_report, sandbox_tools, signature_mismatch,
+    CONTRACT_SIGNALS, IMPLEMENTED, KNOWN_GAPS, coverage_report, sandbox_tools,
+    signature_mismatch,
 )
 
 
@@ -53,7 +54,9 @@ def test_a_tool_cannot_be_both_implemented_and_a_gap():
 
 def test_the_ledger_covers_exactly_the_sandbox():
     r = coverage_report()
-    assert len(IMPLEMENTED) + len(KNOWN_GAPS) == r["sandbox_total"]
+    # v15 起等式是三项：已实现 ∪ 已登记缺口 ∪ 契约信令族 == 沙盒全部工具
+    assert (len(IMPLEMENTED) + len(KNOWN_GAPS)
+            + len(set(CONTRACT_SIGNALS) & set(sandbox_tools()))) == r["sandbox_total"]
 
 
 def test_every_gap_says_why_not_just_the_name():

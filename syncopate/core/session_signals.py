@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from syncopate.core.contract import REPORT_TOOL, SESSION_TOOL_SPECS, TERMINAL_SIGNALS
-from syncopate.core.tool_registry import REGISTRY, ToolContext, ToolRegistry
+from syncopate.core.tool_registry import REGISTRY, ToolContext, ToolRegistry, ToolResult
 
 SESSION_TOOL_NAMES = frozenset(TERMINAL_SIGNALS) | {REPORT_TOOL}
 
@@ -28,15 +28,23 @@ def register_session_tools(registry: ToolRegistry | None = None) -> None:
         if reg.get(fn["name"]) is not None:
             continue
 
-        async def _ack(ctx: ToolContext, _name: str = fn["name"], **kwargs: Any) -> dict[str, Any]:
-            return {"acknowledged": True, "signal": _name, "arguments": kwargs}
+        # ⚠️ handler 的签名是 `(args: dict, ctx: ToolContext)` —— 与全部业务工具同一份约定
+        #   （tool_registry 调的是 `spec.handler(arguments, ctx)`）。
+        #   ⛔ 2026-08-30：初版写成 `(ctx, **kwargs)`，注册过、schema 也对，
+        #     但**一次都没被真的执行过** ⇒ 直到 gold 回放才炸出 TypeError。
+        #     「登记 ≠ 实现」的第 N 次：注册表是最像证据的东西。
+        def _ack(args: dict[str, Any], ctx: ToolContext,
+                 _name: str = fn["name"]) -> ToolResult:
+            return ToolResult(ok=True, data={"acknowledged": True, "signal": _name,
+                                             "arguments": dict(args)})
 
         reg.tool(name=fn["name"], description=fn["description"],
                  parameters=fn["parameters"], kind="read")(_ack)
 
     if reg.get(REPORT_TOOL) is None:
-        async def _report(ctx: ToolContext, **kwargs: Any) -> dict[str, Any]:
-            return {"acknowledged": True, "reported_fields": sorted(kwargs)}
+        def _report(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+            return ToolResult(ok=True, data={"acknowledged": True,
+                                             "reported_fields": sorted(args)})
 
         reg.tool(name=REPORT_TOOL,
                  description="给出本轮结论里机器需要核对的结构化字段（非终止，报完继续收尾）",

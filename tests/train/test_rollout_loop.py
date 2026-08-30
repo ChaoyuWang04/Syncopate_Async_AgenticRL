@@ -17,6 +17,7 @@ from syncopate.authoring.seed_cases import SEED_BUILDERS
 from syncopate.core.parsing import render_final_answer, render_tool_call
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
+from syncopate.train.rollout_budget import assistant_turn_budget
 from syncopate.train.rollout_loop import (
     CHAT_TEMPLATE_KWARGS, RolloutConfig, build_messages, observation_message, run_rollout,
 )
@@ -61,21 +62,40 @@ class ScriptedEngine:
 
 
 def _gold_script(bundle) -> list[str]:
-    """把 gold 轨迹翻译成「模型该输出什么」的剧本。
+    """把 gold 轨迹翻译成「模型该输出什么」的剧本 = **直接用生产那一份**。
 
-    这同时也是构造 SFT 训练数据的方式——同一个函数两用，保证
-    SFT 教的格式和 RL 解析的格式绝对一致。
+    ⛔ 2026-08-30：这里原本自己抄了一份实现（tool_call + render_final_answer）。
+      think-off 的 v14 下两份**恰好逐字节相等**，所以副本存在了很久没人发现；
+      一开 think-on（`25 §3.2` 修法 A），生产的 gold_script 会给每个 assistant 轮
+      加 think 段、副本不会 ⇒ 同构测试 6/6 红。
+      而 25 §3.2 恰恰写着「同构靠"只有一条代码路径"保证，与开关无关」——
+      **那句话当时是错的：一共有两条，另一条在测试里。**
+    ★ 一般化（守则⑨）：凡是「这个值/这段逻辑应该和那边一致」的地方，
+      正确的判据是「这里根本不该有第二份」。**测试里的副本也是副本。**
     """
-    steps = [render_tool_call(a["tool"], a.get("arguments", {})) for a in bundle.gold.actions]
-    steps.append(render_final_answer(bundle.verifier.expected_behavior, bundle.gold.final_answer))
-    return steps
+    from syncopate.pipeline.sft_replay import gold_script
+    return gold_script(bundle)
+
+
+def _final(fields: dict, behavior: str = "tool_call") -> list[str]:
+    """按当前契约产「终答段」的剧本片段（v14=壳一步 / v15=report + 一句人话）。
+
+    ★ 测试也必须按契约分家 —— 用 v14 的输出去考 v15，量的是另一件事
+      （`25 §7⑦` 同一形状：跨契约的判据要先问「新口径在旧产物里存不存在」）。
+    """
+    from syncopate.core.contract import IS_V15
+    if not IS_V15:
+        return [render_final_answer(behavior, fields)]
+    from syncopate.core.parsing_v15 import render_report
+    return [render_report(fields), "已按上面的结果处理完了。"]
 
 
 async def _run(bundle, tokenizer, script, config=None):
     engine = ScriptedEngine(tokenizer, script)
     output = await run_rollout(
         bundle, registry=DOMAIN.registry, tokenizer=tokenizer, generate=engine,
-        config=config or RolloutConfig(max_assistant_turns=8),
+        config=config or RolloutConfig(
+            max_assistant_turns=assistant_turn_budget(bundle.case.max_steps)),
     )
     return output, engine
 
@@ -160,10 +180,17 @@ def test_gold_script_through_full_loop_scores_high(case_id, tokenizer):
 def test_unparseable_output_gets_feedback_and_retries(tokenizer):
     """输出格式崩了 -> 把错误喂回去 -> 模型有机会自己修。"""
     bundle = SEED_BUILDERS["SIG_HIGH_001"]()
+    from syncopate.core.contract import IS_V15
+    # ★ "格式崩了"的形态**本身就是契约的一部分**：
+    #   v14 里「既不是 tool_call 也不是 json」= 崩；
+    #   v15 里纯文本是**合法终答** ⇒ 同一句话不再是错误。能崩的只剩坏 tool_call。
+    #   ⚠️ 这是换契约的一个真实代价，已记进 25 §6：v15 少了一层"胡言乱语"的网。
+    broken = ('<tool_call>\n{"name": "campaign.get_metrics", "arguments": {,,,}\n</tool_call>'
+              if IS_V15 else "我觉得 CPI 大概是 2.1 左右吧")
     script = [
-        "我觉得 CPI 大概是 2.1 左右吧",                       # 既不是 tool_call 也不是 json
+        broken,
         render_tool_call("campaign.get_metrics", {"campaign_id": "CMP_1024"}),
-        render_final_answer("tool_call", {"cpi": 2.10}),
+        *_final({"cpi": 2.10}),
     ]
     output, _ = asyncio.run(_run(bundle, tokenizer, script))
 
@@ -178,7 +205,8 @@ def test_thinking_block_is_stripped(tokenizer):
     script = [
         "<think>用户要查 CPI，先调 get_metrics</think>"
         + render_tool_call("campaign.get_metrics", {"campaign_id": "CMP_1024"}),
-        "<think>拿到了，CPI 是 2.10</think>" + render_final_answer("tool_call", {"cpi": 2.10}),
+        *[("<think>拿到了，CPI 是 2.10</think>" + x) if i == 0 else x
+          for i, x in enumerate(_final({"cpi": 2.10}))],
     ]
     output, _ = asyncio.run(_run(bundle, tokenizer, script))
     assert output.trajectory.final_answer == {"cpi": 2.10}
@@ -230,8 +258,7 @@ def test_false_claim_is_caught(tokenizer):
         render_tool_call("creative.upload", {"campaign_id": "CMP_3072", "creative_name": "hook_b_v1",
                                              "asset_type": "video", "duration_seconds": 45}),
         # 直接跳过 poll_review，猜一个 approved
-        render_final_answer("tool_call", {"asset_id": "ASSET_CMP_3072_hook_b_v1",
-                                          "review_status": "approved"}),
+        *_final({"asset_id": "ASSET_CMP_3072_hook_b_v1", "review_status": "approved"}),
     ]
     output, _ = asyncio.run(_run(bundle, tokenizer, script))
     result = score_trajectory(
@@ -345,7 +372,21 @@ def test_sft_loss_mask_only_covers_model_tokens(case_id, tokenizer):
     text = tokenizer.decode(supervised)
     for action in bundle.gold.actions:
         assert action["tool"] in text
-    assert "```json" in text
+    # ★ 终答形态按契约分家 —— 这条断言本身就是「被测契约」的一部分。
+    #   ⛔ 2026-08-30：原来只写死了 v14 的 ```json，于是**整个训练侧测试只验过 v14**；
+    #     真拿 v15 去训练时，守着 SFT 数据形态的判据一条都不在（「测试全绿但那条路
+    #     从没被真的走过」同族）。
+    from syncopate.core.contract import IS_V15
+    if IS_V15:
+        # v15：机器字段走 session.report；行为走信令或纯文本终答
+        has_report = '"name": "session.report"' in text
+        has_signal = any(f'"name": "session.{k}"' in text
+                         for k in ("defer", "clarify", "reject"))
+        assert has_report or has_signal or text.rstrip().endswith("<|im_end|>"), \
+            f"v15 监督段既没有 report、也没有信令、也没有纯文本终答：{text[-300:]}"
+        assert "```json" not in text, f"v15 监督段出现壳残留：{text[-300:]}"
+    else:
+        assert "```json" in text
     # 工具返回的内容不该出现在被监督的 token 里
     assert "tool_response" not in text
 
@@ -372,9 +413,22 @@ def test_sft_target_behavior_matches_the_spec(tokenizer):
                                               registry=DOMAIN.registry))
         supervised = [t for t, m in zip(sample.input_ids, sample.loss_mask) if m == 1]
         text = tokenizer.decode(supervised)
-        block = text[text.rindex("```json") + 7: text.rindex("```")]
-        assert _json.loads(block)["behavior"] == bundle.verifier.expected_behavior, (
-            f"{name} 的监督目标 behavior 和 spec 不一致：{block}")
+        from syncopate.core.contract import IS_V15
+        if IS_V15:
+            # v15 没有 behavior 字段了 —— 行为**由形态推导**（`25 §3.1`）。
+            # 这条测试的价值不变：监督目标教的行为必须等于 spec 期望的那个。
+            expected = bundle.verifier.expected_behavior
+            if expected in ("defer", "clarify", "reject"):
+                assert f'"name": "session.{expected}"' in text, (
+                    f"{name} 的 v15 监督目标里没有 session.{expected}：{text[-300:]}")
+            else:
+                assert not any(f'"name": "session.{k}"' in text
+                               for k in ("defer", "clarify", "reject")), (
+                    f"{name} 期望 {expected} 却调了终止信令：{text[-300:]}")
+        else:
+            block = text[text.rindex("```json") + 7: text.rindex("```")]
+            assert _json.loads(block)["behavior"] == bundle.verifier.expected_behavior, (
+                f"{name} 的监督目标 behavior 和 spec 不一致：{block}")
 
 
 def test_stops_before_exhausting_response_budget(tokenizer):

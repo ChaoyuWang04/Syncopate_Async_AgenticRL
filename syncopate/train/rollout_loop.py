@@ -189,6 +189,15 @@ async def run_rollout(
     sampling_params = dict(sampling_params or {})
     tool_names = bundle.case.tool_menu  # None = 全量菜单
     tools = registry.menu(tool_names)
+    # ★ 执行白名单必须和**模型看得见的那份**同源，不许各算一份。
+    #   ⛔ 2026-08-30 实案：`menu()` 已让信令族豁免 case 菜单裁剪（模型看得见），
+    #     但下面第 370 行的执行白名单还在拿 `case.tool_menu` 卡 ⇒ session.report
+    #     调用换回 `{"error": "tool_not_available: session.report"}`，
+    #     **每条 v15 gold 轨迹的终答前都插了一条假报错**（= 教模型"报数一定失败"）。
+    #     看得见 ≠ 调得动 —— R0 那条「登记了≠接上了」隔一层的再现。
+    #   ⇒ 白名单从 tools 反推（同一份 menu 的产物），不再读第二份 case.tool_menu。
+    allowed_names = None if tool_names is None else {
+        t["function"]["name"] for t in tools}
 
     namespace_id = f"{run_id}:{bundle.case_id}:{rollout_id}"
     sandbox = Sandbox(bundle.env, namespace_id=namespace_id)
@@ -367,7 +376,7 @@ async def run_rollout(
                     "请等上一个 observation 返回后再决定下一步。"
                 )
             # 菜单外的工具直接拒绝——不能让模型靠调用隐藏工具绕过 tool_missing 类 case
-            elif tool_names is not None and call["name"] not in tool_names:
+            elif allowed_names is not None and call["name"] not in allowed_names:
                 result_ok, result_data, result_error = False, {}, f"tool_not_available: {call['name']}"
             else:
                 tool_start = time.monotonic()

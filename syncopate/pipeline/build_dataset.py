@@ -33,6 +33,7 @@ from typing import Any
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.tool_registry import ToolRegistry
 from syncopate.prompts import stable_hash
+from syncopate.train.rollout_budget import assistant_turn_budget
 from syncopate.train.rollout_loop import RolloutConfig, build_messages
 
 DATA_SOURCE = "syncopate_adcampaign"
@@ -90,7 +91,7 @@ def build_rl_row(bundle: CaseBundle, batch_dir: Path, index: int, split: str,
             # ★ AgentLoop 靠这个路径在运行时读回四件套
             "batch_dir": str(batch_dir.resolve()),
             "artifact_root": str(artifact_root.resolve()),
-            "max_assistant_turns": bundle.case.max_steps,
+            "max_assistant_turns": assistant_turn_budget(bundle.case.max_steps),
             "need_tools_kwargs": False,
             # 分组统计用：可以按信号形态/弱点桶分别看 reward 分布和 advantage 方差
             "signal_class": meta.signal_class,
@@ -204,7 +205,7 @@ def build(
         #    与「GEO 类卡死（在里面打转）」的行为形状一致。
         # ⇒ 修法：轮数跟 case 走；外加 sft_replay 里的硬断言（gold 回放不许截断）。
         def _config_for(bundle: CaseBundle) -> RolloutConfig:
-            return RolloutConfig(max_assistant_turns=bundle.case.max_steps,
+            return RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps),
                                  max_prompt_length=max_length,
                                  max_response_length=max_length)
 

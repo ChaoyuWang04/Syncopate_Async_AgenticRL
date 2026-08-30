@@ -99,8 +99,11 @@ def test_the_coverage_ledger_is_complete():
     ⚠️ 这条和 `tool_parity` 的账本同族 —— **缺口必须写下来才算被承认**。
       不写的话，这张表看起来"都测过了"，而实际只覆盖了五分之一。
     """
-    from syncopate.runtime.tool_parity import sandbox_tools
+    from syncopate.runtime.tool_parity import CONTRACT_SIGNALS, sandbox_tools
     names = set(sandbox_tools())
+    # v15 的 session.* 不是业务工具（runtime 侧由 agent_loop 状态机接），
+    # 它们的交代写在 tool_parity.CONTRACT_SIGNALS 里 —— 同一份来源，不在这里另抄。
+    names -= set(CONTRACT_SIGNALS)
     ledgered = set(EXERCISED) | set(NOT_EXERCISED)
     assert not (names - ledgered), f"这些工具没交代：{sorted(names - ledgered)}"
     assert not (ledgered - names), f"表里有沙盒没有的：{sorted(ledgered - names)}"

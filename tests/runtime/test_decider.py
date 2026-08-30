@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+from syncopate.core.contract import IS_V15
 from syncopate.runtime.decider import DEFAULT_MENU, INTENT_MENUS, VllmDecider
 
 
@@ -18,6 +20,17 @@ def test_single_tool_call_maps_to_proposal():
     assert p.param_source == "model"
 
 
+# ★ 下面两条**只对 v14 契约成立** —— 它们断言的正是被 v15 换掉的那两件事：
+#   ① 壳 JSON 是终答（v15 里壳是残留，终答是纯文本 + session.report）
+#   ② 一段没有结构的自然语言 = 解析错误（v15 里它就是**合法终答**）
+# v15 的对应行为由 tests/runtime/test_decider_v15.py 覆盖（含 v14 默认不变那条）。
+# ⇒ 显式按契约跳过，而不是让它在 v15 下红着 —— 但**跳过必须写清楚谁接了这个班**，
+#   否则就是"删掉一条判据"（守则⑦：空着的门槛应读作"无法判定"）。
+_V14_ONLY = pytest.mark.skipif(
+    IS_V15, reason="v14 契约专属断言；v15 的对应行为见 tests/runtime/test_decider_v15.py")
+
+
+@_V14_ONLY
 def test_final_answer_maps_to_final():
     p = VllmDecider._to_proposal(
         '```json\n{"behavior": "defer", "answer": {"summary": "数据未成熟，D7 再判"}}\n```')
@@ -35,6 +48,7 @@ def test_multi_tool_call_is_intercepted_at_source():
     assert "一个 tool call" in p.rationale
 
 
+@_V14_ONLY
 def test_garbage_output_becomes_correction_not_guess():
     p = VllmDecider._to_proposal("嗯让我想想，大概应该先看看数据吧")
     assert p.kind == "tool_call" and p.tool is None

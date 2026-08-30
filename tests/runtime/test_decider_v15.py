@@ -13,18 +13,32 @@ import os
 import pytest
 
 
-@pytest.fixture
-def v15(monkeypatch):
-    """在 v15 契约下重新加载受影响的模块（进程内切换要显式 reload）。"""
-    monkeypatch.setenv("SYNCOPATE_CONTRACT", "v15")
+def _reload_contract():
+    """按**当前环境变量**重新加载契约相关模块（进程内切换的唯一做法）。"""
     import syncopate.core.contract as C
     importlib.reload(C)
     import syncopate.runtime.decider as D
     importlib.reload(D)
+    return C, D
+
+
+@pytest.fixture
+def v15(monkeypatch):
+    """在 v15 契约下重新加载受影响的模块，**拆卸时恢复原值**。
+
+    ⛔ 2026-08-30 实案（测试污染，C-1 同族）：原实现拆卸时写死
+      `monkeypatch.delenv("SYNCOPATE_CONTRACT")` + reload ⇒ 无论进程本来是什么契约，
+      跑完这个文件之后 `IS_V15` 一律变成 **False**。
+      于是 `SYNCOPATE_CONTRACT=v15 pytest tests` 全量跑时，排在 runtime 后面的
+      tests/train 全部在**错误的契约**下执行（22 条红），而单独跑又全绿 ——
+      "单跑绿、全量红" 是顺序依赖的典型指纹。
+    ⇒ 正确做法：monkeypatch.undo() 恢复**原来的值**（可能本来就是 v15），再 reload。
+    """
+    monkeypatch.setenv("SYNCOPATE_CONTRACT", "v15")
+    _, D = _reload_contract()
     yield D
-    monkeypatch.delenv("SYNCOPATE_CONTRACT", raising=False)
-    importlib.reload(C)
-    importlib.reload(D)
+    monkeypatch.undo()          # ← 恢复原值，不是删掉
+    _reload_contract()
 
 
 TC = '<tool_call>\n{{"name": "{n}", "arguments": {a}}}\n</tool_call>'
@@ -89,11 +103,15 @@ def test_runtime_uses_the_same_parser_as_training(v15):
 
 
 def test_v14_default_unchanged(monkeypatch):
-    """不设环境变量时，runtime 行为与 v14 逐字节相同。"""
+    """不设环境变量时，runtime 行为与 v14 逐字节相同。
+
+    ⚠️ 同样要在结尾把契约**恢复原值**（见 v15 fixture 的注释），否则污染后面的测试。
+    """
     monkeypatch.delenv("SYNCOPATE_CONTRACT", raising=False)
-    import syncopate.core.contract as C
-    importlib.reload(C)
-    import syncopate.runtime.decider as D
-    importlib.reload(D)
-    p = D.VllmDecider._to_proposal('```json\n{"behavior": "defer", "answer": {"a": 1}}\n```')
-    assert p.kind == "final" and p.final_answer["behavior"] == "defer"
+    _, D = _reload_contract()
+    try:
+        p = D.VllmDecider._to_proposal('```json\n{"behavior": "defer", "answer": {"a": 1}}\n```')
+        assert p.kind == "final" and p.final_answer["behavior"] == "defer"
+    finally:
+        monkeypatch.undo()
+        _reload_contract()

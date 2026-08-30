@@ -1046,15 +1046,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("extra", nargs="*", help="额外的 Hydra override")
     args = parser.parse_args(argv)
 
-    # ★ think 开关只给评测探针（E27），训练路径启动即拦（最早能判的地方）。
-    #   理由：SFT 是 enable_thinking=False 模板练的，开 think 会让「增量拼接 vs
-    #   整段渲染」逐 token 不相等（rollout_loop.py:50 全文）⇒ 两阶段分布对不齐且不报错。
-    #   think-on 的训练要等带思考的 SFT 数据，不是拨个开关的事。
-    if os.environ.get("SYNCOPATE_THINK", "0") == "1":
+    # ★ think 开关的训练路径拦截（最早能判的地方）。
+    #   拦它的原文理由是：「SFT 是 think-off 模板练的，开 think 两阶段分布对不齐；
+    #   think-on 的训练要等**带思考的 SFT 数据**，不是拨个开关的事」。
+    #   ⇒ **v15 的 R2 产的正是这批数据，前置条件到此才成立**（`25 §3.2` 修法 A，
+    #     Chaoyu 08-30 goal 放行）。所以拦截按契约分家，不是一刀切解除：
+    #       v14 契约 + think-on  ⇒ 仍然拦（老 SFT 权重是 think-off 练的，没变）
+    #       v15 契约 + think-on  ⇒ 放行，并打判据行（静默生效 = 下一个「机制在但没接上」）
+    from syncopate.core.contract import IS_V15
+    from syncopate.train.rollout_budget import MAX_RESPONSE_LENGTH, THINK_ON
+    if THINK_ON and not IS_V15:
         raise SystemExit(
-            "🔴 SYNCOPATE_THINK=1 只允许用于评测探针（E27，scripts/run_e27_think_probe.sh）。\n"
-            "   训练路径禁止开 thinking：SFT 是 think-off 模板练的，开了两阶段分布对不齐\n"
-            "   （rollout_loop.py:50 有全文与测试）。请去掉该环境变量再起训练。")
+            "🔴 v14 契约下 SYNCOPATE_THINK=1 只允许用于评测探针（E27，"
+            "scripts/run_e27_think_probe.sh）。\n"
+            "   训练路径禁止开 thinking：v14 的 SFT 是 think-off 模板练的，开了两阶段分布\n"
+            "   对不齐（rollout_loop.py:50 有全文与测试）。要 think-on 训练请走 v15 契约。")
+    if THINK_ON:
+        print(f"[think-train] 契约=v15 · think-on 训练路径已放行 · "
+              f"MAX_RESPONSE_LENGTH={MAX_RESPONSE_LENGTH}"
+              f" ⚠️ 跑完必查 truncation_reason='tokens' 比例", flush=True)
 
     # ★ 候选跑的**最少**步数。⚠️ 它是**下限不是目标** ——
     #   真正的停止条件是「零梯度率不再创新高」（scripts/pool_readout.py）。
