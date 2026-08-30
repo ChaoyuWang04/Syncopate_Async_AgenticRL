@@ -43,6 +43,8 @@ def audit(supervised_texts: list[str], buckets: list[str] | None = None) -> dict
     n = len(supervised_texts)
     buckets = buckets or [""] * n
     layer = {"hard": [0, 0], "easy": [0, 0]}          # [非空块, 总块]
+    import collections
+    tails: collections.Counter = collections.Counter()   # 终答收尾话术（缺陷㉖ 的判据）
     shell = summary = rows_think = blocks = nonempty = sig = sig_ok = 0
     for sup, bk in zip(supervised_texts, buckets):
         if _SHELL.search(sup):
@@ -58,6 +60,14 @@ def audit(supervised_texts: list[str], buckets: list[str] | None = None) -> dict
         key = "hard" if bk in HARD_BUCKETS else "easy"
         layer[key][0] += ne
         layer[key][1] += len(bl)
+        # ★ 终答收尾话术集中度（缺陷㉖）：41.8% 的行终答曾是同一句常量兜底，
+        #   而**每一条都合法、不报错** ⇒ 必须有一条判据盯着"是不是都在说同一句话"。
+        #   ⚠️ 监督段是拼接过的（多轮 assistant 内容首尾相接），里面未必有 im_start 标记
+        #   ⇒ 剥掉 think/tool_call 后取最后一段非空文本。
+        _t = _TC.sub("\n", _THINK.sub("\n", sup)).replace("<|im_end|>", "\n")
+        _lines = [x.strip() for x in _t.split("\n") if x.strip()]
+        if _lines and len(_lines[-1]) >= 8:
+            tails[_lines[-1][-12:]] += 1
         for blk in _TC.findall(sup):
             try:
                 p = json.loads(blk)
@@ -70,6 +80,9 @@ def audit(supervised_texts: list[str], buckets: list[str] | None = None) -> dict
     return {"rows": n, "shell_residue_rows": shell, "summary_rows": summary,
             "rows_with_think": rows_think, "think_blocks": blocks,
             "think_nonempty": nonempty, "signal_calls": sig, "signal_schema_ok": sig_ok,
+            "top_tail": (tails.most_common(1) or [("", 0)])[0][0],
+            "top_tail_n": (tails.most_common(1) or [("", 0)])[0][1],
+            "tail_total": sum(tails.values()),
             "hard_nonempty": layer["hard"][0], "hard_blocks": layer["hard"][1],
             "easy_nonempty": layer["easy"][0], "easy_blocks": layer["easy"][1]}
 
@@ -103,6 +116,11 @@ def gate_status(a: dict) -> list[tuple[str, bool]]:
          a.get("hard_blocks", 0) > 0 and _r(a, "hard") >= 0.60),
         (f"⑤⒝-易 非难例桶非空 think  : {a.get('easy_nonempty', 0)}/{a.get('easy_blocks', 0)} = "
          f"{_r(a, 'easy'):.1%}   门槛 ≤10%", _r(a, "easy") <= 0.10),
+        (f"⑦ 终答话术集中度          : {a.get('top_tail_n', 0)}/{a.get('tail_total', 0)} = "
+         f"{a.get('top_tail_n', 0) / max(1, a.get('tail_total', 0)):.1%}"
+         f" ({a.get('top_tail', '')!r})   门槛 ≤10%",
+         a.get("tail_total", 0) > 0                       # ★ 先断言"量到了东西"
+         and a.get("top_tail_n", 0) / max(1, a.get("tail_total", 1)) <= 0.10),
         (f"   （报告项）全库非空占比   : {a['think_nonempty']}/{a['think_blocks']} = "
          f"{ratio:.1%}   由上两条推出，不作门槛", True),
     ]

@@ -92,7 +92,10 @@ def judge_item(item: dict, spec: dict) -> tuple[bool, str]:
                     return True, "ok"
         return False, f"未见 ≈{want:.0f} 的提案参数"
     if kind == "clarify_then_proceed":
-        c1 = (t1.get("behavior") == "clarify") or bool(t1.get("clarification"))
+        # ★ Chaoyu 08-30 裁定：人话追问也算 clarify（同 REJ，复用同一份规则）
+        from syncopate.core.contract import prose_expresses
+        c1 = ((t1.get("behavior") == "clarify") or bool(t1.get("clarification"))
+              or prose_expresses("clarify", t1.get("reply") or ""))
         if not c1:
             return False, f"第一轮未 clarify（behavior={t1.get('behavior')}）"
         if t2.get("behavior") == "clarify":

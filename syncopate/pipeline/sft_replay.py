@@ -118,7 +118,57 @@ def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:
     # tool_call / answer：机器字段已在 head 的 report 里，这里只剩一句人话。
     # ★ 人话字段（value_source=="any"，实测 60/4100 全是 CHAT 的 reply）**不进 report** ——
     #   否则等于逼模型把同一句人话在机器通道里再抄一遍（「summary 污染」同族）。
-    return head + [str(fa.get("reply") or "已经按上面的结果处理完了。")]
+    return head + [str(fa.get("reply") or _prose_from_fields(fa))]
+
+
+# 机器字段 → 一句人话（v15 契约要求终答是自然语言，而 v13 的 gold 只有机器字段）
+_FIELD_CN = {
+    "conclusion": "结论", "lift": "提升", "region": "地区", "sample_size": "样本量",
+    "reason": "原因", "feature": "特征", "excluded": "已排除", "recommendation": "建议",
+    "spend_7d": "近 7 天消耗", "installs_7d": "近 7 天安装", "roas_d7": "7 日 ROAS",
+    "cpi": "CPI", "ctr": "点击率", "frequency": "频次", "new_budget": "新预算",
+    "approved_budget": "核准预算", "review_status": "审核状态", "asset_id": "素材 ID",
+    "data_maturity": "数据成熟度", "missing_field": "缺少字段",
+    "conflict_record_ids": "冲突记录", "recheck_after_days": "建议复查天数",
+}
+_CONCLUSION_CN = {
+    "positive": "有正向效果", "negative": "有负向效果",
+    "no_significant_effect": "没有显著效果", "insufficient_evidence": "证据不足",
+}
+
+
+def _prose_from_fields(fa: dict) -> str:
+    """把 gold 的机器字段渲染成一句人话。
+
+    ⛔ 2026-08-30（缺陷㉖，Chaoyu 裁定修）：这里原本是一句**常量兜底**
+      「已经按上面的结果处理完了。」——而 v13 压舱石那 419 行的 gold **本来就没有 reply**
+      （v14 时代终答是 JSON 壳，机器字段就是答案）⇒ **41.8% 的训练行终答变成同一句空话**。
+      后果实测：L2 从 78% 掉到 14%（判据要"读数在场"）、L3 归零（只查不做还说"处理完了"
+      = 空头支票的训练版）。**每一条都合法、不报错。**
+    ★ 一般化：换契约时「旧契约里不存在的那个字段」要有**真实来源**，不能用常量兜底。
+    ★ 顺带兑现 S1 挖出的那条：非判分字段（excluded/feature/region/reason…）本来只有 14%
+      活在人话里，现在它们**全部**被说出来 —— 答案不再变笼统。
+    """
+    if not fa:
+        return "已按上面的结果处理完成。"
+    parts: list[str] = []
+    for k, v in fa.items():
+        if k in ("summary", "reply") or v is None or v == "":
+            continue
+        name = _FIELD_CN.get(k, k)
+        if k == "conclusion":
+            parts.append(_CONCLUSION_CN.get(str(v), str(v)))
+        elif isinstance(v, (list, tuple)):
+            if not v:
+                continue
+            parts.append(f"{name}{'、'.join(str(x) for x in v)}")
+        elif isinstance(v, bool):
+            parts.append(f"{name}{'是' if v else '否'}")
+        else:
+            parts.append(f"{name} {v}")
+    if not parts:
+        return "已按上面的结果处理完成。"
+    return "、".join(parts) + "。"
 
 
 EMPTY_THINK = "<think>\n\n</think>\n\n"
