@@ -8,6 +8,7 @@
 - [infra 线状态与决策](infra-line-state.md) — ★收尾期·单任务制（08-28）：训练线全闭环（E31 统一 FP8 定界·占空比 31→73.4%），★全线收官（08-28）：E32 serving 单日收官（四卡拓扑 3.86×·goodput 64·PD no-go·ngram 2.3× 进默认），B-5 调度层也单日收官（E33：goodput 64→192 3×·七翻案·膝点移交引擎），三案全收官；入口 docs/infra_exp/00-START.md
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错；★第八形态 = 测试全绿但服务**从没被真的起过**（入口/流关闭只在实跑存在）
+- [按旧单位标定的阈值](thresholds-calibrated-in-old-units.md) — ★换契约让「按旧口径标定」的数字同时失效；08-30 一天撞五次，一次都不报错
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★判据太宽会**为错误的理由通过**；★★08-20 一天写空三次 ⇒ 固定动作：**撤掉修复确认判据会红**
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
 - [两个基石级 bug（2026-08-18）](two-foundational-bugs-2026-08-18.md) — ★ 梯度没跨 rank 同步 · 权重从没推给 rollout；**所有 RL 结论作废**，登记在 docs/syncopate/21
