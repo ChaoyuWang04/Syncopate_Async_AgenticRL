@@ -414,9 +414,14 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         return None
 
     out, tried, hit = [], 0, 0
-    for cid in capped:
-        if len(out) >= max_rows:
-            break
+    sem = asyncio.Semaphore(3)
+
+    async def one_row(cid):
+        async with sem:
+            return await _row(cid)
+
+    async def _row(cid):
+        nonlocal tried, hit
         b = bundles[cid]
         base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                    index=0, split="train", config=None)
@@ -424,7 +429,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         segs = full.split(ASST)
         n_steps = len(segs) - 1
         if n_steps < 2:
-            continue
+            return None
         # ★ session.report 步**不参与采样**：它是机械序列化（把数字填进 schema），
         #   不需要思考，空块正是对的。而且实测教师（裸 8B，没学过我们的信令契约）
         #   在这一步 0/6 命中 —— 强行采样只会白烧几十分钟。
@@ -432,33 +437,38 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
                     if first_action(segs[i + 1]) != "session.report"]
         want_n = max(1, int(round(n_steps * target)))
         if len(eligible) < want_n:
-            continue
+            return None
         # 复用 v14.5 已有的终答步思考（物料键是 1-based 的 segs 下标）
         reuse = MATERIALS["cot_think"].get(f"{cid}_COT5", {})
         thinking = {int(k) - 1: v for k, v in reuse.items() if 0 <= int(k) - 1 < n_steps}
-        for si in sorted(eligible, reverse=True):     # 从终答步往回收（终判最难、最值钱）
-            if len(thinking) >= want_n:
-                break
-            if si in thinking:
-                continue
-            ctx = ASST.join(segs[:si + 1]) + ASST + "\n"
-            want = first_action(segs[si + 1])
-            tried += 1
-            th = await step_sample(ctx, want)
+        # ★ 整行的步**一次性并发**采样：每一步的上下文只是前缀，事先就全知道，
+        #   步与步之间没有依赖。顺序跑的话一行要几分钟（实测），并发后是一轮的事。
+        todo = [si for si in eligible if si not in thinking]
+        tried += len(todo)
+        res = await asyncio.gather(*[
+            step_sample(ASST.join(segs[:si + 1]) + ASST + "\n",
+                        first_action(segs[si + 1])) for si in todo])
+        for si, th in zip(todo, res):
             if th:
                 thinking[si] = th
                 hit += 1
         if len(thinking) < want_n:
-            continue                                  # 达不到 60% 的行不要（宁缺勿滥）
+            return None                               # 达不到 60% 的行不要（宁缺勿滥）
         row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
-                                  index=95000 + len(out), split="train", config=None,
+                                  index=95000, split="train", config=None,
                                   thinking=thinking)
         row["case_id"] = f"{cid}_COT15"
         row["bucket"] = "cot_hard"
         row["sub_axis"] = f"{cid.split('_')[0]}|steps{n_steps}|think{len(thinking)}"
-        out.append(row)
-        print(f"  [CoT-v15] 收 {cid}（{len(thinking)}/{n_steps} 步有思考）→ "
-              f"{len(out)}/{max_rows}", flush=True)
+        print(f"  [CoT-v15] 收 {cid}（{len(thinking)}/{n_steps} 步有思考）", flush=True)
+        return row
+
+    got = await asyncio.gather(*[one_row(c) for c in capped[:max_rows * 2]])
+    for i, r in enumerate(x for x in got if x):
+        if len(out) >= max_rows:
+            break
+        r["index"] = 95000 + i
+        out.append(r)
     print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
           f"（命中率 {hit/max(1,tried):.0%}）")
     return out
