@@ -124,9 +124,17 @@ class DynamicPoolSampler:
         log = os.environ.get(DISPATCH_LOG_ENV)
         self.dispatch_log = Path(log) if log else None
         self._step = 0
+        # ★ 排除窗口**跨 epoch 保持**（存在实例上，不在 __iter__ 里重置）。
+        #   ⛔ 2026-08-30 定位到的根因（`25 §6⑧`⒝ 登记的那条已知红）：
+        #     原实现把 `prev_batch = []` 写在 __iter__ 开头 ⇒ **每个 epoch 开头窗口清空**，
+        #     上个 epoch 的最后一批和下个 epoch 的第一批可以撞题 ⇒ 跨 epoch 边界的训练批
+        #     混进重复（实测 e31s12_cand_unified 1/400 步、smoke 3/400 步）。
+        #   ★ 同时把窗口从「上一批」放宽到「最近两批」：训练批与采样批的边界不保证对齐，
+        #     隔一批只保证间隔 ≥batch_size，隔两批才对任何 ≤2×batch 的切法都成立。
+        self._recent: list[str] = []
         print(f"[pool] 动态分池启用：{len(self.case_ids)} 条 case，"
               f"batch={self.batch_size}，反馈来源={self.dispatch_log}，"
-              f"去重=批内无放回+排除上一批（P4 判据）", flush=True)
+              f"去重=批内无放回+排除最近两批（跨 epoch 保持，P4 判据）", flush=True)
 
     def __len__(self) -> int:
         return len(self.case_ids)
@@ -139,13 +147,12 @@ class DynamicPoolSampler:
         #   一个 ≤ batch_size 的训练 batch 里都不可能出现重复题。
         #   P4 实测过 3/110 步重复（13.jsonl 一步里同一条题出现 3 组）——
         #   根因就是「采样批」和「训练批」的边界不保证对齐。
-        prev_batch: list[str] = []
         while emitted < len(self.case_ids):
             if self.dispatch_log:
                 self.pool.ingest(self.dispatch_log, self._step)
             batch = self.pool.sample(self.batch_size, step=self._step,
                                      seed=self.seed * 100003 + self._step,
-                                     exclude=prev_batch)
+                                     exclude=self._recent)
             if not batch:
                 break
             # 当场报警（守则②：假设写成断言）。sample 的实现保证了这两条，
@@ -153,11 +160,12 @@ class DynamicPoolSampler:
             if len(set(batch)) != len(batch):
                 raise RuntimeError(f"[pool] 同一批内抽到重复 case：{batch} —— "
                                    "GRPO 组内比较的前提被破坏，拒绝继续")
-            dup = set(batch) & set(prev_batch)
-            if dup and len(self.case_ids) > 2 * self.batch_size:
-                raise RuntimeError(f"[pool] 相邻两批出现重复 case：{sorted(dup)} —— "
+            dup = set(batch) & set(self._recent)
+            if dup and len(self.case_ids) > 3 * self.batch_size:
+                raise RuntimeError(f"[pool] 排除窗口内出现重复 case：{sorted(dup)} —— "
                                    "排除窗口失效，训练批可能混入重复题")
-            prev_batch = batch
+            # 滚动窗口 = 最近两批（跨 epoch 保持）
+            self._recent = (self._recent + batch)[-2 * self.batch_size:]
             if self._step % 10 == 0:
                 snap = self.pool.snapshot(self._step)
                 print(f"[pool] step={self._step} {snap}", flush=True)
@@ -172,11 +180,14 @@ class DynamicPoolSampler:
 
     # StatefulDataLoader 会尝试存取采样器状态（用于断点续跑）
     def state_dict(self) -> dict:
-        return {"step": self._step, "epoch": self.epoch}
+        return {"step": self._step, "epoch": self.epoch, "recent": list(self._recent)}
 
     def load_state_dict(self, state: dict) -> None:
         self._step = int(state.get("step", 0))
         self.epoch = int(state.get("epoch", 0))
+        # ⚠️ 续训也要恢复排除窗口 —— 不恢复的话「续训的第一批」和「中断前的最后一批」
+        #   可以撞题，而那正是最容易被当成"偶发"忽略的一种重复。
+        self._recent = list(state.get("recent", []))
 
 
 MODE_ENV = "SYNCOPATE_RL_MODE"
