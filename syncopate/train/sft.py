@@ -378,10 +378,20 @@ def main(argv: list[str] | None = None) -> int:
                 # 单卡配方 2×8=16 ⇒ 四卡等效 2×2×4；不自动降会静默变 64（连 lr 语义一起变）
                 new_argv += ["--grad-accum", str(max(1, args.grad_accum // 4))]
             os.environ.setdefault("CUDA_VISIBLE_DEVICES", ",".join(free[:4]))
-            cmd = ["torchrun", "--standalone", "--nproc_per_node=4",
+            # ★ torchrun 从**当前解释器旁边**找，不假设它在 PATH 上。
+            #   ⛔ 2026-08-30：用 `nohup .venv/bin/python -m syncopate.train.sft` 起（没先
+            #     `source activate`）⇒ `FileNotFoundError: /bin/torchrun`，**起跑即挂**。
+            #     v14.5 的链路脚本恰好先激活了 venv，所以这个隐形前提两个月没暴露
+            #     （「干净机器才暴露的缺口」同族：手动装/手动激活过的东西 = 隐形前提）。
+            import shutil
+            tr = shutil.which("torchrun") or str(Path(sys.executable).parent / "torchrun")
+            if not Path(tr).exists():
+                raise SystemExit(f"🔴 找不到 torchrun（试过 PATH 与 {tr}）——"
+                                 f"用 .venv/bin/python 起就该在 .venv/bin 里找")
+            cmd = [tr, "--standalone", "--nproc_per_node=4",
                    "-m", "syncopate.train.sft", *new_argv]
             print(f"[DDP] {len(free)} 张空闲卡 ⇒ 默认四卡升格：{' '.join(cmd)}")
-            os.execvpe("torchrun", cmd, dict(os.environ))
+            os.execvpe(tr, cmd, dict(os.environ))
         print(f"[DDP] 空闲卡 {len(free)} 张 < 4 ⇒ 单卡回退（SYNCOPATE_SFT_SINGLE=1 可显式压单卡）")
 
     # ---- DDP 数据并行（torchrun 启动时自动生效；单进程跑 = 原语义分毫不动）----
