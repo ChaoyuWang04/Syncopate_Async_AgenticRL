@@ -1,0 +1,177 @@
+{
+ "file": "data/sft/v15.PRE_PROSE_FIX/train.parquet",
+ "rows": 949,
+ "buckets": {
+  "全部终答·逐字": {
+   "n": 855,
+   "unique": 681,
+   "top_share": 0.023391812865497075,
+   "top": "已经按上面的结果处理完了。"
+  },
+  "全部终答·句式": {
+   "n": 855,
+   "unique": 451,
+   "top_share": 0.026900584795321637,
+   "top": "approval_case_id APR_§ID_§N_safety_line_backfill、decision no"
+  },
+  "  chat_shell·句式": {
+   "n": 80,
+   "unique": 80,
+   "top_share": 0.0125,
+   "top": "哈哈，当然有啦！要不要听听我最近学的新知识？或者你有什么问题，我来帮你解决？放心，我永远都是你最靠谱的伙伴～"
+  },
+  "  cot_hard·句式": {
+   "n": 20,
+   "unique": 1,
+   "top_share": 1.0,
+   "top": "已经按上面的结果处理完了。"
+  },
+  "  critical_args·句式": {
+   "n": 169,
+   "unique": 20,
+   "top_share": 0.13609467455621302,
+   "top": "approval_case_id APR_§ID_§N_safety_line_backfill、decision no"
+  },
+  "  multiturn_l1·句式": {
+   "n": 97,
+   "unique": 76,
+   "top_share": 0.030927835051546393,
+   "top": "ARPU是每用户平均收入，等于总收入除以活跃用户数得出的平均值。"
+  },
+  "  multiturn_l2·句式": {
+   "n": 270,
+   "unique": 238,
+   "top_share": 0.022222222222222223,
+   "top": "CMP_§N 的 CPI 是 §N，整体表现略高于预期，可能需要关注一下性能优化。"
+  },
+  "  rag_policy·句式": {
+   "n": 33,
+   "unique": 4,
+   "top_share": 0.30303030303030304,
+   "top": "approval_case_id §ID§N_policy_lookup、decision escalated、原因 p"
+  },
+  "  reasoning·句式": {
+   "n": 69,
+   "unique": 8,
+   "top_share": 0.21739130434782608,
+   "top": "证据不足、原因 only_§N_creatives、样本量 §N。"
+  },
+  "  sequential_dependency·句式": {
+   "n": 76,
+   "unique": 16,
+   "top_share": 0.13157894736842105,
+   "top": "素材 ID §ID_§N_fresh_§N、审核状态 approved。"
+  },
+  "信令 explanation/question/reason": {
+   "n": 94,
+   "unique": 6,
+   "top_share": 0.3829787234042553,
+   "top": "请补充 campaign_id 后我再继续。"
+  },
+  "题面（首轮 user）·逐字": {
+   "n": 949,
+   "unique": 915,
+   "top_share": 0.002107481559536354,
+   "top": "当前时间：2026-10-05T00:00:00+00:00\n当前投放任务：\naccount_id=ACC_14\ncam"
+  },
+  "题面·句式": {
+   "n": 949,
+   "unique": 759,
+   "top_share": 0.01053740779768177,
+   "top": "当前时间：§N-§N-§NT§N:§N:§N+§N:§N 当前投放任务： account_id=ACC_§N candi"
+  },
+  "think 段·逐字": {
+   "n": 90,
+   "unique": 90,
+   "top_share": 0.011111111111111112,
+   "top": "好的，现在我需要处理用户的请求，将账户ACC_13下的campaign CMP_4038的日预算从700元调整到840元"
+  },
+  "终答末 12 字": {
+   "n": 845,
+   "unique": 417,
+   "top_share": 0.027218934911242602,
+   "top": "_candidates。"
+  }
+ },
+ "findings": [
+  {
+   "gate": "prose_verbatim_top",
+   "label": "全部终答·逐字",
+   "share": 0.023391812865497075,
+   "top": "已经按上面的结果处理完了。"
+  },
+  {
+   "gate": "prose_pattern_top",
+   "label": "  cot_hard·句式",
+   "share": 1.0,
+   "top": "已经按上面的结果处理完了。"
+  },
+  {
+   "gate": "prose_pattern_top",
+   "label": "  critical_args·句式",
+   "share": 0.13609467455621302,
+   "top": "approval_case_id APR_§ID_§N_safety_line_backfill、decision no_expansion、已排除 US,GB,JP、原因 safety_line_unavailable_for_all_c"
+  },
+  {
+   "gate": "prose_pattern_top",
+   "label": "  rag_policy·句式",
+   "share": 0.30303030303030304,
+   "top": "approval_case_id §ID§N_policy_lookup、decision escalated、原因 policy_not_applicable。"
+  },
+  {
+   "gate": "prose_pattern_top",
+   "label": "  reasoning·句式",
+   "share": 0.21739130434782608,
+   "top": "证据不足、原因 only_§N_creatives、样本量 §N。"
+  },
+  {
+   "gate": "prose_pattern_top",
+   "label": "  sequential_dependency·句式",
+   "share": 0.13157894736842105,
+   "top": "素材 ID §ID_§N_fresh_§N、审核状态 approved。"
+  },
+  {
+   "gate": "answer_serves_prompts",
+   "count": 32,
+   "worst": [
+    [
+     "已经按上面的结果处理完了。",
+     20
+    ],
+    [
+     "证据不足、原因 only_4_creatives、样本量 4。",
+     15
+    ],
+    [
+     "有正向效果、特征 before_after、提升 0.168、地区 DE、样本量 16。",
+     13
+    ],
+    [
+     "有正向效果、特征 real_person、提升 0.2267、地区 US、样本量 20。",
+     12
+    ],
+    [
+     "有正向效果、特征 real_person、提升 0.1791、地区 GB、样本量 20。",
+     10
+    ]
+   ]
+  },
+  {
+   "gate": "prose_in_report",
+   "count": 150
+  },
+  {
+   "gate": "signal_top",
+   "label": "信令 explanation/question/reason",
+   "share": 0.3829787234042553,
+   "top": "请补充 campaign_id 后我再继续。"
+  },
+  {
+   "gate": "prose_verbatim_top",
+   "label": "终答末 12 字",
+   "share": 0.027218934911242602,
+   "top": "_candidates。"
+  }
+ ],
+ "ok": false
+}

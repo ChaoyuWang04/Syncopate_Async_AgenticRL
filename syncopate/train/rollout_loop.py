@@ -23,14 +23,16 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol
 
-from syncopate.core.contract import IS_V15, REPORT_TOOL, TERMINAL_SIGNALS
+from syncopate.core.contract import (IS_V15, REPORT_TOOL, TERMINAL_SIGNALS,
+                                     visible_answer_fields)
 from syncopate.core.parsing import ParsedStep, parse_step
 from syncopate.core.parsing_v15 import derive_behavior, parse_step_v15
 from syncopate.core.sandbox import Sandbox
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.tool_registry import ToolContext, ToolRegistry
 from syncopate.core.trajectory import Action, Observation, Trajectory
-from syncopate.prompts import load_prompt, prompt_hash, render_prompt
+from syncopate.prompts import (load_prompt, load_system_prompt, prompt_hash,
+                               render_prompt)
 
 
 # Qwen3 的轮次结束符。模型通常自己会生成它并被 vLLM 当停止符吞掉，
@@ -142,7 +144,7 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> lis
     #
     # 更根本的是：prompt 的内容不该取决于 dict 的插入顺序 ——
     # 那意味着换个构造写法，模型看到的题面就变了。
-    system_text = load_prompt("system.txt")
+    system_text = load_system_prompt()
     user_text = render_prompt("step_user.txt", {
         # ★ M2：把「今天是几号」给模型。
         #
@@ -160,7 +162,7 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> lis
         "reference_now": bundle.env.reference_now,
         "context": bundle.case.context,
         "user_message": bundle.case.user_message,
-        "answer_fields": bundle.verifier.required_answer_fields,
+        "answer_fields": visible_answer_fields(bundle.verifier.required_answer_fields),
     })
     return [{"role": "system", "content": system_text}, {"role": "user", "content": user_text}]
 
@@ -433,7 +435,7 @@ async def run_rollout(
             "segments": segments,
             "response_token_count": len(response_ids),
             "prompt_token_count": len(prompt_ids),
-            "prompt_hash": prompt_hash(load_prompt("system.txt"), tools),
+            "prompt_hash": prompt_hash(load_system_prompt(), tools),
         },
         metrics={
             "num_steps": step,

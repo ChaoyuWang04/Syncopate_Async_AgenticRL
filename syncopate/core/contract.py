@@ -72,6 +72,30 @@ REPORT_TOOL = "session.report"
 SESSION_TOOL_NAMES = frozenset(TERMINAL_SIGNALS) | {REPORT_TOOL}
 
 
+# ── ★ 人话字段家族：**永远不走机器通道**（v15 契约，`25 §3.1`）──────────────
+#
+# ⛔ 2026-08-30 考场炸出来的：`multiturn_l1` 那 150 行（15.8%）把纯人话 `reply`
+#   塞进了 `session.report`，下一步再把同一句原样抄成终答。模型学到的于是不是
+#   「答问题」，而是**「先往机器通道写一句，再复制」** —— 复制模式一断（报文稍微
+#   不像训练里的样子），它就落回背下来的那句 reject。实测：50 道概念题 41 道被拒。
+#
+# 这是「模型填的是我们给的那张表」的又一次兑现，也是 `summary` 污染的同族 ——
+# 所以判据写成**字段家族**而不是逐个特判：
+#   ① 不进 `session.report`（构造侧：`sft_replay._machine_fields`）
+#   ② 不出现在「本次结论需要给出的字段」清单里（教学面＋生产面同一条）
+#   ③ 判分时从**终答文本**里看（`verifier_engine`）—— 人话本来就是终答本身
+PROSE_FIELDS = frozenset({"reply", "summary"})
+
+
+def visible_answer_fields(fields):
+    """渲染给模型看的字段清单。v15 下过滤掉人话字段；v14 原样返回（逐字节不变）。"""
+    if not IS_V15:
+        return fields
+    return [f for f in fields
+            if (getattr(f, "key", None) or (f.get("key") if isinstance(f, dict) else f))
+            not in PROSE_FIELDS]
+
+
 # ── ★ 人话也算表达了行为（Chaoyu 2026-08-30 裁定）────────────────────────────
 #
 # 原话：「用人话拒绝我觉得是可以接受的，包括 defer 这些，掉了相应的 session 也可以，

@@ -262,7 +262,12 @@ def _score_answer_fields(
         #   ⚠️ 爆炸半径已实测：这类字段 60/4100 = 1.5%，全是 CHAT 的 `reply`，
         #     且它们在 v14 里**本来就只查存在** —— 改的是「去哪看」，不是「查多松」。
         #     空终答在 v15 是解析错误（empty_final_text），刷分下限与 v14 相同。
-        if (IS_V15 and stated is None and field_spec.value_source == "any"
+        #   ★ 08-30 扩到 `PROSE_FIELDS`：`reply` 没有 value_source（AnswerField 默认
+        #     None＝只查"说了"），过不了 "any" 那道筛子，于是被逼进 session.report。
+        #     取数口径必须和构造口径是**同一条规则**，否则一边不写、另一边照查 = 白丢分。
+        from syncopate.core.contract import PROSE_FIELDS
+        if (IS_V15 and stated is None
+                and (field_spec.value_source == "any" or field_spec.key in PROSE_FIELDS)
                 and (trajectory.final_text or "").strip()):
             stated = trajectory.final_text
         present = stated is not None and str(stated).strip() != ""

@@ -63,3 +63,24 @@ __all__ = [
     "PROMPT_VERSION", "load_prompt", "render_prompt",
     "stable_hash", "prompt_hash", "assert_prompt_consistency",
 ]
+
+
+def load_system_prompt() -> str:
+    """系统提示。**v15 换掉「最终结论格式」那一段**，v14 逐字节不变。
+
+    ⛔ 2026-08-30 考场炸出来的：v15 把契约从「自造 JSON 壳」换成了
+      「纯自然语言 + session.* 信令」，数据侧、解析侧、判分侧全改了，
+      **只有说明书没改** —— system.txt 还在教模型输出 `{"behavior": ..., "answer": {...}}`
+      和"不要输出隐藏推理过程"（而 v15 是 think-on）。教学面和契约互相矛盾，
+      模型只能靠监督信号硬掰。文档 25 从头到尾没有一处提到 system prompt ——
+      「机制在但没接上」的第 N 次，这次接的是**指令面**。
+
+    ⚠️ 训练侧（rollout_loop）与生产侧（decider）必须用同一个函数取 ——
+      两边各拼一次就是两份说明书。
+    """
+    from syncopate.core.contract import IS_V15
+
+    text = load_prompt("system.txt")
+    if not IS_V15:
+        return text
+    return text[:text.index("## 最终结论格式")] + load_prompt("final_answer_v15.txt")

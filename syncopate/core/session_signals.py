@@ -20,6 +20,18 @@ from syncopate.core.tool_registry import REGISTRY, ToolContext, ToolRegistry, To
 SESSION_TOOL_NAMES = frozenset(TERMINAL_SIGNALS) | {REPORT_TOOL}
 
 
+def ack_payload(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """信令 ack 的载荷。**沙盒 handler 与 runtime binding 共用这一份。**
+
+    ⚠️ 不许两边各写一个一行 ack —— 两份实现会各自漂移，而"两边都能跑但含义不同"
+      正是 B-5b 那一族最贵的缺陷（沙盒返回 reported_fields、线上返回别的，
+      模型学到的读法在生产上就是错的）。
+    """
+    if name == REPORT_TOOL:
+        return {"acknowledged": True, "reported_fields": sorted(args)}
+    return {"acknowledged": True, "signal": name, "arguments": dict(args)}
+
+
 def register_session_tools(registry: ToolRegistry | None = None) -> None:
     """把信令族注册进表。幂等——重复调用不报错（域模块可能被 import 多次）。"""
     reg = registry or REGISTRY
@@ -35,16 +47,14 @@ def register_session_tools(registry: ToolRegistry | None = None) -> None:
         #     「登记 ≠ 实现」的第 N 次：注册表是最像证据的东西。
         def _ack(args: dict[str, Any], ctx: ToolContext,
                  _name: str = fn["name"]) -> ToolResult:
-            return ToolResult(ok=True, data={"acknowledged": True, "signal": _name,
-                                             "arguments": dict(args)})
+            return ToolResult(ok=True, data=ack_payload(_name, args))
 
         reg.tool(name=fn["name"], description=fn["description"],
                  parameters=fn["parameters"], kind="read")(_ack)
 
     if reg.get(REPORT_TOOL) is None:
         def _report(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
-            return ToolResult(ok=True, data={"acknowledged": True,
-                                             "reported_fields": sorted(args)})
+            return ToolResult(ok=True, data=ack_payload(REPORT_TOOL, args))
 
         reg.tool(name=REPORT_TOOL,
                  description="给出本轮结论里机器需要核对的结构化字段（非终止，报完继续收尾）",

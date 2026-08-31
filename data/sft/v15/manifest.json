@@ -4,30 +4,30 @@
  "sources": {
   "v13_train": 419,
   "multiturn_l2": 280,
-  "multiturn_l1": 150,
+  "multiturn_l1": 240,
   "chat_shell": 80,
-  "cot_hard": 19
+  "cot_hard": 20
  },
- "total": 948,
+ "total": 1039,
  "val": 114,
  "sup_tok_share": {
-  "v13": 0.6185,
-  "l2": 0.1134,
-  "l1": 0.0634,
-  "chat": 0.0201,
-  "cot": 0.1847
+  "v13": 0.6475,
+  "l2": 0.1102,
+  "l1": 0.0416,
+  "chat": 0.0195,
+  "cot": 0.1813
  },
  "axis_counts": {
   "get_metrics": 190,
   "get_attribution": 90,
-  "query_hist": 77,
-  "concept_hist": 73,
+  "query_hist": 123,
+  "concept_hist": 117,
   "亲切口语": 28,
   "简洁专业": 25,
   "轻松幽默": 27,
-  "FAIL": 13,
-  "DIA": 4,
-  "BUD": 2
+  "FAIL": 15,
+  "BUD": 2,
+  "DIA": 3
  },
  "gates": "份额±带宽 · 密度 · OOV=0 · 泄漏=0 · 冻结419 全过"
 }

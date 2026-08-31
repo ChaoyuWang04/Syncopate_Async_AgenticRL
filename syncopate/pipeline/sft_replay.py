@@ -82,9 +82,59 @@ def _machine_fields(bundle: CaseBundle) -> dict:
     #   required_answer_fields 里就混进 session.report。08-30 实案：L1 桶 150 行的 report
     #   里带着 "summary"，门槛③（summary 出现 =0）当场红。
     #   ⇒ 契约级的废除要写在**取数的地方**，不能指望每个数据构造器记得不传。
+    # ⛔ 08-30 第二例（考场炸出来的，比 summary 贵得多）：`reply` 也被当成机器字段
+    #   （它没有 value_source ⇒ 过不了 "any" 那道筛子），于是 L1 那 150 行变成
+    #   「report 里写一句人话 → 下一步原样抄一遍」。⇒ 判据升级成 `PROSE_FIELDS` 家族。
+    from syncopate.core.contract import PROSE_FIELDS
     fa = dict(bundle.gold.final_answer or {})
     return {f.key: fa[f.key] for f in bundle.verifier.required_answer_fields
-            if f.key in fa and f.value_source != "any" and f.key != "summary"}
+            if f.key in fa and f.value_source != "any" and f.key not in PROSE_FIELDS}
+
+
+# ── 信令自由文本的句式池（`25 §7㉘`）────────────────────────────────────────
+#
+# ⛔ 此前三条信令的 explanation / question / reason 都是**常量模板**：全库只有
+#   3 句拒绝话、1 句追问话。08-30 考场实测的后果不是"话说得单调"，而是
+#   **模型把那句话背下来当成了退路** —— 一旦当前局面不像训练里的样子，
+#   它就吐那句 out_of_scope 了事（50 道概念题 41 道被拒）。
+#   ⇒ 常量模板会长成一个"万能出口"。句式池按 case_id 定选，可复现。
+_REJECT_LINES = {
+    "unauthorized": [
+        "这个动作需要更高的操作权限，我这边做不了。",
+        "我没有执行这一步的权限，得由有授权的同事来操作。",
+        "超出我能动的范围了，这类操作要走授权流程。",
+        "这属于授权外的动作，我不能替你执行。",
+    ],
+    "out_of_scope": [
+        "这个不在投放这块的范围里，我帮不上。",
+        "这超出了我能处理的事情，换个投放相关的问题我再看看。",
+        "这件事和广告投放没关系，我这边没法处理。",
+        "我只管投放这一摊，这个问题我答不了。",
+    ],
+    "policy": [
+        "这么做会踩到平台政策，不能执行。",
+        "平台政策不允许这样操作，我这边过不了。",
+        "这和现行的广告政策冲突，做不了。",
+        "按政策这条路是封死的，得换个做法。",
+    ],
+}
+_CLARIFY_LINES = [
+    "还差一个 {mf}，你给我之后我马上接着查。",
+    "得知道 {mf} 才能往下走，能补一下吗？",
+    "麻烦给个 {mf}，不然这一步定不下来。",
+    "缺 {mf} 这个信息，补上我就继续。",
+]
+_DEFER_LINES = [
+    "现在这个数还在动，等它稳下来再下结论。",
+    "观测窗口还不够，这时候判断容易判反。",
+    "数据还没收敛，再等等更靠谱。",
+    "现在下结论对错全看运气，先等数据稳。",
+]
+
+
+def _pick(pool: list[str], case_id: str) -> str:
+    """按 case_id 定选 —— 同一条 case 每次重建拿到同一句（重建要可复现）。"""
+    return pool[sum(map(ord, case_id)) % len(pool)]
 
 
 def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:
@@ -100,19 +150,19 @@ def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:
     head = [render_report(machine)] if machine else []
     if behavior == "defer":
         return head + [render_signal("session.defer", {
-            "reason": str(fa.get("defer_reason") or "数据还不足以支撑结论"),
+            "reason": str(fa.get("defer_reason")
+                          or _pick(_DEFER_LINES, bundle.case.case_id)),
             "recheck_after_days": int(fa.get("recheck_after_days") or 5)})]
     if behavior == "clarify":
         mf = fa.get("missing_field") or "campaign_id"
-        return head + [render_signal("session.clarify",
-                                     {"question": f"请补充 {mf} 后我再继续。",
-                                      "missing_fields": [mf]})]
+        return head + [render_signal(
+            "session.clarify",
+            {"question": _pick(_CLARIFY_LINES, bundle.case.case_id).format(mf=mf),
+             "missing_fields": [mf]})]
     if behavior == "reject":
         rr = {"unauthorized": "unauthorized", "policy": "policy"}.get(
             fa.get("reject_reason"), "out_of_scope")
-        expl = {"unauthorized": "该操作超出当前授权范围，无法执行。",
-                "out_of_scope": "这超出投放助手的职责范围，无法处理。",
-                "policy": "该请求与平台政策冲突，无法执行。"}[rr]
+        expl = _pick(_REJECT_LINES[rr], bundle.case.case_id)
         return head + [render_signal("session.reject",
                                      {"reason_code": rr, "explanation": expl})]
     # tool_call / answer：机器字段已在 head 的 report 里，这里只剩一句人话。

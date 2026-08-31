@@ -183,7 +183,12 @@ async def gen_chat(client, bank) -> list[dict]:
 
 
 L2_TAILS: Counter = Counter()
-TAIL_CAP = 10          # 200 行里同尾 ≤5%，给 10% 密度闸留一半余量
+# ⛔ 08-30 体检实测：19 条以「可能需要进一步优化投放策略。」收尾（配额本该是 10）。
+#   两个原因，都得治：① 配额是按 200 行标的，现在全库 900+ 行还在用同一个绝对数；
+#   ② **复用物料那条路根本没过这道闸** —— 缓存里的句子直接进库，配额只管新生成的。
+#   ⇒ 配额收到 4（全库 922 行 ⇒ ≤0.4%，体检闸 2%），且复用也要过闸。
+# ⚠️ 这个计数器现在是**全库共用**（L2 + 压舱人话），不再只属于 L2。
+TAIL_CAP = 4
 
 
 def _tail_ok(rep: str) -> bool:
@@ -444,6 +449,14 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     async def _row(cid):
         nonlocal tried, hit, trimmed
         b = bundles[cid]
+        # ★ CoT 桶取的也是 v13 case ⇒ 同样没有 reply。体检实测：这 20 行**100%**
+        #   以同一句兜底话收尾（㉖ 那次只修了压舱桶，漏了这里）。用同一份教师人话。
+        if IS_V15:
+            _rep = await ballast_replies(client, bundles, [cid])
+            if cid in _rep:
+                b = copy.deepcopy(b)
+                b.gold.final_answer = dict(b.gold.final_answer or {})
+                b.gold.final_answer["reply"] = _rep[cid]
         base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                    index=0, split="train", config=None)
         full = tokenizer.decode(list(base["input_ids"])[:base["total_length"]])
@@ -615,8 +628,12 @@ async def build_l2_l1(tokenizer, registry, client):
             rep = MATERIALS["l2_replies"].get(f"{b.case_id}_MT5")
             if rep is None:                       # 物料没有 ⇒ 现调教师（4B）
                 rep = await gen_l2_reply(client, cid2, mname, val)
+            elif not _tail_ok(rep):
+                # 复用的句子撞了尾部配额 ⇒ 重新生成（缓存不是豁免）
+                rep = await gen_l2_reply(client, cid2, mname, val)
             else:
                 reused += 1
+                _tail_note(rep)        # ★ 复用的也占配额（gen_l2_reply 内部已自记）
             if rep.endswith("随时说。"):
                 fallback += 1
             b2.gold.final_answer = {"summary": f"{cid2} {mkey}={val}", "reply": rep}
@@ -652,7 +669,11 @@ async def build_l2_l1(tokenizer, registry, client):
     terms = list(GLOSSARY)
     li = 0
     all_forms = SUB_TRAIN + ["那{X}呢", "{X}又是什么", "什么是{X}？", "再说说{X}"]
-    while len(l1_rows) < 160 and li < 900:
+    # ★ 08-30：L1 行去掉了那一步"把人话写进 session.report"（㉗）之后，每行的监督
+    #   token 少了一整轮 ⇒ 份额从 4.6% 掉到 2.8%，撞穿 [3%,9%] 的下沿。
+    #   ⛔ 处理方式是**补行数**，不是放宽带宽：带宽表达的是"L1 该占多少教学份量"，
+    #     那个意图没变；变的是"一行值多少 token"。按旧口径标定的**行数**才是失效的那个数。
+    while len(l1_rows) < 250 and li < 1500:
         li += 1
         b_src = rng.choice(z_bundles) if li % 2 == 0 else rng.choice(q_bundles)
         kind = "concept_hist" if li % 2 == 0 else "query_hist"
@@ -790,7 +811,130 @@ def density_gate(rows, tokenizer, name):
             f"🔴 {name} 的 session.report 参数模板化超标（{rtop[0][:80]}）")
 
 
-async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int):
+# ── 压舱桶的终答人话：**教师生成**，不是模板拼接（`25 §7㉙`）──────────────────
+#
+# ⛔ 三次同一种病，第三次才看清（08-30）：
+#   ㉖ v13 压舱 419 行的 gold **没有 reply**（v14 时代终答是 JSON 壳，机器字段就是答案），
+#      于是 v15 拼壳时用了一句常量兜底 ⇒ 41.8% 的行以同一句空话收尾。
+#   ㉖的修法（把字段渲染成中文句）只是把常量换成**模板** ⇒ 体检器实测：
+#      rag_policy 桶 30.3% 同句式、reasoning 21.7%、32 个答案各自服务 ≥3 个不同题面。
+#   ⇒ 一般化：**旧契约里不存在的字段，必须有真实来源；"拼一个"和"常量"是同一类错误。**
+#     真实来源 = 教师按题面 + 事实清单说一句人话（L2/chat 桶一直是这么做的）。
+#
+# 三道过滤缺一不可：① 长度/病句 ② 句式去重（抹掉数字后不许撞） ③ **禁编数**
+#   —— ③ 是最容易漏的：教师顺手编一个没出现过的数字，就等于在教模型幻觉。
+_BALLAST_CACHE = Path("data/u_route/v15_ballast_replies.json")
+ANGLES_BALLAST = [
+    "先说结论再补一句依据", "从用户关心的那个点切入", "口语一点，像同事口头汇报",
+    "先点出关键数字再说结论", "简短直接，一句话说完", "带一句下一步建议",
+    "把前提交代清楚再给结论", "语气平实，不要套话",
+]
+_NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+
+# ⚠️ 枚举值要**先翻译成行话再喂教师** —— 让它自己猜 snake_case 就会猜错，
+#   而猜错的是**业务事实**：实测 `only_4_creatives` 被译成"只有 4 个创作者"
+#   （其实是 4 条素材）。错的人话会当成 gold 训进去，比说得干巴巴贵得多。
+_TERM_CN = {
+    "real_person": "真人出镜", "before_after": "前后对比开场", "dark_palette": "暗色调",
+    "fast_cut": "快切节奏", "ugc_style": "UGC 风格",
+    "cpi_spike": "CPI 冲高", "roas_drop": "ROAS 下滑", "creative_fatigue": "素材疲劳",
+    "no_expansion": "不扩量", "escalated": "上报审批", "approved": "已通过",
+    "pending": "审核中", "rejected": "已驳回",
+    "policy_not_found": "没有查到对应政策条款",
+}
+_ONLY_N = re.compile(r"only_(\d+)_creatives")
+
+
+# 教师最容易顺手编的东西：一个**事实里没有的指标名**。
+# （实测："提升 0.2667" 被写成"转化率提升了 0.2667" —— 那个 lift 是对 d7 ROAS 的。）
+_METRIC_WORDS = ["转化率", "点击率", "留存", "安装量", "曝光", "客单价", "利润",
+                 "CTR", "IPM", "CPI", "ROAS", "ARPU", "LTV"]
+# 叠字病句：中文有合法叠词（看看/试试），所以只查**虚词**叠字。
+_DUP = re.compile(r"([的了是和与在就都也很更值])\1")
+
+
+def _facts_line(fa: dict) -> str:
+    """给教师看的事实清单（**不是**给模型看的答案）。"""
+    from syncopate.pipeline.sft_replay import _CONCLUSION_CN, _FIELD_CN
+
+    out = []
+    for k, v in (fa or {}).items():
+        if k in ("summary", "reply") or v in (None, ""):
+            continue
+        name = _FIELD_CN.get(k, k)
+        if k == "conclusion":
+            out.append(f"{name}={_CONCLUSION_CN.get(str(v), str(v))}")
+        elif isinstance(v, str) and _ONLY_N.fullmatch(v):
+            out.append(f"{name}=只有 {_ONLY_N.fullmatch(v).group(1)} 条素材，样本不足")
+        elif isinstance(v, str) and v in _TERM_CN:
+            out.append(f"{name}={_TERM_CN[v]}")
+        elif isinstance(v, (list, tuple)):
+            out.append(f"{name}={'、'.join(map(str, v))}" if v else "")
+        else:
+            out.append(f"{name}={v}")
+    return "；".join(x for x in out if x)
+
+
+def _no_invented_numbers(text: str, allowed: str) -> bool:
+    """文本里出现的每个数字都必须在事实清单或题面里有 —— 否则就是教师在编。"""
+    return all(n in allowed for n in _NUM_RE.findall(text))
+
+
+def _no_invented_metrics(text: str, allowed: str) -> bool:
+    """不许出现事实/题面里没有的指标名 —— 编一个指标名 = 把结论安到别的指标上。"""
+    return all(w in allowed for w in _METRIC_WORDS if w in text)
+
+
+async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str]:
+    """case_id → 一句自然中文终答。带缓存，断了不从零开始。"""
+    cache = json.loads(_BALLAST_CACHE.read_text()) if _BALLAST_CACHE.exists() else {}
+    used = {re.sub(r"\d+(\.\d+)?", "§", v) for v in cache.values()}
+    # ⚠️ 只有"要给结论"的行才用得上人话；defer/clarify/reject 的终答是信令，
+    #   给它们生成 = 白烧教师额度，还会往缓存里塞永远用不到的条目。
+    case_ids = [c for c in case_ids
+                if bundles.get(c) is not None
+                and bundles[c].verifier.expected_behavior in ("tool_call", "answer")]
+    todo = [c for c in case_ids if c not in cache]
+    if todo:
+        print(f"[压舱人话] 教师生成 {len(todo)} 条（缓存已有 {len(cache)}）", flush=True)
+    for i, cid in enumerate(todo):
+        b = bundles[cid]
+        fa = dict(b.gold.final_answer or {})
+        facts = _facts_line(fa)
+        ask = str(b.case.user_message or "")[:300]
+        allowed = facts + " " + ask
+        got = ""
+        for k in range(5):
+            cand = clean_reply(await teach(
+                client, T4B,
+                f"用户问：{ask}\n\n你已经查完了，事实是：{facts or '（无额外数据）'}\n\n"
+                f"用一到两句自然中文把结论说给用户听，{ANGLES_BALLAST[(i + k) % len(ANGLES_BALLAST)]}。"
+                f"⚠️ 只能用上面给的数字，不许出现别的数字；不要列清单、不要 JSON、不要写『结论如下』。",
+                temp=0.95, max_tokens=110))
+            key = re.sub(r"\d+(\.\d+)?", "§", cand)
+            if (12 <= len(cand) <= 160 and not SICK.search(cand)
+                    and not _DUP.search(cand) and _tail_ok(cand)
+                    and "{" not in cand and key not in used
+                    and _no_invented_numbers(cand, allowed)
+                    and _no_invented_metrics(cand, allowed)):
+                got = cand
+                break
+        if not got:                       # 兜底：宁可留模板，也要**记账**（见下方闸）
+            from syncopate.pipeline.sft_replay import _prose_from_fields
+            got = _prose_from_fields(fa)
+        cache[cid] = got
+        _tail_note(got)
+        used.add(re.sub(r"\d+(\.\d+)?", "§", got))
+        if (i + 1) % 25 == 0:
+            _BALLAST_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1))
+            print(f"  [压舱人话] {i + 1}/{len(todo)}", flush=True)
+    if todo:
+        _BALLAST_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1))
+    return cache
+
+
+async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int,
+                         client=None):
     """把冻结桶的 case **按当前契约重放**成行（v15 用）。
 
     ★ 冻结的是**语义**不是字节：换壳之后逐字节冻结在物理上不可能，
@@ -801,11 +945,28 @@ async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int
     from syncopate.pipeline.split import load_bundles
     df = pd.read_parquet(parquet_path)
     bundles = load_bundles(Path("data/batches/v13"))
+    # ★ v15：这批 case 的 gold **没有 reply**（v14 终答是 JSON 壳）⇒ 终答人话要有真实来源。
+    #   不给 client 就会落回模板兜底 —— 那正是 ㉖/㉙ 的病根，所以这里**要求**给。
+    replies = {}
+    if IS_V15:
+        # ⚠️ 调用点可能在 `async with httpx.AsyncClient(...)` 块**之外**（实测崩过一次：
+        #   "Cannot send a request, as the client has been closed"）⇒ 客户端关了就自己开一个。
+        #   ⛔ 但**绝不许**因为拿不到客户端就落回模板兜底 —— 那正是 ㉖/㉙ 的病根。
+        ids = list(map(str, df.case_id))
+        if client is None or client.is_closed:
+            async with httpx.AsyncClient(timeout=180) as _c:
+                replies = await ballast_replies(_c, bundles, ids)
+        else:
+            replies = await ballast_replies(client, bundles, ids)
     rows = []
     for i, cid in enumerate(df.case_id):
         b = bundles.get(cid)
         if b is None or not b.gold:
             raise AssertionError(f"🔴 冻结桶的 case 找不到 bundle：{cid}")
+        if str(cid) in replies:
+            b = copy.deepcopy(b)
+            b.gold.final_answer = dict(b.gold.final_answer or {})
+            b.gold.final_answer["reply"] = replies[str(cid)]
         row = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                   index=base_index + i,
                                   split=str(df.iloc[i]["split"]), config=None)
@@ -870,7 +1031,12 @@ async def main() -> int:
     # held-out val 切分（每桶尾部拿走）
     _l2_train = 280 if IS_V15 else 200
     l2, l2v = l2[:_l2_train], l2[_l2_train:_l2_train + 10]
-    l1, l1v = l1[:150], l1[150:160]
+    # ★ 08-30：L1 训练条数跟着"一行值多少 token"走 —— 去掉 report 步之后每行变短，
+    #   150 行只够 2.7%（带宽下沿 3%）。⛔ 这里是**第二处**按旧口径写死的行数：
+    #   上面把生成上限从 160 提到 250，如果这里不跟着改，多造的 100 行会被直接切掉
+    #   （而且不报错 —— 份额闸只会说"还是 2.7%"，不会说"你多造的被扔了"）。
+    _l1_train = 240 if IS_V15 else 150
+    l1, l1v = l1[:_l1_train], l1[_l1_train:_l1_train + 10]
     chat_rows = build_chat_rows(tokenizer, chat_mat)
     chat_rows, chatv = chat_rows[:80], chat_rows[80:90]
 
@@ -878,8 +1044,10 @@ async def main() -> int:
         # ★ 压舱石 419 行**不能直接沿用 v13 的 parquet**（那是 v14 壳的 token）。
         #   语义冻结的做法是**同一批 case 用 v15 契约重放一遍**——
         #   等价性已由 scripts/v15_r2_migrate.py 全量证过（419/419 四项全等）。
-        t13 = await _replay_frozen(tokenizer, registry, "data/sft/v13/train.parquet", 0)
-        v13v = await _replay_frozen(tokenizer, registry, "data/sft/v13/val.parquet", 80000)
+        t13 = await _replay_frozen(tokenizer, registry, "data/sft/v13/train.parquet", 0,
+                                   client=client)
+        v13v = await _replay_frozen(tokenizer, registry, "data/sft/v13/val.parquet",
+                                    80000, client=client)
     else:
         t13 = pd.read_parquet("data/sft/v13/train.parquet")
         v13v = pd.read_parquet("data/sft/v13/val.parquet")
@@ -971,6 +1139,40 @@ async def main() -> int:
              "chat": (0.01, 0.07), "cot": (0.05, 0.20)}
     for k, (lo, hi) in bands.items():
         assert lo <= share[k] <= hi, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
+    if IS_V15:
+        # ── 闸：人话不许出现在机器通道 + 信令自由文本不许是同一句（`25 §7㉗㉘`）──
+        #
+        # ⛔ 这两条都是**考场炸出来之后**才补的（08-30）。此前的密度闸只量终答尾巴，
+        #   `session.report` 的参数和信令的 explanation 是**闸的盲区** ——
+        #   于是 150 行人话进了机器通道、全库只有 3 句拒绝话，两样都没人看见。
+        #   ⇒ 判据要跟着"模型实际会读到的每一段文本"走，不是只跟着终答走。
+        import re as _re
+
+        from syncopate.core.contract import PROSE_FIELDS
+        _rp = _re.compile(r'<tool_call>\s*(\{"name": "session\.(?:report|defer|clarify|reject)".*?\})\s*</tool_call>', _re.S)
+        prose_in_report, sig_lines = 0, Counter()
+        for r in new_rows + valrows:
+            txt = tokenizer.decode(list(r["input_ids"])[:r["total_length"]])
+            for m in _rp.findall(txt):
+                try:
+                    call = json.loads(m)
+                except Exception:
+                    continue
+                args = call.get("arguments") or {}
+                if call["name"] == "session.report":
+                    prose_in_report += len(set(args) & set(PROSE_FIELDS))
+                else:
+                    for k in ("explanation", "question", "reason"):
+                        if args.get(k):
+                            sig_lines[str(args[k])] += 1
+        top = sig_lines.most_common(1)
+        top_share = (top[0][1] / sum(sig_lines.values())) if sig_lines else 0.0
+        print(f"[人话通道] report 里的人话字段 {prose_in_report}（必须 0）· "
+              f"信令自由文本 {len(sig_lines)} 种/{sum(sig_lines.values())} 次 · "
+              f"最高频 {top_share:.0%}"
+              + (f" ('{top[0][0][:24]}')" if top else ""))
+        assert prose_in_report == 0, f"🔴 人话进了机器通道 {prose_in_report} 处"
+        assert top_share <= 0.35, f"🔴 信令话术复读 {top_share:.0%}（≤35%）—— 会长成万能出口"
     density_gate(l2, tokenizer, "L2")
     density_gate(l1, tokenizer, "L1")
     density_gate(chat_rows, tokenizer, "chat")
@@ -1023,6 +1225,18 @@ async def main() -> int:
                 "gates": "份额±带宽 · 密度 · OOV=0 · 泄漏=0 · 冻结419 全过"}
     json.dump(manifest, open(out / "manifest.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(manifest, ensure_ascii=False, indent=1))
+    # ── 出厂体检（`25 §7㉙`，Chaoyu 08-30：「不能走完完整训练之后再返工来做检查」）──
+    #   ⚠️ 必须在**落盘之后**跑真产物，不是跑内存里的中间态 ——
+    #     ㉖ 那次就是闸写在生产者里，缓存命中时整条闸被绕过去了。
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location(
+        "v15_data_audit", Path(__file__).resolve().parent / "v15_data_audit.py")
+    _mod = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_mod)
+    _audit = _mod.audit
+    rep = _audit(out / "train.parquet")
+    if not rep["ok"]:
+        print("🔴 出厂体检未通过 ⇒ 不许进训练（见上面的 🔴 行）")
+        return 1
     print(f"✅ {'v15' if IS_V15 else 'v14.5'} 构建完成，全部门禁通过")
     return 0
 

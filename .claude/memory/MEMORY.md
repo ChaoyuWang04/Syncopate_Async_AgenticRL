@@ -29,3 +29,5 @@
 - [截断家族一天三例](budget-truncation-family.md) — ★v13 SFT 26% 样本没终答（轮数上限默认 8，已修已重建）；预算必须从契约派生、截断必须报错或计数；RL prompt 余量只剩 466
 - [正确系统第一条 RL 曲线](first-clean-rl-curve.md) — 峰值 200 步过训回落;★cap 单调恶化+总分涨=reward 盲区显影法;并列点按 cap 干净度选
 - [模型填的是我们给的那张表](contract-shapes-behavior.md) — answer_fields 一格 ⇒ 机器标签；改契约 5 分钟拿回一半人话；★但**只要人话会把办事能力换走**（实测）
+- [开训前逐通道体检](audit-every-channel-before-training.md) — ★数据的病不崩任何东西，只是让模型学到更省事的策略；同一个坑三次
+- [训练样例必须和线上同形](train-data-must-match-production-shape.md) — ★★守则⑮；08-31 通查出 7 处不同形，全是造数据时的临时办法

@@ -182,7 +182,7 @@ def main() -> int:
     print(f"  [行为读数] 话术复读率={ro['canned_rate']:.0%}（尾={ro['canned_tail']!r}，门槛≤15%）"
           f" 病句率={ro['sick_rate']:.1%}（≤2%） L2工具浪费={ro['l2_tool_waste_rate']:.0%}（≤20%）"
           f" 答长p50/p95={ro['reply_len_p50']}/{ro['reply_len_p95']}")
-    for fid, why in fails[:25]:
+    for fid, why in fails:          # ⚠️ 不截断：截断会让"看起来只有这些问题"（08-30 实测漏看 L4/REJ 全部）
         print(f"   ✗ {fid}: {why}")
     out = args.context.replace("run_", "judged_")
     json.dump({"file": args.context,

@@ -25,7 +25,7 @@ from typing import Any
 
 import httpx
 
-from syncopate.core.contract import IS_V15, TERMINAL_SIGNALS
+from syncopate.core.contract import IS_V15, TERMINAL_SIGNALS, visible_answer_fields
 from syncopate.core.parsing import parse_step, render_tool_call
 from syncopate.core.parsing_v15 import parse_step_v15
 
@@ -37,7 +37,7 @@ import os as _os
 RUNTIME_THINKING = _os.environ.get("SYNCOPATE_RUNTIME_THINKING") == "1"
 import re as _re
 _THINK_RE = _re.compile(r"<think>(.*?)</think>", _re.S)
-from syncopate.prompts import load_prompt, render_prompt
+from syncopate.prompts import load_prompt, load_system_prompt, render_prompt
 from syncopate.runtime.agent_loop import Proposal
 from syncopate.train.rollout_budget import (
     MAX_RESPONSE_LENGTH, SAMPLING_TEMPERATURE, SAMPLING_TOP_K, SAMPLING_TOP_P)
@@ -155,6 +155,9 @@ class VllmDecider:
         ★ 只带**问题 + 结论**，不带那几轮的工具步骤明细：
           省 token，且模型要的是"上次说了什么"，不是"上次怎么查的"。
         ⚠️ 这是训练分布外的形状（模型只训过单轮 user）——探针要量的正是它。
+        ★ v15 训练里的多轮是**写在题面里的文本**（"[上一轮] 用户：… [上一轮] 助手：…"），
+          这里是**真消息对**。结构上仍有差，但至少内容对得上（人话对人话）；
+          结构要不要对齐是设计决定，留给 Chaoyu 裁（见 §7㉝）。
         """
         out: list[dict[str, Any]] = []
         for t in turns:
@@ -165,28 +168,61 @@ class VllmDecider:
                     result = json.loads(result)
                 except ValueError:
                     result = {"summary": result}
-            answer = (result or {}).get("answer", result or {})
-            text = json.dumps(answer, ensure_ascii=False)
+            # ⛔ 08-30：v15 的终答**是一段人话**，而这里一直把上一轮的结果
+            #   `json.dumps` 成 JSON 塞回历史 —— 模型于是在多轮题里看到一个
+            #   `{"text": "...", "behavior": null}` 的壳，那既不是它训过的形状，
+            #   也正是 v15 明令不再输出的东西。context_v3 整份考卷都是多轮题，
+            #   L1/L2/L3/L4 全部中招。⇒ v15 下上一轮就还原成那句人话。
+            #   （v14 走原路径，逐字节不变。）
+            if IS_V15 and isinstance(result, dict):
+                text = str(result.get("text") or "").strip()
+                if not text:                      # 信令收场（defer/clarify/reject）没有终答文本
+                    a = result.get("arguments") or {}
+                    text = str(a.get("question") or a.get("explanation")
+                               or a.get("reason") or "（上一轮以信令收场）")
+            else:
+                answer = (result or {}).get("answer", result or {})
+                text = json.dumps(answer, ensure_ascii=False)
             ids = self.tokenizer.encode(text, add_special_tokens=False)
             if len(ids) > PRIOR_ANSWER_BUDGET:
                 text = self.tokenizer.decode(ids[:PRIOR_ANSWER_BUDGET]) + "…（已截断）"
             out.append({"role": "assistant", "content": text})
         return out
 
+    def _prior_as_inline_text(self, prior: list[dict]) -> str:
+        """把历史折成**训练里那种**「[上一轮] …」文本（实验开关，默认关）。
+
+        ★ 这是一次**受控实验**，不是产品决定：v15 的多轮在训练里是写在题面内的文本，
+          在生产里是真消息对。两种形状哪个是主因，要量出来再定往哪边对齐（`25 §7㉝`）。
+          开关 SYNCOPATE_PRIOR_INLINE=1；⛔ 默认必须是关的 —— 真实产品就是多轮消息。
+        """
+        lines = []
+        for t in prior:
+            lines.append(f"[上一轮] 用户：{t.get('user_message') or ''}")
+            msgs = self._prior_turn_messages([t])
+            lines.append(f"[上一轮] 助手：{msgs[-1]['content']}")
+        return "\n".join(lines)
+
     def _messages(self, user_message: str,
                   history: list[dict[str, Any]],
                   prior: list[dict] | None = None) -> list[dict[str, Any]]:
-        system_text = load_prompt("system.txt")
+        import os as _os
+
+        inline = _os.environ.get("SYNCOPATE_PRIOR_INLINE") == "1"
+        if inline and prior:
+            user_message = self._prior_as_inline_text(prior) + "\n\n" + user_message
+        system_text = load_system_prompt()
         user_text = render_prompt("step_user.txt", {
             "reference_now": _dt.date.today().isoformat(),
             "context": self.context,
             "user_message": user_message,
-            "answer_fields": self.answer_fields,
+            # ★ 人话字段不进清单：清单是"要填的表"，人话不是表格里的一格
+            "answer_fields": visible_answer_fields(self.answer_fields),
         })
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_text}]
         # ★ 历史插在 system 之后、本轮任务之前 —— 本轮永远是最后一条 user，
         #   模型的"当前要办的事"不会被历史挤到中间去。
-        if prior:
+        if prior and not inline:
             messages += self._prior_turn_messages(prior)
         messages.append({"role": "user", "content": user_text})
         last_tool = "system"
@@ -337,6 +373,24 @@ def build_decider_from_env() -> VllmDecider | None:
             "它必须是**正在被 serve 的那个模型**的路径。\n"
             "   留默认值 = 用另一个模型的分词器渲染 prompt，且不会报错。")
     model = os.environ.get("SYNCOPATE_DECIDER_MODEL", "candidate")
+    # ⛔ 2026-08-30：模型名对不上端点时，vLLM 对**每一条请求**回 404，而 worker 只把它
+    #   记成一条 run.failed —— 考场里 109/277 条这么死的，读数看着"跑完了"。
+    #   成因是上一轮的 worker 没停干净，它认的还是**上一个已经不在服务的模型名**，
+    #   和新 worker 抢同一个队列。⇒ 启动时就核一次：名字不在端点的清单里，**直接不许起**。
+    #   ⚠️ 端点没起来（连不上）是另一回事，只警告 —— 那是竞速，不是配错。
+    try:
+        import httpx as _hx
+
+        served = [m["id"] for m in
+                  _hx.get(f"{base_url.rstrip('/')}/v1/models", timeout=5).json()["data"]]
+    except Exception as exc:                      # 连不上 / 还没起来
+        print(f"[decider] ⚠️ 端点暂时问不到模型清单（{type(exc).__name__}），跳过核对", flush=True)
+    else:
+        if model not in served:
+            raise SystemExit(
+                f"🔴 SYNCOPATE_DECIDER_MODEL={model!r} 不在端点 {base_url} 服务的模型里：{served}\n"
+                "   继续跑的话每条请求都会拿 404，而 worker 只会把它记成一条 run.failed。\n"
+                "   最常见的原因：**上一轮的 worker 没停干净**，它和新 worker 在抢同一个队列。")
     print(f"[decider] base_url={base_url} model={model} tokenizer={tok}", flush=True)
     return VllmDecider(base_url=base_url, model=model, tokenizer_path=tok,
                        context=_demo_context())

@@ -1,15 +1,18 @@
 {
   "audit": {
-    "rows": 948,
+    "rows": 949,
     "shell_residue_rows": 0,
     "summary_rows": 0,
-    "rows_with_think": 948,
-    "think_blocks": 4039,
-    "think_nonempty": 84,
-    "signal_calls": 91,
-    "signal_schema_ok": 91,
-    "hard_nonempty": 84,
-    "hard_blocks": 140,
+    "rows_with_think": 949,
+    "think_blocks": 4049,
+    "think_nonempty": 90,
+    "signal_calls": 94,
+    "signal_schema_ok": 94,
+    "top_tail": "_candidates。",
+    "top_tail_n": 23,
+    "tail_total": 855,
+    "hard_nonempty": 90,
+    "hard_blocks": 150,
     "easy_nonempty": 0,
     "easy_blocks": 3899
   },
@@ -23,15 +26,15 @@
       "pass": true
     },
     {
-      "label": "④ 信令 schema 合法率      : 91/91 = 100.0%   门槛 =100%",
+      "label": "④ 信令 schema 合法率      : 94/94 = 100.0%   门槛 =100%",
       "pass": true
     },
     {
-      "label": "⑤⒜ 监督段含 think 的行    : 948/948 = 100.0%   门槛 =100%",
+      "label": "⑤⒜ 监督段含 think 的行    : 949/949 = 100.0%   门槛 =100%",
       "pass": true
     },
     {
-      "label": "⑤⒝-难 难例桶非空 think    : 84/140 = 60.0%   门槛 ≥60%",
+      "label": "⑤⒝-难 难例桶非空 think    : 90/150 = 60.0%   门槛 ≥60%",
       "pass": true
     },
     {
@@ -39,7 +42,11 @@
       "pass": true
     },
     {
-      "label": "   （报告项）全库非空占比   : 84/4039 = 2.1%   由上两条推出，不作门槛",
+      "label": "⑦ 终答话术集中度          : 23/855 = 2.7% ('_candidates。')   门槛 ≤10%",
+      "pass": true
+    },
+    {
+      "label": "   （报告项）全库非空占比   : 90/4049 = 2.2%   由上两条推出，不作门槛",
       "pass": true
     }
   ],

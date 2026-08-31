@@ -32,3 +32,6 @@ tmp/
 
 # nsys profile：单个 300MB+，超 GitHub 100MB 硬限，push 会被 pre-receive 拒
 logs/nsys/
+
+# 重建时让开的旧缓存备份（75M，只为万一要回滚；不进版本管理）
+_audit/v15_r2_prefix/

@@ -9,6 +9,14 @@ source .venv/bin/activate
 MERGED="${1:?合并模型路径}"; ARM="${2:-v15sft}"
 say(){ echo "[V15-EXAM $(date +%H:%M:%S)] $*"; }
 
+# ⛔ 08-30：上一轮的 worker 没停干净 ⇒ 它认旧模型名，和新 worker 抢同一个队列，
+#   109/277 条 run 拿 404 死掉，而链路看着"跑完了"。⇒ 起链之前先拒绝重叠。
+if pgrep -f "syncopate.runtime.worker" >/dev/null; then
+  echo "🔴 已有 worker 在跑（下面这些），先停掉再起考场 —— 两个 worker 抢同一个队列："
+  ps -eo pid,etime,cmd | grep "[s]yncopate.runtime.worker"
+  exit 1
+fi
+
 say "① 起端点（GPU0，:8100）"
 CUDA_VISIBLE_DEVICES=0 nohup vllm serve "$MERGED" \
   --max-model-len 14336 --host 127.0.0.1 --port 8100 --gpu-memory-utilization 0.85 \

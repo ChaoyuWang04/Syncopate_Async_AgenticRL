@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from syncopate.core.contract import IS_V15, REPORT_TOOL
+from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
 from syncopate.runtime.db import (Database, approved_action, claim_run, finish_run,
                                   prior_turns)
@@ -127,6 +129,15 @@ async def audit(db: Database, *, org_id: str, run_id: str, action: str,
             """, run_id, org_id, action, object_key, param_source, detail or {})
 
 
+async def _session_report_invoke(**arguments: Any) -> dict[str, Any]:
+    """`session.report` 的 runtime 实现：零副作用 ack，轨迹继续（`25 §3.3`）。
+
+    载荷来自 `session_signals.ack_payload` —— 与沙盒 handler **同一份**，
+    这样模型在训练里学会读的那个观测形状，线上逐字节一样。
+    """
+    return ack_payload(REPORT_TOOL, dict(arguments))
+
+
 @dataclass
 class WorkerConfig:
     worker_id: str = "worker-1"
@@ -186,7 +197,7 @@ class Worker:
         from functools import partial
 
         from syncopate.runtime import tool_impls as impl
-        return {
+        bindings: dict[str, ToolBinding] = {
             "campaign.get_metrics": ToolBinding(self.platform.get_metrics),
             "campaign.update_budget": ToolBinding(self.platform.update_budget),
             "campaign.list": ToolBinding(partial(impl.campaign_list, self.platform)),
@@ -247,6 +258,17 @@ class Worker:
             "risk.check_account": ToolBinding(
                 partial(impl.risk_check_account, self.db, org_id)),
         }
+        if IS_V15:
+            # ★ v15 信令族里**只有 session.report 会走到收口** —— 三条终止性信令
+            #   在 decider 就被解析成 final（agent_loop 特判各自的终止语义，R4①）。
+            # ⛔ 2026-08-30 考场实测：report 在菜单里可见、模型也照训练调了，
+            #   但收口这边没有 binding ⇒ 判 `unknown_tool`，模型连试 6 次后改调
+            #   session.reject，50 道 L1 里 43 道被取消。**又是"机制在但没接上"**：
+            #   训练侧我修过同形的 allowlist，运行时这条通道是**另一份名单**。
+            # ⛔ 只绑 report：终止性信令若真的走到这里，`unknown_tool` 是**响的**失败，
+            #   而 ack 成功会让"要拒绝"被静默吞掉 —— 后者贵得多。
+            bindings[REPORT_TOOL] = ToolBinding(_session_report_invoke)
+        return bindings
 
     def _gate(self, *, org_id: str, run_id: str) -> ActionGate:
         bindings = self._bindings(org_id, run_id)

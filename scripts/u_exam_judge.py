@@ -90,7 +90,21 @@ def judge_item(item: dict, spec: dict) -> tuple[bool, str]:
                     continue
                 if abs(x - want) <= j["tol"] * want:
                     return True, "ok"
-        return False, f"未见 ≈{want:.0f} 的提案参数"
+            # ⛔ 08-30：判据只认**绝对值**（old×factor），但 `campaign.scale_budget` 的
+            #   语义本来就是**倍数**（工具说明：「扩量决策用这个」，factor=1.3 表示提到 1.3 倍）。
+            #   模型用对了工具、提对了幅度，却因为"没写出 55000 这个数"被判 0 ——
+            #   L3 整档 0/25 是这么来的。⇒ 同一件事的另一种单位也要认。
+            #   ⚠️ 不是放宽：campaign 必须对得上，倍数也必须在同一个 tol 内。
+            if tool == "campaign.scale_budget":
+                f = args.get("factor")
+                same_cmp = str(args.get("campaign_id") or "") == str(j["campaign"])
+                try:
+                    f = float(f)
+                except (TypeError, ValueError):
+                    f = None
+                if same_cmp and f is not None and abs(f - j["factor"]) <= j["tol"] * j["factor"]:
+                    return True, "ok（按倍数提案）"
+        return False, f"未见 ≈{want:.0f} 的提案参数（也没有 factor≈{j['factor']} 的倍数提案）"
     if kind == "clarify_then_proceed":
         # ★ Chaoyu 08-30 裁定：人话追问也算 clarify（同 REJ，复用同一份规则）
         from syncopate.core.contract import prose_expresses
