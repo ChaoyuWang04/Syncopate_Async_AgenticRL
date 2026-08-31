@@ -35,3 +35,19 @@ logs/nsys/
 
 # 重建时让开的旧缓存备份（75M，只为万一要回滚；不进版本管理）
 _audit/v15_r2_prefix/
+
+# ── 中间产物，不进版本管理（2026-08-31 定性）──────────────────────────────
+# Hydra 每跑一次就写一份 930 行的完整 config —— 是运行痕迹不是证据
+outputs/
+# 性能剖析产物（infra 线，单个 9M）与进程痕迹
+logs/torchprof/
+logs/b4/
+logs/chatstack/
+*.pid
+# 建库的增量断点缓存（内容与 v15_cot_rows.json 重复，只为"重启不从零"）
+data/u_route/*_partial.jsonl
+# 已结案实验臂的旧数据 / 冒烟试跑的一次性输出
+data/v15_r0/*.OLD_INJECTION/
+_audit/*_smoke.json
+# 判卷器输出（由 run_*.jsonl 一条命令重出，不是证据本体）
+logs/u_route/judged_*.jsonl
