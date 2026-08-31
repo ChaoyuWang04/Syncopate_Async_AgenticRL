@@ -520,8 +520,12 @@ U0 起训自查（0.5h·0 GPU）= `06 §1` 清单逐条勾
 U1 四卡 SFT 五点谱（~40min·四卡）
    命令 SYNCOPATE_CONTRACT=v15 python -m syncopate.train.sft --model models/Qwen3-4B \
         --train-file data/sft/v15/train.parquet --val-file data/sft/v15/val.parquet \
-        --out checkpoints/sft/v15_r1 --epochs 3
-   产物 checkpoints/sft/v15_r1/epoch{1,1.5,2,2.5,3}
+        --out checkpoints/sft/v15_r<N> --epochs 3
+   产物 checkpoints/sft/v15_r<N>/{epoch1,sel_f1.5,epoch2,sel_f2.5,epoch3}
+   ⚠️ **轮次号必须递增，不许覆盖**：r1=坏数据（41.8% 填充话）· r2=修了填充话但人话
+     仍在机器通道 · **r3=当前有效**（1039 行，出厂体检全绿）。三轮的读数**完全不可比**，
+     路径写死成 r1 会让下一个人拿错模型（08-31 交接实测被问到）。
+     当前有效产物：`checkpoints/sft/v15_r3/sel_f2.5` → 合并后 `models/Qwen3-4B-sft-v15r3-f25`
    判据 训练健康：曲线不发散 · ΔW 位移打印 · val_loss 按行为分组可见 · 零截断
    ⛔ 契约参数一个都不许在命令行传（守则⑨）——长度/采样只能来自 rollout_budget
 
