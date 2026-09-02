@@ -25,7 +25,7 @@ from typing import Any, Awaitable, Callable, Protocol
 
 from syncopate.core.prior_turns import render_prior_messages
 from syncopate.core.contract import (IS_V15, REPORT_TOOL, TERMINAL_SIGNALS, effective_tool_menu,
-                                     visible_answer_fields)
+                                     visible_answer_fields, visible_context)
 from syncopate.core.parsing import ParsedStep, parse_step
 from syncopate.core.parsing_v15 import derive_behavior, parse_step_v15
 from syncopate.core.sandbox import Sandbox
@@ -170,7 +170,7 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None,
         # ★ 09-02（Chaoyu 08-31 裁定③，守则⑮ #5）：**纯日期**，同线上 decider（date.today().isoformat()）。
         #   v15 之前渲染 ISO 带时区，线上是纯日期 ⇒ 不同形；随 W4 全量重建生效（DATA_VERSION 升版）。
         "reference_now": (bundle.env.reference_now or "")[:10] if IS_V15 else bundle.env.reference_now,
-        "context": bundle.case.context,
+        "context": visible_context(bundle.case.context),   # 裁定⑨：account_id 等身份不进题面
         "user_message": bundle.case.user_message,
         "answer_fields": visible_answer_fields(bundle.verifier.required_answer_fields),
     })

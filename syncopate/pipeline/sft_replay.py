@@ -54,7 +54,9 @@ def gold_script(bundle: CaseBundle, behavior: str | None = None,
     """
     assert bundle.gold is not None, f"{bundle.case_id} 没有 gold"
     resolved = behavior or bundle.verifier.expected_behavior
-    steps = [render_tool_call(a["tool"], a.get("arguments", {})) for a in bundle.gold.actions]
+    from syncopate.core.contract import visible_args
+    # ★ 裁定⑨：gold 里的 account_id 不进 SFT 目标——模型不该学会填账户身份
+    steps = [render_tool_call(a["tool"], visible_args(a.get("arguments", {}))) for a in bundle.gold.actions]
     if IS_V15:
         steps.extend(_v15_tail(bundle, resolved))
     else:

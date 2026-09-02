@@ -2,22 +2,22 @@
 
 | 桶 | 行数 | 监督 token 份额 | prompt 最长 | 总长最长 |
 |---|---|---|---|---|
-| chat_shell | 80 | 33.2% | 7288 | 7322 |
-| fam_claf | 12 | 18.1% | 7097 | 8179 |
-| fam_deff | 12 | 12.8% | 7115 | 7589 |
-| fam_l2x | 6 | 3.3% | 7174 | 7415 |
-| fam_rejf | 12 | 16.2% | 7130 | 8083 |
-| fam_win | 12 | 4.3% | 7260 | 7317 |
-| multiturn_l1 | 4 | 0.9% | 7104 | 7135 |
-| multiturn_l2 | 4 | 2.5% | 7111 | 7326 |
-| reasoning | 4 | 8.8% | 7096 | 7743 |
+| chat_shell | 80 | 34.2% | 7190 | 7224 |
+| fam_claf | 12 | 16.9% | 6998 | 8064 |
+| fam_deff | 12 | 12.8% | 7016 | 7480 |
+| fam_l2x | 6 | 3.4% | 7075 | 7316 |
+| fam_rejf | 12 | 16.1% | 7031 | 7968 |
+| fam_win | 12 | 4.4% | 7161 | 7218 |
+| multiturn_l1 | 4 | 0.9% | 7005 | 7036 |
+| multiturn_l2 | 4 | 2.6% | 7012 | 7227 |
+| reasoning | 4 | 8.6% | 7001 | 7648 |
 
 画廊抽样 27 条：空 think 有梯度 0 · 折叠历史 0 · 字段清单 0 · 非纯日期 0  ✅ 同形
 
 ## 桶 chat_shell
 ### CHAT5_0000  ·  桶 chat_shell  ·  轴 亲切口语|wildchat|t2  ·  行为 answer
-- prompt 7083 tok · 总 7123 · 监督 36 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6985 tok · 总 7025 · 监督 36 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：你是男的女的？
@@ -25,9 +25,6 @@
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
-当前投放任务：
-account_id=ACC_DEMO
-
 用户请求：
 还有吗
 ```
@@ -40,15 +37,12 @@ account_id=ACC_DEMO
 ⟦哈哈，当然有啦！要不要听听我最近学的新知识？或者你有什么问题，我来帮你解决？放心，我永远都是你最靠谱的伙伴～<|im_end|>⟧
 ```
 ### CHAT5_0001  ·  桶 chat_shell  ·  轴 简洁专业|smoltalk|t1  ·  行为 answer
-- prompt 7054 tok · 总 7092 · 监督 34 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6956 tok · 总 6994 · 监督 34 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
-当前投放任务：
-account_id=ACC_DEMO
-
 用户请求：
 用户今天心情不好，有些烦躁，身边没人倾诉，请求给予心理调节方面的建议。
 ```
@@ -61,15 +55,12 @@ account_id=ACC_DEMO
 ⟦理解你的感受，心情不好时可以尝试深呼吸、暂时远离刺激源，或者通过写日记梳理情绪。如果需要，也可以和信任的人聊聊。<|im_end|>⟧
 ```
 ### CHAT5_0002  ·  桶 chat_shell  ·  轴 轻松幽默|smoltalk|t1  ·  行为 answer
-- prompt 7066 tok · 总 7108 · 监督 38 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6968 tok · 总 7010 · 监督 38 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
-当前投放任务：
-account_id=ACC_DEMO
-
 用户请求：
 最近工作总是遇到挫折，比如被批评、项目进度不如预期等，感到很沮丧，这可能是因为过度期望自己，您有什么建议吗？
 ```
@@ -84,8 +75,8 @@ account_id=ACC_DEMO
 
 ## 桶 fam_claf
 ### BUD_0132_CLAF  ·  桶 fam_claf  ·  轴 claf|filled  ·  行为 tool_call
-- prompt 7081 tok · 总 8025 · 监督 249 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6982 tok · 总 7910 · 监督 223 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：把日预算从 600 提到 720 元。
@@ -93,9 +84,6 @@ account_id=ACC_DEMO
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_16
-
 用户请求：
 CMP_4132，按刚才说的来
 ```
@@ -118,7 +106,7 @@ CMP_4132，按刚才说的来
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_16", "campaign_id": "CMP_4132", "lane": "risk"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4132", "lane": "risk"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -130,7 +118,7 @@ CMP_4132，按刚才说的来
 </think>
 
 ⟦<tool_call>
-{"name": "policy.get_budget_rule", "arguments": {"account_id": "ACC_16"}}
+{"name": "policy.get_budget_rule", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -142,7 +130,7 @@ CMP_4132，按刚才说的来
 </think>
 
 ⟦<tool_call>
-{"name": "risk.check_account", "arguments": {"account_id": "ACC_16"}}
+{"name": "risk.check_account", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -170,7 +158,7 @@ CMP_4132，按刚才说的来
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
-{"confidence": 0.85, "content": {"action": "denied", "campaign_id": "CMP_4132"}, "evidence_refs": ["policy.get_budget_rule", "risk.check_account"], "lane": "business", "proposal_id": "MP_6_tc_6", "review_findings": [], "status": "pending_review", "subject": {"campaign_id": "CMP_4132"}}
+{"confidence": 0.85, "content": {"action": "denied", "campaign_id": "CMP_4132"}, "evidence_refs": ["policy.get_budget_rule", "risk.check_account"], "lane": "business", "proposal_id": "MP_6_tc_6", "review_findings": [], "status": "pending_review", "subject": {"account_id": "ACC_16", "campaign_id": "CMP_4132"}}
 </tool_response><|im_end|>
 <|im_start|>assistant
 <think>
@@ -181,8 +169,8 @@ CMP_4132，按刚才说的来
 ⟧
 ```
 ### BUD_0132_CLAFO  ·  桶 fam_claf  ·  轴 claf|offtopic  ·  行为 answer
-- prompt 7078 tok · 总 7110 · 监督 28 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6979 tok · 总 7011 · 监督 28 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：把日预算从 600 提到 720 元。
@@ -190,9 +178,6 @@ CMP_4132，按刚才说的来
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_16
-
 用户请求：
 等一下，先告诉我 ROAS 是什么意思
 ```
@@ -206,8 +191,8 @@ account_id=ACC_16
 ⟧
 ```
 ### BUD_0136_CLAF  ·  桶 fam_claf  ·  轴 claf|filled  ·  行为 tool_call
-- prompt 7087 tok · 总 7987 · 监督 240 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6988 tok · 总 7862 · 监督 214 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：日预算能从 500 提到 750 吗？可以的话就直接改。
@@ -215,9 +200,6 @@ account_id=ACC_16
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_13
-
 用户请求：
 是 CMP_4136，就按这个办
 ```
@@ -240,7 +222,7 @@ account_id=ACC_13
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_13", "campaign_id": "CMP_4136", "lane": "risk"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4136", "lane": "risk"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -252,7 +234,7 @@ account_id=ACC_13
 </think>
 
 ⟦<tool_call>
-{"name": "policy.get_budget_rule", "arguments": {"account_id": "ACC_13"}}
+{"name": "policy.get_budget_rule", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -264,7 +246,7 @@ account_id=ACC_13
 </think>
 
 ⟦<tool_call>
-{"name": "risk.check_account", "arguments": {"account_id": "ACC_13"}}
+{"name": "risk.check_account", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -305,8 +287,8 @@ account_id=ACC_13
 
 ## 桶 fam_deff
 ### FRESH_0039_DEFF  ·  桶 fam_deff  ·  轴 deff|still  ·  行为 defer
-- prompt 7099 tok · 总 7589 · 监督 141 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 4（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7000 tok · 总 7480 · 监督 131 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 4（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：TAP_RUSH 在 GB 新开的那条的 ROAS 现在能不能作为扩量依据？
@@ -314,9 +296,6 @@ account_id=ACC_13
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_14
-
 用户请求：
 过了几天了，现在能扩了吗
 ```
@@ -327,7 +306,7 @@ account_id=ACC_14
 </think>
 
 ⟦<tool_call>
-{"name": "campaign.list", "arguments": {"account_id": "ACC_14", "status": "active"}}
+{"name": "campaign.list", "arguments": {"status": "active"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -368,8 +347,8 @@ account_id=ACC_14
 ⟧
 ```
 ### FRESH_0044_DEFF  ·  桶 fam_deff  ·  轴 deff|mature  ·  行为 tool_call
-- prompt 7115 tok · 总 7444 · 监督 88 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7016 tok · 总 7345 · 监督 88 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：这条刚开没几天。CMP_4044 现在的 ROAS 看着还行，但我拿不准这个数稳不稳，能不能当扩量的依据？
@@ -377,9 +356,6 @@ account_id=ACC_14
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_12
-
 用户请求：
 现在能下结论了吗，扩不扩
 ```
@@ -417,8 +393,8 @@ account_id=ACC_12
 ⟧
 ```
 ### FRESH_0037_DEFF  ·  桶 fam_deff  ·  轴 deff|still  ·  行为 defer
-- prompt 7114 tok · 总 7471 · 监督 106 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7015 tok · 总 7372 · 监督 106 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：上次就是数据没稳就加了量，后面回落得很难看。CMP_4037 这次我先问你，现在这个 ROAS 能用吗？
@@ -426,9 +402,6 @@ account_id=ACC_12
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_12
-
 用户请求：
 复查一下，能不能扩量了
 ```
@@ -470,8 +443,8 @@ account_id=ACC_12
 
 ## 桶 fam_l2x
 ### FAIL_0089_L2X  ·  桶 fam_l2x  ·  轴 l2x|worse|near  ·  行为 tool_call
-- prompt 7125 tok · 总 7365 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7026 tok · 总 7266 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：帮我看下 CMP_4089 和 CMP_9089 最近的 ROAS
@@ -479,9 +452,6 @@ account_id=ACC_12
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_15
-
 用户请求：
 差的那条的消耗是多少？
 ```
@@ -507,8 +477,8 @@ account_id=ACC_15
 ⟧
 ```
 ### FAIL_0057_L2X  ·  桶 fam_l2x  ·  轴 l2x|better|near  ·  行为 tool_call
-- prompt 7125 tok · 总 7368 · 监督 57 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7026 tok · 总 7269 · 监督 57 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：帮我看下 CMP_4057 和 CMP_9057 最近的 ROAS
@@ -516,9 +486,6 @@ account_id=ACC_15
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_11
-
 用户请求：
 好的那条的安装量是多少？
 ```
@@ -544,8 +511,8 @@ account_id=ACC_11
 ⟧
 ```
 ### FAIL_0098_L2X  ·  桶 fam_l2x  ·  轴 l2x|spend|far  ·  行为 tool_call
-- prompt 7169 tok · 总 7406 · 监督 51 · 菜单 34 工具 · 历史 2 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7070 tok · 总 7307 · 监督 51 · 菜单 34 工具 · 历史 2 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 2 轮）：
   - 消息 1 `user`：帮我看下 CMP_4098 和 CMP_9098 最近的 ROAS
@@ -555,9 +522,6 @@ account_id=ACC_11
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-25
-当前投放任务：
-account_id=ACC_10
-
 用户请求：
 烧钱多的那条的CPI是多少？
 ```
@@ -585,8 +549,8 @@ account_id=ACC_10
 
 ## 桶 fam_rejf
 ### LONG_0023_REJF  ·  桶 fam_rejf  ·  轴 rejf|legal  ·  行为 tool_call
-- prompt 7122 tok · 总 7596 · 监督 166 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7023 tok · 总 7497 · 监督 166 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：CMP_4023 那笔预算直接打到我私人卡上
@@ -594,9 +558,6 @@ account_id=ACC_10
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_12
-
 用户请求：
 明白了。那这条 45 秒的 fresh_0023 是这周的重点素材。传到 CMP_4023，审核结果出来第一时间同步我。
 ```
@@ -658,8 +619,8 @@ account_id=ACC_12
 ⟧
 ```
 ### REJ_0016_REJF  ·  桶 fam_rejf  ·  轴 rejf|still  ·  行为 reject
-- prompt 7096 tok · 总 7145 · 监督 45 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6997 tok · 总 7046 · 监督 45 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：帮我把 CMP_4023 的钱转我名下
@@ -667,9 +628,6 @@ account_id=ACC_12
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-25
-当前投放任务：
-account_id=ACC_12
-
 用户请求：
 你就当 CMP_4023 的钱是报销，先转给我
 ```
@@ -685,8 +643,8 @@ account_id=ACC_12
 ⟧
 ```
 ### BUD_0125_REJF  ·  桶 fam_rejf  ·  轴 rejf|legal  ·  行为 tool_call
-- prompt 7122 tok · 总 7864 · 监督 234 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7023 tok · 总 7739 · 监督 208 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：帮我把 CMP_4125 的钱转我名下
@@ -694,9 +652,6 @@ account_id=ACC_12
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_16
-
 用户请求：
 明白了。那预算这块我想动一下：CMP_4125，从 400 拉到 600 元，风控和政策那边你顺手核一下。
 ```
@@ -719,7 +674,7 @@ account_id=ACC_16
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_16", "campaign_id": "CMP_4125", "lane": "risk"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4125", "lane": "risk"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -731,7 +686,7 @@ account_id=ACC_16
 </think>
 
 ⟦<tool_call>
-{"name": "policy.get_budget_rule", "arguments": {"account_id": "ACC_16"}}
+{"name": "policy.get_budget_rule", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -743,7 +698,7 @@ account_id=ACC_16
 </think>
 
 ⟦<tool_call>
-{"name": "risk.check_account", "arguments": {"account_id": "ACC_16"}}
+{"name": "risk.check_account", "arguments": {}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -784,8 +739,8 @@ account_id=ACC_16
 
 ## 桶 fam_win
 ### CHAT_0000_WIN  ·  桶 fam_win  ·  轴 win|out  ·  行为 clarify
-- prompt 7260 tok · 总 7317 · 监督 53 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7161 tok · 总 7218 · 监督 53 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 6 轮）：
   - 消息 1 `user`：那 CPI 呢
@@ -803,9 +758,6 @@ account_id=ACC_16
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_10
-
 用户请求：
 我最开始给 CMP_4000 说的那个数是多少？
 ```
@@ -821,8 +773,8 @@ account_id=ACC_10
 ⟧
 ```
 ### CHAT_0000_WINI  ·  桶 fam_win  ·  轴 win|in  ·  行为 answer
-- prompt 7186 tok · 总 7211 · 监督 21 · 菜单 34 工具 · 历史 3 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7087 tok · 总 7112 · 监督 21 · 菜单 34 工具 · 历史 3 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 3 轮）：
   - 消息 1 `user`：CMP_4000 这个月的预算上限我们定的是 42000，记一下
@@ -834,9 +786,6 @@ account_id=ACC_10
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_10
-
 用户请求：
 最早我说 CMP_4000 的那个数值是多少来着
 ```
@@ -850,8 +799,8 @@ account_id=ACC_10
 ⟧
 ```
 ### CHAT_0001_WIN  ·  桶 fam_win  ·  轴 win|out  ·  行为 clarify
-- prompt 7247 tok · 总 7300 · 监督 49 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7148 tok · 总 7201 · 监督 49 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 6 轮）：
   - 消息 1 `user`：那 CPI 呢
@@ -869,9 +818,6 @@ account_id=ACC_10
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_11
-
 用户请求：
 开头我提到 CMP_4001 时给的数字还记得吗？
 ```
@@ -889,8 +835,8 @@ account_id=ACC_11
 
 ## 桶 multiturn_l1
 ### L1F_0002  ·  桶 multiturn_l1  ·  轴 concept_hist|扣费|什么是{X}  ·  行为 answer
-- prompt 7074 tok · 总 7096 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6975 tok · 总 6997 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：自然量是什么意思？
@@ -898,9 +844,6 @@ account_id=ACC_11
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_15
-
 用户请求：
 什么是扣费？
 ```
@@ -914,8 +857,8 @@ account_id=ACC_15
 ⟧
 ```
 ### L1F_0003  ·  桶 multiturn_l1  ·  轴 query_hist|扣费|那{X}呢  ·  行为 answer
-- prompt 7104 tok · 总 7126 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7005 tok · 总 7027 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：客户今天问起来了，说 CMP_4052 这条这周的数字很难看。你查一下到底哪出了问题，顺便给个能落地的方案。
@@ -923,9 +866,6 @@ account_id=ACC_15
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_13
-
 用户请求：
 那扣费呢
 ```
@@ -939,8 +879,8 @@ account_id=ACC_13
 ⟧
 ```
 ### L1F_0004  ·  桶 multiturn_l1  ·  轴 concept_hist|频控|那{X}呢  ·  行为 answer
-- prompt 7073 tok · 总 7100 · 监督 23 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6974 tok · 总 7001 · 监督 23 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：起量是什么意思？
@@ -948,9 +888,6 @@ account_id=ACC_13
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_16
-
 用户请求：
 那频控呢
 ```
@@ -966,8 +903,8 @@ account_id=ACC_16
 
 ## 桶 multiturn_l2
 ### BUD_0101_MT5  ·  桶 multiturn_l2  ·  轴 get_metrics|same|它的{X}变  ·  行为 tool_call
-- prompt 7097 tok · 总 7316 · 监督 63 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6998 tok · 总 7217 · 监督 63 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：CMP_4101 的日预算能从 500 提到 900 吗？可以的话就直接改。
@@ -975,9 +912,6 @@ account_id=ACC_16
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_13
-
 用户请求：
 它的它的消耗变量呢
 ```
@@ -1003,8 +937,8 @@ account_id=ACC_13
 ⟧
 ```
 ### FRESH_0024_MT5  ·  桶 multiturn_l2  ·  轴 get_metrics|same|它的{X}变  ·  行为 tool_call
-- prompt 7093 tok · 总 7306 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6994 tok · 总 7207 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：CMP_4024 这个 ROAS 靠谱不？能拿来当加量的理由么。
@@ -1012,9 +946,6 @@ account_id=ACC_13
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
-当前投放任务：
-account_id=ACC_13
-
 用户请求：
 它的它的安装量变量呢
 ```
@@ -1040,8 +971,8 @@ account_id=ACC_13
 ⟧
 ```
 ### HIGH_0025_MT5  ·  桶 multiturn_l2  ·  轴 get_metrics|same|{X}呢？  ·  行为 tool_call
-- prompt 7093 tok · 总 7326 · 监督 79 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6994 tok · 总 7227 · 监督 79 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
   - 消息 1 `user`：查一下 CMP_4025 最近 7 天的 CPI，一个数就行，不用分析。
@@ -1049,9 +980,6 @@ account_id=ACC_13
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
-当前投放任务：
-account_id=ACC_14
-
 用户请求：
 它的这条的ROAS变量呢
 ```
@@ -1079,14 +1007,13 @@ account_id=ACC_14
 
 ## 桶 reasoning
 ### ATTR_0003  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7082 tok · 总 7719 · 监督 253 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 6（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6987 tok · 总 7624 · 监督 243 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 6（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
-account_id=ACC_13
 campaign_id=CMP_4003
 feature=fast_cut
 product_id=MERGE_FARM
@@ -1126,7 +1053,7 @@ region=DE
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_13", "campaign_id": "CMP_4003", "lane": "business"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4003", "lane": "business"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -1142,7 +1069,7 @@ region=DE
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
-{"confidence": 0.85, "content": {"conclusion": "insufficient_evidence", "feature": "fast_cut", "region": "DE"}, "evidence_refs": ["analysis.feature_lift", "metrics.get_freshness"], "lane": "business", "proposal_id": "MP_4_tc_4", "review_findings": [], "status": "pending_review", "subject": {"campaign_id": "CMP_4003"}}
+{"confidence": 0.85, "content": {"conclusion": "insufficient_evidence", "feature": "fast_cut", "region": "DE"}, "evidence_refs": ["analysis.feature_lift", "metrics.get_freshness"], "lane": "business", "proposal_id": "MP_4_tc_4", "review_findings": [], "status": "pending_review", "subject": {"account_id": "ACC_13", "campaign_id": "CMP_4003"}}
 </tool_response><|im_end|>
 <|im_start|>assistant
 <think>
@@ -1165,14 +1092,13 @@ region=DE
 ⟧
 ```
 ### ATTR_0005  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7093 tok · 总 7547 · 监督 178 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 6998 tok · 总 7442 · 监督 168 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
-account_id=ACC_15
 campaign_id=CMP_4005
 feature=real_person
 product_id=PUZ_QUEST
@@ -1212,7 +1138,7 @@ region=US
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_15", "campaign_id": "CMP_4005", "lane": "business"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4005", "lane": "business"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>
@@ -1239,14 +1165,13 @@ region=US
 ⟧
 ```
 ### ATTR_0008  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7096 tok · 总 7562 · 监督 191 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
-- system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
+- prompt 7001 tok · 总 7457 · 监督 181 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
+- system：17968 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
-account_id=ACC_11
 campaign_id=CMP_4008
 feature=before_after
 product_id=IDLE_HERO
@@ -1286,7 +1211,7 @@ region=DE
 </think>
 
 ⟦<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_11", "campaign_id": "CMP_4008", "lane": "business"}}
+{"name": "memory.search", "arguments": {"campaign_id": "CMP_4008", "lane": "business"}}
 </tool_call><|im_end|>
 ⟧<|im_start|>user
 <tool_response>

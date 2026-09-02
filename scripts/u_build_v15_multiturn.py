@@ -39,10 +39,7 @@ def prod_context(bundle: CaseBundle) -> dict[str, Any]:
     """与线上 core.demo_context **同一形状**：只有 account_id（Chaoyu 09-02 裁定）。
     有哪些 campaign 由模型调 campaign.list 自己查——真实账户几万条、每天在变，不进提示词。
     多轮行不带 campaign_id：上一轮对话里已经出现过对象，本轮靠指代/重查。"""
-    camps = (bundle.env.readonly_tables or {}).get("campaigns", {}) or {}
-    acc = bundle.case.context.get("account_id") or next(
-        (c.get("account_id") for c in camps.values()), "ACC_DEMO")
-    return {"account_id": acc}
+    return {}      # 裁定⑨：account_id 运行态注入，不进题面；多轮行没有界面选中的 campaign
 
 
 def answer_turn(text: str) -> dict:

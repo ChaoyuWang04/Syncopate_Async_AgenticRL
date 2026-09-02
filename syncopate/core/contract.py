@@ -161,3 +161,22 @@ def effective_tool_menu(case_menu):
       不实现该工具来表达，不再靠裁菜单）。
     """
     return None if IS_V15 else case_menu
+
+
+# ── 运行态注入参数（Chaoyu 09-02 裁定⑨）────────────────────────────────────
+# 模型脑子里装的是知识与策略（什么时候调什么工具、该怎么想），**不是运行态的身份**。
+# account_id 是"当前在替哪个账户干活"——来自登录态，和 run_id 一样由 runtime 注入：
+#   · 不进 prompt（context 里剥掉）      · 不进工具 schema（模型看不到这一格）
+#   · 不进 gold 渲染（SFT 目标里没有）   · 执行时由沙盒/收口按当前租户填入，**模型填了也覆盖**（安全）
+RUNTIME_INJECTED_PARAMS = frozenset({"account_id"})
+
+
+def visible_args(arguments):
+    """模型该输出/看到的工具参数：剥掉运行态注入的键。"""
+    return {k: v for k, v in (arguments or {}).items() if k not in RUNTIME_INJECTED_PARAMS}
+
+
+def visible_context(context):
+    """渲染进题面的 context：剥掉运行态注入的键（account_id 等身份信息）。"""
+    return {k: v for k, v in (context or {}).items() if k not in RUNTIME_INJECTED_PARAMS}
+

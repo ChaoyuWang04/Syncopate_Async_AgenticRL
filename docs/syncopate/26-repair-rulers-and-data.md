@@ -37,7 +37,7 @@
 |---|---|---|
 | system prompt | `load_system_prompt()`，v15 只换终答段 | `syncopate/prompts/__init__.py:68-88` |
 | 会话历史 | **真 user/assistant 消息对**，插在 system 之后、本轮 user 之前；助手内容 = 上一轮**真实终答人话**（信令收场用信令自己的话），超 400 token 截断 | `syncopate/runtime/decider.py:152-190,222-227` |
-| 本轮 user | `step_user.txt` 渲染：当前时间（**纯日期**）+ context（**只有 `account_id`**；用户在界面选了 campaign 才带 `campaign_id`——09-02 Chaoyu 裁定⑥：几万条每天在变的清单不进提示词，有哪些 campaign 调 `campaign.list` 自己翻）+ 用户问题；**没有字段清单**（v15 一律不列） | `core/demo_context.py`（decider 与建库共用）；`contract.visible_answer_fields` |
+| 本轮 user | `step_user.txt` 渲染：当前时间（**纯日期**）+ context（**用户在界面选中的 campaign_id，可选；没有就整节不渲染**。`account_id` 是运行态身份，裁定⑨：不进题面、不进工具 schema、由收口按租户注入；campaign 清单不进提示词，裁定⑥）+ 用户问题；**没有字段清单**（v15 一律不列） | `core/demo_context.py` · `contract.visible_context / visible_args / RUNTIME_INJECTED_PARAMS` |
 | 工具菜单 | **全量 34 个**（30 业务 + 4 个 session 信令；实测 `REGISTRY.menu(None)`=34） | `decider.py:124,245-247` |
 | think | think-on（`enable_thinking=True`，v15 契约默认） | `syncopate/train/rollout_budget.py:51-56,74`；`decider.py:249-252` |
 | 模型该输出 | `<think>…</think>` + 若干 `<tool_call>` 轮 + 纯人话终答，或终止性 `session.*` 信令 | `25 §3.1` |
@@ -544,6 +544,7 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 | 工具菜单 | `contract.effective_tool_menu` | v15 一律全量 34 | run_rollout（SFT/RL 同源）· decider `FULL_MENU_MODE` 默认 full |
 | 历史窗口 | `core/prior_turns.PRIOR_TURNS_LIMIT` / `PRIOR_ANSWER_BUDGET` | 6 轮 / 每轮 400 tok | db.prior_turns 默认 · decider 渲染 · 训练 build_messages（同一渲染函数） |
 | 当前时间格式 | build_messages（v15 取 `reference_now[:10]`）· decider `date.today()` | 纯日期 | 同形断言 tests/train/test_train_prod_same_shape.py |
+| 运行态注入参数 | `contract.RUNTIME_INJECTED_PARAMS` | {account_id} | ToolSpec.openai_schema 剥掉 · registry.execute 注入覆盖 · gold_script/visible_args · build_messages/visible_context · ActionGate 注入 |
 | 字段清单 | `contract.visible_answer_fields`（PROSE_FIELDS 过滤） | v15 多轮行=空 | step_user.txt `{% if answer_fields %}` |
 | 空 think 块 | `sft_replay._mask_empty_think` | 不监督 | SFT 样本 · 同构测试期望 |
 | 教师 think 采样 | `u_build_v14_5.THINK_MAX_*` | 900 tok / 4096 字 / 不限段（不缩短） | gen_cot_v15 · behavior 探针 |
@@ -596,6 +597,10 @@ prompt 集 v2 = 419 骨架 + chat_bank_v2 + S2 held-out 句式 + 多轮占比 14
                       **不进提示词**（真实账户几万条、每天在变），有哪些 campaign 由模型调 campaign.list 翻页
                       → core/demo_context.py（线上）与 prod_context（训练）同一形状；08-20 那版清单是演示补丁
 ⑦ 09-02 空 think 不监督 · CoT 不缩短 · 上限 9216/18432（§4.1 / §W3 / §W2⑤）
+⑨ 09-02 运行态注入  模型脑子里装知识与策略，不装运行态身份。account_id 来自登录态 ⇒ 与 run_id 同类：
+                      不进 prompt · 不进工具 schema · 不进 gold 渲染 · 沙盒/收口按当前租户注入且**模型填了也覆盖**
+                      （contract.RUNTIME_INJECTED_PARAMS 一处定义；tests/core/test_runtime_injected_params.py 五条）
+                      "这一版就是最终版，改好为止"——不留 v16 欠账
 ⑧ 09-02 画廊抓到的三条（Chaoyu 逐条看数据）：闲聊行空块有梯度 · 压舱行仍列字段清单 · WIN 行 8 轮全进
    prompt 而 gold 说"看不到"（=教撒谎）⇒ 6 轮窗口下沉到共用渲染函数 render_prior_messages；
    历史里的助手回答必须是真内容（定义库按术语名取，取不到报错，不许"好的。"占位）

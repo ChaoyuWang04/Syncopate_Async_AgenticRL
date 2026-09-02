@@ -51,6 +51,21 @@ class ToolContext:
     # latency_seconds 是静态的，表达不了"等 30 秒"这种动态时长。
     latency_scale: float = 1.0
 
+    @property
+    def account_id(self) -> str | None:
+        """当前在替哪个账户干活（沙盒 = case 的账户）。运行态注入，模型不填。"""
+        acc = (self.case.context or {}).get("account_id")
+        if acc:
+            return str(acc)
+        accounts = self.env.table("accounts") if hasattr(self.env, "table") else {}
+        if accounts:
+            return str(next(iter(accounts)))
+        camps = self.env.table("campaigns") if hasattr(self.env, "table") else {}
+        for row in camps.values():
+            if row.get("account_id"):
+                return str(row["account_id"])
+        return None
+
     # ---- ★ 读工具必须走这两个方法，不要直接 ctx.env.row() ----
     #
     # 实测过的缺口：改预算 500 → 900 之后再查，读到的还是 500。
@@ -128,14 +143,26 @@ class ToolSpec:
         return self.cost_points if self.cost_points is not None else (3 if self.kind == "write" else 1)
 
     def openai_schema(self) -> dict[str, Any]:
+        # ★ 运行态注入的参数（account_id）不给模型看（contract.RUNTIME_INJECTED_PARAMS）
+        from syncopate.core.contract import RUNTIME_INJECTED_PARAMS
+        params = dict(self.parameters)
+        props = {k: v for k, v in (params.get("properties") or {}).items() if k not in RUNTIME_INJECTED_PARAMS}
+        params["properties"] = props
+        if "required" in params:
+            params["required"] = [r for r in params["required"] if r not in RUNTIME_INJECTED_PARAMS]
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.parameters,
+                "parameters": params,
             },
         }
+
+    def injected_params(self) -> set[str]:
+        """本工具声明了、但由运行态注入的参数名。"""
+        from syncopate.core.contract import RUNTIME_INJECTED_PARAMS
+        return set(self.parameters.get("properties") or {}) & set(RUNTIME_INJECTED_PARAMS)
 
 
 class ToolRegistry:
@@ -241,6 +268,11 @@ class ToolRegistry:
         if spec is None:
             return ToolResult(ok=False, error=f"unknown_tool: {name}")
         ctx.latency_scale = self.latency_scale
+        # ★ 运行态注入（裁定⑨）：account_id 由当前租户填入，**模型填了也覆盖**——账户身份不能由模型决定
+        if spec.injected_params():
+            arguments = {k: v for k, v in arguments.items() if k not in spec.injected_params()}
+            if "account_id" in spec.injected_params() and ctx.account_id:
+                arguments["account_id"] = ctx.account_id
 
         # ---- ★ 幂等去重：同一个 client_request_id 重复提交，返回上次的结果 ----
         #

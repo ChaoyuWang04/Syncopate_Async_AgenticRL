@@ -1,9 +1,9 @@
 当前时间：{{ reference_now }}
-当前投放任务：
+{% if context %}当前投放任务：
 {% for key, value in context | dictsort -%}
 {{ key }}={{ value }}
 {% endfor %}
-用户请求：
+{% endif %}用户请求：
 {{ user_message }}
 
 {% if answer_fields %}本次结论需要给出的字段：

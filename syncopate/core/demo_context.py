@@ -16,11 +16,17 @@ PLATFORM_STATE = "data/demo/platform_state.json"
 
 
 def demo_context(path: str = PLATFORM_STATE, campaign_id: str | None = None) -> dict[str, Any]:
-    f = pathlib.Path(path)
-    acc = "ACC_DEMO"
-    if f.is_file():
-        acc = json.loads(f.read_text(encoding="utf-8")).get("account_id", acc)
-    ctx: dict[str, Any] = {"account_id": acc}
+    """★ 裁定⑨（09-02）：account_id 是运行态身份，**不进 prompt**（收口按租户注入工具参数）。
+    context 只剩用户在界面选中的 campaign（可选）；没有就是空，模板不渲染该节。"""
+    ctx: dict[str, Any] = {}
     if campaign_id:
-        ctx["campaign_id"] = campaign_id          # 用户在界面上选中的那条（可选）
+        ctx["campaign_id"] = campaign_id
     return ctx
+
+
+def demo_account_id(path: str = PLATFORM_STATE) -> str:
+    """当前 demo 租户的账户（给运行态注入用，不给模型看）。"""
+    f = pathlib.Path(path)
+    if f.is_file():
+        return json.loads(f.read_text(encoding="utf-8")).get("account_id", "ACC_DEMO")
+    return "ACC_DEMO"

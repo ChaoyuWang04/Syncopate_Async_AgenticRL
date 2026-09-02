@@ -104,6 +104,7 @@ class ActionGate:
 
     def __init__(self, db: Database, tools: ToolRuntime,
                  bindings: dict[str, ToolBinding], *,
+                 account_id: str | None = None,
                  org_id: str, run_id: str,
                  over_budget: Callable[[], Awaitable[bool]],
                  emit: Callable[..., Awaitable[Any]],
@@ -116,6 +117,7 @@ class ActionGate:
                  attempts: int = 1,
                  record_usage: Callable[..., Awaitable[Any]] | None = None,
                  budget_check: Callable[..., Awaitable[str | None]] | None = None) -> None:
+        self.account_id = account_id        # 裁定⑨：当前租户账户，注入工具参数，模型碰不到
         self.db = db
         self.attempts = attempts
         # K9-3/K9-2：记账与预算闸也是横切，收口持有；假 db 时可注入或不接（None = 不记/不判）
@@ -255,6 +257,14 @@ class ActionGate:
                                error="max_steps_exceeded")
 
         # ── ② 工具存在吗（模型会编工具名）────────────────────────────────
+        # ★ 裁定⑨：运行态注入——模型给的 account_id 一律丢弃（账户身份不能由模型决定），
+        #   沙盒 spec 声明了 account_id 的工具由这里按当前租户填入（同一份注册表判"谁需要"）
+        from syncopate.core.contract import RUNTIME_INJECTED_PARAMS
+        from syncopate.core.tool_registry import REGISTRY as _REG
+        arguments = {k: v for k, v in dict(arguments).items() if k not in RUNTIME_INJECTED_PARAMS}
+        _spec = _REG.get(tool)
+        if _spec is not None and "account_id" in _spec.injected_params() and self.account_id:
+            arguments["account_id"] = self.account_id
         binding = self._bindings.get(tool)
         if binding is None:
             # ⚠️ **报"没有"，不猜** —— 不要模糊匹配到一个名字相近的工具，

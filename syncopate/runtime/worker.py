@@ -349,6 +349,7 @@ class Worker:
             bindings = {k: _timed_binding(v) for k, v in bindings.items()}
         return ActionGate(
             self.db, self.tools, bindings,
+            account_id=getattr(self.platform, "account_id", None),   # 裁定⑨：租户账户由 runtime 注入
             org_id=org_id, run_id=run_id,
             over_budget=lambda: self._over_budget(org_id),
             emit=emit, audit=audit,
