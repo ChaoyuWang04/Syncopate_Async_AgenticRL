@@ -148,6 +148,9 @@ def test_approval_parked_run_is_not_closed_by_a_chat_message() -> None:
         org, cid = f"org_{uuid.uuid4().hex[:8]}", f"cv_{uuid.uuid4().hex[:8]}"
         await create_conversation(db, org_id=org, conversation_id=cid)
         await create_run(db, org_id=org, run_id="r1", user_message="提预算", conversation_id=cid)
+        # K4 状态机：审批单只能开在 running 的 run 上（queued→waiting_for_user 是非法迁移）⇒ 先 claim
+        from syncopate.runtime.db import claim_run
+        assert (await claim_run(db, worker_id="t", org_id=org))["run_id"] == "r1"
         await open_approval_case(db, org_id=org, run_id="r1", action_type="campaign.update_budget",
                                  proposed_params={"new_budget": 1}, rationale="t", evidence={},
                                  triggers=[])
