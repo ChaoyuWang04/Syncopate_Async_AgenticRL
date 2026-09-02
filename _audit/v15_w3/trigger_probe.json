@@ -1,0 +1,22 @@
+{
+ "n_cases": 1670,
+ "hard_families": [
+  "BUD",
+  "DIA",
+  "FAIL",
+  "RAG",
+  "SCALE"
+ ],
+ "pool": 114,
+ "family_level_balanced_acc": 0.838,
+ "within_family_balanced_acc": 0.655,
+ "within_family_after_explicit_prompt": 0.885,
+ "threshold": 0.8,
+ "pool_by_family": {
+  "BUD": 30,
+  "FAIL": 40,
+  "SCALE": 14,
+  "RAG": 18,
+  "DIA": 12
+ }
+}

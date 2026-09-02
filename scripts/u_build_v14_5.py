@@ -231,6 +231,8 @@ async def gen_l2_reply(client, cid, mname, val) -> str:
 # ═══════════ Stage B · CoT 难例（8B 逐步 think + 承诺闸）═══════════
 
 ASST = "<|im_start|>assistant"
+# W3① think 做轻（26 §W3 门槛①：p95 ≤500 字 · 段数 ≤2）。现状池：p50 691 字 / 6 段（09-02 实测）
+THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 350, 350, 2
 
 
 async def gen_cot(client, tok, max_rows=100) -> list[dict]:
@@ -399,7 +401,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     async def one_think(ctx: str):
         _SEED[0] += 1
         r = await client.post(f"{T8B}/completions", json={
-            "model": "t", "prompt": ctx + "<think>\n", "max_tokens": 900,
+            # ★ 09-02 W3①（26 §W3）：think 做轻——上限 900→350 token；段数/字数闸在 step_sample
+            "model": "t", "prompt": ctx + "<think>\n", "max_tokens": THINK_MAX_TOKENS,
             "seed": _SEED[0], "temperature": 0.7, "top_p": 0.95})
         r.raise_for_status()
         return r.json()["choices"][0]["text"]
@@ -422,7 +425,9 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
             think, post = g.split("</think>", 1)
             think = think.strip()
             cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
-            if not think or len(think) > 4096 or cjk < 0.5:
+            n_seg = len([p for p in re.split(r"\n\s*\n|\n", think) if p.strip()])
+            # ★ W3① 画像闸：≤THINK_MAX_CHARS 字、≤THINK_MAX_SEGS 段、中文 ≥0.5；命中判据「首动作名相等」不放宽
+            if not think or len(think) > THINK_MAX_CHARS or n_seg > THINK_MAX_SEGS or cjk < 0.5:
                 continue
             if first_action(post) == want:
                 return think
@@ -460,10 +465,14 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         #   以同一句兜底话收尾（㉖ 那次只修了压舱桶，漏了这里）。用同一份教师人话。
         if IS_V15:
             _rep = await ballast_replies(client, bundles, [cid])
+            b = copy.deepcopy(b)
             if cid in _rep:
-                b = copy.deepcopy(b)
                 b.gold.final_answer = dict(b.gold.final_answer or {})
                 b.gold.final_answer["reply"] = _rep[cid]
+            # ★ W3②（26 §W3）：触发显性化——难例行题面加多步诊断问法，让"该想"在题面上可学
+            #   （探针实测：族内 65.5% → 显性化后 88.5%，_audit/v15_w3/trigger_probe.json）
+            from u_build_v15_cot import explicit_hard_prompt
+            b.case.user_message = explicit_hard_prompt(b.case.user_message, cid)
         base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                    index=0, split="train", config=None)
         full = tokenizer.decode(list(base["input_ids"])[:base["total_length"]])
