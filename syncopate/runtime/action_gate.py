@@ -111,8 +111,15 @@ class ActionGate:
                  record_step: Callable[..., Awaitable[Any]] | None = None,
                  amount_threshold: int | None = None,
                  max_steps: int = MAX_STEPS_PER_RUN,
-                 cancel_check: Callable[[], Awaitable[bool]] | None = None) -> None:
+                 cancel_check: Callable[[], Awaitable[bool]] | None = None,
+                 record_blocked: Callable[..., Awaitable[Any]] | None = None) -> None:
         self.db = db
+        # K6："拦下也落库"——每道闸拒绝时在 tool_calls 留一行（blocked_by + error_json）。
+        # 有真 db 时默认接 db.record_blocked_call；假 db（测试）可注入记录器。
+        if record_blocked is None and db is not None:
+            from syncopate.runtime.db import record_blocked_call as _rbc
+            record_blocked = lambda **kw: _rbc(db, **kw)      # noqa: E731
+        self._record_blocked = record_blocked
         # K1-4 协作式取消：收口入口是「工具调用前」这个安全点（课件 CH3 §11.1）。
         # 注入而不是直连 db：测试用假 db 也能造"已请求取消"的局面。None = 不检查（旧行为）。
         self._cancel_check = cancel_check
@@ -131,6 +138,16 @@ class ActionGate:
         # ★ 已裁决的动作不再过网关（否则刚批准就又被同一个触发器拦下来，
         #   run 会在 waiting_for_user 和 queued 之间来回弹，永远跑不完）
         self.skip_triggers = False
+
+    async def _blocked(self, tool: str, arguments: dict[str, Any], blocked_by: str,
+                       message: str) -> None:
+        """四道闸任一拒绝 ⇒ tool_calls(failed, blocked_by, error_json)。没有这一行，事后看不见"模型试过"。"""
+        if self._record_blocked is None:
+            return
+        from syncopate.runtime.tool_governance import error_json
+        await self._record_blocked(org_id=self.org_id, run_id=self.run_id, step=self.step, tool=tool,
+                                   arguments=_json_safe(arguments), blocked_by=blocked_by,
+                                   error_json=error_json(blocked_by, message))
 
     async def stop_requested(self) -> bool:
         """安全点判定（K5-5）：取消意图 ∨ lease 丢失。loop 在**模型调用前/下一轮前**问一次，
@@ -200,6 +217,7 @@ class ActionGate:
         # API 对 running 的 run 只写 cancel_requested_at（意图 ≠ 状态，H104）；
         # 在这里兑现：不计步、不执行、交回 worker 迁 cancelled。其余安全点 K5-5。
         if self._cancel_check is not None and await self._cancel_check():
+            await self._blocked(tool, arguments, "cancel_requested", "用户已请求取消 / lease 已丢失")
             return GateOutcome(status="refused",
                                observation={"error": "cancel_requested"},
                                error="cancel_requested")
@@ -210,6 +228,7 @@ class ActionGate:
             await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
                              kind="run.degraded",
                              payload={"reason": "max_steps", "limit": self.max_steps})
+            await self._blocked(tool, arguments, "max_steps", f"步数上限 {self.max_steps}")
             return GateOutcome(status="refused",
                                observation={"error": "max_steps"},
                                error="max_steps_exceeded")
@@ -223,6 +242,7 @@ class ActionGate:
             await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
                              kind="tool.result", payload={"tool": tool, "ok": False,
                                                           "error": "unknown_tool"})
+            await self._blocked(tool, arguments, "unknown_tool", f"模型点名了不存在的工具 {tool}")
             return GateOutcome(status="failed", observation=obs, error="unknown_tool")
 
         # ── ②.5 参数校验（B-6：`validation_errors` 此前**没有生产者**）────
@@ -239,10 +259,11 @@ class ActionGate:
                              kind="tool.result",
                              payload={"tool": tool, "ok": False,
                                       "error": "validation_failed"})
+            await self._blocked(tool, arguments, "validation_failed", f"缺必填参数 {missing}")
             return GateOutcome(status="failed", observation=obs,
                                error="validation_failed")
 
-        is_write = tool in WRITE_TOOLS
+        is_write = tool in WRITE_TOOLS      # WRITE_TOOLS 从治理表派生（K6），不是手抄名单
 
         # ── ②.6 档位推导（2026-08-20）：**档位是动作的属性** ───────────────
         # ★ 此前档位由调用方在建 run 时声明（用户在 UI 上选 A/B/C/D）——
@@ -270,6 +291,7 @@ class ActionGate:
                              kind="run.degraded",
                              payload={"reason": "tier_d_never_automated",
                                       "tool": tool, "detail": reason})
+            await self._blocked(tool, arguments, "tier_d_refused", reason)
             return GateOutcome(
                 status="failed",
                 observation={"error": f"tier_d_never_automated: {reason}；"
@@ -293,6 +315,7 @@ class ActionGate:
                                           "tier_reason": decision.reason,
                                           # ★ 关闭要**可追溯**：重新打开时按它找回受影响的 run
                                           "halt_reason": rel.halt_reason})
+                await self._blocked(tool, arguments, "release_gate", f"灰测档位不允许 {effective_tier} 自动执行")
                 return GateOutcome(
                     status="refused",
                     observation={"error": "release_gate: 当前灰测档位不允许自动执行"},
@@ -303,6 +326,7 @@ class ActionGate:
             await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
                              kind="run.degraded",
                              payload={"reason": "daily_cost_cap", "at": "before_write"})
+            await self._blocked(tool, arguments, "daily_cost_cap", "org 日成本上限已到（写之前再查一次）")
             return GateOutcome(status="refused",
                                observation={"error": "daily_cost_cap"},
                                error="daily_cost_cap_exceeded")
@@ -347,6 +371,7 @@ class ActionGate:
             await self._audit(self.db, org_id=self.org_id, run_id=self.run_id,
                               action="permission_denied", object_key=None,
                               param_source="system", detail={"tool": tool, "error": str(exc)})
+            await self._blocked(tool, arguments, "permission_denied", str(exc))
             return GateOutcome(status="failed",
                                observation={"error": "permission_denied"},
                                error=str(exc))

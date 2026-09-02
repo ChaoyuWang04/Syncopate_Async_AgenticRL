@@ -32,23 +32,16 @@ from typing import Any, Awaitable, Callable
 from syncopate.runtime.db import Database, ToolCallResult, record_tool_call
 from syncopate.runtime.platform import PlatformError
 
-# 写工具白名单 → 需要的权限。
-#
-# ⚠️⚠️ **不在这张表里的工具会被当成读工具** —— 既不校验权限，**也不生成外部幂等键**。
-# 所以"漏登记"的代价不是报错，是**一个写动作悄悄没有幂等保护**。
-# ⇒ `tests/runtime/test_design_conformance.py` 有一条测试守着：
-#   沙盒里每多一个 kind="write" 的工具，这里没跟上就会红。
-WRITE_TOOLS: dict[str, str] = {
-    "campaign.update_budget": "budget:write",
-    "campaign.create": "campaign:write",
-    "campaign.scale_budget": "budget:write",
-    "approval.create_case": "approval:write",
-    # 🆕 2026-08-17 补齐：此前这四个在 runtime 侧被当读工具处理
-    "creative.upload": "creative:write",
-    "memory.write_proposal": "memory:write",
-    "memory.invalidate": "memory:write",
-    "memory.conflict_resolve": "memory:write",
-}
+# 写工具白名单 → 需要的权限：**从治理表派生**（K6-3），不再手抄一份。
+# 08-19 的老病：这里登记了 8 个写工具、实现只有 2 个——登记表是最像证据的名单。
+# 现在 `tool_governance.assert_governance_complete()` 在导入时对着沙盒 REGISTRY 断言：
+# 已登记 == 全集、side_effect == kind=="write"。缺一个、多一个、标错一个都在导入时炸。
+from syncopate.runtime.tool_governance import (assert_governance_complete, check_output,
+                                               classify_platform_error, error_json, governance,
+                                               write_permissions)
+
+assert_governance_complete()
+WRITE_TOOLS: dict[str, str] = write_permissions()
 
 MAX_ATTEMPTS = 3          # 和沙盒 core/failures.py 的 MAX_ATTEMPTS 保持一致
 RETRY_BACKOFF = (0.05, 0.15)
@@ -103,41 +96,54 @@ class ToolRuntime:
     async def call(self, *, org_id: str, run_id: str, step: int, tool: str,
                    arguments: dict[str, Any],
                    invoke: Callable[..., Awaitable[dict[str, Any]]]) -> ToolOutcome:
-        """`invoke` 是真正打平台的那个协程，签名 `invoke(**arguments, idempotency_key=...)`。"""
-        self._check_permission(tool)
+        """`invoke` 是真正打平台的那个协程，签名 `invoke(**arguments, idempotency_key=...)`。
 
-        is_write = tool in WRITE_TOOLS
+        K6：超时 / 可重试错误 / 输出键 全部从治理表读（禁全局常量）；失败一律结构化成
+        error_json {code, message, retryable, alert}（课件 CH6 分诊三字段）。
+        """
+        self._check_permission(tool)
+        gov = governance(tool)
+        is_write = gov.side_effect
         key = derive_idempotency_key(org_id=org_id, run_id=run_id, tool=tool,
                                      arguments=arguments) if is_write else None
+        timeout = gov.timeout_seconds
 
         attempts = 0
 
-        async def execute() -> tuple[bool, dict[str, Any] | None, str | None]:
+        async def execute() -> tuple[bool, dict[str, Any] | None, str | None, dict[str, Any] | None]:
             nonlocal attempts
             last_error: str | None = None
+            last_json: dict[str, Any] | None = None
             for attempt in range(1, MAX_ATTEMPTS + 1):
                 attempts = attempt
                 try:
                     kwargs = dict(arguments)
                     if is_write:
                         kwargs["idempotency_key"] = key
-                    data = await asyncio.wait_for(invoke(**kwargs),
-                                                  timeout=self.timeout_seconds)
-                    return True, data, None
+                    data = await asyncio.wait_for(invoke(**kwargs), timeout=timeout)
+                    bad = check_output(tool, data)
+                    if bad:
+                        # 反向污染：脏返回不进 context。副作用（若有）已发生 ⇒ 结果照存、观测报错、不重试
+                        return False, None, bad, error_json("output_schema_violation", bad)
+                    return True, data, None, None
                 except PlatformError as exc:
                     last_error = str(exc)
-                    # ★★ 只在平台**明确说可重试**时才重试，且写动作重试必须带同一个键。
-                    # 不带键就重试 = 在赌"刚才那次没生效"，赌输了是重复扣款。
-                    if not exc.retriable or (is_write and key is None):
-                        return False, None, last_error
+                    last_json = classify_platform_error(tool, code=str(exc.code), message=str(exc))
+                    # ★★ 只在治理表登记为可重试的错误码上重试，且写动作重试必须带同一个键。
+                    if not last_json["retryable"] or (is_write and key is None):
+                        return False, None, last_error, last_json
                 except asyncio.TimeoutError:
                     # 我们这侧的超时。和平台超时一样：**分不出副作用有没有发生**。
                     last_error = "client_timeout: 本地等待超时"
+                    # 读工具：超时可重试（无副作用）；写工具：结果未知 ⇒ 不重试，由 record_tool_call 记 response_lost
+                    last_json = error_json("client_timeout", last_error, retryable=not is_write)
+                    if is_write:
+                        return False, None, last_error, last_json
                 if attempt < MAX_ATTEMPTS:
                     await asyncio.sleep(RETRY_BACKOFF[min(attempt - 1, len(RETRY_BACKOFF) - 1)])
             # ★ 用尽重试就如实上报失败，**不是重试到成功为止** ——
             # 否则沙盒里教的"失败之后怎么办"在线上永远用不上。
-            return False, None, last_error
+            return False, None, last_error, last_json
 
         result: ToolCallResult = await record_tool_call(
             self.db, org_id=org_id, run_id=run_id, step=step, tool=tool,

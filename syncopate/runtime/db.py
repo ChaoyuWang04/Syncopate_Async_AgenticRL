@@ -862,6 +862,21 @@ async def _await_settled_prior(db: Database, org_id: str, key: str,
         await _asyncio.sleep(poll_seconds)
 
 
+async def record_blocked_call(db: Database, *, org_id: str, run_id: str, step: int, tool: str,
+                              arguments: dict[str, Any], blocked_by: str,
+                              error_json: dict[str, Any]) -> int:
+    """被闸拦下**也落库**（课件 CH6 四道闸："无论穿过还是被拦下都必须在 tool_calls 留下一行"）。
+    没有这一行，"模型试过越权/编工具名"这类事实事后不可见。"""
+    async with db.tx() as conn:
+        return int(await conn.fetchval(
+            """
+            INSERT INTO tool_calls (run_id, org_id, step, tool, arguments, ok, error, status,
+                                    blocked_by, error_json, ended_at)
+            VALUES ($1,$2,$3,$4,$5,FALSE,$6,'failed',$7,$8,now()) RETURNING id
+            """, run_id, org_id, step, tool, arguments, str(error_json.get("message", blocked_by))[:500],
+            blocked_by, error_json))
+
+
 RESPONSE_LOST_PREFIXES = ("client_timeout",)     # 结果未知的错误族：请求发出去了、回包没等到
 
 
@@ -933,10 +948,11 @@ async def record_tool_call(
                 """
                 INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
                                         ok, result, error, replayed_from,
-                                        status, duplicate_of, side_effect, ended_at)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'skipped_duplicate',$9,$10,now())
+                                        status, duplicate_of, side_effect, ended_at, external_idempotency_key)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'skipped_duplicate',$9,$10,now(),$11)
                 """, run_id, org_id, step, tool, arguments,
-                prior["ok"], prior["result"], prior["error"], prior["id"], side_effect)
+                prior["ok"], prior["result"], prior["error"], prior["id"], side_effect,
+                external_idempotency_key)
         # ok 仍是 NULL ⇒ 那一次至今没跑完（等超时了）。**如实上报"处理中"**，
         # 绝不冒充成功 —— 见 _await_settled_prior 的说明。
         if prior["ok"] is None:
@@ -962,14 +978,30 @@ async def record_tool_call(
     # ★ 计时从**执行**开始，不含占坑那次写库 —— §19 量的是"打平台花了多久"。
     import time as _time
     t0 = _time.perf_counter()
-    ok, data, error = await execute()
+    error_json: dict[str, Any] | None = None
+    try:
+        res = await execute()
+    except Exception as exc:                          # noqa: BLE001
+        # 工具实现崩了（不是平台返回 error）：这一行不能停在 running——那会被 sweeper 当"结果未知"
+        # 去对账。如实记 failed + tool_crashed，再把异常交给收口变成失败观测（09 §4 ⑨）。
+        latency_ms = int((_time.perf_counter() - t0) * 1000)
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE tool_calls SET ok=FALSE, error=$2, latency_ms=$3, status='failed', ended_at=now(), "
+                "error_json=$4 WHERE id=$1", call_id, f"tool_crashed: {exc}"[:500], latency_ms,
+                {"code": "tool_crashed", "message": str(exc)[:300], "retryable": False, "alert": True})
+        raise
+    if len(res) == 4:
+        ok, data, error, error_json = res
+    else:
+        ok, data, error = res
     latency_ms = int((_time.perf_counter() - t0) * 1000)
 
     status = _final_status(ok=bool(ok), error=error, side_effect=side_effect)
     async with db.tx() as conn:
         await conn.execute(
-            "UPDATE tool_calls SET ok=$2, result=$3, error=$4, latency_ms=$5, status=$6, ended_at=now() "
-            "WHERE id=$1", call_id, ok, data, error, latency_ms, status)
+            "UPDATE tool_calls SET ok=$2, result=$3, error=$4, latency_ms=$5, status=$6, ended_at=now(), "
+            "error_json=$7 WHERE id=$1", call_id, ok, data, error, latency_ms, status, error_json)
     if status == "response_lost":
         # 有副作用 + 结果未知：本地只能诚实地写"不知道"（课件 §11.3）；对账（K8）按键回查后回填
         error = f"response_lost: {error}"

@@ -347,12 +347,15 @@ TABLE tool_calls
   COL ended_at timestamp with time zone null=YES default=None
   COL side_effect boolean null=NO default=false
   COL duplicate_of bigint null=YES default=None
+  COL error_json jsonb null=YES default=None
+  COL blocked_by text null=YES default=None
   CONSTRAINT tool_calls_duplicate_of_fkey FOREIGN KEY (duplicate_of) REFERENCES tool_calls(id)
   CONSTRAINT tool_calls_pkey PRIMARY KEY (id)
   CONSTRAINT tool_calls_replayed_from_fkey FOREIGN KEY (replayed_from) REFERENCES tool_calls(id)
   CONSTRAINT tool_calls_side_effect_needs_key CHECK (((NOT side_effect) OR (external_idempotency_key IS NOT NULL)))
   CONSTRAINT tool_calls_status_check CHECK ((status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text, 'skipped_duplicate'::text, 'response_lost'::text])))
-  INDEX tool_calls_external_idem_uniq CREATE UNIQUE INDEX tool_calls_external_idem_uniq ON public.tool_calls USING btree (org_id, external_idempotency_key) WHERE ((external_idempotency_key IS NOT NULL) AND (replayed_from IS NULL))
+  INDEX tool_calls_external_idem_uniq CREATE UNIQUE INDEX tool_calls_external_idem_uniq ON public.tool_calls USING btree (org_id, external_idempotency_key) WHERE ((external_idempotency_key IS NOT NULL) AND (status <> 'skipped_duplicate'::text))
+  INDEX tool_calls_open_side_effects CREATE INDEX tool_calls_open_side_effects ON public.tool_calls USING btree (created_at) WHERE (side_effect AND (status = ANY (ARRAY['running'::text, 'response_lost'::text])))
   INDEX tool_calls_pkey CREATE UNIQUE INDEX tool_calls_pkey ON public.tool_calls USING btree (id)
 TABLE usage_records
   COL id bigint null=NO default=nextval('usage_records_id_seq'::regclass)

@@ -58,7 +58,7 @@
 | B2 | 八张核心表 | ✅ | 9 张（+approval_cases）`schema.sql:24-216` | model_calls 表**无写入路径**（全仓无 INSERT）→ K5/K9 |
 | B3 | 单调 sequence 同事务领号（last_seq） | ✅ 09-02 | `db.py:290-293` `MAX(seq)+1`；`worker.py:65-91` 有界重试掩盖撞号 | H13 → K2-2；`28` P-03 |
 | B4 | 子表冗余 org_id | ✅ | run_events/agent_steps/model_calls/tool_calls/checkpoints/usage/audit 全有 | 可开 RLS 的前提已具备 |
-| B5 | tool_calls `UNIQUE(org,tool,key)` + CHECK 写工具 key 非空 | ✅ 09-02（0002：side_effect 列 + CHECK；side_effect 由 K6 填） | `schema.sql:130-132` 部分唯一索引 `(org_id, key)` | 无 tool 维度（key 已含 tool 名，等价）；**无 CHECK**（H19）→ K2-1 |
+| B5 | tool_calls `UNIQUE(org,tool,key)` + CHECK 写工具 key 非空 | ✅ 09-02（0002 CHECK；K6 起 side_effect 由治理表填，唯一索引按五态） | `schema.sql:130-132` 部分唯一索引 `(org_id, key)` | 无 tool 维度（key 已含 tool 名，等价）；**无 CHECK**（H19）→ K2-1 |
 | B6 | tool_calls 两阶段写入（意图日志 created/ended） | ✅ 09-02（running→终态 + ended_at） | `db.py:439-462` 先占坑再执行，`ok` NULL=执行中 | 无 `ended_at`/`status` 列，"执行中"靠 NULL 三值表达 → K2-1/K6-2 五态 |
 | B7 | usage_records UNIQUE 防账单翻倍 | ✅ 09-02（call_index=attempts，28 P-12） | `schema.sql:144-153` 零约束 | H15 → K2-1 |
 | B8 | checkpoints UNIQUE(run, index) | ✅ | `schema.sql:141` `(org_id,run_id,step)` | — |
@@ -101,13 +101,13 @@
 | D8 | 步数上限 = permanent | ✅ | `action_gate.py:187-193` → `worker.py:522-529` failed | — |
 | D9 | timeout 三层（模型 / 工具 / run） | 🔶 | 模型 120s `decider.py:133,140`；工具 30s `tools.py:90` | **run 级无** → K5/K9-2 max_duration |
 | D10 | 错误分层：transient 回队列 / permanent 终态 | ✅ 09-02（K3）+ response_lost ⇒ awaiting_reconciliation（K5） | 只有 permanent 路（failed）；动作失败观测回模型 `agent_loop.py:213-216` | K5-4 |
-| D11 | Tool Runtime 四道闸（找定义→schema→权限→幂等） | ✅ | `action_gate.py:201`（存在）`:212`（必填）`tools.py:99`（权限）`db.py:405`（幂等） | 🔶 schema 校验只查**必填缺失**不校验类型（09 §4 ⑧ 字符串数字坑）→ K6-1 |
-| D12 | 注册断言 side_effect ⇒ idempotency_required + key_fn + timeout + output_schema | 🔶 | `tool_registry.py:168` 断言 write⇒fact_key；**runtime 另抄一份 `WRITE_TOOLS`** `tools.py:41`（两份"哪些是写工具"的真相，`test_design_conformance` 靠测试对齐） | K6-3：以 registry `kind=="write"` 为唯一来源，删 WRITE_TOOLS 抄本；补 timeout/output_schema |
+| D11 | Tool Runtime 四道闸（找定义→schema→权限→幂等） | ✅ 09-02 对照验收（拦下也落库） | `action_gate.py:201`（存在）`:212`（必填）`tools.py:99`（权限）`db.py:405`（幂等） | 🔶 schema 校验只查**必填缺失**不校验类型（09 §4 ⑧ 字符串数字坑）→ K6-1 |
+| D12 | 注册断言 side_effect ⇒ idempotency_required + key_fn + timeout + output_schema | ✅ 09-02（tool_governance；WRITE_TOOLS 抄本退役） | `tool_registry.py:168` 断言 write⇒fact_key；**runtime 另抄一份 `WRITE_TOOLS`** `tools.py:41`（两份"哪些是写工具"的真相，`test_design_conformance` 靠测试对齐） | K6-3：以 registry `kind=="write"` 为唯一来源，删 WRITE_TOOLS 抄本；补 timeout/output_schema |
 | D13 | tool_calls 五态含 `response_lost` | ✅ 09-02（写入路径；超龄 running→response_lost 的 sweeper 判定归 K8） | `schema.sql:110` `ok BOOLEAN` 三值 | K6-2 |
 | D14 | 幂等键绑业务实体、**不含 run_id** | ✅ 09-02（loop 路径；写死三步路径的 client_request_id 仍带 run_id，无 decider 时才走） | `tools.py:71-84` `f"{org}:{run_id}:{tool}:{hash}"`；编排 `client_request_id=f"{run_id}:budget"` `worker.py:437` | rerun 即双重执行（课件 §11.4）→ `28` S-02，K5-6/K6-4 |
-| D15 | 失败分诊 `error_json{code,message,retryable}` | 🔶 | `error TEXT` + `PlatformError.retriable` 内部字段 | K6-5 |
-| D16 | output_schema 防反向污染 | ❌ | 无 | K6-6 |
-| D17 | 拦下也落库（tool_calls 行） | 🔶 | 权限/步数/成本拦下只写 audit+event `action_gate.py:243-247,281-286` | 不写 tool_calls 行 → K6-1 |
+| D15 | 失败分诊 `error_json{code,message,retryable}` | ✅ 09-02（+alert；权限拒绝不告警） | `error TEXT` + `PlatformError.retriable` 内部字段 | K6-5 |
+| D16 | output_schema 防反向污染 | ✅ 09-02（顶层必有键；脏返回不进 context） | 无 | K6-6 |
+| D17 | 拦下也落库（tool_calls 行） | ✅ 09-02（blocked_by 八种） | 权限/步数/成本拦下只写 audit+event `action_gate.py:243-247,281-286` | 不写 tool_calls 行 → K6-1 |
 | D18 | 幂等命中"执行中"返回处理中不冒充 | ✅ | `db.py:366-402` `_await_settled_prior` | 课件 `response_lost` 语义的雏形，K6-2 收编 |
 | D19 | SSE 先落库再推 + heartbeat + terminal 关流 | ✅ | `api.py:409-452`；B-6a 终态事件并入 finish_run 事务 `db.py:265-293` | — |
 | D20 | 双路续传 `after` + `Last-Event-ID` | 🔶 | 只有 header 路 `api.py:458-475` | K7-1 补 query 路（优先级 query > header） |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K5 后）**：✅ 53 · 🔶 15 · ❌ 9 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K6 后）**：✅ 58 · 🔶 11 · ❌ 8 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 
@@ -162,6 +162,24 @@
 | 7 | transient/permanent 分层，execute_run 永远正常 return | `worker.execute_claimed` + `classify_error` + `schedule_run_retry` | ✅（K3） |
 | 8 | waiting_for_user 干等搬到数据维度 | `gateway.open_approval_case` / `db.park_run_for_user` 走 `transition_run`（清 lease、发 token） | ✅（K4） |
 | 9 | timeout 分层 | 模型 120s（decider）· 工具 30s（ToolRuntime）· run 级 ⬜（K9-2） | 🔶 |
+
+### 2.2 K6-1 · 课件"十三条职责" × ActionGate / ToolRuntime / db（2026-09-02）
+
+| # | 职责 | 落点 | 结论 |
+|---|---|---|---|
+| 1 | 按 tool_name 找定义 | `ActionGate.invoke` ②（bindings；报"没有"不猜） | ✅ |
+| 2 | schema 校验 args | `_missing_required`（必填从沙盒 spec 取）；类型校验仍欠（09 §4 ⑧ 字符串数字在实现层强转） | 🔶 |
+| 3 | 权限（用户/org/run） | `ToolRuntime._check_permission`（权限从治理表）；资源归属三判 = 单租户断言 | 🔶 |
+| 4 | 判断有无副作用 | `tool_governance.governance(tool).side_effect`（与 REGISTRY kind 一致性断言） | ✅ |
+| 5 | 有副作用必查幂等键 | `derive_idempotency_key`（不含 run_id）+ `record_tool_call` 键路径 + UNIQUE | ✅ |
+| 6 | 创建 tool_call 记录（执行前） | `record_tool_call` 占坑 status=running（意图日志） | ✅ |
+| 7 | timeout | 治理表 `timeout_seconds`（禁全局常量） | ✅ |
+| 8 | retry policy | 治理表 `retryable_errors` + MAX_ATTEMPTS + 同键 | ✅ |
+| 9 | 执行真实工具 | `ToolBinding.invoke`（收口持有绑定，loop 拿不到 platform） | ✅ |
+| 10 | 保存 result/error | `record_tool_call` 终态 UPDATE（五态 + error_json + ended_at） | ✅ |
+| 11 | 写 run_events | `ActionGate` ⑦ `tool.result`（拦下也发） | ✅ |
+| 12 | 写 audit_logs | `ActionGate` ⑦（写工具带 param_source） | ✅ |
+| 13 | 返回结构化结果给 loop | `GateOutcome`（status/observation/error/replayed） | ✅ |
 
 ---
 

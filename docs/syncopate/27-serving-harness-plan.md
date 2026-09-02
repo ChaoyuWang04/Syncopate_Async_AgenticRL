@@ -493,6 +493,22 @@ K5-7 测试收编：剧本假模型跑全链，只断言库状态；恢复测试
 
 ## 8 · K6 · Tool Runtime（课件 CH6；~2 天）
 
+> ✅ **K6 已落地（2026-09-02，对照验收 ActionGate，不另建一层）**：`tool_governance.py` 治理表（30 工具逐条：
+> permission / timeout_seconds / expected_max_ms / retryable_errors / output_required_keys / audit_required）+
+> **注册断言**：`ToolGovernance.__post_init__` 写工具缺权限/超时/输出键/审计即拒；`assert_governance_complete()`
+> 在 `tools.py` 导入时对着沙盒 REGISTRY 断言"已登记 == 全集 ∧ side_effect == kind"（不改训练共用的
+> `tool_registry`，真相仍只有一份）；`WRITE_TOOLS` 改为从治理表派生（08-19"登记 8 实现 2"的那张抄本退役）·
+> 0004 迁移：`tool_calls.error_json`（code/message/retryable/alert）+ `blocked_by`；唯一索引改覆盖
+> `status <> 'skipped_duplicate'`，重放行带键引用 `duplicate_of` · 四道闸**拦下也落库**（unknown_tool /
+> validation_failed / permission_denied / tier_d_refused / release_gate / daily_cost_cap / cancel_requested /
+> max_steps 各一行）· 分诊：平台错误码 ∈ 治理表 retryable_errors 才重试；写工具**改造**为
+> {429, rate_limited, server_error, timeout} 带同键可重试（B-1a 实查 + 沙盒同形；课件的"空集"不采纳，理由在
+> 治理表注释），本地 `client_timeout` 对写工具 = response_lost 不重试 · output_schema 轻量版：顶层必有键，
+> 脏返回不进 context；工具实现崩溃时 tool_calls 行关成 failed/tool_crashed（不再停在 running 误入对账）。
+> 门槛②③④⑤⑥ = `test_tool_runtime_k6.py` 13 条（五种非法登记必拒、幽灵/缺失/标错必红、四闸落库、同键零执行 +
+> UNIQUE 负向、脏输出、分诊表 + 写超时=response_lost、权限拒绝不告警）；⑦ tool_parity 10 条全绿，回归 332 passed。
+> 欠账：expected_max_ms 的消费者（超龄 running→response_lost）在 K8-1；权限"资源归属"三判仍是单租户断言。
+
 > 我们已有 ActionGate（agent 碰外部世界的**唯一出口**，横切收口：权限/幂等/重试/成本闸/
 > 审批/审计/事件/步数上限）+ tool_registry（spec 唯一真相来源）+ tool_parity（30/30 账本）。
 > K6 = 拿课件的"四道闸 + 八步生命周期 + 十三条职责"当**对照清单**验收 ActionGate，
