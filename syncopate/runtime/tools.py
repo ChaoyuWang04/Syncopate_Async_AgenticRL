@@ -68,19 +68,18 @@ class ToolOutcome:
     idempotency_key: str | None
 
 
-def derive_idempotency_key(*, org_id: str, run_id: str, tool: str,
+def derive_idempotency_key(*, org_id: str, run_id: str | None = None, tool: str,
                            arguments: dict[str, Any]) -> str:
-    """从 (org, run, 工具, 参数) 推出稳定的外部幂等键。
+    """写工具的外部幂等键。**必须确定性**（重试要推出同一个键），**不含 run_id**（K5-6，课件 §11.4）：
 
-    ★ **必须是确定性的**：重试时要能推出**同一个键**，否则幂等等于没有。
-    所以不能用 uuid4，也不能带时间戳。
-
-    ★ 带上参数的哈希：同一个 run 里"把预算改成 900"和"改成 1200"是两个不同的动作，
-    共用一个键会让第二个被误挡。
+    带 run_id 的键在"同 run 内崩溃重试"下完全正常，一遇 rerun（新 run_id）就变成"新的一笔"——
+    下游认不出、本地 UNIQUE 也拦不住 ⇒ 双重扣款。键标识的是"这是哪一笔业务"，不是"哪一次执行"。
+    业务实体 = 参数本身（沙盒 spec 的 client_request_id 就是模型给的业务级请求号，训练里教过它传）。
+    `run_id` 参数只为兼容旧调用方，**不参与**键的计算。
     """
     payload = repr(sorted(arguments.items())).encode()
     digest = hashlib.sha256(payload).hexdigest()[:16]
-    return f"{org_id}:{run_id}:{tool}:{digest}"
+    return f"{org_id}:{tool}:{digest}"
 
 
 class ToolRuntime:
@@ -142,7 +141,8 @@ class ToolRuntime:
 
         result: ToolCallResult = await record_tool_call(
             self.db, org_id=org_id, run_id=run_id, step=step, tool=tool,
-            arguments=arguments, external_idempotency_key=key, execute=execute)
+            arguments=arguments, external_idempotency_key=key, execute=execute,
+            side_effect=is_write)
 
         return ToolOutcome(ok=result.ok, data=result.data, error=result.error,
                            attempts=attempts, replayed=result.replayed,

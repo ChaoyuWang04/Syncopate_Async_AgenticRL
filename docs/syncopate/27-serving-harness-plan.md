@@ -420,6 +420,19 @@ K4-7 grep 判据进 CI/pre-commit：`\.status\s*=` 命中白名单只留 transit
 
 ## 7 · K5 · 执行 loop（课件 CH5；~2 天）
 
+> ✅ **K5 已落地（2026-09-02，对照收编，loop 渲染/解析零改动）**：存档密度=课件快照式（一轮两档：模型点名
+> 工具后 / 结果回灌后；快照带 `last`/`completed_tool_calls`/`n`，恢复读消息最多那档）· 恢复两路：`last=tool_use`
+> 时读意图日志——succeeded ⇒ 回填观测续跑（`tool.repaired_from_intent_log`）/ running·response_lost ⇒
+> `awaiting_reconciliation` ⇒ 回队列延迟重投 + `tool.manual_review` 事件（⛔ 不自动重试）/ 无记录 ⇒ 重做安全 ·
+> **任何**一次执行都从最新快照接着走（此前只有审批裁决后才 resume，崩溃重投等于从头跑，29 D5）· 意图日志：
+> `record_tool_call` 先落 running(side_effect) 再 UPDATE 五态（succeeded/failed/**response_lost**/skipped_duplicate
+> +duplicate_of），写工具 client_timeout ⇒ response_lost · 安全点：模型调用前/下一轮前（loop 顶）+ 工具调用前
+> （收口入口），判据同一个 `gate.stop_requested()` · 幂等键去 run_id（`org:tool:hash(args)`；rerun 同一业务
+> 意图 ⇒ 同键）。门槛②③⑤ = `test_loop_k5.py` 4 条（分支 C 全程副作用=1 + 负向"抹掉意图日志必重发"、只读恢复
+> 复用观测、取消在模型调用前拦住）；④ 错误分层 = K3 测试；⑥ 同形红线 = tests/train 同形断言 + decider 测试全绿；
+> ⑦ 回归 315 passed。欠账：平台侧去重账本持久化（K8-2 对账要查它）；旧的写死三步路径 client_request_id 仍带
+> run_id（只在无 decider 时用）。
+
 > ⚠️ **本阶段的性质与其他阶段不同：我们已经有一个在生产跑的 agent_loop + ActionGate +
 > transcript 恢复 + 假模型驱动测试（B-0/B-3a/B-3b，01 §1）**，且横切（权限/幂等/审批/
 > 审计/事件/步数上限）已收口在 ActionGate——比课件"散点检查"更结构化。

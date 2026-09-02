@@ -562,7 +562,7 @@ class Worker:
                                                   run_agent_loop)
 
         gate = self._gate(org_id=org_id, run_id=run_id)
-        gate.skip_triggers = resumed
+        gate.skip_triggers = resumed          # 只有"人已裁决"才跳过网关；恢复本身不跳
         usage: dict[str, int] = {}
         token = MODEL_USAGE.set(usage)
         intent_token = RUN_INTENT.set(intent)
@@ -591,10 +591,12 @@ class Worker:
                           flush=True)
         try:
             decider = _TimedDecider(chosen) if _st.ENABLED else chosen
+            # K5-2：**任何**一次执行都从最新快照接着走（没有快照 = 空 = 从头）。此前只有审批裁决后
+            # 才 resume ⇒ 崩溃/重投后的执行从头重跑（29 D5）。resumed（审批已裁决）只控制 skip_triggers。
             result = await run_agent_loop(gate, decider, db=self.db,
                                           org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
-                                          resume=resumed)
+                                          resume=True)
         finally:
             PRIOR_TURNS.reset(prior_token)
             RUN_INTENT.reset(intent_token)
@@ -611,6 +613,13 @@ class Worker:
         if result.status == "finished":
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="succeeded", result=result.final_answer)
+        elif result.status == "awaiting_reconciliation":
+            # K5-3 分支 C：写工具结果未知（response_lost）。⛔ 禁止自动重试；
+            # 回队列延迟重投，等对账（K8）按幂等键回填后，loop 从意图日志接着走。
+            await emit(self.db, org_id=org_id, run_id=run_id, kind="tool.manual_review",
+                       payload={"tool": result.error, "reason": "response_lost"})
+            await schedule_run_retry(self.db, org_id=org_id, run_id=run_id,
+                                     error=f"response_lost:{result.error}", delay_seconds=300)
         elif result.status == "halted":
             if result.case_ref is None:
                 # ★ 09-02（`26 §2.5` Ⓐ）：没有审批单的挂起 = session.clarify。

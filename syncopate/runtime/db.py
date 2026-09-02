@@ -862,10 +862,37 @@ async def _await_settled_prior(db: Database, org_id: str, key: str,
         await _asyncio.sleep(poll_seconds)
 
 
+RESPONSE_LOST_PREFIXES = ("client_timeout",)     # 结果未知的错误族：请求发出去了、回包没等到
+
+
+def _final_status(*, ok: bool, error: str | None, side_effect: bool) -> str:
+    """五态（课件 CH6 / K5-3）：succeeded / failed / **response_lost**（有副作用且结果未知，禁止自动重试）。"""
+    if ok:
+        return "succeeded"
+    if side_effect and error and error.startswith(RESPONSE_LOST_PREFIXES):
+        return "response_lost"
+    return "failed"
+
+
+async def last_write_call(db: Database, *, org_id: str, run_id: str, tool: str) -> dict | None:
+    """恢复第二路（课件 CH8 §4.3）：模型已点名工具、结果未回时，读意图日志判断"钱动没动"。
+    只看**真正执行**的那一行（排除 skipped_duplicate）。"""
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, status, ok, result, error, side_effect, external_idempotency_key
+              FROM tool_calls
+             WHERE org_id=$1 AND run_id=$2 AND tool=$3 AND status <> 'skipped_duplicate'
+             ORDER BY id DESC LIMIT 1
+            """, org_id, run_id, tool)
+    return dict(row) if row else None
+
+
 async def record_tool_call(
     db: Database, *, org_id: str, run_id: str, step: int, tool: str,
     arguments: dict[str, Any], external_idempotency_key: str | None,
     execute,                                   # async () -> (ok, data, error)
+    side_effect: bool = False,
 ) -> ToolCallResult:
     """执行一次工具调用，带工具级幂等。
 
@@ -891,9 +918,9 @@ async def record_tool_call(
                 row = await conn.fetchrow(
                     """
                     INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                            external_idempotency_key)
-                    VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-                    """, run_id, org_id, step, tool, arguments, external_idempotency_key)
+                                            external_idempotency_key, status, side_effect)
+                    VALUES ($1,$2,$3,$4,$5,$6,'running',$7) RETURNING id
+                    """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect)
                 call_id = row["id"]
         except UniqueViolationError:
             prior = await _await_settled_prior(db, org_id, external_idempotency_key)
@@ -905,10 +932,11 @@ async def record_tool_call(
             await conn.execute(
                 """
                 INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                        ok, result, error, replayed_from)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                                        ok, result, error, replayed_from,
+                                        status, duplicate_of, side_effect, ended_at)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'skipped_duplicate',$9,$10,now())
                 """, run_id, org_id, step, tool, arguments,
-                prior["ok"], prior["result"], prior["error"], prior["id"])
+                prior["ok"], prior["result"], prior["error"], prior["id"], side_effect)
         # ok 仍是 NULL ⇒ 那一次至今没跑完（等超时了）。**如实上报"处理中"**，
         # 绝不冒充成功 —— 见 _await_settled_prior 的说明。
         if prior["ok"] is None:
@@ -926,9 +954,9 @@ async def record_tool_call(
             row = await conn.fetchrow(
                 """
                 INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                        external_idempotency_key)
-                VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-                """, run_id, org_id, step, tool, arguments, external_idempotency_key)
+                                        external_idempotency_key, status, side_effect)
+                VALUES ($1,$2,$3,$4,$5,$6,'running',$7) RETURNING id
+                """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect)
             call_id = row["id"]
 
     # ★ 计时从**执行**开始，不含占坑那次写库 —— §19 量的是"打平台花了多久"。
@@ -937,8 +965,12 @@ async def record_tool_call(
     ok, data, error = await execute()
     latency_ms = int((_time.perf_counter() - t0) * 1000)
 
+    status = _final_status(ok=bool(ok), error=error, side_effect=side_effect)
     async with db.tx() as conn:
         await conn.execute(
-            "UPDATE tool_calls SET ok=$2, result=$3, error=$4, latency_ms=$5 WHERE id=$1",
-            call_id, ok, data, error, latency_ms)
+            "UPDATE tool_calls SET ok=$2, result=$3, error=$4, latency_ms=$5, status=$6, ended_at=now() "
+            "WHERE id=$1", call_id, ok, data, error, latency_ms, status)
+    if status == "response_lost":
+        # 有副作用 + 结果未知：本地只能诚实地写"不知道"（课件 §11.3）；对账（K8）按键回查后回填
+        error = f"response_lost: {error}"
     return ToolCallResult(ok=ok, data=data, error=error, replayed=False, call_id=call_id)

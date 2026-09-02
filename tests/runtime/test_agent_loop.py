@@ -190,6 +190,12 @@ class _HaltingGate:
     def __init__(self) -> None:
         self.step = 1
 
+    async def stop_requested(self) -> bool:               # K5-5 安全点契约（假 gate 显式实现）
+        return False
+
+    def observation_for(self, tool, *, ok, data, error):    # noqa: ANN001
+        return {"tool": tool, "ok": ok, "data": data, "error": error}
+
     async def invoke(self, **kw):                          # noqa: ANN003
         from syncopate.runtime.action_gate import GateOutcome
         return GateOutcome(status="halted", case_ref="CASE_9",

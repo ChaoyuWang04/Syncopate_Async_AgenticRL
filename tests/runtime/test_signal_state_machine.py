@@ -40,6 +40,12 @@ class _FakeGate:
         self.step = 1
         self.events: list[tuple[str, dict]] = []
 
+    async def stop_requested(self) -> bool:               # K5-5 安全点契约（假 gate 显式实现）
+        return False
+
+    def observation_for(self, tool, *, ok, data, error):    # noqa: ANN001
+        return {"tool": tool, "ok": ok, "data": data, "error": error}
+
     async def emit_info(self, *, kind: str, payload: dict):
         self.events.append((kind, payload))
 

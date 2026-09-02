@@ -21,6 +21,10 @@
 
 ⇒ 所以这里给 `checkpoints` 补上了它一直缺的写入路径（`db.py:184` 明写"那张表现在没人写"），
   审批中断后从**上次的 transcript** 接着走。
+★ K5-2（2026-09-02，27 §16-4 裁定 = 课件快照式）：**每 append 一条消息就存一次**——一轮两档
+  （模型点名工具后 / 工具结果回灌后），快照带 `last` 与 `completed_tool_calls`。存档密度决定
+  恢复分辨率：只有"已点名、结果未回"那一档存在，恢复时才能走第二路（读意图日志判断钱动没动，
+  而不是重问模型或裸重跑工具）。
 ⚠️ 写动作的安全性仍然由**幂等键**兜底 —— transcript 只是省掉重复劳动，
   不是正确性的唯一依赖。两条都在，才敢在生产上恢复。
 """
@@ -83,7 +87,7 @@ class Decider(Protocol):
 
 @dataclass
 class LoopResult:
-    status: Literal["finished", "halted", "exhausted", "failed"]
+    status: Literal["finished", "halted", "exhausted", "failed", "awaiting_reconciliation"]
     final_answer: dict[str, Any] | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     case_ref: str | None = None
@@ -97,20 +101,40 @@ async def save_transcript(db, *, org_id: str, run_id: str, step: int,
     ★ 这是 `checkpoints` 表**第一个写入者** —— 它建了很久但一直没人写
       （`db.py:184` 明写这一点，并因此选了"从头重跑"）。
     """
+    state = {"history": history, "last": _last_of(history),
+             "completed_tool_calls": [i for i, m in enumerate(history) if m.get("role") == "observation"],
+             "n": len(history)}
     async with db.tx() as conn:
+        # step 只是"第几轮"；同一轮的两档以 n（消息数）区分 ⇒ 用 (step, n) 做键的等价物：
+        # 覆盖同 step 的快照，但 state.n 单调，恢复读最新一条即可
         await conn.execute(
             "INSERT INTO checkpoints (org_id, run_id, step, state) VALUES ($1,$2,$3,$4) "
             "ON CONFLICT (org_id, run_id, step) DO UPDATE SET state=EXCLUDED.state",
-            org_id, run_id, step, json.dumps({"history": history}, ensure_ascii=False,
-                                             default=str))
+            org_id, run_id, step, json.dumps(state, ensure_ascii=False, default=str))
+
+
+def _last_of(history: list[dict[str, Any]]) -> str:
+    """快照的 `last`（课件 CH8 §4.2）：决定恢复走哪一路。"""
+    if not history:
+        return "user:input"
+    m = history[-1]
+    role = m.get("role")
+    if role == "action":
+        return f"tool_use:{m.get('tool')}"
+    if role == "observation":
+        return "tool_result"
+    if role == "final":
+        return "final"
+    return str(role)
 
 
 async def load_transcript(db, *, org_id: str, run_id: str) -> list[dict[str, Any]]:
     """读回最后一次 transcript。没有就返回空 —— **报"没有"，不猜**。"""
     async with db.tx() as conn:
         row = await conn.fetchrow(
+            # 最新 = 消息最多的那档（一轮两档可能落在相邻 step；n 单调，step 不一定）
             "SELECT state FROM checkpoints WHERE org_id=$1 AND run_id=$2 "
-            "ORDER BY step DESC LIMIT 1", org_id, run_id)
+            "ORDER BY COALESCE((state->>'n')::int, 0) DESC, id DESC LIMIT 1", org_id, run_id)
     if row is None:
         return []
     state = row["state"]
@@ -142,7 +166,35 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
     #   步数上限管不到它（那是 gate.invoke 记的），所以这里单独设一条连续失败上限。
     fumbles = 0
 
+    if resume and history and history[-1].get("role") == "action":
+        # ★ 恢复第二路（课件 CH8 §4.3）：last = 已点名工具、结果未回。既不重问模型，也不裸重跑工具：
+        #   读意图日志——succeeded ⇒ 回填观测续跑；running/response_lost ⇒ 停下转对账；
+        #   没有记录（只读工具或还没占坑）⇒ 重做这一步是安全的。
+        from syncopate.runtime.db import last_write_call
+        pending = history[-1]
+        rec = await last_write_call(db, org_id=org_id, run_id=run_id, tool=pending["tool"])
+        if rec is not None and rec["side_effect"] and rec["status"] in ("running", "response_lost"):
+            await gate.emit_info(kind="run.awaiting_reconciliation",
+                                 payload={"tool": pending["tool"], "tool_call_id": rec["id"],
+                                          "status": rec["status"]})
+            return LoopResult(status="awaiting_reconciliation", error=pending["tool"], history=history)
+        if rec is not None and rec["status"] in ("succeeded", "failed"):
+            obs = gate.observation_for(pending["tool"], ok=bool(rec["ok"]), data=rec["result"],
+                                       error=rec["error"])
+            history.append({"role": "observation", "observation": obs})
+            await save_transcript(db, org_id=org_id, run_id=run_id, step=gate.step, history=history)
+            await gate.emit_info(kind="tool.repaired_from_intent_log",
+                                 payload={"tool": pending["tool"], "tool_call_id": rec["id"]})
+        else:
+            # 没占过坑 ⇒ 副作用不可能发生过；把这一步交回下面的正常路径重做（去掉悬空的 action）
+            history.pop()
+
     while True:
+        # ── 安全点：模型调用前 / 下一轮 loop 前（K5-5；工具调用前那个在收口入口）──
+        if await gate.stop_requested():
+            await save_transcript(db, org_id=org_id, run_id=run_id, step=gate.step, history=history)
+            return LoopResult(status="exhausted", error="cancel_requested", history=history)
+
         proposal = await decider.decide(user_message=user_message, history=history)
 
         if getattr(proposal, "thinking", ""):
@@ -193,14 +245,19 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
             continue
         fumbles = 0
 
+        # ── 存档①：模型点名工具后、执行前（"已点名、结果未回"这一档是分支 C 的全部依据）──
+        history.append({"role": "action", "tool": proposal.tool,
+                        "arguments": proposal.arguments})
+        await save_transcript(db, org_id=org_id, run_id=run_id,
+                              step=gate.step + 1, history=history)
+
         outcome: GateOutcome = await gate.invoke(
             tool=proposal.tool, arguments=dict(proposal.arguments), ctx=ctx,
             param_source=proposal.param_source, rationale=proposal.rationale)
 
-        history.append({"role": "action", "tool": proposal.tool,
-                        "arguments": proposal.arguments})
         # ★★ 观测**一律**回到模型 —— 成功、失败、被拒，都回。
         #   只回成功的，模型就永远学不到"失败之后怎么办"。
+        # ── 存档②：结果回灌后 ──
         history.append({"role": "observation", "observation": outcome.observation})
         await save_transcript(db, org_id=org_id, run_id=run_id,
                               step=gate.step, history=history)

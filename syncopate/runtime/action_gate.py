@@ -132,6 +132,16 @@ class ActionGate:
         #   run 会在 waiting_for_user 和 queued 之间来回弹，永远跑不完）
         self.skip_triggers = False
 
+    async def stop_requested(self) -> bool:
+        """安全点判定（K5-5）：取消意图 ∨ lease 丢失。loop 在**模型调用前/下一轮前**问一次，
+        收口入口在**工具调用前**自己再问一次——四个安全点两处代码，判据同一个。"""
+        return bool(self._cancel_check is not None and await self._cancel_check())
+
+    def observation_for(self, tool: str, *, ok: bool, data: dict[str, Any] | None,
+                        error: str | None) -> dict[str, Any]:
+        """恢复第二路回填观测时用同一套渲染（守则⑮：观测形状两侧只有一份）。"""
+        return self._observation(tool, ok=ok, data=data, error=error)
+
     async def emit_info(self, *, kind: str, payload: dict) -> None:
         """信息型事件的公开出口（model.thinking 等展示流；不参与判定/审计语义）。"""
         await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,

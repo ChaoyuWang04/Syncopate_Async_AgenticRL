@@ -59,7 +59,7 @@
 | B3 | 单调 sequence 同事务领号（last_seq） | ✅ 09-02 | `db.py:290-293` `MAX(seq)+1`；`worker.py:65-91` 有界重试掩盖撞号 | H13 → K2-2；`28` P-03 |
 | B4 | 子表冗余 org_id | ✅ | run_events/agent_steps/model_calls/tool_calls/checkpoints/usage/audit 全有 | 可开 RLS 的前提已具备 |
 | B5 | tool_calls `UNIQUE(org,tool,key)` + CHECK 写工具 key 非空 | ✅ 09-02（0002：side_effect 列 + CHECK；side_effect 由 K6 填） | `schema.sql:130-132` 部分唯一索引 `(org_id, key)` | 无 tool 维度（key 已含 tool 名，等价）；**无 CHECK**（H19）→ K2-1 |
-| B6 | tool_calls 两阶段写入（意图日志 created/ended） | 🔶 | `db.py:439-462` 先占坑再执行，`ok` NULL=执行中 | 无 `ended_at`/`status` 列，"执行中"靠 NULL 三值表达 → K2-1/K6-2 五态 |
+| B6 | tool_calls 两阶段写入（意图日志 created/ended） | ✅ 09-02（running→终态 + ended_at） | `db.py:439-462` 先占坑再执行，`ok` NULL=执行中 | 无 `ended_at`/`status` 列，"执行中"靠 NULL 三值表达 → K2-1/K6-2 五态 |
 | B7 | usage_records UNIQUE 防账单翻倍 | ✅ 09-02（call_index=attempts，28 P-12） | `schema.sql:144-153` 零约束 | H15 → K2-1 |
 | B8 | checkpoints UNIQUE(run, index) | ✅ | `schema.sql:141` `(org_id,run_id,step)` | — |
 | B9 | `input_hash / cancel_requested_at / resume_token / last_seq / version` 五列 | ✅ 09-02（0002，另加 run_type/parent_run_id/rerun_reason） | `schema.sql:24-51` 一列都没有 | K2-1 一次建齐 |
@@ -80,7 +80,7 @@
 | C5 | 先写库再 ack | ✅ 09-02（acks_late；集成测试③） | 无 ack 概念（无 broker） | K3-8 |
 | C6 | 错误分类 transient/permanent + 退避 + DLQ | ✅ 09-02（副作用感知归 K5/K6） | 工具级 retriable 重试 `tools.py:114-136`；run 级异常一律 `failed` `worker.py:318-322`；无 DLQ | K3-9 |
 | C7 | worker 层不改 run 状态（一个写入者） | ✅ 09-02（Celery task 层零状态写；业务错误在 execute_claimed 内经 transition_run 消化） | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
-| C8 | 协作式取消消费端（四个安全点） | 🔶（1/4：工具调用前已接；模型调用前/step 后/下轮前 K5-5） | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
+| C8 | 协作式取消消费端（四个安全点） | ✅ 09-02（模型调用前/下轮前 = loop 顶；工具调用前 = 收口入口；step 后 = 下一轮顶） | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
 | C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | ✅ 09-02（三队列建好；告警线 60s；面板归 K9） | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
 | C10 | 三个 attempts 分账 | ✅ 09-02（outbox.attempts / Celery retries / agent_runs.attempts） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
 | C11 | job payload 只放 run_id | ✅ 09-02 | 无 job | K3-4；`28` H23 |
@@ -94,17 +94,17 @@
 | D1 | 迁移白名单 + `transition_run` 唯一入口 + reason/actor 必填 | ✅ 09-02 | 状态裸改四处：`db.py:241`（claim）`db.py:278`（finish）`db.py:324`（resume）`gateway.py:143`（open_approval_case） | K4-1/K4-6；K4 门槛② grep 判据 |
 | D2 | 事件名映射（succeeded→`run.completed`） | ✅ 09-02（前端 sse.ts/controller.ts 改名，本机未构建验证） | `db.py:259` `_TERMINAL_EVENT` 用 **`run.succeeded`**；`api.py:406` TERMINAL 同名 | 课件口径 `run.completed`；前端 `sse.ts` 也认现名 ⇒ K4-2 改名要三处同步（含前端） |
 | D3 | 非法迁移 → 409 `INVALID_RUN_TRANSITION` | ✅ 09-02 | 无 | K4-1 |
-| D4 | checkpoint 每 append 一条存一次，带 `last`/`completed_tool_calls` | 🔶 | `agent_loop.py:174-180` action+observation **一起 append 后存一次**；`agent_loop.py:93-105` 快照只有 `history` | **缺"模型已点名工具、结果未回"那一档** ⇒ 分支 C 无解（`28` S-07）→ K5-2 |
-| D5 | 恢复 = 读最新快照重入 loop，不重跑已完成工具 | ✅ | `agent_loop.py:108-119,140` `load_transcript(resume=True)` | 🔶 resume 判定 = "有已裁决审批单" `worker.py:445-452`；崩溃恢复路径（sweeper 重投后 resume）不存在 → K5-2/K8 |
+| D4 | checkpoint 每 append 一条存一次，带 `last`/`completed_tool_calls` | ✅ 09-02 | `agent_loop.py:174-180` action+observation **一起 append 后存一次**；`agent_loop.py:93-105` 快照只有 `history` | **缺"模型已点名工具、结果未回"那一档** ⇒ 分支 C 无解（`28` S-07）→ K5-2 |
+| D5 | 恢复 = 读最新快照重入 loop，不重跑已完成工具 | ✅ 09-02（任何执行都 resume；第二路读意图日志） | `agent_loop.py:108-119,140` `load_transcript(resume=True)` | 🔶 resume 判定 = "有已裁决审批单" `worker.py:445-452`；崩溃恢复路径（sweeper 重投后 resume）不存在 → K5-2/K8 |
 | D6 | 快照无"下一步"字段，下一步由模型定 | ✅ | `agent_loop.py:145` 每轮重新 decide | — |
 | D7 | loop 内零横切，横切收口唯一出口 | ✅ | `action_gate.py:167-378`；`test_agent_loop` 源码判据 | — |
 | D8 | 步数上限 = permanent | ✅ | `action_gate.py:187-193` → `worker.py:522-529` failed | — |
 | D9 | timeout 三层（模型 / 工具 / run） | 🔶 | 模型 120s `decider.py:133,140`；工具 30s `tools.py:90` | **run 级无** → K5/K9-2 max_duration |
-| D10 | 错误分层：transient 回队列 / permanent 终态 | 🔶 | 只有 permanent 路（failed）；动作失败观测回模型 `agent_loop.py:213-216` | K5-4 |
+| D10 | 错误分层：transient 回队列 / permanent 终态 | ✅ 09-02（K3）+ response_lost ⇒ awaiting_reconciliation（K5） | 只有 permanent 路（failed）；动作失败观测回模型 `agent_loop.py:213-216` | K5-4 |
 | D11 | Tool Runtime 四道闸（找定义→schema→权限→幂等） | ✅ | `action_gate.py:201`（存在）`:212`（必填）`tools.py:99`（权限）`db.py:405`（幂等） | 🔶 schema 校验只查**必填缺失**不校验类型（09 §4 ⑧ 字符串数字坑）→ K6-1 |
 | D12 | 注册断言 side_effect ⇒ idempotency_required + key_fn + timeout + output_schema | 🔶 | `tool_registry.py:168` 断言 write⇒fact_key；**runtime 另抄一份 `WRITE_TOOLS`** `tools.py:41`（两份"哪些是写工具"的真相，`test_design_conformance` 靠测试对齐） | K6-3：以 registry `kind=="write"` 为唯一来源，删 WRITE_TOOLS 抄本；补 timeout/output_schema |
-| D13 | tool_calls 五态含 `response_lost` | ❌ | `schema.sql:110` `ok BOOLEAN` 三值 | K6-2 |
-| D14 | 幂等键绑业务实体、**不含 run_id** | 🔶 | `tools.py:71-84` `f"{org}:{run_id}:{tool}:{hash}"`；编排 `client_request_id=f"{run_id}:budget"` `worker.py:437` | rerun 即双重执行（课件 §11.4）→ `28` S-02，K5-6/K6-4 |
+| D13 | tool_calls 五态含 `response_lost` | ✅ 09-02（写入路径；超龄 running→response_lost 的 sweeper 判定归 K8） | `schema.sql:110` `ok BOOLEAN` 三值 | K6-2 |
+| D14 | 幂等键绑业务实体、**不含 run_id** | ✅ 09-02（loop 路径；写死三步路径的 client_request_id 仍带 run_id，无 decider 时才走） | `tools.py:71-84` `f"{org}:{run_id}:{tool}:{hash}"`；编排 `client_request_id=f"{run_id}:budget"` `worker.py:437` | rerun 即双重执行（课件 §11.4）→ `28` S-02，K5-6/K6-4 |
 | D15 | 失败分诊 `error_json{code,message,retryable}` | 🔶 | `error TEXT` + `PlatformError.retriable` 内部字段 | K6-5 |
 | D16 | output_schema 防反向污染 | ❌ | 无 | K6-6 |
 | D17 | 拦下也落库（tool_calls 行） | 🔶 | 权限/步数/成本拦下只写 audit+event `action_gate.py:243-247,281-286` | 不写 tool_calls 行 → K6-1 |
@@ -143,13 +143,25 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K4 后）**：✅ 47 · 🔶 20 · ❌ 10 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K5 后）**：✅ 53 · 🔶 15 · ❌ 9 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 
 ## 2 · 各阶段函数级细表（开工时就地填，K5-1 / K6-1 / K7-1 各一节）
 
-（K1 开工时从 §1 组 A 展开到函数级；本节现为空是正常的，不是漏填。）
+### 2.1 K5-1 · 课件"九件事" × agent_loop / ActionGate / worker（2026-09-02）
+
+| # | 课件九件事（CH5） | 我们的函数 | 结论 |
+|---|---|---|---|
+| 1 | 拼 context（消息列表，无"下一步"指针） | `agent_loop.run_agent_loop` 的 `history`；渲染在 `decider.build_messages`（26 线所有，K 线不动） | ✅ 同形 |
+| 2 | 每 append 一条存一次 checkpoint | `agent_loop.save_transcript`（存档①点名后 / ②回灌后；`_last_of`） | ✅ 09-02 补齐 |
+| 3 | 读档重入循环，`last` 两路 | `run_agent_loop(resume=True)` 头部：`db.last_write_call` | ✅ 09-02 |
+| 4 | 模型调用边界 `run_model_step` | `decider.decide`（Proposal 只有两种：tool_call / final） | ✅ |
+| 5 | 工具调用边界 + 四不准 | `ActionGate.invoke` → `ToolRuntime.call` → `db.record_tool_call` | ✅（四道闸细核在 K6-1） |
+| 6 | 每轮控制检查（取消/预算/步数/超时） | 取消：loop 顶 `gate.stop_requested` + 收口入口；步数：收口①；成本：收口③；run 级 max_duration：K9-2 | 🔶 max_duration 欠 K9 |
+| 7 | transient/permanent 分层，execute_run 永远正常 return | `worker.execute_claimed` + `classify_error` + `schedule_run_retry` | ✅（K3） |
+| 8 | waiting_for_user 干等搬到数据维度 | `gateway.open_approval_case` / `db.park_run_for_user` 走 `transition_run`（清 lease、发 token） | ✅（K4） |
+| 9 | timeout 分层 | 模型 120s（decider）· 工具 30s（ToolRuntime）· run 级 ⬜（K9-2） | 🔶 |
 
 ---
 
