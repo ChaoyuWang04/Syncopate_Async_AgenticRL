@@ -32,7 +32,17 @@ PG_LIB="${PG_LIB:-/workspace/tools/postgres/root/usr/lib/x86_64-linux-gnu}"
 # `dpkg -x` 解出来的 libpq.so.5 不在 ldconfig 的搜索路径里（旧机器上 libpq5 是
 # apt 装进系统的，所以一直没暴露）。⇒ 所有 PG 二进制都要自带库路径。
 export LD_LIBRARY_PATH="$PG_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-PGDATA="${PGDATA:-/var/lib/postgresql/16/syncopate}"
+# ---- 用户态运行（2026-09-02 补，本机 5090 工作站无 root）----
+# 非 root 时：PG 来自 conda-forge（PG_HOME 指到 conda env），PGDATA 放 $HOME，
+# 不建 postgres 系统用户、不 su、不 chown。训练机（root + /workspace 那套）行为不变。
+if [[ "$(id -u)" -ne 0 ]]; then PG_USER_MODE=1; else PG_USER_MODE=0; fi
+if [[ "$PG_USER_MODE" == 1 ]]; then
+  PGDATA="${PGDATA:-$HOME/.local/share/syncopate/pgdata/16}"
+else
+  PGDATA="${PGDATA:-/var/lib/postgresql/16/syncopate}"
+fi
+# 以 PG 运行身份执行一条命令：root 走 su postgres；用户态直接跑。
+run_pg() { if [[ "$PG_USER_MODE" == 1 ]]; then bash -c "$1"; else su postgres -c "$1"; fi; }
 PGPORT="${PGPORT:-5432}"
 DB_NAME="${DB_NAME:-syncopate}"
 DB_USER="${DB_USER:-syncopate}"
@@ -53,7 +63,7 @@ die()  { echo "❌ $*" >&2; exit 1; }
 # `dpkg -x` 只解包、**不跑 maintainer 脚本**，所以从 debs 重装出来的 PG 没有
 # `postgres` 这个用户 —— 而下面每一步都是 `su postgres -c`。旧机器上它是当初
 # `apt install` 建的，于是这个缺口在"一条命令重建"里藏了下来，只有干净机器才暴露。
-if ! id postgres &>/dev/null; then
+if [[ "$PG_USER_MODE" == 0 ]] && ! id postgres &>/dev/null; then
   step "创建 postgres 系统用户"
   groupadd -r postgres 2>/dev/null || true
   useradd -r -g postgres -d /var/lib/postgresql -s /bin/bash postgres \
@@ -62,44 +72,52 @@ fi
 
 if [[ "${1:-}" == "--reset" ]]; then
   step "重置：停服务、删数据"
-  su postgres -c "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/pg_ctl -D $PGDATA stop -m immediate" 2>/dev/null || true
+  run_pg "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/pg_ctl -D $PGDATA stop -m immediate" 2>/dev/null || true
   rm -rf "$PGDATA"
 fi
 
 # ---- initdb（PGDATA 必须 0700，所以只能在本地盘）----
 if [[ ! -s "$PGDATA/PG_VERSION" ]]; then
   step "initdb -> $PGDATA"
-  mkdir -p "$PGDATA" /var/run/postgresql
-  chown postgres:postgres "$PGDATA" /var/run/postgresql
+  mkdir -p "$PGDATA"
+  if [[ "$PG_USER_MODE" == 0 ]]; then
+    mkdir -p /var/run/postgresql
+    chown postgres:postgres "$PGDATA" /var/run/postgresql
+  fi
   chmod 700 "$PGDATA"
   [[ "$(stat -c %a "$PGDATA")" == "700" ]] || die "PGDATA 权限设不成 0700 —— 是不是又放到网络盘上了？"
-  su postgres -c "LD_LIBRARY_PATH=$PG_LIB PGSHAREDIR=$PG_SHARE $PG_HOME/bin/initdb -D $PGDATA -A trust -E UTF8 --locale=C" >/dev/null
+  run_pg "LD_LIBRARY_PATH=$PG_LIB PGSHAREDIR=$PG_SHARE $PG_HOME/bin/initdb -D $PGDATA -A trust -E UTF8 --locale=C" >/dev/null
 fi
 
 # ---- 启动（幂等）----
-if ! "$PG_HOME/bin/pg_isready" -p "$PGPORT" -q 2>/dev/null; then
+if ! "$PG_HOME/bin/pg_isready" -h 127.0.0.1 -p "$PGPORT" -q 2>/dev/null; then
   step "启动 PostgreSQL"
   # ⚠️ `mkdir -p "$PGDATA"` 只 chown 了最里层那一级，日志写在**父目录**里 ⇒ 也要给权限，
   # 否则 pg_ctl -l 报 "Permission denied"，而错误信息里只字不提是父目录的事。
   mkdir -p "$(dirname "$LOGFILE")"
-  chown postgres:postgres "$(dirname "$LOGFILE")" /var/run/postgresql 2>/dev/null || true
-  su postgres -c "LD_LIBRARY_PATH=$PG_LIB PGSHAREDIR=$PG_SHARE $PG_HOME/bin/pg_ctl -D $PGDATA -o '-p $PGPORT' -l $LOGFILE start" >/dev/null
+  [[ "$PG_USER_MODE" == 0 ]] && chown postgres:postgres "$(dirname "$LOGFILE")" /var/run/postgresql 2>/dev/null || true
+  # 用户态：unix socket 放 /tmp（/var/run/postgresql 不可写）；应用一律走 127.0.0.1，不受影响。
+  SOCKDIR_OPT=""; [[ "$PG_USER_MODE" == 1 ]] && SOCKDIR_OPT=" -k /tmp"
+  run_pg "LD_LIBRARY_PATH=$PG_LIB PGSHAREDIR=$PG_SHARE $PG_HOME/bin/pg_ctl -D $PGDATA -o '-p $PGPORT$SOCKDIR_OPT' -l $LOGFILE start" >/dev/null
   for _ in $(seq 1 20); do
-    "$PG_HOME/bin/pg_isready" -p "$PGPORT" -q 2>/dev/null && break
+    "$PG_HOME/bin/pg_isready" -h 127.0.0.1 -p "$PGPORT" -q 2>/dev/null && break
     sleep 0.5
   done
 fi
-"$PG_HOME/bin/pg_isready" -p "$PGPORT" || die "起不来，看 $LOGFILE"
+"$PG_HOME/bin/pg_isready" -h 127.0.0.1 -p "$PGPORT" || die "起不来，看 $LOGFILE"
 
 # ---- 角色与库（幂等）----
-psql_su() { su postgres -c "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/psql -p $PGPORT -tAc \"$1\""; }
+# 用户态走 127.0.0.1（initdb -A trust 对本地 TCP 同样 trust），root 态走默认 socket。
+if [[ "$PG_USER_MODE" == 1 ]]; then PSQL_HOST_OPT="-h 127.0.0.1"; else PSQL_HOST_OPT=""; fi
+# -d postgres：用户态的超级用户是当前 OS 用户，没有同名库，不指定会 FATAL "database <user> does not exist"。
+psql_su() { run_pg "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/psql $PSQL_HOST_OPT -p $PGPORT -d postgres -tAc \"$1\""; }
 if [[ "$(psql_su "select 1 from pg_roles where rolname='$DB_USER'")" != "1" ]]; then
   step "建角色 $DB_USER"
   psql_su "create user $DB_USER with password '$DB_PASS' createdb" >/dev/null
 fi
 if [[ "$(psql_su "select 1 from pg_database where datname='$DB_NAME'")" != "1" ]]; then
   step "建库 $DB_NAME"
-  su postgres -c "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/createdb -p $PGPORT -O $DB_USER $DB_NAME"
+  run_pg "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/createdb $PSQL_HOST_OPT -p $PGPORT -O $DB_USER $DB_NAME"
 fi
 
 # ---- schema（真相来源在仓库里，见 syncopate/runtime/schema.sql）----

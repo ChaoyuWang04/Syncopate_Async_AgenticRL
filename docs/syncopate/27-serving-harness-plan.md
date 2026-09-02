@@ -73,6 +73,9 @@ dev mode 的业务 agent。每条课件机制在计划里标三种处置之一�
 
 ## 2 · K0 · 现状盘点（0 GPU，~1 天；一切阶段的前置）
 
+> ✅ **K0 已完成（2026-09-02）**：产物 = `29-serving-k0-inventory.md`（77 条对照 + 门槛②重验表
+> + 底座核实 + 交给 K1 的三句话）；测试基线 **247 passed**；§16 四件已裁（本文 §16）。
+
 ### 步骤
 
 ```
@@ -264,10 +267,13 @@ K3-3 dispatcher 循环：扫 pending 且 next_attempt_at 到期，LIMIT 100；
      2^(attempts-1))，cap 首标 300s（不设 cap 重试 20 次=12 天后，H103）
      顺序铁律：先 publish 后标记（"投了没记"下轮重投无害；"记了没投"任务永久消失）
      ——把不可恢复的一步放前面
-K3-4 队列本体：按 §16 裁定落地。预设=数据库表队列（job_queue 表 +
-     FOR UPDATE SKIP LOCKED 领取；课件明说低并发场景完全可以，且把 Celery 藏起来
-     的 available_at/locked_by/max_attempts 全部显式化）。enqueue_job 抽象成单一
-     函数——将来换 Redis/框架只换这一个函数
+K3-4 队列本体：**Celery + Redis（§16-1 已裁，Chaoyu 09-02）**。Celery 只承担
+     "投递/消费/ack/重试/分队列"，⛔ 不承担 run 状态、事务、幂等、lease（课件 §4
+     "装个 Celery ≠ 有了 Agent 后端"）。enqueue_job 仍抽象成单一函数（内部=
+     `execute_run.apply_async`），task 体只放 run_id（H23）。Celery/Redis 的配置项
+     必修（acks_late · prefetch=1 · visibility_timeout 与 lease 对齐 · reject_on_worker_lost
+     · JSON 序列化 · ignore_result · Redis AOF+noeviction+requirepass）全部登记在 **28**，
+     每条带负向认证，K3 门槛⑩=28 §1/§2 的 K3 归属项全部关闭
 K3-5 worker 分层（课件 §14.3，全章最值钱）：
      worker 层只碰基础设施（claim job / ack / requeue），⛔ 不改 run 状态；
      业务错误在 execute_run 内部被消化并走状态迁移。
@@ -386,7 +392,7 @@ K4-7 grep 判据进 CI/pre-commit：`\.status\s*=` 命中白名单只留 transit
 
 | 课件机制 | 处置 | 理由 |
 |---|---|---|
-| 每 append 一条存一次 checkpoint（快照哲学） | **改造** | 课件自己承认有两种恢复哲学（快照 vs 事件重放）。我们已有 transcript 重放（B-3b），且每轮 prompt 本来就由 transcript 重渲染——**预设：重放为主，checkpoint 表只存两类快照：waiting/审批中断点 + 失败现场**。全量每步快照裁剪（重放已等价）；盘点若发现重放不可靠即翻案 → 随 K0 呈报确认（§16-4） |
+| 每 append 一条存一次 checkpoint（快照哲学） | **采纳（§16-4 已裁，Chaoyu 09-02）** | 课件 CH5 §4.4/CH8 §4.3：**存档密度决定恢复分辨率**——只有"模型已点名工具、结果未回"那一档存在，恢复才能走第二路（查 tool_calls 而不是重问模型/重跑工具），否则分支 C（写工具半成功）无解。我们现有 `save_transcript` 本质就是课件的 context 快照，收编而非新建：K0 核存档密度（工具调用前那一档有没有）+ 补 `last`/`completed_tool_calls` 两个恢复判断字段；`run_events` 只做回放展示，⛔ 不做恢复来源 |
 | 意图日志（写工具"先记后做"两阶段写入） | **采纳（本阶段最重要的增量）** | "崩在副作用发生与记录之间"是重放和快照都救不了的唯一黑洞；执行前 INSERT tool_calls(幂等键, status=running) → 执行后 UPDATE 结果。恢复时读它判断"钱动没动" |
 | 恢复两条路（last=无结果的写调用 ⇒ 不重试、查证对账） | **采纳** | response_lost 语义 + "结果未知禁止自动重试"铁律 |
 | 错误分层（业务错误 Loop 内消化不外抛；worker 层薄） | **采纳** | "一个状态一个负责人"；与我们 K3-5 同一条。取消异常按课件待查#7 定死：ensure_not_cancelled 内部完成 transition 后直接 return，不设第三类异常 |
@@ -402,8 +408,11 @@ K4-7 grep 判据进 CI/pre-commit：`\.status\s*=` 命中白名单只留 transit
 ```
 K5-1 对照清单先行（准则〇）：课件"九件事"逐条 × 我们 agent_loop/ActionGate/worker 的
      现状，打「已有/缺/不同形」表（K0 已做粗表，此处细化到函数级）
-K5-2 恢复哲学落地：transcript 重放为主；checkpoint 表只写中断点/失败现场两类；
-     重放函数 = 从 events/steps 重建消息列表（与 decider 渲染同一条代码路径）
+K5-2 恢复哲学落地（§16-4 已裁=课件快照式）：`save_transcript` 收编为课件 checkpoint：
+     每 append 一条消息存一次（一轮两档：模型输出后 / 工具结果回灌后），快照带
+     `last` + `completed_tool_calls`；不变量 checkpoint #k 恰 k 条消息；恢复 = 读最新
+     快照重入 loop，⛔ 快照里没有"下一步"字段（下一步永远由模型决定）；
+     渲染仍与 decider 同一条代码路径（守则⑮）
 K5-3 意图日志：写类工具经 ActionGate 执行前先落 tool_calls(幂等键,status=running)，
      执行后 UPDATE(status, result, ended_at)；恢复逻辑分两路——last 为无结果写调用
      ⇒ 查意图日志：succeeded 则补结果续跑 / running·response_lost 则停下转对账（K8）
@@ -551,7 +560,7 @@ K7-5 SSE endpoint 只读纪律固化：endpoint 代码路径零业务调用（�
 | 四动词纪律（Replay/Retry/Rerun/Repair） | **采纳** | 接口名/按钮/日志用准四个词；Replay 零副作用（"每次复盘真金白银再退一次款"是课件定性的最致命错误）；Repair 必留四样（audit/reason/operator/before-after） |
 | 恢复必须留痕 | **采纳** | requeued_by_sweeper + 第二条 run.started 是特性不是 bug——事后要能区分"正常执行"和"救援" |
 | 七步排查 SOP + trace 聚合 | **采纳** | 按 run_id 一键拉齐八表证据；第 2 步"最后一个事件"是分诊台（对应我们已有的括号式事件流） |
-| checkpoint 读档重入 | **改造** | 按 §16-4 裁定：transcript 重放为主；"重入循环"=从事件/意图日志重建消息列表后进 loop，`last` 两路判断在 K5-3 已定 |
+| checkpoint 读档重入 | **采纳** | §16-4 已裁=课件快照式：读最新 checkpoint 还原 context 重入 loop，`last` 两路判断在 K5-2/K5-3 已定；`run_events` 只用于回放展示与排查 |
 | 僵尸 queued 清理（课件 H37 全书未解） | **采纳（我们定死）** | sweeper 加扫描类：queued 超龄且 outbox 无 pending ⇒ 告警 + 允许人工 requeue outbox（不自动，避免掩盖投递层病根） |
 
 ### 步骤
@@ -765,14 +774,16 @@ K5 2 + K6 2 + K7 1.5 + K8 2 + K9 2 + K10 2 + K11 1.5，含各阶段验收）。
 
 ---
 
-## 16 · 待裁定（K0 盘点呈报后一并裁，⛔ 盘点前不拍）
+## 16 · 已裁定（Chaoyu 2026-09-02；原"盘点后再拍"改为读完课件相关章后先拍，K0 只做核实）
 
-| # | 事 | 预设方向 |
-|---|---|---|
-| 1 | 队列底座 | 数据库表队列（job_queue + FOR UPDATE SKIP LOCKED；课件认可低并发场景，且显式化所有队列语义）；enqueue 抽象成单函数留升级钩子 |
-| 2 | 数据库引擎 | 看 K0 盘点：现有引擎的事务/行锁/触发器能力够不够 K2/K3 的设计；不够则呈报迁移代价 |
-| 3 | 存量 id 形态 | 看 K0 盘点：现有 id 可枚举则新数据切 ULID，存量迁移方案随呈报 |
-| 4 | 恢复哲学 | transcript 重放为主 + checkpoint 只存中断点/失败现场（K5 取舍表的预设）；盘点确认现有 transcript 重放的可靠边界后随呈报定案 |
+| # | 事 | 裁定 | 理由（课件出处） | K0 仍要核实的 |
+|---|---|---|---|---|
+| 1 | 队列底座 | **Celery + Redis**（Dramatiq 为备选，RabbitMQ 登记复活条件=需要更强路由语义） | CH3 §4：框架"使用"中间件；Redis 全书默认且身兼四职（broker/限流/信号量/缓存，CH9 §13）；Chaoyu 要求对齐工业惯例并把中间件的坑逐条学到手 | 现有 asyncio worker 与 Celery prefork 的接法（每任务一个事件循环、连接池在 worker_process_init 建）；B-5 goodput 数字作废需重测 |
+| 2 | 数据库引擎 | **PostgreSQL 不换 + 引入 Alembic 做版本化 migration；不引 SQLAlchemy ORM** | CH1 §8 技术栈 = PostgreSQL + Alembic；CH2 C8"schema 一定会变，光补 CH1 承诺的列就三次 migration"；现有裸 SQL + asyncpg 是刻意选择（09 §4 Decimal 等坑在此层修） | Alembic 与 schema.sql 谁是唯一真相（准则〇：只能一份）；DDL 不能进事务的项（CONCURRENTLY） |
+| 3 | 存量 id 形态 | **不迁移**：run_id/conversation_id 已是随机十六进制 | 实查 api.py:272/336；H18 前提不成立 | case_ref 及其他表编号是否同样随机 |
+| 4 | 恢复哲学 | **课件快照式**：每 append 一条存一次 checkpoint，快照带 last/completed_tool_calls；run_events 只做回放展示 | CH5 §4.4 / CH8 §4.3"存档密度决定恢复分辨率"；分支 C 在稀疏存档下无解 | 现有 save_transcript 的存档密度与字段；resume_after_approval 是否读最新快照 |
+
+⚠️ 四件的坑与后续排查/优化项**不写在本文**，全部登记在 `28-serving-middleware-hazards.md`（独立文档集，保持本文只有施工步骤与门槛）。
 
 ---
 
