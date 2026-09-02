@@ -166,7 +166,10 @@ S5 闲聊与表达     闲聊、承接语、说人话
 同时按守则⑮，④族训练行的 prior 形状**必须等线上先定义**（历史里到底放不放信令收场的轮次、
 放什么文本），否则又是"为了造得出来"的临时形状。
 
-**待 Chaoyu 裁（两条，推荐都做，改动面小、全在 runtime 状态映射层）**：
+**✅ Chaoyu 09-02 裁定都做 → 已落地**（018773f，K 线 5962e38 把事件领号改走 append_event）：clarify 收场 →
+waiting_for_user（清 lease）→ 同会话下一条消息把它收尾为 succeeded；prior_turns 纳入 succeeded ∪
+cancelled+session_reject；真库测试 `tests/runtime/test_clarify_turns_enter_history.py`（4 条，负向认证撤掉 Ⓐ
+即红）。**审批裁决回灌仍未做**（APR-F 登记欠账，等 K 线 D25 统一后再议）。原裁定项保留如下备查：
 ```
 Ⓐ clarify 收场 ⇒ 置 waiting_for_user（不开审批单），终态事件沿用 run.waiting_for_user；
    同会话下一条消息到来 ⇒ 该 run 结束为 succeeded（result = 信令自己的话），新 run 正常起
@@ -279,9 +282,30 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 | ① 结构断言 | v4 生成器每科的多样性断言全绿（≥2 对象 · ≥2 问法 · ≥2 历史长度 · 成对对齐 · WIN ≥7 轮），且**撤掉任一断言会红** |
 | ② 可比性 | L1–L4 125 题与 v3 **diff = 0** |
 | ③ 判卷器负向认证 | 每个新科目构造 ≥5 类劣化答卷（该拒不拒/嘴拒手动/该 defer 直答/该办仍 clarify/空答/**编造数字**/复述上轮原话/旧参数粘连），每类判红率 **100%**；gold 答卷 selfcheck 100% 判对 |
-| ④ 思考率尺子校准 | 考场 jsonl 带 thinking 计数；在训练机 r3 考场重跑一遍的读数 = PG 查库值（本机无 PG，这条挪到 W5 起链前做，W1 只交装置与本机假数据单测） |
+| ④ 思考率尺子校准 | 考场 jsonl 带 thinking 计数（已交付）；读数 = PG 查库值的对照在 **W5 起链的第一遍**做（本机有 PG 但无模型端点，跑不了考场） |
 | ⑤ 装置足量 | 带硬预期行为的题合计 ≥ **150**，每种行为 ≥ **20**；报告项科目各 ≥10 |
 | ⑥ 三查零缺口 | `v15_gate_triage.py --strict` 退出码 0（登记表按 v4 实际题数回填） |
+
+**✅ W1 完成（2026-09-02，本机 0 GPU）**
+```
+产物   scripts/u_make_exams_v4.py → data/u_route/context_v4_exam.jsonl（361 题：L1 50·L2 25·L3 25·L4 25
+       逐字继承 · REJ 32 · DEF 24 · CLA 20 · HARD 20 · DEF-F 20 · REJ-F 20 · CLA-F 20 · L2-x 20 · WIN 20 ·
+       META/PRG/COR/TIME 各 10 报告项）· scripts/u_exam_judge_v4.py（13 个新判类 + 按档读数：思考率/N1/
+       编造/写操作）· scripts/v15_w1_exam_certify.py · u_exam_run 加脚本化历史 + think_nonempty ·
+       contract.n1_hits · compare 逐 cap 泊松 verdict · v1 判卷器去截断 · demo 加 CMP_7（样本不足型不成熟）
+读数   ① 结构断言：每科 ≥2 对象（REJ 6/DEF 4/HARD 4/L2-x 5）· ≥2 问法（4–17）· 成对 5 科全配对 ·
+         L2-x 轮距 {1,3} · WIN 历史 {3,8} · 收场类型 answer/defer/reject/clarify 全在场；
+         撤掉一条（DEF 单对象）断言即红（tests/train/test_exam_v4_structure.py）✓
+       ② L1–L4 125 题与 v3 diff=0 ✓
+       ③ 负向认证：13 判类 × 5 类劣化全部判红、gold 全判过（含编造数字/复述原话/旧参数粘连）✓
+       ④ 装置交付 ✓；校准挪 W5 第一遍
+       ⑤ 硬预期行为题 161 ≥150；每种行为 ≥20 ✓
+       ⑥ --strict 零缺口 ✓
+脚本化历史 = 按线上同一张 agent_runs 表插终态行，prior_turns 同一条读取路径，6 轮窗口原样作用
+       （tests/runtime/test_exam_scripted_prior.py 真库验过：9 轮取最近 6、reject 轮在、事实轮出窗）
+考场时长重估 361 题 ≈ 133 的 2.7 倍 ⇒ 一遍 ~27 min，四遍 ~1.8 h（W5 排期）
+未入卷    APR-F（审批回灌待 K 线 D25）；②③⑤族只放报告项，训练数据下一版
+```
 
 ### W2 · 数据管线同形改造（~1 天代码 + 0.5 天验证）
 

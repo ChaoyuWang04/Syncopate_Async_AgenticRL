@@ -142,7 +142,7 @@ def main() -> int:
         for lv in sorted(by):
             a, n = by[lv]
             print(f"  {lv}: {a}/{n} = {a/n:.0%}")
-        for fid, why in fails[:20]:
+        for fid, why in fails:          # ⚠️ 不截断（26 §2.3⑦：v2 修了 v1 没跟；截断会制造错误的全局印象）
             print(f"   ✗ {fid}: {why}")
         json.dump({"file": args.context,
                    "levels": {lv: {"pass": a, "n": n} for lv, (a, n) in by.items()},

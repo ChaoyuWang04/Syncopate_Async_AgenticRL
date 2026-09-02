@@ -86,6 +86,22 @@ SESSION_TOOL_NAMES = frozenset(TERMINAL_SIGNALS) | {REPORT_TOOL}
 #   ③ 判分时从**终答文本**里看（`verifier_engine`）—— 人话本来就是终答本身
 PROSE_FIELDS = frozenset({"reply", "summary"})
 
+# ── N1 纯净终答（25 §2）：给人读的文本里零机器语法 ─────────────────────────
+# 判定 = 正则零命中。三类：JSON 壳/代码块围栏 · <tool_call>/<think> 标签残留 · 字段名以字段身份出现
+# （`"behavior":` / `summary:` 这种键值形状；正文里提到"总结"一词不算）。
+# ⚠️ 09-02 W0 查出：R5④ 写着"N1 正则零命中"，全库却没有这条正则 ⇒ 这里是它唯一的家，
+#    判卷器/出厂体检都 import 它，不另抄。
+import re as _re_n1
+N1_MACHINE_SYNTAX = _re_n1.compile(
+    r"```|<tool_call>|</tool_call>|<think>|</think>"
+    r"|[\{\[]\s*\"(?:behavior|answer|reply|summary|signal|arguments|tool|name)\"\s*:"
+    r"|\b(?:behavior|summary|reply|answer_fields|tool_call)\s*[:=]")
+
+
+def n1_hits(text: str) -> list[str]:
+    """终答里的机器语法命中（空列表 = N1 通过）。"""
+    return [m.group(0) for m in N1_MACHINE_SYNTAX.finditer(text or "")]
+
 
 def visible_answer_fields(fields):
     """渲染给模型看的字段清单。v15 下过滤掉人话字段；v14 原样返回（逐字节不变）。"""

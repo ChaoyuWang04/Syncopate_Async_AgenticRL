@@ -57,6 +57,11 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
     prop = await pg.fetchrow(
         "SELECT proposed_params, action_type AS tool FROM approval_cases "
         "WHERE org_id='org_demo' AND run_id=$1 ORDER BY created_at DESC LIMIT 1", rid)
+    # ★ 09-02（26 §W1④）：思考率尺子的原始计数落进 jsonl —— 此前只在 PG 里，本机没库就量不了。
+    #   口径 = agent_loop 只对非空 think 发 model.thinking（空块 strip 后不发），所以只数事件。
+    think_n = await pg.fetchval(
+        "SELECT count(*) FROM run_events WHERE org_id='org_demo' AND run_id=$1 "
+        "AND kind='model.thinking'", rid)
     raw = term["payload"] if term else None
     if isinstance(raw, str):                 # 裸 asyncpg 无 jsonb codec ⇒ 字符串
         try:
@@ -102,6 +107,7 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
         extra = {}
     return {
         "run_id": rid, "status": st, "terminal": term["kind"] if term else None,
+        "think_nonempty": int(think_n or 0),
         "behavior": beh,
         "reply": rep,
         "summary": summ,
@@ -113,10 +119,31 @@ async def run_turn(c: httpx.AsyncClient, pg: asyncpg.Pool, cid: str, msg: str) -
     }
 
 
+async def seed_prior(pg: asyncpg.Pool, cid: str, prior: list[dict]) -> None:
+    """脚本化历史（考卷 v4 的 `prior`）：按线上同一张 agent_runs 表**直接写终态行**。
+
+    prior_turns 读的就是这张表（status ∈ succeeded / cancelled+session_reject，result 非空），
+    渲染由 decider 决定 ⇒ 模型看到的历史与线上真实回灌**同一条代码路径**。
+    ⚠️ 直接 INSERT 终态行而不走 create_run：queued 行会被常驻 worker 抢走真跑一遍。
+    created_at 逐轮递增（比现在早 N 分钟），保证 prior_turns 的排序与窗口（最近 6 轮）按题意落位。
+    """
+    n = len(prior)
+    for i, p in enumerate(prior):
+        await pg.execute(
+            """INSERT INTO agent_runs (run_id, org_id, user_message, status, result, error,
+                                       conversation_id, created_at, ended_at)
+               VALUES ($1, 'org_demo', $2, $3, $4, $5, $6,
+                       now() - make_interval(mins => $7), now() - make_interval(mins => $7))""",
+            f"run_{uuid.uuid4().hex[:12]}", p["user"], p["status"],
+            json.dumps(p.get("result") or {}, ensure_ascii=False), p.get("error"), cid, n - i)
+
+
 async def one_item(c, pg, sem, item, out, arm):
     async with sem:
         cv = await c.post("/conversations", json={"title": f"uexam-{arm}-{item['id']}"})
         cid = cv.json()["conversation_id"]
+        if item.get("prior"):
+            await seed_prior(pg, cid, item["prior"])
         turns = []
         for msg in item["turns"]:
             turns.append(await run_turn(c, pg, cid, msg))
@@ -127,7 +154,7 @@ async def one_item(c, pg, sem, item, out, arm):
 
 async def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exam", choices=["talk", "context", "context_v2", "context_v3"],
+    ap.add_argument("--exam", choices=["talk", "context", "context_v2", "context_v3", "context_v4"],
                     required=True)
     ap.add_argument("--arm", required=True)
     ap.add_argument("--limit", type=int, default=0)

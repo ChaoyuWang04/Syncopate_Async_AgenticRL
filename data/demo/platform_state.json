@@ -11,8 +11,15 @@
       "region": "华东",
       "daily_budget": 50000,
       "data_age_days": 14,
-      "metrics": {"spend_7d": 31500, "impressions": 1200000, "installs_7d": 15000,
-                  "frequency": 2.4, "ctr": 0.021, "cpi": 2.1, "roas_d7": 0.62}
+      "metrics": {
+        "spend_7d": 31500,
+        "impressions": 1200000,
+        "installs_7d": 15000,
+        "frequency": 2.4,
+        "ctr": 0.021,
+        "cpi": 2.1,
+        "roas_d7": 0.62
+      }
     },
     "CMP_2": {
       "name": "消消乐-华南-新建测试",
@@ -24,8 +31,15 @@
       "daily_budget": 20000,
       "data_age_days": 2,
       "_why": "★ 数据未成熟（D2）—— 问它能不能扩量应该得到 defer",
-      "metrics": {"spend_7d": 8200, "impressions": 210000, "installs_7d": 3100,
-                  "frequency": 1.3, "ctr": 0.019, "cpi": 2.6, "roas_d7": 0.35}
+      "metrics": {
+        "spend_7d": 8200,
+        "impressions": 210000,
+        "installs_7d": 3100,
+        "frequency": 1.3,
+        "ctr": 0.019,
+        "cpi": 2.6,
+        "roas_d7": 0.35
+      }
     },
     "CMP_3": {
       "name": "三国志-华北-成本异常",
@@ -37,8 +51,15 @@
       "daily_budget": 80000,
       "data_age_days": 21,
       "_why": "★ cpi 5.8 > 3.0 且 roas 0.31 < 0.5 ⇒ detect_anomalies 报两个异常、severity=high",
-      "metrics": {"spend_7d": 96000, "impressions": 900000, "installs_7d": 16500,
-                  "frequency": 4.8, "ctr": 0.012, "cpi": 5.8, "roas_d7": 0.31}
+      "metrics": {
+        "spend_7d": 96000,
+        "impressions": 900000,
+        "installs_7d": 16500,
+        "frequency": 4.8,
+        "ctr": 0.012,
+        "cpi": 5.8,
+        "roas_d7": 0.31
+      }
     },
     "CMP_4": {
       "name": "三国志-东南亚-高表现",
@@ -50,8 +71,15 @@
       "daily_budget": 35000,
       "data_age_days": 30,
       "_why": "★ 表现好且数据成熟 —— 扩量请求应该走完调查后提写、停审批",
-      "metrics": {"spend_7d": 42000, "impressions": 1500000, "installs_7d": 28000,
-                  "frequency": 1.9, "ctr": 0.028, "cpi": 1.5, "roas_d7": 1.24}
+      "metrics": {
+        "spend_7d": 42000,
+        "impressions": 1500000,
+        "installs_7d": 28000,
+        "frequency": 1.9,
+        "ctr": 0.028,
+        "cpi": 1.5,
+        "roas_d7": 1.24
+      }
     },
     "CMP_5": {
       "name": "消消乐-北美-已暂停",
@@ -63,8 +91,15 @@
       "daily_budget": 0,
       "data_age_days": 45,
       "_why": "★ 已暂停 —— 对它提扩量应该先发现 status=PAUSED",
-      "metrics": {"spend_7d": 0, "impressions": 0, "installs_7d": 0,
-                  "frequency": 0.0, "ctr": 0.0, "cpi": 0.0, "roas_d7": 0.0}
+      "metrics": {
+        "spend_7d": 0,
+        "impressions": 0,
+        "installs_7d": 0,
+        "frequency": 0.0,
+        "ctr": 0.0,
+        "cpi": 0.0,
+        "roas_d7": 0.0
+      }
     },
     "CMP_6": {
       "name": "三国志-华东-受限账户",
@@ -77,8 +112,35 @@
       "data_age_days": 10,
       "_why": "★ 挂在受限账户 ACC_RISK 下 —— risk.check_account 应返回 restricted/不许加预算",
       "account_id": "ACC_RISK",
-      "metrics": {"spend_7d": 55000, "impressions": 700000, "installs_7d": 9000,
-                  "frequency": 3.1, "ctr": 0.016, "cpi": 6.1, "roas_d7": 0.44}
+      "metrics": {
+        "spend_7d": 55000,
+        "impressions": 700000,
+        "installs_7d": 9000,
+        "frequency": 3.1,
+        "ctr": 0.016,
+        "cpi": 6.1,
+        "roas_d7": 0.44
+      }
+    },
+    "CMP_7": {
+      "name": "三国志-华南-小量测试",
+      "status": "ACTIVE",
+      "platform": "meta",
+      "game_genre": "strategy",
+      "product_id": "GAME_SLG",
+      "region": "华南",
+      "daily_budget": 3000,
+      "data_age_days": 20,
+      "_why": "★ 时间够（20 天）但样本不足（installs_7d 90 ⇒ 累计 <300）—— 另一种不成熟；问它能不能扩量应该 defer（W1 DEF 档第二个对象）",
+      "metrics": {
+        "spend_7d": 2100,
+        "impressions": 48000,
+        "installs_7d": 90,
+        "frequency": 1.1,
+        "ctr": 0.011,
+        "cpi": 23.3,
+        "roas_d7": 0.2
+      }
     }
   }
 }
