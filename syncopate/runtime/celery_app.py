@@ -130,6 +130,9 @@ def execute_run(self, run_id: str, org_id: str) -> str:
     except Exception as exc:                        # noqa: BLE001
         if _is_infrastructure_error(exc):
             n = self.request.retries
+            from syncopate.runtime.log import log_event
+            log_event("celery", "infrastructure_error", level="error", run_id=run_id, org_id=org_id,
+                      retries=n, error=repr(exc)[:300], worker_id=_state.worker_id)
             if n < len(INFRA_RETRY_COUNTDOWN_S):
                 print(f"[celery] 🔴 run={run_id} 基础设施错误 {exc!r} ⇒ {INFRA_RETRY_COUNTDOWN_S[n]}s 后重投"
                       f"（第 {n + 1} 次）", flush=True)

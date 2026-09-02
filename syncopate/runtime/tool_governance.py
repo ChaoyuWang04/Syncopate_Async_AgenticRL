@@ -27,7 +27,7 @@ from typing import Any
 # 防线生效不是故障（课件 H56）：这些拒绝记 failed，但**不告警**
 NON_ALERTING_CODES = frozenset({"permission_denied", "validation_failed", "tier_d_refused",
                                 "release_gate", "daily_cost_cap", "cancel_requested", "max_steps",
-                                "unknown_tool", "skipped_duplicate"})
+                                "unknown_tool", "skipped_duplicate", "tool_disabled"})
 READ_RETRYABLE = frozenset({"429", "rate_limited", "server_error", "timeout", "client_timeout"})
 # 写工具：课件说 retryable_errors=空集；我们**改造**（准则五）——平台的限流/超时/5xx 在**带同一个幂等键**
 # 重试时是安全的（B-1a 实查：幂等命中先于扣分与频次检查），且沙盒（训练侧）的重试契约就是这样，

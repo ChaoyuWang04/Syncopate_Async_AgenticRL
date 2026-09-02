@@ -112,8 +112,15 @@ class ActionGate:
                  amount_threshold: int | None = None,
                  max_steps: int = MAX_STEPS_PER_RUN,
                  cancel_check: Callable[[], Awaitable[bool]] | None = None,
-                 record_blocked: Callable[..., Awaitable[Any]] | None = None) -> None:
+                 record_blocked: Callable[..., Awaitable[Any]] | None = None,
+                 attempts: int = 1,
+                 record_usage: Callable[..., Awaitable[Any]] | None = None,
+                 budget_check: Callable[..., Awaitable[str | None]] | None = None) -> None:
         self.db = db
+        self.attempts = attempts
+        # K9-3/K9-2：记账与预算闸也是横切，收口持有；假 db 时可注入或不接（None = 不记/不判）
+        self._record_usage = record_usage
+        self._budget_check = budget_check
         # K6："拦下也落库"——每道闸拒绝时在 tool_calls 留一行（blocked_by + error_json）。
         # 有真 db 时默认接 db.record_blocked_call；假 db（测试）可注入记录器。
         if record_blocked is None and db is not None:
@@ -148,6 +155,20 @@ class ActionGate:
         await self._record_blocked(org_id=self.org_id, run_id=self.run_id, step=self.step, tool=tool,
                                    arguments=_json_safe(arguments), blocked_by=blocked_by,
                                    error_json=error_json(blocked_by, message))
+
+    async def record_model_usage(self, *, call_no: int, tokens_in: int, tokens_out: int) -> None:
+        """一轮一行（课件 §6：记录的粒度决定控制的粒度）。call_index = (attempts-1)*1000 + 第几次调用。"""
+        if self._record_usage is None:
+            return
+        await self._record_usage(org_id=self.org_id, run_id=self.run_id,
+                                 call_index=(self.attempts - 1) * 1000 + call_no,
+                                 tokens_in=tokens_in, tokens_out=tokens_out)
+
+    async def budget_exceeded(self, *, model_calls: int, tokens: int) -> str | None:
+        if self._budget_check is None:
+            return None
+        return await self._budget_check(org_id=self.org_id, run_id=self.run_id,
+                                        model_calls=model_calls, tokens=tokens)
 
     async def stop_requested(self) -> bool:
         """安全点判定（K5-5）：取消意图 ∨ lease 丢失。loop 在**模型调用前/下一轮前**问一次，
@@ -244,6 +265,12 @@ class ActionGate:
                                                           "error": "unknown_tool"})
             await self._blocked(tool, arguments, "unknown_tool", f"模型点名了不存在的工具 {tool}")
             return GateOutcome(status="failed", observation=obs, error="unknown_tool")
+
+        # ── ②.1 禁工具开关（K9-6 发布五能力之"禁工具"：env SYNCOPATE_DISABLED_TOOLS="a,b"）──
+        if tool in disabled_tools():
+            await self._blocked(tool, arguments, "tool_disabled", "该工具已被发布开关禁用")
+            return GateOutcome(status="failed", observation={"error": f"tool_disabled: {tool}"},
+                               error="tool_disabled")
 
         # ── ②.5 参数校验（B-6：`validation_errors` 此前**没有生产者**）────
         # ⚠️ 不校验的后果不是"返回一个错"，是**崩在实现里**：
@@ -420,6 +447,13 @@ class ActionGate:
             observation=self._observation(tool, ok=outcome.ok, data=outcome.data,
                                           error=outcome.error),
             error=outcome.error, replayed=outcome.replayed)
+
+
+def disabled_tools() -> frozenset[str]:
+    """发布开关之"禁工具"（读 env，每次读——回滚是拨开关不是重启）。"""
+    import os
+    raw = os.environ.get("SYNCOPATE_DISABLED_TOOLS", "")
+    return frozenset(t.strip() for t in raw.split(",") if t.strip())
 
 
 def _json_safe(value: Any) -> Any:

@@ -156,3 +156,43 @@ def test_crash_after_terminal_before_ack_is_skipped_on_redelivery() -> None:
     assert attempts == 1, f"run 被重跑了：attempts={attempts}"
     assert kinds.count("run.started") == 1, kinds
     assert qlen == 0, "重投的消息没被 ack 掉 ⇒ 会无限重投"
+
+
+def test_drain_warm_shutdown_finishes_in_flight_run_then_exits() -> None:
+    """K9-6 发布五能力之 drain：SIGTERM = warm shutdown ⇒ worker 跑完手里这条 run 才退（不是强杀，H105）。
+    平台每次调用慢 2s 制造"在飞"窗口。"""
+    import signal
+    queue = f"test-{uuid.uuid4().hex[:8]}"
+    org, run_id = f"org_{uuid.uuid4().hex[:8]}", f"run_{uuid.uuid4().hex[:12]}"
+    w = CeleryWorker(queue, {"SYNCOPATE_TEST_SLOW_SECONDS": "2"})
+    try:
+        w.wait_ready()
+
+        async def go():
+            db = Database()
+            await db.connect(max_size=3)
+            try:
+                await create_run(db, org_id=org, run_id=run_id, user_message="drain 演练")
+                async with db.tx() as conn:
+                    await conn.execute("UPDATE outbox_jobs SET queue=$1 WHERE org_id=$2", queue, org)
+                assert await Dispatcher(db, org_id=org).dispatch_once() == 1
+                # 等它开始跑（run.started），然后发 SIGTERM
+                st = await _wait_status(db, org, run_id, leave={"queued"}, timeout=20)
+                assert st == "running", st
+                w.proc.send_signal(signal.SIGTERM)
+                t0 = time.time()
+                w.proc.wait(timeout=60)
+                exited_after = time.time() - t0
+                final = await _wait_status(db, org, run_id, leave={"running"}, timeout=5)
+                async with db.tx() as conn:
+                    lease = await conn.fetchval("SELECT lease_owner FROM agent_runs WHERE org_id=$1 AND run_id=$2", org, run_id)
+                return final, exited_after, lease
+            finally:
+                await db.close()
+
+        final, exited_after, lease = asyncio.run(go())
+    finally:
+        w.stop()
+    assert final in ("succeeded", "failed", "cancelled", "waiting_for_user"), (final, w.text()[-1500:])
+    assert lease is None, "drain 退出后 lease 没放（下一次要等过期才能接管）"
+    assert exited_after >= 1.0, "SIGTERM 后立刻退出 = 没跑完手里的活（强杀）"

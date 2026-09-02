@@ -42,6 +42,8 @@ KIND_LAYER: dict[str, str] = {
     "run.waiting_too_long": PUBLIC,
     "run.stuck_queued": INTERNAL,
     "run.requeued_manually": INTERNAL,
+    "run.budget_exceeded": PUBLIC,
+    "run.manual_review": INTERNAL,
     # ---- v15 信令族（decider/loop：session.<signal>）----
     "session.defer": PUBLIC,
     "session.clarify": PUBLIC,

@@ -127,15 +127,15 @@
 | E3 | 四动词 replay/retry/rerun/repair | ✅ 09-02（repair 管理通道四样留痕） | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
 | E4 | 七步排查 SOP + trace 聚合 | ❌ | 无 | K8-4/K11-2 |
 | E5 | 端到端故障注入联测（分支 A/B/C） | ✅ 09-02（A/C 进程内联测 + B 真 Celery；取消兑现；慢不当死） | `FaultPlan` `platform.py:60-72`（工具超时/限流/5xx/副作用已发生）+ `test_m97_stress` 12 条 + loadtest kill -9 恢复 3/3（11 §5） | 分支 C（写工具执行后记录前 kill）无自动化 → K8-5 |
-| E6 | 九条 SLO 自动读数 | 🔶 | `metrics.py:58-137` 四项（按意图延迟/排队/工具延迟/读写分桶）+ loadtest §19 判定 | 九条对齐 → K9-1 |
-| E7 | run 级预算四字段 + 超限转 waiting | 🔶 | 步数上限 ✅；org 日成本闸 `worker.py:286,374-379`（超限=failed/cancelled，非 waiting） | max_tokens/max_duration/max_model_calls 无 → K9-2 |
-| E8 | usage 一轮一行 | 🔶 | 一 run 一行 `worker.py:495-500`（loop 结束后汇总写） | K9-3 |
-| E9 | 结构化日志（11 字段） | ❌ | 判据行全是 `print` | K9-4 |
-| E10 | `/metrics` + `duplicate_prevented_total` | 🔶 | `metrics.py` 函数无 endpoint；`tool_calls.replayed_from` 可算重复挡下次数但无指标 | K9-3 |
-| E11 | 限流（API/org/写工具） | 🔶 | 平台侧 BUC 积分制 ✅（B-1a）；API 侧无 | K9 三维度 |
-| E12 | schema_version / payload `v` | ❌ | 无 | K9-5 |
-| E13 | 发布能力（开关/停队列/禁工具/回滚/drain）+ 演练 | 🔶 | `release.py:70-95` 开关 + fail-closed ✅；其余四项无、零演练 | K9-6 |
-| E14 | 测试八类 | 🔶 | unit/integration/contract/故障注入/压测 ✅；migration/replay/idempotency(rerun) 缺 | K9-7 |
+| E6 | 九条 SLO 自动读数 | ✅ 09-02（scripts/slo_readout.py；P95 需 --api） | `metrics.py:58-137` 四项（按意图延迟/排队/工具延迟/读写分桶）+ loadtest §19 判定 | 九条对齐 → K9-1 |
+| E7 | run 级预算四字段 + 超限转 waiting | ✅ 09-02 | 步数上限 ✅；org 日成本闸 `worker.py:286,374-379`（超限=failed/cancelled，非 waiting） | max_tokens/max_duration/max_model_calls 无 → K9-2 |
+| E8 | usage 一轮一行 | ✅ 09-02 | 一 run 一行 `worker.py:495-500`（loop 结束后汇总写） | K9-3 |
+| E9 | 结构化日志（11 字段） | ✅ 09-02（裁剪版 8 字段；错误路径；判据行保留） | 判据行全是 `print` | K9-4 |
+| E10 | `/metrics` + `duplicate_prevented_total` | ✅ 09-02 | `metrics.py` 函数无 endpoint；`tool_calls.replayed_from` 可算重复挡下次数但无指标 | K9-3 |
+| E11 | 限流（API/org/写工具） | 🔶（org 日预算两档 ✅；API 全局并发/写工具并发额度未做，登记） | 平台侧 BUC 积分制 ✅（B-1a）；API 侧无 | K9 三维度 |
+| E12 | schema_version / payload `v` | 🔶 09-02（checkpoint ✅；outbox/事件 payload 未加，登记） | 无 | K9-5 |
+| E13 | 发布能力（开关/停队列/禁工具/回滚/drain）+ 演练 | 🔶 09-02（开关/禁工具/drain 三项真演练；停队列/回滚只写命令） | `release.py:70-95` 开关 + fail-closed ✅；其余四项无、零演练 | K9-6 |
+| E14 | 测试八类 | ✅ 09-02（§2.4 对照表；migration/replay/idempotency 三类已有实例） | unit/integration/contract/故障注入/压测 ✅；migration/replay/idempotency(rerun) 缺 | K9-7 |
 | E15 | `feedback_items` / `run_annotations` | ❌ | 无 | K10-1 |
 | E16 | 版本号 run 级 + tool 级 | 🔶 | `conversations.model` 有模型标签（dev mode）；无 contract/prompt/registry 版本 | K10-5 |
 | E17 | `training_exports` 留痕 + 出局/准入清单 | ❌ | 无（26 号管线有 DATA_VERSION，但 runtime→训练无通道） | K10-6 |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K8 后）**：✅ 66 · 🔶 7 · ❌ 4 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K9 后）**：✅ 71 · 🔶 4 · ❌ 2 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 
@@ -192,6 +192,19 @@
 | 5 | 取号无洞无撞 | K2 领号器（`db.append_event`） | ✅ |
 | 6 | 事件分层 + payload 两视图 | `event_layer.public_view`；trace 全量 | ✅ 09-02 |
 | 7 | 鉴权（同域 Cookie 首选） | `current_org(Cookie syncopate_token)`；跨租户 404 | ✅ 09-02 |
+
+### 2.4 K9-7 · 测试八类对照（课件 CH9 §16：有几类测试 = 真正在守护几层承诺）
+
+| 类 | 守哪层承诺 | 现有实例（可点名） |
+|---|---|---|
+| unit | 机制本身对不对 | `test_tool_governance`（K6 注册断言）· `test_event_name_mapping`（K4） |
+| integration | 组件接在一起 | `test_run_api_k1` · `test_loop_k5` · `test_recovery_k8` |
+| contract | 两侧同形 | `test_tool_parity` / `test_tool_field_parity`（沙盒↔runtime）· `tests/train/test_train_prod_same_shape` |
+| 故障注入 | 不顺利时的行为 | `FaultPlan` 家族 · `test_response_lost_write_is_not_retried…`（K5）· `test_branch_c…`（K8）· 拔铃（K7） |
+| 压测 | 容量与劣化 | `scripts/runtime_loadtest.py`（B-6；Celery 化后需重测 S-05） |
+| migration | 迁移链 = 真相 | `test_schema_migrations`（干净库 upgrade head == 快照；负向 MAX+1 撞号） |
+| replay | 旧数据新代码可读 | `test_old_checkpoint_without_version_is_still_readable…`（K9-5） |
+| idempotency | 重复无害 | `test_same_key_second_call_skips_handler…`（K6）· `test_crash_after_terminal_before_ack…`（K3 真 Celery） |
 
 ---
 

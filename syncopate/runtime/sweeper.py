@@ -156,6 +156,9 @@ async def reconcile_once(db: Database, ledger: Any, *, actor_id: str = "reconcil
         except Exception as exc:                       # noqa: BLE001 —— 账本不可用：不猜，转人工
             downstream, available = None, False
             print(f"[reconcile] 账本不可用 {exc!r} ⇒ tool_call={r['id']} manual_review", flush=True)
+            from syncopate.runtime.log import log_event
+            log_event("reconcile", "ledger_unavailable", level="error", run_id=r["run_id"], org_id=r["org_id"],
+                      tool_call_id=r["id"], tool=r["tool"], error=repr(exc)[:300])
         async with db.tx() as conn:
             if not available:
                 await append_event(conn, org_id=r["org_id"], run_id=r["run_id"], kind="tool.manual_review",

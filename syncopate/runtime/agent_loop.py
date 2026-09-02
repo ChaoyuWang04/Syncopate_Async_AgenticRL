@@ -87,11 +87,18 @@ class Decider(Protocol):
 
 @dataclass
 class LoopResult:
-    status: Literal["finished", "halted", "exhausted", "failed", "awaiting_reconciliation"]
+    status: Literal["finished", "halted", "exhausted", "failed", "awaiting_reconciliation", "budget_exceeded"]
     final_answer: dict[str, Any] | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     case_ref: str | None = None
     error: str | None = None
+
+
+CHECKPOINT_VERSION = 1      # K9-5：跨时间存活的数据带版本；读到不认识的版本 ⇒ 拒绝 + manual_review，不猜不崩
+
+
+class UnsupportedCheckpointVersion(Exception):
+    pass
 
 
 async def save_transcript(db, *, org_id: str, run_id: str, step: int,
@@ -101,7 +108,7 @@ async def save_transcript(db, *, org_id: str, run_id: str, step: int,
     ★ 这是 `checkpoints` 表**第一个写入者** —— 它建了很久但一直没人写
       （`db.py:184` 明写这一点，并因此选了"从头重跑"）。
     """
-    state = {"history": history, "last": _last_of(history),
+    state = {"v": CHECKPOINT_VERSION, "history": history, "last": _last_of(history),
              "completed_tool_calls": [i for i, m in enumerate(history) if m.get("role") == "observation"],
              "n": len(history)}
     async with db.tx() as conn:
@@ -140,6 +147,9 @@ async def load_transcript(db, *, org_id: str, run_id: str) -> list[dict[str, Any
     state = row["state"]
     if isinstance(state, str):
         state = json.loads(state)
+    v = state.get("v", 1)             # 无 v = 旧格式（K9 之前）= 版本 1，读得懂（replay 测试守着）
+    if v != CHECKPOINT_VERSION:
+        raise UnsupportedCheckpointVersion(f"checkpoint v{v}，本代码只认 v{CHECKPOINT_VERSION}")
     return list(state.get("history") or [])
 
 
@@ -161,7 +171,14 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
       （沙盒里专门训过这一段）。
     """
     ctx = ctx or DecisionContext()
-    history = await load_transcript(db, org_id=org_id, run_id=run_id) if resume else []
+    try:
+        history = await load_transcript(db, org_id=org_id, run_id=run_id) if resume else []
+    except UnsupportedCheckpointVersion as exc:
+        # 版本网关（K9-5）：不猜、不崩——记事件交人，run 以 failed 收口（现场在 checkpoints 表里原样留着）
+        await gate.emit_info(kind="run.manual_review", payload={"reason": "unsupported_checkpoint_version",
+                                                               "detail": str(exc)})
+        return LoopResult(status="failed", error="unsupported_checkpoint_version", history=[])
+    usage_seen = {"calls": 0, "tokens_in": 0, "tokens_out": 0}
     # ⚠️ tool=None 的回灌不过收口、不计步数 ⇒ 连续输出解析不了的东西会无限烧模型。
     #   步数上限管不到它（那是 gate.invoke 记的），所以这里单独设一条连续失败上限。
     fumbles = 0
@@ -196,6 +213,19 @@ async def run_agent_loop(gate: ActionGate, decider: Decider, *, db,
             return LoopResult(status="exhausted", error="cancel_requested", history=history)
 
         proposal = await decider.decide(user_message=user_message, history=history)
+
+        # ── 记账（K9-3 一轮一行）+ 预算闸（K9-2）：由收口判，loop 只问一句 ──
+        usage_now = MODEL_USAGE.get() or {}
+        delta = {k: int(usage_now.get(k, 0)) - usage_seen[k] for k in usage_seen}
+        if delta["calls"] > 0:
+            await gate.record_model_usage(call_no=int(usage_now.get("calls", 0)),
+                                          tokens_in=delta["tokens_in"], tokens_out=delta["tokens_out"])
+            usage_seen = {k: int(usage_now.get(k, 0)) for k in usage_seen}
+        over = await gate.budget_exceeded(model_calls=usage_seen["calls"],
+                                          tokens=usage_seen["tokens_in"] + usage_seen["tokens_out"])
+        if over:
+            await save_transcript(db, org_id=org_id, run_id=run_id, step=gate.step, history=history)
+            return LoopResult(status="budget_exceeded", error=over, history=history)
 
         if getattr(proposal, "thinking", ""):
             # 思考事件：独立 kind，前端折叠渲染；截 6000 字防事件超载

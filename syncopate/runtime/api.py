@@ -108,7 +108,7 @@ ERROR_CODES = frozenset({
     "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CONFLICT", "VALIDATION_ERROR", "INTERNAL_ERROR",
     "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_KEY_TOO_SHORT", "INVALID_RUN_INPUT",
     "RUN_ALREADY_TERMINAL", "RUN_NOT_WAITING_FOR_USER", "INVALID_RESUME_TOKEN",
-    "TRACE_FORBIDDEN", "INVALID_RUN_TRANSITION", "RUN_NOT_TERMINAL",
+    "TRACE_FORBIDDEN", "INVALID_RUN_TRANSITION", "RUN_NOT_TERMINAL", "ORG_BUDGET_EXCEEDED",
 })
 _STATUS_DEFAULT_CODE = {401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND",
                         409: "CONFLICT", 422: "VALIDATION_ERROR"}
@@ -226,6 +226,20 @@ _RUN_VIEW_SQL = (
     " cancel_requested_at IS NOT NULL AS cancel_requested,"
     " CASE WHEN status='waiting_for_user' THEN resume_token END AS resume_token"
     " FROM agent_runs WHERE org_id=$1 AND run_id=$2")
+
+
+async def _enforce_org_budget(db: Database, org_id: str, response: Response) -> None:
+    """K9-2 org 日预算两档：warn ⇒ 响应头 X-Budget-Warn + 判据行；over ⇒ 429 ORG_BUDGET_EXCEEDED（拒新建，
+    已在跑的不受影响——超限拒新建与杀在飞的是两件事）。"""
+    from syncopate.runtime.budget import org_budget_state
+    st = await org_budget_state(db, org_id=org_id)
+    if st["state"] == "over":
+        print(f"[budget] 🔴 org={org_id} 日预算超限 {st['ratio']:.0%} ⇒ 拒新建（Runbook: 06 token 消耗异常）", flush=True)
+        raise ApiError(429, "ORG_BUDGET_EXCEEDED",
+                       f"org 日预算已用 {st['ratio']:.0%}（{st['tokens']}/{st['daily_tokens']} tokens）")
+    if st["state"] == "warn":
+        response.headers["X-Budget-Warn"] = f"{st['ratio']:.0%}"
+        print(f"[budget] ⚠️ org={org_id} 日预算近限 {st['ratio']:.0%}", flush=True)
 
 
 async def _run_view(db: Database, org_id: str, run_id: str, *, created: bool = True) -> RunView | None:
@@ -438,6 +452,7 @@ def create_app(db: Database | None = None) -> FastAPI:
         """
         _check_idempotency_key(idempotency_key)
         _validate_run_input(body.run_type, body.model_dump())
+        await _enforce_org_budget(db, org_id, response)
         handle = await create_run(
             db, org_id=org_id, run_id=new_run_id(),
             user_message=body.user_message, idempotency_key=idempotency_key,
@@ -644,6 +659,7 @@ def create_app(db: Database | None = None) -> FastAPI:
     ) -> RunView:
         """一条消息 = 一个 run。幂等/审批/事件全部沿用 run 的既有语义（含 K1-3 三态）。"""
         _check_idempotency_key(idempotency_key)
+        await _enforce_org_budget(db, org_id, response)
         if not await conversation_exists(db, org_id=org_id, conversation_id=cid):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在")
         # ★ 09-02（`26 §2.5` Ⓐ）：这条消息可能就是对上一轮 clarify 的回答 ⇒ 先把等补充的
@@ -751,6 +767,19 @@ def create_app(db: Database | None = None) -> FastAPI:
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     # ---- M9.6 · 观测：成本与用量 ----------------------------------------
+
+    # ---- K9-3 · /metrics（文本，Prometheus 形状）+ /alerts（带 runbook）----
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint(db: DB) -> Response:
+        from syncopate.runtime import metrics as _m
+        snap = await _m.snapshot(db)
+        return Response(content=_m.render_prometheus(snap), media_type="text/plain; version=0.0.4")
+
+    @app.get("/alerts")
+    async def alerts_endpoint(principal: Principal, db: DB) -> dict[str, Any]:
+        from syncopate.runtime import metrics as _m
+        snap = await _m.snapshot(db, org_id=principal.org)
+        return {"alerts": _m.alerts(snap), "snapshot": {k: v for k, v in snap.items() if isinstance(v, (int, float))}}
 
     @app.get("/usage", response_model=UsageView)
     async def usage(org_id: OrgId, db: DB) -> UsageView:

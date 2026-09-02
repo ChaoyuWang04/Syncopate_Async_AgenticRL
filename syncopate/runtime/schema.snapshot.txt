@@ -35,6 +35,10 @@ TABLE agent_runs
   COL version integer null=NO default=0
   COL parent_run_id text null=YES default=None
   COL rerun_reason text null=YES default=None
+  COL max_model_calls integer null=NO default=40
+  COL max_tokens bigint null=NO default=400000
+  COL max_duration_s integer null=NO default=900
+  COL budget_exceeded_at timestamp with time zone null=YES default=None
   CONSTRAINT agent_runs_automation_tier_check CHECK ((automation_tier = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'D'::text])))
   CONSTRAINT agent_runs_org_id_run_id_key UNIQUE (org_id, run_id)
   CONSTRAINT agent_runs_pkey PRIMARY KEY (id)
@@ -243,6 +247,15 @@ TABLE model_calls
   COL created_at timestamp with time zone null=NO default=now()
   CONSTRAINT model_calls_pkey PRIMARY KEY (id)
   INDEX model_calls_pkey CREATE UNIQUE INDEX model_calls_pkey ON public.model_calls USING btree (id)
+TABLE org_budgets
+  COL org_id text null=NO default=None
+  COL daily_tokens bigint null=NO default=2000000
+  COL daily_cost_micros bigint null=NO default=10000000
+  COL warn_ratio real null=NO default=0.8
+  COL updated_at timestamp with time zone null=NO default=now()
+  CONSTRAINT org_budgets_pkey PRIMARY KEY (org_id)
+  CONSTRAINT org_budgets_warn_ratio_check CHECK (((warn_ratio > (0)::double precision) AND (warn_ratio < (1)::double precision)))
+  INDEX org_budgets_pkey CREATE UNIQUE INDEX org_budgets_pkey ON public.org_budgets USING btree (org_id)
 TABLE outbox_jobs
   COL id bigint null=NO default=nextval('outbox_jobs_id_seq'::regclass)
   COL org_id text null=NO default=None
@@ -374,7 +387,10 @@ TABLE usage_records
   COL cost_micros bigint null=NO default=0
   COL created_at timestamp with time zone null=NO default=now()
   COL call_index integer null=NO default=0
+  COL model text null=YES default=None
+  COL usage_source text null=NO default='measured'::text
   CONSTRAINT usage_records_pkey PRIMARY KEY (id)
+  CONSTRAINT usage_records_usage_source_check CHECK ((usage_source = ANY (ARRAY['measured'::text, 'estimated'::text])))
   INDEX usage_by_org_day CREATE INDEX usage_by_org_day ON public.usage_records USING btree (org_id, day)
   INDEX usage_records_once CREATE UNIQUE INDEX usage_records_once ON public.usage_records USING btree (org_id, run_id, call_index) WHERE (run_id IS NOT NULL)
   INDEX usage_records_pkey CREATE UNIQUE INDEX usage_records_pkey ON public.usage_records USING btree (id)

@@ -62,6 +62,9 @@ class Dispatcher:
         except Exception as exc:                    # noqa: BLE001 —— 失败不丢，退避
             outcome = await mark_outbox_retry(self.db, job_id=job["id"], error=repr(exc)[:500])
             self.stats["retried" if outcome == "retry" else "dead"] += 1
+            from syncopate.runtime.log import log_event
+            log_event("dispatcher", "publish_failed", level="error", outbox_job_id=job["id"], run_id=rid,
+                      org_id=job["org_id"], queue=job["queue"], outcome=outcome, error=repr(exc)[:300])
             print(f"[outbox] 🔴 job={job['id']} run={rid} publish 失败 ⇒ {outcome}: {exc!r}",
                   flush=True)
             return

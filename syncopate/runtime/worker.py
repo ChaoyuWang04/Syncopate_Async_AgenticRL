@@ -25,7 +25,7 @@ from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
 from syncopate.runtime.db import (MAX_RUN_ATTEMPTS, Database, InvalidRunTransition, append_event,
                                   approved_action, cancel_requested,
-                                  claim_run, finish_run, renew_lease, schedule_run_retry,
+                                  claim_run, finish_run, renew_lease, schedule_run_retry, transition_run,
                                   prior_turns, park_run_for_user)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform, PlatformError
@@ -89,20 +89,21 @@ async def record_step(db: Database, *, org_id: str, run_id: str, step: int,
 
 
 async def record_usage(db: Database, *, org_id: str, run_id: str,
-                       tokens_in: int = 0, tokens_out: int = 0,
-                       cost_micros: int = 0) -> None:
+                       tokens_in: int, tokens_out: int, cost_micros: int,
+                       call_index: int | None = None, model: str | None = None,
+                       usage_source: str = "measured") -> None:
+    """usage 一行。K9-3 起粒度 = **每次模型调用一行**（call_index=(attempts-1)*1000+第几次）；
+    写死三步路径（无 decider）仍是每次执行一行（call_index=attempts）。同一 (org,run,call_index) 重放被
+    usage_records_once 拒（H15 账单翻倍）。"""
     async with db.tx() as conn:
         await conn.execute(
             """
-            INSERT INTO usage_records (org_id, run_id, tokens_in, tokens_out, cost_micros,
-                                       call_index)
+            INSERT INTO usage_records (org_id, run_id, tokens_in, tokens_out, cost_micros, call_index,
+                                       model, usage_source)
             VALUES ($1,$2,$3,$4,$5,
-                    -- K2（H15）：粒度 = 每次执行（attempts）一行。同一次执行重放第二次
-                    -- 会撞 usage_records_once —— 那正是"账单翻倍"要被拒的形状；
-                    -- 审批恢复是**新的一次执行**（attempts+1），合法地多一行。
-                    -- K9-3 改成"每次模型调用一行"时 call_index 换成调用序号。
-                    (SELECT attempts FROM agent_runs WHERE org_id=$1 AND run_id=$2))
-            """, org_id, run_id, tokens_in, tokens_out, cost_micros)
+                    COALESCE($6, (SELECT attempts FROM agent_runs WHERE org_id=$1 AND run_id=$2)),
+                    $7, $8)
+            """, org_id, run_id, tokens_in, tokens_out, cost_micros, call_index, model, usage_source)
 
 
 async def audit(db: Database, *, org_id: str, run_id: str, action: str,
@@ -332,8 +333,18 @@ class Worker:
             bindings[REPORT_TOOL] = ToolBinding(_session_report_invoke)
         return bindings
 
-    def _gate(self, *, org_id: str, run_id: str) -> ActionGate:
+    def _gate(self, *, org_id: str, run_id: str, attempts: int = 1) -> ActionGate:
         bindings = self._bindings(org_id, run_id)
+        from syncopate.runtime.budget import load_run_budget, run_budget_exceeded
+
+        async def _budget(*, org_id: str, run_id: str, model_calls: int, tokens: int) -> str | None:
+            budget, elapsed = await load_run_budget(self.db, org_id=org_id, run_id=run_id)
+            return run_budget_exceeded(budget, model_calls=model_calls, tokens=tokens, elapsed_s=elapsed)
+
+        async def _usage(*, org_id: str, run_id: str, call_index: int, tokens_in: int, tokens_out: int) -> None:
+            await record_usage(self.db, org_id=org_id, run_id=run_id, tokens_in=tokens_in,
+                               tokens_out=tokens_out, cost_micros=tokens_in + 4 * tokens_out,
+                               call_index=call_index)
         if _st.ENABLED:                      # B-5 分账：工具计时（默认关）
             bindings = {k: _timed_binding(v) for k, v in bindings.items()}
         return ActionGate(
@@ -343,7 +354,8 @@ class Worker:
             emit=emit, audit=audit,
             amount_threshold=self.config.amount_threshold,
             # K1-4：安全点「工具调用前」读取消意图；命中 ⇒ refused(cancel_requested) ⇒ 下面映射成 cancelled
-            cancel_check=lambda: self._should_stop(org_id, run_id))
+            cancel_check=lambda: self._should_stop(org_id, run_id),
+            attempts=attempts, record_usage=_usage, budget_check=_budget)
 
     # ---- 成本闸：压测场景⑤ ------------------------------------------------
 
@@ -391,12 +403,16 @@ class Worker:
                                 user_message=claimed["user_message"] or "",
                                 automation_tier=claimed.get("automation_tier"),
                                 intent=claimed.get("intent"),
-                                conversation_id=claimed.get("conversation_id"))
+                                conversation_id=claimed.get("conversation_id"),
+                                attempts=int(claimed.get("attempts") or 1))
         except Exception as exc:                      # noqa: BLE001
             # ★ 兜底：worker 不能因为一条 run 挂掉而停摆（压测场景②）。
             #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
             kind = classify_error(exc)
             attempts = int(claimed.get("attempts") or 1)
+            from syncopate.runtime.log import log_event
+            log_event("worker", "run_execution_error", level="error", run_id=run_id, org_id=org_id,
+                      attempts=attempts, error_code=kind, error=str(exc)[:300], worker_id=self.config.worker_id)
             try:
                 if kind == "transient" and attempts < MAX_RUN_ATTEMPTS:
                     delay = RUN_RETRY_BACKOFF_S[min(attempts - 1, len(RUN_RETRY_BACKOFF_S) - 1)]
@@ -418,7 +434,8 @@ class Worker:
     async def _execute(self, *, org_id: str, run_id: str, user_message: str,
                        automation_tier: str | None = None,
                        intent: str | None = None,
-                       conversation_id: str | None = None) -> None:
+                       conversation_id: str | None = None,
+                       attempts: int = 1) -> None:
         # ---- D 档：永不自动，连审批单都不开 ----
         # ★ §3 的四档里 D 是「不可逆**且**不可验证」（跨账户 / 竞品 / 合规边界 /
         #   账户级预算）。它和 C 档的区别是**性质**不是程度：C 是"要人点头"，
@@ -462,7 +479,8 @@ class Worker:
             await self._execute_with_loop(org_id=org_id, run_id=run_id,
                                           user_message=user_message, ctx=ctx,
                                           resumed=decided is not None, intent=intent,
-                                          conversation_id=conversation_id)
+                                          conversation_id=conversation_id,
+                                          attempts=attempts)
             return
 
         # ---- step 0：查政策 ----
@@ -556,12 +574,13 @@ class Worker:
     async def _execute_with_loop(self, *, org_id: str, run_id: str,
                                  user_message: str, ctx, resumed: bool,
                                  intent: str | None = None,
-                                 conversation_id: str | None = None) -> None:
+                                 conversation_id: str | None = None,
+                                 attempts: int = 1) -> None:
         """B-4：模型驱动的执行路径。横切全在 ActionGate 里，这里只做状态映射。"""
         from syncopate.runtime.agent_loop import (MODEL_USAGE, PRIOR_TURNS, RUN_INTENT,
                                                   run_agent_loop)
 
-        gate = self._gate(org_id=org_id, run_id=run_id)
+        gate = self._gate(org_id=org_id, run_id=run_id, attempts=attempts)
         gate.skip_triggers = resumed          # 只有"人已裁决"才跳过网关；恢复本身不跳
         usage: dict[str, int] = {}
         token = MODEL_USAGE.set(usage)
@@ -601,18 +620,22 @@ class Worker:
             PRIOR_TURNS.reset(prior_token)
             RUN_INTENT.reset(intent_token)
             MODEL_USAGE.reset(token)
-            if usage.get("calls"):
-                # 计价是工程值（in×1 + out×4 micros）：成本闸要的是"有单调的账"，
-                # 真实单价接真平台时再定；token 数本身是 §19 成本指标的口径。
-                await record_usage(
-                    self.db, org_id=org_id, run_id=run_id,
-                    tokens_in=usage.get("tokens_in", 0),
-                    tokens_out=usage.get("tokens_out", 0),
-                    cost_micros=usage.get("tokens_in", 0) + 4 * usage.get("tokens_out", 0))
+            # K9-3：记账已在 loop 内**每次模型调用一行**（gate.record_model_usage）；这里不再汇总写一行
+            # （写了就是双写；计价口径 in×1 + out×4 micros 不变，真实单价接真平台时再定）
 
         if result.status == "finished":
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="succeeded", result=result.final_answer)
+        elif result.status == "budget_exceeded":
+            # K9-2：run 级预算超限 ⇒ **转 waiting_for_user 不判死**（还有救：人可以加预算后 resume）
+            async with self.db.tx() as conn:
+                await transition_run(conn, org_id=org_id, run_id=run_id, to="waiting_for_user",
+                                     reason=f"budget:{result.error}", actor_type="worker", actor_id="budget_gate",
+                                     event_payload={"reason": result.error, "signal": "budget_exceeded"})
+                await conn.execute("UPDATE agent_runs SET budget_exceeded_at=now() WHERE org_id=$1 AND run_id=$2",
+                                   org_id, run_id)
+                await append_event(conn, org_id=org_id, run_id=run_id, kind="run.budget_exceeded",
+                                   payload={"reason": result.error})
         elif result.status == "awaiting_reconciliation":
             # K5-3 分支 C：写工具结果未知（response_lost）。⛔ 禁止自动重试；
             # 回队列延迟重投，等对账（K8）按幂等键回填后，loop 从意图日志接着走。

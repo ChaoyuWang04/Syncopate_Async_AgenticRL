@@ -193,6 +193,12 @@ class _HaltingGate:
     async def stop_requested(self) -> bool:               # K5-5 安全点契约（假 gate 显式实现）
         return False
 
+    async def budget_exceeded(self, *, model_calls, tokens):  # noqa: ANN001 —— K9-2 预算闸契约
+        return None
+
+    async def record_model_usage(self, *, call_no, tokens_in, tokens_out):  # noqa: ANN001 —— K9-3 记账契约
+        return None
+
     def observation_for(self, tool, *, ok, data, error):    # noqa: ANN001
         return {"tool": tool, "ok": ok, "data": data, "error": error}
 

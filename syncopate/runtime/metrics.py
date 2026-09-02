@@ -184,3 +184,114 @@ async def queue_backlog(db: Database, *, org_id: str | None = None,
                                       for q in ("interactive", "batch", "maintenance")}
     out["alert"] = out["oldest_queued_run_age_s"] > OLDEST_JOB_AGE_ALERT_S
     return out
+
+
+# --------------------------------------------------------------------------
+# K9-3 · 指标面板（~10 项，课件 15 项裁剪）+ 告警绑定 runbook；K9-1 · 九条 SLO 自动读数
+# --------------------------------------------------------------------------
+
+RUNBOOK = {
+    "queue_lag": "27 §13 K11-2 · RUNBOOK 01 queue lag 持续升高",
+    "stuck_runs": "RUNBOOK 02 卡死 run",
+    "write_tool_errors": "RUNBOOK 03 写工具报错",
+    "dead_letter": "RUNBOOK 01/03（死信 = 病历）",
+    "response_lost": "RUNBOOK 03（对账）",
+    "budget": "RUNBOOK 06 token 消耗异常",
+}
+
+
+async def snapshot(db: Database, *, org_id: str | None = None) -> dict[str, Any]:
+    """一次查全（读数来源全部是表，不许人工口算）。"""
+    async with db.tx() as conn:
+        by_status = {r["status"]: int(r["n"]) for r in await conn.fetch(
+            "SELECT status, count(*) AS n FROM agent_runs WHERE ($1::text IS NULL OR org_id=$1) GROUP BY status", org_id)}
+        row = await conn.fetchrow("""
+            SELECT
+              (SELECT count(*) FROM agent_runs WHERE status='running' AND lease_expires_at < now()
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS stuck_running,
+              (SELECT count(*) FROM run_events e JOIN agent_runs r ON r.org_id=e.org_id AND r.run_id=e.run_id
+                WHERE e.kind='run.stuck_queued' AND r.status='queued'
+                  AND ($1::text IS NULL OR e.org_id=$1))                                          AS stuck_queued,
+              (SELECT count(*) FROM tool_calls WHERE status='skipped_duplicate'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS duplicate_prevented_total,
+              (SELECT count(*) FROM tool_calls WHERE side_effect AND status='response_lost'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS response_lost_open,
+              (SELECT count(*) FROM dead_letter_jobs WHERE reprocessed_at IS NULL
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS dead_letter_open,
+              (SELECT count(*) FROM tool_calls WHERE side_effect AND blocked_by IS NULL
+                 AND created_at > now()-interval '24 hours' AND ($1::text IS NULL OR org_id=$1)) AS write_calls_24h,
+              (SELECT count(*) FROM tool_calls WHERE side_effect AND blocked_by IS NULL AND status IN ('failed','response_lost')
+                 AND created_at > now()-interval '24 hours' AND ($1::text IS NULL OR org_id=$1)) AS write_errors_24h,
+              (SELECT count(*) FROM agent_runs WHERE created_at > now()-interval '24 hours'
+                 AND status IN ('succeeded','failed','cancelled') AND ($1::text IS NULL OR org_id=$1)) AS finished_24h,
+              (SELECT count(*) FROM agent_runs WHERE created_at > now()-interval '24 hours' AND status='failed'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS failed_24h,
+              (SELECT count(*) FROM agent_runs WHERE created_at > now()-interval '24 hours'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS created_24h,
+              (SELECT count(DISTINCT run_id) FROM run_events WHERE kind='run.created'
+                 AND created_at > now()-interval '24 hours' AND ($1::text IS NULL OR org_id=$1)) AS created_events_24h,
+              (SELECT count(*) FROM agent_runs WHERE budget_exceeded_at IS NOT NULL
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS budget_waiting_total,
+              (SELECT COALESCE(percentile_disc(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (started_at-created_at))),0)
+                 FROM agent_runs WHERE started_at IS NOT NULL AND created_at > now()-interval '24 hours'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS queue_lag_p95_s,
+              (SELECT COALESCE(percentile_disc(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (ended_at-created_at))),0)
+                 FROM agent_runs WHERE ended_at IS NOT NULL AND created_at > now()-interval '24 hours'
+                 AND ($1::text IS NULL OR org_id=$1))                                            AS completion_p95_s
+        """, org_id)
+    m = {k: (float(v) if k.endswith("_s") else int(v)) for k, v in dict(row).items()}
+    backlog = await queue_backlog(db, org_id=org_id)
+    m.update({f"runs_{k}": v for k, v in by_status.items()})
+    m["outbox_pending"] = backlog["outbox_pending"]
+    m["oldest_queued_run_age_s"] = backlog["oldest_queued_run_age_s"]
+    m["stuck_runs"] = m["stuck_running"] + m["stuck_queued"]
+    m["write_tool_error_rate"] = (m["write_errors_24h"] / m["write_calls_24h"]) if m["write_calls_24h"] else 0.0
+    m["run_failed_ratio"] = (m["failed_24h"] / m["finished_24h"]) if m["finished_24h"] else 0.0
+    m["run_created_success_rate"] = (m["created_events_24h"] / m["created_24h"]) if m["created_24h"] else 1.0
+    return m
+
+
+def alerts(m: dict[str, Any]) -> list[dict[str, str]]:
+    """告警绑定行动（课件 §12：告警正文带 Runbook 引用）。单一指标不判根因，这里只是"该看了"。"""
+    out = []
+    if m["oldest_queued_run_age_s"] > OLDEST_JOB_AGE_ALERT_S:
+        out.append({"alert": "queue_lag", "value": f"{m['oldest_queued_run_age_s']:.0f}s", "runbook": RUNBOOK["queue_lag"]})
+    if m["stuck_runs"] >= 10:
+        out.append({"alert": "stuck_runs", "value": str(m["stuck_runs"]), "runbook": RUNBOOK["stuck_runs"]})
+    if m["write_tool_error_rate"] > 0.001 and m["write_calls_24h"] >= 20:
+        out.append({"alert": "write_tool_errors", "value": f"{m['write_tool_error_rate']:.2%}", "runbook": RUNBOOK["write_tool_errors"]})
+    if m["dead_letter_open"] > 0:
+        out.append({"alert": "dead_letter", "value": str(m["dead_letter_open"]), "runbook": RUNBOOK["dead_letter"]})
+    if m["response_lost_open"] > 0:
+        out.append({"alert": "response_lost", "value": str(m["response_lost_open"]), "runbook": RUNBOOK["response_lost"]})
+    return out
+
+
+def render_prometheus(m: dict[str, Any]) -> str:
+    lines = []
+    for k, v in sorted(m.items()):
+        if isinstance(v, (int, float)):
+            lines.append(f"syncopate_{k} {v}")
+    return "\n".join(lines) + "\n"
+
+
+SLO_SPEC = (   # 27 §15 九条：名 · 读数键 · 判据（lambda 读数→bool）· 归属
+    ("POST /runs P95 < 300ms", "post_runs_p95_ms", lambda v: v is not None and v < 300, "K1"),
+    ("run.created 成功率 > 99.9%", "run_created_success_rate", lambda v: v > 0.999, "K2/K3"),
+    ("普通任务 P95 完成 < 60s", "completion_p95_s", lambda v: v < 60, "整链"),
+    ("run.failed 比例 < 1%", "run_failed_ratio", lambda v: v < 0.01, "K5"),
+    ("写类工具错误率 < 0.1%", "write_tool_error_rate", lambda v: v < 0.001, "K6"),
+    ("queue lag P95 < 10s", "queue_lag_p95_s", lambda v: v < 10, "K3"),
+    ("SSE 断线后可通过 after 补齐", "sse_after_ok", lambda v: v is True, "K7"),
+    ("stuck run 数量 < 10", "stuck_runs", lambda v: v < 10, "K8"),
+    ("单 org 每日成本不超预算", "org_budget_ratio", lambda v: v is not None and v < 1.0, "K9"),
+)
+
+
+def slo_table(m: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for name, key, ok, owner in SLO_SPEC:
+        v = m.get(key)
+        rows.append({"slo": name, "value": v, "ok": (ok(v) if v is not None else None), "owner": owner,
+                     "verdict": "✅" if v is not None and ok(v) else ("⬜ 无读数" if v is None else "🔴")})
+    return rows

@@ -685,6 +685,20 @@ K8-5 端到端故障注入联测（本阶段的主体工作量）：分支 A/B/C
 
 ## 11 · K9 · 生产硬化（课件 CH9；~2 天；准则五裁剪面最大的一章）
 
+> ✅ **K9 已落地（2026-09-02，裁剪面按取舍表）**：SLO 九条自动读数 `scripts/slo_readout.py`（`metrics.snapshot` +
+> `slo_table`；POST /runs P95 给 `--api` 才真打；SSE after 由测试守）· run 级预算四字段（0006：max_model_calls /
+> max_tokens / max_duration_s + 步数）由收口判、loop 只问一句，超限 ⇒ **waiting_for_user 不判死**（resume 即可续）·
+> org 日预算两档（`org_budgets`：warn ⇒ X-Budget-Warn 头 + 判据行；over ⇒ 新建 429 ORG_BUDGET_EXCEEDED，已跑的不动）·
+> usage **每次模型调用一行**（call_index=(attempts-1)*1000+n；`usage_source` measured/estimated）· `/metrics`
+> 文本面板 12 项（含 `duplicate_prevented_total` 一等公民、stuck_runs、oldest_queued_run_age、write_tool_error_rate、
+> queue_lag_p95、budget_waiting_total）+ `/alerts` 每条绑 runbook 节 · 结构化日志 `log.py`（错误路径 JSON 一行；
+> token/password/secret/prompt 打码；判据行保留）· checkpoint `v` 版本网关（旧格式无 v 可读；未知版本 ⇒
+> run.manual_review + failed，不崩不猜；outbox payload 未加 v，登记）· 发布五能力：开关（release.py）✅ ·
+> 禁工具（`SYNCOPATE_DISABLED_TOOLS`，拦下也落库）✅ · drain（Celery warm shutdown 真演练：跑完在飞 run 才退、
+> lease 已放）✅ · 停队列（`celery control cancel_consumer <queue>`）📝 命令进 runbook 未真演练 · 回滚版本
+> （git checkout + 重启）📝 未真演练。测试八类对照见 29 §2.4。门槛②③④⑤⑥ = `test_hardening_k9.py` 9 条 +
+> 集成 drain 1 条；回归 362 passed。
+
 > 课件三圈壳：入口先拦 · 过程看得见 · 变更可逆。我们的现状：release.py 灰测闸门
 > （automation_tier 阶梯 + fail-closed）≈ feature flag/canary 的等价物已有；
 > B-1a 平台限流已有；测试租户与真人租户结构隔离（C-1）≈ "staging 不连 prod"已有。
