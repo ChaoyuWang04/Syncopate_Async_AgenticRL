@@ -28,7 +28,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from syncopate.runtime.db import Database
+from syncopate.runtime.db import Database, new_resume_token
 
 # 金额阈值（微单位，和 usage_records.cost_micros 同口径）。
 # ⚠️ 这个数**该由业务定**，设计文档附录 A 的 A2 还空着（"扩量的常见幅度档位？
@@ -141,7 +141,7 @@ async def open_approval_case(db: Database, *, org_id: str, run_id: str, action_t
         await conn.execute(
             """
             UPDATE agent_runs SET status='waiting_for_user', requires_approval=TRUE,
-                   lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
+                   lease_owner=NULL, lease_expires_at=NULL, resume_token=$3, updated_at=now()
              WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id)
+            """, org_id, run_id, new_resume_token())
     return case_ref

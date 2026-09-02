@@ -21,16 +21,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
+import uuid
 from pathlib import Path
 from typing import Literal, Annotated, Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 
 from syncopate.runtime.db import (Database, close_parked_clarify_runs, conversation_exists,
                                   create_conversation, create_run, new_conversation_id,
-                                  new_run_id, resume_after_approval)
+                                  new_run_id, request_cancel, resume_after_approval,
+                                  resume_run, trace)
 
 # --------------------------------------------------------------------------
 # 鉴权：token → org。最小实现，形状是对的。
@@ -44,20 +49,78 @@ _DEV_TOKENS: dict[str, str] = {
     "dev-token-acme": "org_acme",
     "dev-token-globex": "org_globex",
     "dev-token-demo": "org_demo",
+    # K1-8：/trace 含完整 prompt/参数，org 校验挡不住"组织内普通成员看别人全文"（课件 H08）
+    # ⇒ 独立角色位 trace，默认关。角色随 token 来，不随请求体来。
+    "dev-token-acme-trace": "org_acme",
 }
+_DEV_ROLES: dict[str, frozenset[str]] = {"dev-token-acme-trace": frozenset({"member", "trace"})}
+_DEFAULT_ROLES = frozenset({"member"})
+
+
+@dataclass(frozen=True)
+class _Principal:
+    org: str
+    roles: frozenset[str]
+
+
+def _parse_token(authorization: str | None) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "缺少 Bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    if token not in _DEV_TOKENS:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token 无效")
+    return token
 
 
 async def current_org(authorization: Annotated[str | None, Header()] = None) -> str:
     """从 Authorization 头解析出 org_id。**这是 org_id 的唯一来源。**"""
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "缺少 Bearer token")
-    org = _DEV_TOKENS.get(authorization.split(" ", 1)[1].strip())
-    if org is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token 无效")
-    return org
+    return _DEV_TOKENS[_parse_token(authorization)]
+
+
+async def current_principal(authorization: Annotated[str | None, Header()] = None) -> _Principal:
+    token = _parse_token(authorization)
+    return _Principal(org=_DEV_TOKENS[token], roles=_DEV_ROLES.get(token, _DEFAULT_ROLES))
 
 
 OrgId = Annotated[str, Depends(current_org)]
+Principal = Annotated[_Principal, Depends(current_principal)]
+
+
+# --------------------------------------------------------------------------
+# K1-7 双层错误码：统一信封 {error:{code,message,request_id}}
+#   code 给前端代码判断（稳定，进注册表）；message 给人看（可改）；
+#   request_id 让用户报错时能一句话定位到日志。
+# --------------------------------------------------------------------------
+
+ERROR_CODES = frozenset({
+    "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CONFLICT", "VALIDATION_ERROR", "INTERNAL_ERROR",
+    "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_KEY_TOO_SHORT", "INVALID_RUN_INPUT",
+    "RUN_ALREADY_TERMINAL", "RUN_NOT_WAITING_FOR_USER", "INVALID_RESUME_TOKEN",
+    "TRACE_FORBIDDEN",
+})
+_STATUS_DEFAULT_CODE = {401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND",
+                        409: "CONFLICT", 422: "VALIDATION_ERROR"}
+
+
+class ApiError(HTTPException):
+    """带业务码的 HTTP 错误。⛔ code 必须在 ERROR_CODES 注册，否则前端没法稳定判断。"""
+
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        if code not in ERROR_CODES:
+            raise ValueError(f"未注册的错误码 {code!r}")
+        super().__init__(status_code, detail={"code": code, "message": message})
+
+
+def _request_id(request: Request) -> str:
+    return request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+
+
+def _error_body(request: Request, status_code: int, detail: Any) -> dict[str, Any]:
+    if isinstance(detail, dict) and "code" in detail:
+        code, message = detail["code"], str(detail.get("message", ""))
+    else:
+        code, message = _STATUS_DEFAULT_CODE.get(status_code, "INTERNAL_ERROR"), str(detail)
+    return {"error": {"code": code, "message": message, "request_id": _request_id(request)}}
 
 
 def get_db(request: Request) -> Database:
@@ -83,10 +146,30 @@ class RunCreate(BaseModel):
     user_message: str = Field(min_length=1, max_length=4000)
     intent: str | None = None
     automation_tier: str | None = Field(default=None, pattern="^[ABCD]$")
+    # K1-1：run_type 决定 input 按哪个子 schema 校验（课件 H06："格式对但字段缺"不许漏到 worker）。
+    # 当前只有 chat（一条消息 = 一个 run）；新类型 = 在 RUN_INPUT_MODELS 加一行。
+    run_type: Literal["chat"] = "chat"
+
+
+class _ChatInput(BaseModel):
+    user_message: str = Field(min_length=1, max_length=4000)
+
+
+RUN_INPUT_MODELS: dict[str, type[BaseModel]] = {"chat": _ChatInput}
+
+
+def _validate_run_input(run_type: str, body: dict[str, Any]) -> None:
+    model = RUN_INPUT_MODELS.get(run_type)
+    if model is None:
+        raise ApiError(422, "INVALID_RUN_INPUT", f"未知 run_type {run_type!r}")
+    try:
+        model.model_validate(body)
+    except Exception as exc:  # pydantic.ValidationError
+        raise ApiError(422, "INVALID_RUN_INPUT", str(exc)[:300]) from exc
 
 
 class RunView(BaseModel):
-    """★ 白名单：只有这些字段会出去。lease_owner / attempt / error 细节留在内部。"""
+    """★ 白名单：只有这些字段会出去。lease_owner / attempts / error 细节留在内部。"""
 
     run_id: str
     status: str
@@ -94,6 +177,39 @@ class RunView(BaseModel):
     automation_tier: str | None = None
     requires_approval: bool = False
     created: bool = Field(default=True, description="False = 幂等命中，返回的是原来那次")
+    run_type: str = "chat"
+    cancel_requested: bool = False              # 意图，不是状态（K1-4）
+    resume_token: str | None = None             # 只在 waiting_for_user 时给出（K1-5）
+
+
+class CancelRunRequest(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+class ResumeRunRequest(BaseModel):
+    """resume 是"带着新信息继续"，不只是继续（27 K1-1）。input 落进 run.resumed 事件。"""
+
+    resume_token: str = Field(min_length=8)
+    input: dict[str, Any] | None = None
+
+
+_RUN_VIEW_SQL = (
+    "SELECT run_id,status,intent,automation_tier,requires_approval,run_type,"
+    " cancel_requested_at IS NOT NULL AS cancel_requested,"
+    " CASE WHEN status='waiting_for_user' THEN resume_token END AS resume_token"
+    " FROM agent_runs WHERE org_id=$1 AND run_id=$2")
+
+
+async def _run_view(db: Database, org_id: str, run_id: str, *, created: bool = True) -> RunView | None:
+    async with db.tx() as conn:
+        row = await conn.fetchrow(_RUN_VIEW_SQL, org_id, run_id)
+    return None if row is None else RunView(**dict(row), created=created)
+
+
+def _check_idempotency_key(key: str | None) -> None:
+    # 课件 H05：key 由客户端在点击那一刻生成，粒度「实体:动作:v版本」；min_length=8 挡住 "1"、"abc" 这类
+    if key is not None and len(key) < 8:
+        raise ApiError(422, "IDEMPOTENCY_KEY_TOO_SHORT", "Idempotency-Key 至少 8 个字符")
 
 
 class ApprovalView(BaseModel):
@@ -184,6 +300,20 @@ def create_app(db: Database | None = None) -> FastAPI:
     app.state.sse_waiters = {}
     app.state.sse_bell_task = None
 
+    # K1-7：所有非 2xx 走同一个信封（含 Starlette 自己抛的 404/405 与 422 校验错误）
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code,
+                            content=_error_body(request, exc.status_code, exc.detail),
+                            headers=getattr(exc, "headers", None))
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        msg = "; ".join(f"{'.'.join(str(x) for x in e.get('loc', ()))}: {e.get('msg')}"
+                        for e in exc.errors()[:3])
+        return JSONResponse(status_code=422, content=_error_body(
+            request, 422, {"code": "VALIDATION_ERROR", "message": msg}))
+
     async def _sse_bell() -> None:
         import asyncpg as _apg
 
@@ -261,22 +391,30 @@ def create_app(db: Database | None = None) -> FastAPI:
         body: RunCreate,
         org_id: OrgId,
         db: DB,
+        response: Response,
         idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> RunView:
         """★ 注意签名：`org_id` 来自 `Depends`，`body` 里没有它。
 
-        ★ 幂等命中时返回 **201 + created=False**，而不是 409。
-        重复提交是正常现象，报错会让客户端以为出事了从而**再重试一次**。
+        K1-3 幂等三态（课件 CH1 §4.2 / H01 / H04）：
+            新 key                → 201 created=True
+            同 key 同 input       → **200** created=False（分布式正常现象，不是错误）
+            同 key 不同 input     → 409 IDEMPOTENCY_CONFLICT（第二把锁 input_hash）
+        竞态由 UNIQUE 约束 + ON CONFLICT 兜住（db.create_run），不是"先查再插"。
         """
+        _check_idempotency_key(idempotency_key)
+        _validate_run_input(body.run_type, body.model_dump())
         handle = await create_run(
             db, org_id=org_id, run_id=new_run_id(),
             user_message=body.user_message, idempotency_key=idempotency_key,
-            intent=body.intent, automation_tier=body.automation_tier)
-        async with db.tx() as conn:
-            row = await conn.fetchrow(
-                "SELECT run_id,status,intent,automation_tier,requires_approval "
-                "FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, handle.run_id)
-        return RunView(**dict(row), created=handle.created)
+            intent=body.intent, automation_tier=body.automation_tier,
+            run_type=body.run_type)
+        if not handle.created:
+            if not handle.input_matches:
+                raise ApiError(409, "IDEMPOTENCY_CONFLICT",
+                               "同一个 Idempotency-Key 已用于不同的输入")
+            response.status_code = status.HTTP_200_OK
+        return await _run_view(db, org_id, handle.run_id, created=handle.created)
 
     # ---- GET /runs/{run_id} ----
     @app.get("/runs/{run_id}", response_model=RunView)
@@ -286,15 +424,53 @@ def create_app(db: Database | None = None) -> FastAPI:
         少了它，知道别人 run_id 的人就能读到别人的数据。所以这里不能写成
         "先查出来再判断 org 对不对" —— 那样一次 SQL 注入或一个 typo 就穿了。
         """
-        async with db.tx() as conn:
-            row = await conn.fetchrow(
-                "SELECT run_id,status,intent,automation_tier,requires_approval "
-                "FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, run_id)
-        if row is None:
+        view = await _run_view(db, org_id, run_id)
+        if view is None:
             # ★ 别人的 run 和不存在的 run 返回**同一个** 404 ——
             # 区分开就成了一个探测别人 run_id 是否存在的接口。
             raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
-        return RunView(**dict(row))
+        return view
+
+    # ---- K1-4 · 协作式取消 ----
+    @app.post("/runs/{run_id}/cancel", response_model=RunView)
+    async def cancel_run(run_id: str, body: CancelRunRequest, org_id: OrgId, db: DB,
+                         response: Response) -> RunView:
+        """queued/waiting_for_user ⇒ 直接 cancelled（200）；running ⇒ 只登记意图（202），
+        worker 在安全点自己迁；终态 ⇒ 409（不是 400、不是静默成功）。"""
+        outcome = await request_cancel(db, org_id=org_id, run_id=run_id, reason=body.reason)
+        if outcome is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+        if outcome == "terminal":
+            raise ApiError(409, "RUN_ALREADY_TERMINAL", "run 已结束，不能取消")
+        if outcome == "requested":
+            response.status_code = status.HTTP_202_ACCEPTED
+        return await _run_view(db, org_id, run_id)
+
+    # ---- K1-5 · resume 四道检查 ----
+    @app.post("/runs/{run_id}/resume", response_model=RunView)
+    async def resume_run_endpoint(run_id: str, body: ResumeRunRequest, org_id: OrgId,
+                                  db: DB) -> RunView:
+        outcome = await resume_run(db, org_id=org_id, run_id=run_id,
+                                   resume_token=body.resume_token, input=body.input)
+        if outcome is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+        if outcome == "terminal":
+            raise ApiError(409, "RUN_ALREADY_TERMINAL", "run 已结束，不能恢复")
+        if outcome == "not_waiting":
+            raise ApiError(409, "RUN_NOT_WAITING_FOR_USER", "run 不在等待用户，不能恢复")
+        if outcome == "bad_token":
+            raise ApiError(403, "INVALID_RESUME_TOKEN", "resume_token 不匹配")
+        return await _run_view(db, org_id, run_id)
+
+    # ---- K1-8 · trace（独立角色位；跨租户 404 先于角色 403）----
+    @app.get("/runs/{run_id}/trace")
+    async def get_trace(run_id: str, principal: Principal, db: DB) -> dict[str, Any]:
+        data = await trace(db, org_id=principal.org, run_id=run_id)
+        if data is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+        if "trace" not in principal.roles:
+            raise ApiError(403, "TRACE_FORBIDDEN", "需要 trace 角色")
+        return json.loads(json.dumps(data, ensure_ascii=False, default=str))
 
     # ---- 审批网关：GET / POST ----
     @app.get("/approvals", response_model=list[ApprovalView])
@@ -380,10 +556,11 @@ def create_app(db: Database | None = None) -> FastAPI:
     @app.post("/conversations/{cid}/messages", response_model=RunView,
               status_code=status.HTTP_201_CREATED)
     async def post_message(
-        cid: str, body: MessageCreate, org_id: OrgId, db: DB,
+        cid: str, body: MessageCreate, org_id: OrgId, db: DB, response: Response,
         idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> RunView:
-        """一条消息 = 一个 run。幂等/审批/事件全部沿用 run 的既有语义。"""
+        """一条消息 = 一个 run。幂等/审批/事件全部沿用 run 的既有语义（含 K1-3 三态）。"""
+        _check_idempotency_key(idempotency_key)
         if not await conversation_exists(db, org_id=org_id, conversation_id=cid):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在")
         # ★ 09-02（`26 §2.5` Ⓐ）：这条消息可能就是对上一轮 clarify 的回答 ⇒ 先把等补充的
@@ -394,11 +571,11 @@ def create_app(db: Database | None = None) -> FastAPI:
             user_message=body.user_message, idempotency_key=idempotency_key,
             intent=body.intent, automation_tier=body.automation_tier,
             conversation_id=cid)
-        async with db.tx() as conn:
-            row = await conn.fetchrow(
-                "SELECT run_id,status,intent,automation_tier,requires_approval "
-                "FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, handle.run_id)
-        return RunView(**dict(row), created=handle.created)
+        if not handle.created:
+            if not handle.input_matches:
+                raise ApiError(409, "IDEMPOTENCY_CONFLICT", "同一个 Idempotency-Key 已用于不同的输入")
+            response.status_code = status.HTTP_200_OK
+        return await _run_view(db, org_id, handle.run_id, created=handle.created)
 
     # ---- M9.6 · SSE：事件流 + 断线补发 ----------------------------------
 

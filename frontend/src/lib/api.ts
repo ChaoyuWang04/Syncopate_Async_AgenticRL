@@ -57,7 +57,16 @@ async function request<T>(
   if (!res.ok) {
     let detail = ''
     try {
-      detail = (await res.text()).slice(0, 300)
+      // K1-7 双层错误码：后端统一信封 {error:{code,message,request_id}}；
+      // code 给程序判断、message 给人看。旧的 {detail} 形状仍兜底。
+      const text = await res.text()
+      try {
+        const j = JSON.parse(text)
+        detail = j?.error?.message ?? j?.detail ?? text
+      } catch {
+        detail = text
+      }
+      detail = String(detail).slice(0, 300)
     } catch {
       // 忽略 body 读取失败
     }

@@ -37,18 +37,18 @@
 | A1 | `POST /runs` 快速返回 run_id | ✅ | `api.py:259-280` | — |
 | A2 | `GET /runs/{id}` | ✅ | `api.py:282-298` | — |
 | A3 | `GET /runs/{id}/events`（拉历史 + 流） | 🔶 | `api.py:455-480` | 课件分两入口（`events?after=N` 拉历史 / `events/stream` 推）；我们一个入口只走 SSE，**无 `after` 查询参数**，只认 `Last-Event-ID` 头 → K7-1 |
-| A4 | `GET /runs/{id}/trace`（八表聚合，独立权限） | ❌ | 路由表 `api.py:235-483` 无 | K1-8 建入口，K8-4 聚合 |
-| A5 | `POST /runs/{id}/cancel`（协作式） | ❌ | 无路由；`schema.sql:24-51` 无 `cancel_requested_at` | K1-4 + K2-1 |
-| A6 | `POST /runs/{id}/resume`（resume_token + 新 input） | 🔶 | 只有 `POST /approvals/{case_ref}` 间接恢复 `api.py:310-329` → `db.py:297` | 无 resume_token、无 input 带入、任何 pending 审批单裁决即恢复 → K1-5 收编 |
+| A4 | `GET /runs/{id}/trace`（八表聚合，独立权限） | ✅ 09-02 | 路由表 `api.py:235-483` 无 | K1-8 建入口，K8-4 聚合 |
+| A5 | `POST /runs/{id}/cancel`（协作式） | ✅ 09-02（安全点：ActionGate 入口；其余 K5-5） | 无路由；`schema.sql:24-51` 无 `cancel_requested_at` | K1-4 + K2-1 |
+| A6 | `POST /runs/{id}/resume`（resume_token + 新 input） | ✅ 09-02（input 落 run.resumed 事件，loop 消费归 K5-2） | 只有 `POST /approvals/{case_ref}` 间接恢复 `api.py:310-329` → `db.py:297` | 无 resume_token、无 input 带入、任何 pending 审批单裁决即恢复 → K1-5 收编 |
 | A7 | 六状态三活三终 | ✅ | `schema.sql:30-32` CHECK | — |
-| A8 | 幂等三态 201 / 200 / 409 | 🔶 | 命中返回 **201 + created=False** `api.py:266-280`；无 `input_hash` 列 | 同 key 不同 input 判不出 409（H11）→ K1-3 + K2-1 |
+| A8 | 幂等三态 201 / 200 / 409 | ✅ 09-02 | 命中返回 **201 + created=False** `api.py:266-280`；无 `input_hash` 列 | 同 key 不同 input 判不出 409（H11）→ K1-3 + K2-1 |
 | A9 | 幂等靠约束不靠先查（H01） | ✅ | `db.py:159-189` ON CONFLICT DO NOTHING + 回查 | — |
 | A10 | 隔离进 SQL，跨租户 404 | ✅ | `api.py:290-298`；11 §3 R3.2 | — |
-| A11 | 双层错误码信封 `{error:{code,message,request_id}}` | ❌ | `HTTPException(404,"run 不存在")` 纯字符串 `api.py:297` | K1-7 |
+| A11 | 双层错误码信封 `{error:{code,message,request_id}}` | ✅ 09-02 | `HTTPException(404,"run 不存在")` 纯字符串 `api.py:297` | K1-7 |
 | A12 | response_model 出口白名单 | ✅ | 11 §3 R3.9；`api.py` 各路由 | — |
-| A13 | input 按 run_type 分发子 schema 校验（H06） | 🔶 | `RunCreate` 只有 user_message/intent/automation_tier | 无 run_type 概念；一条消息=一个 run → K1-1 定 run_type 是否引入 |
+| A13 | input 按 run_type 分发子 schema 校验（H06） | ✅ 09-02（RUN_INPUT_MODELS，只有 chat） | `RunCreate` 只有 user_message/intent/automation_tier | 无 run_type 概念；一条消息=一个 run → K1-1 定 run_type 是否引入 |
 | A14 | id 不可枚举 | ✅ | `api.py:272` `run_` + uuid4 hex12；`api.py:336` conv 同 | case_ref 见 §4-3 |
-| A15 | `POST /runs` P95 < 300ms | ✅ | 11 §5 压测 I01 P95 1.3s 是整条 run；创建耗时未单独量 | K1 门槛⑥补量 |
+| A15 | `POST /runs` P95 < 300ms | ✅ 09-02 实测（test_post_runs_p95_under_300ms） | 11 §5 压测 I01 P95 1.3s 是整条 run；创建耗时未单独量 | K1 门槛⑥补量 |
 
 ### 组 B · 数据库（课件 CH2，K2 承接）
 
@@ -80,7 +80,7 @@
 | C5 | 先写库再 ack | ⛔→K3 | 无 ack 概念（无 broker） | K3-8 |
 | C6 | 错误分类 transient/permanent + 退避 + DLQ | 🔶 | 工具级 retriable 重试 `tools.py:114-136`；run 级异常一律 `failed` `worker.py:318-322`；无 DLQ | K3-9 |
 | C7 | worker 层不改 run 状态（一个写入者） | 🔶 | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
-| C8 | 协作式取消消费端（四个安全点） | ❌ | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
+| C8 | 协作式取消消费端（四个安全点） | 🔶（1/4：工具调用前已接；模型调用前/step 后/下轮前 K5-5） | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
 | C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | 🔶 | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
 | C10 | 三个 attempts 分账 | 🔶（列已改名 attempts，其余两个随 K3） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
 | C11 | job payload 只放 run_id | ⛔→K3 | 无 job | K3-4；`28` H23 |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K2 后）**：✅ 28 · 🔶 33 · ❌ 14 · ⛔ 2（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1+K2 后）**：✅ 34 · 🔶 28 · ❌ 13 · ⛔ 2（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

@@ -110,8 +110,12 @@ class ActionGate:
                  audit: Callable[..., Awaitable[Any]],
                  record_step: Callable[..., Awaitable[Any]] | None = None,
                  amount_threshold: int | None = None,
-                 max_steps: int = MAX_STEPS_PER_RUN) -> None:
+                 max_steps: int = MAX_STEPS_PER_RUN,
+                 cancel_check: Callable[[], Awaitable[bool]] | None = None) -> None:
         self.db = db
+        # K1-4 协作式取消：收口入口是「工具调用前」这个安全点（课件 CH3 §11.1）。
+        # 注入而不是直连 db：测试用假 db 也能造"已请求取消"的局面。None = 不检查（旧行为）。
+        self._cancel_check = cancel_check
         self.tools = tools
         self._bindings = dict(bindings)
         self.org_id = org_id
@@ -181,6 +185,14 @@ class ActionGate:
         """
         if param_source not in PARAM_SOURCES:
             raise ValueError(f"param_source 必须显式且合法：{PARAM_SOURCES}，收到 {param_source!r}")
+
+        # ── ⓪ 取消意图（安全点：工具调用前）────────────────────────────────
+        # API 对 running 的 run 只写 cancel_requested_at（意图 ≠ 状态，H104）；
+        # 在这里兑现：不计步、不执行、交回 worker 迁 cancelled。其余安全点 K5-5。
+        if self._cancel_check is not None and await self._cancel_check():
+            return GateOutcome(status="refused",
+                               observation={"error": "cancel_requested"},
+                               error="cancel_requested")
 
         self.step += 1
         # ── ① 步数上限 ──────────────────────────────────────────────────

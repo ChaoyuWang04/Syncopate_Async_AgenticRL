@@ -23,7 +23,8 @@ from typing import Any
 from syncopate.core.contract import IS_V15, REPORT_TOOL
 from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
-from syncopate.runtime.db import (Database, append_event, approved_action, claim_run, finish_run,
+from syncopate.runtime.db import (Database, append_event, approved_action, cancel_requested,
+                                  claim_run, finish_run,
                                   prior_turns, park_run_for_user)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
@@ -269,7 +270,9 @@ class Worker:
             org_id=org_id, run_id=run_id,
             over_budget=lambda: self._over_budget(org_id),
             emit=emit, audit=audit,
-            amount_threshold=self.config.amount_threshold)
+            amount_threshold=self.config.amount_threshold,
+            # K1-4：安全点「工具调用前」读取消意图；命中 ⇒ refused(cancel_requested) ⇒ 下面映射成 cancelled
+            cancel_check=lambda: cancel_requested(self.db, org_id=org_id, run_id=run_id))
 
     # ---- 成本闸：压测场景⑤ ------------------------------------------------
 
@@ -522,7 +525,8 @@ class Worker:
             # ★ session_reject 是模型**做对了**（越权/离题该拒），归"取消"不归"失败" ——
             #   归失败会让线上尺子（人工修正率、失败率）把正确的拒绝算成事故。
             status = ("cancelled" if result.error in
-                      ("release_gate", "daily_cost_cap_exceeded", "session_reject")
+                      ("release_gate", "daily_cost_cap_exceeded", "session_reject",
+                       "cancel_requested")           # K1-4：用户取消 = 取消，不是失败
                       else "failed")
             # ★ 09-02（Ⓑ）：拒绝轮要进历史 ⇒ result 存信令自己的话（prior_turns 认它）
             await finish_run(self.db, org_id=org_id, run_id=run_id,

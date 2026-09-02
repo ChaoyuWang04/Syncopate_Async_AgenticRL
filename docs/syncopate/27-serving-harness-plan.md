@@ -112,6 +112,14 @@ K0-4 产出《选型呈报》交 Chaoyu 裁定（见 §8）：队列底座 · �
 
 ## 3 · K1 · Run API（课件 CH1；~2 天）
 
+> ✅ **K1 已落地（2026-09-02）**：六入口齐（cancel/resume/trace 新增；events 的 `after` 查询路归 K7-1）·
+> 幂等三态 201/200/409（input_hash 第二把锁）· 协作式取消（API 写意图，ActionGate 入口 = 第一个
+> 安全点兑现，其余安全点 K5-5）· resume 四道检查（一次性 resume_token，回 queued 不回 running）·
+> 错误信封 `{error:{code,message,request_id}}` + 13 个注册码 · run_type 分发校验（当前只有 chat）·
+> /trace 独立角色位（`dev-token-acme-trace`）。门槛①–⑥ = `tests/runtime/test_run_api_k1.py` 22 条
+> （并发双击、6×2 终态矩阵、五入口 404、SQL org_id 扫描、P95 实测）。K1-2 的投递仍是"worker 轮询"，
+> K3-2 换 Outbox（欠账已在 K3）。⚠️ 前端 `api.ts` 改读信封（本机无 node，未构建验证）。
+
 ### 目标形状（课件的骨架，一次列全）
 
 ```

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import hashlib
+import secrets
 import uuid
 
 import asyncpg
@@ -211,9 +212,9 @@ async def park_run_for_user(db: Database, *, org_id: str, run_id: str,
         await conn.execute(
             """
             UPDATE agent_runs SET status='waiting_for_user', result=$3,
-                   lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
+                   lease_owner=NULL, lease_expires_at=NULL, resume_token=$4, updated_at=now()
              WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id, result)
+            """, org_id, run_id, result, new_resume_token())
         await append_event(conn, org_id=org_id, run_id=run_id,
                            kind="run.waiting_for_user", payload=payload or {})
 
@@ -416,14 +417,135 @@ async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> No
     ⇒ 记在这里，因为"为什么不做断点续"以后一定会被再问一次。
     """
     async with db.tx() as conn:
-        await conn.execute(
+        tag = await conn.execute(
             """
             UPDATE agent_runs
                SET status='queued', lease_owner=NULL, lease_expires_at=NULL,
-                   updated_at=now()
+                   resume_token=NULL, updated_at=now()
              WHERE org_id=$1 AND run_id=$2 AND status='waiting_for_user'
             """, org_id, run_id)
+        if tag.endswith(" 1"):
+            # K1-5：恢复留痕（课件 CH4 事件名 run.resumed）；回到 queued 不是 running——
+            # 必须重新走队列被领取，保住"同一时刻只有一个 worker 持有"
+            await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
+                               payload={"actor": "approval"})
 
+
+
+# --------------------------------------------------------------------------
+# K1（课件 CH1）：六状态 · 协作式取消 · resume 四道检查 · trace 聚合
+# --------------------------------------------------------------------------
+
+RUN_STATUSES = ("queued", "running", "waiting_for_user", "succeeded", "failed", "cancelled")
+TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+
+
+def new_resume_token() -> str:
+    """resume 的凭证（课件 CH1 §5.4）：run 进 waiting_for_user 时生成，用一次即清。"""
+    return secrets.token_urlsafe(24)
+
+
+async def request_cancel(db: Database, *, org_id: str, run_id: str, reason: str,
+                         actor: str = "api") -> str | None:
+    """协作式取消（课件 CH1 §5.2 / CH3 §11，27 K1-4）。返回：
+
+        None          run 不在这个 org（API 按 404 处理，防枚举）
+        "terminal"    已是终态 ⇒ API 409 RUN_ALREADY_TERMINAL
+        "cancelled"   queued / waiting_for_user：没有 worker 在跑，API 直接迁 cancelled
+        "requested"   running：只写 cancel_requested_at + run.cancel_requested 事件；
+                      由 worker 在安全点自己迁（ActionGate 入口是第一个安全点）
+
+    ⛔ `cancel_requested` 永不进状态枚举——它是意图不是状态（H104）。
+    """
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            "SELECT status FROM agent_runs WHERE org_id=$1 AND run_id=$2 FOR UPDATE",
+            org_id, run_id)
+        if row is None:
+            return None
+        st = row["status"]
+        if st in TERMINAL_STATUSES:
+            return "terminal"
+        if st == "running":
+            await conn.execute(
+                "UPDATE agent_runs SET cancel_requested_at = COALESCE(cancel_requested_at, now()) "
+                " WHERE org_id=$1 AND run_id=$2", org_id, run_id)
+            await append_event(conn, org_id=org_id, run_id=run_id, kind="run.cancel_requested",
+                               payload={"reason": reason, "actor": actor})
+            return "requested"
+        await conn.execute(
+            """
+            UPDATE agent_runs SET status='cancelled', error=$3, ended_at=now(),
+                   lease_owner=NULL, lease_expires_at=NULL, resume_token=NULL,
+                   cancel_requested_at = COALESCE(cancel_requested_at, now())
+             WHERE org_id=$1 AND run_id=$2
+            """, org_id, run_id, f"cancelled_by_{actor}")
+        await append_event(conn, org_id=org_id, run_id=run_id, kind=_TERMINAL_EVENT["cancelled"],
+                           payload={"reason": reason, "actor": actor, "from": st})
+        await conn.execute(
+            "INSERT INTO audit_logs (run_id, org_id, action, param_source, detail) "
+            "VALUES ($1,$2,'run.cancelled','user',$3)",
+            run_id, org_id, {"reason": reason, "from": st, "actor": actor})
+        return "cancelled"
+
+
+async def cancel_requested(db: Database, *, org_id: str, run_id: str) -> bool:
+    """安全点读取消意图（ActionGate 入口调用）。"""
+    async with db.tx() as conn:
+        return bool(await conn.fetchval(
+            "SELECT cancel_requested_at IS NOT NULL FROM agent_runs WHERE org_id=$1 AND run_id=$2",
+            org_id, run_id))
+
+
+async def resume_run(db: Database, *, org_id: str, run_id: str, resume_token: str,
+                     input: dict | None = None) -> str | None:
+    """resume 四道检查（课件 CH1 §5.4，27 K1-5）：404 → 409 状态 → token → 回 queued。
+
+    返回 None / "terminal" / "not_waiting" / "bad_token" / "resumed"。
+    ⛔ 回到 queued 不是 running：必须重新走队列被领取。
+    ⚠️ input 只落进 run.resumed 事件（K5-2 让 loop 消费它），K1 不假装它已进 prompt。
+    """
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            "SELECT status, resume_token FROM agent_runs WHERE org_id=$1 AND run_id=$2 FOR UPDATE",
+            org_id, run_id)
+        if row is None:
+            return None
+        if row["status"] in TERMINAL_STATUSES:
+            return "terminal"
+        if row["status"] != "waiting_for_user":
+            return "not_waiting"
+        if not row["resume_token"] or not secrets.compare_digest(row["resume_token"], resume_token):
+            return "bad_token"
+        await conn.execute(
+            """
+            UPDATE agent_runs SET status='queued', lease_owner=NULL, lease_expires_at=NULL,
+                   resume_token=NULL
+             WHERE org_id=$1 AND run_id=$2
+            """, org_id, run_id)
+        await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
+                           payload={"actor": "api", "input": input or {}})
+        return "resumed"
+
+
+_TRACE_TABLES = ("run_events", "agent_steps", "model_calls", "tool_calls",
+                 "checkpoints", "usage_records", "audit_logs", "approval_cases")
+
+
+async def trace(db: Database, *, org_id: str, run_id: str) -> dict | None:
+    """八表按 run 聚合（课件 CH8 §12 / 27 K1-8·K8-4）。每张子表查询**直接带 org_id**
+    （子表已冗余 org_id，课件 H17 的写法废除）。"""
+    async with db.tx() as conn:
+        run = await conn.fetchrow(
+            "SELECT * FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, run_id)
+        if run is None:
+            return None
+        out: dict = {"run": dict(run)}
+        for t in _TRACE_TABLES:
+            rows = await conn.fetch(
+                f"SELECT * FROM {t} WHERE org_id=$1 AND run_id=$2 ORDER BY id", org_id, run_id)
+            out[t] = [dict(r) for r in rows]
+        return out
 
 async def approved_action(db: Database, *, org_id: str, run_id: str) -> dict | None:
     """这条 run 有没有一个**已经被人裁决过**的动作。
@@ -516,39 +638,58 @@ async def record_tool_call(
     ⚠️ 占坑用**独立事务**提交，不能和执行放在一个事务里：
     执行是外部副作用（HTTP 调用），事务回滚**撤销不了它**。
     """
+    from asyncpg.exceptions import UniqueViolationError
+
+    prior = None
     if external_idempotency_key is not None:
         prior = await _await_settled_prior(db, org_id, external_idempotency_key)
-        if prior is not None:
+    if prior is None and external_idempotency_key is not None:
+        # 课件 H01 的工具级形态："先查再插"有竞态——两个并发调用都查到"没有"，都去占坑，
+        # 第二个撞 tool_calls_external_idem_uniq。救你的是约束不是查询：撞了就当命中，回到等原结果那条路。
+        try:
             async with db.tx() as conn:
-                # 命中 ⇒ **返回原结果，不重放**。同时记一条"这次被幂等挡下了"的痕迹，
-                # 否则"到底重试了几次"在事后完全不可见。
-                await conn.execute(
+                row = await conn.fetchrow(
                     """
                     INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                            ok, result, error, replayed_from)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                    """, run_id, org_id, step, tool, arguments,
-                    prior["ok"], prior["result"], prior["error"], prior["id"])
-            # ok 仍是 NULL ⇒ 那一次至今没跑完（等超时了）。**如实上报"处理中"**，
-            # 绝不冒充成功 —— 见 _await_settled_prior 的说明。
-            if prior["ok"] is None:
-                return ToolCallResult(
-                    ok=False, data=None, replayed=True, call_id=prior["id"],
-                    error="tool_call_in_progress: 同一幂等键的上一次调用仍在执行中，"
-                          "本次**没有**重复执行；结果未知，不要当成失败处理")
-            return ToolCallResult(ok=prior["ok"], data=prior["result"],
-                                  error=prior["error"], replayed=True,
-                                  call_id=prior["id"])
+                                            external_idempotency_key)
+                    VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
+                    """, run_id, org_id, step, tool, arguments, external_idempotency_key)
+                call_id = row["id"]
+        except UniqueViolationError:
+            prior = await _await_settled_prior(db, org_id, external_idempotency_key)
+            assert prior is not None, "撞了唯一键却查不到原记录：索引与查询条件不一致？"
+    if prior is not None:
+        async with db.tx() as conn:
+            # 命中 ⇒ **返回原结果，不重放**。同时记一条"这次被幂等挡下了"的痕迹，
+            # 否则"到底重试了几次"在事后完全不可见。
+            await conn.execute(
+                """
+                INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
+                                        ok, result, error, replayed_from)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                """, run_id, org_id, step, tool, arguments,
+                prior["ok"], prior["result"], prior["error"], prior["id"])
+        # ok 仍是 NULL ⇒ 那一次至今没跑完（等超时了）。**如实上报"处理中"**，
+        # 绝不冒充成功 —— 见 _await_settled_prior 的说明。
+        if prior["ok"] is None:
+            return ToolCallResult(
+                ok=False, data=None, replayed=True, call_id=prior["id"],
+                error="tool_call_in_progress: 同一幂等键的上一次调用仍在执行中，"
+                      "本次**没有**重复执行；结果未知，不要当成失败处理")
+        return ToolCallResult(ok=prior["ok"], data=prior["result"],
+                              error=prior["error"], replayed=True,
+                              call_id=prior["id"])
 
-    # 占坑（独立事务，先提交）
-    async with db.tx() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                    external_idempotency_key)
-            VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-            """, run_id, org_id, step, tool, arguments, external_idempotency_key)
-        call_id = row["id"]
+    # 占坑（独立事务，先提交）—— 带幂等键的已在上面占过坑，这里只剩只读工具（无键）
+    if external_idempotency_key is None:
+        async with db.tx() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
+                                        external_idempotency_key)
+                VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
+                """, run_id, org_id, step, tool, arguments, external_idempotency_key)
+            call_id = row["id"]
 
     # ★ 计时从**执行**开始，不含占坑那次写库 —— §19 量的是"打平台花了多久"。
     import time as _time

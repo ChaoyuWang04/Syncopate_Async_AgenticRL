@@ -134,7 +134,11 @@ def test_other_org_and_nonexistent_are_indistinguishable(client) -> None:
     theirs = client.get(f"/runs/{mine}", headers=GLOBEX)
     ghost = client.get("/runs/run_completely_made_up", headers=GLOBEX)
     assert theirs.status_code == ghost.status_code == 404
-    assert theirs.json() == ghost.json(), "两种 404 的响应体不同 ⇒ 可以据此探测"
+
+    def _shape(body: dict) -> dict:
+        # K1-7 信封里的 request_id 每次不同（它就是用来区分请求的），探测面是 code/message
+        return {k: v for k, v in body["error"].items() if k != "request_id"}
+    assert _shape(theirs.json()) == _shape(ghost.json()), "两种 404 的 code/message 不同 ⇒ 可以据此探测"
 
 
 # --------------------------------------------------------------------------
@@ -146,19 +150,21 @@ def test_same_idempotency_key_returns_the_same_run(client) -> None:
     h = {**ACME, "Idempotency-Key": _key()}
     a = client.post("/runs", json={"user_message": "加预算"}, headers=h)
     b = client.post("/runs", json={"user_message": "加预算"}, headers=h)
-    assert a.status_code == b.status_code == 201
+    # K1-3 三态：新建 201，同 key 同 input 命中 200（课件 H04：不是 400/409）
+    assert (a.status_code, b.status_code) == (201, 200)
     assert a.json()["run_id"] == b.json()["run_id"]
     assert a.json()["created"] is True and b.json()["created"] is False
 
 
 def test_idempotent_replay_is_not_an_error(client) -> None:
-    """★ 幂等命中返回 201 而不是 409。
+    """★ 幂等命中返回 200 而不是 409。
 
     报错会让客户端以为出事了，从而**再重试一次** —— 那正好是我们要避免的。
+    （K1-3：命中从 201 改为 200 —— "不是新建"也要如实说，课件 CH1 §8 状态码口径。）
     """
     h = {**ACME, "Idempotency-Key": _key()}
     client.post("/runs", json={"user_message": "x"}, headers=h)
-    assert client.post("/runs", json={"user_message": "x"}, headers=h).status_code == 201
+    assert client.post("/runs", json={"user_message": "x"}, headers=h).status_code == 200
 
 
 def test_idempotency_key_is_scoped_to_org(client) -> None:

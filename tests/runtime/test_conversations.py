@@ -90,7 +90,9 @@ def test_foreign_conversation_is_indistinguishable_from_missing(client) -> None:
     r2 = client.get(f"/conversations/conv_{uuid.uuid4().hex[:12]}/messages",
                     headers=GLOBEX)
     assert r1.status_code == r2.status_code == 404
-    assert r1.json() == r2.json()
+    # K1-7 信封：request_id 每次不同，探测面是 code/message
+    strip = lambda b: {k: v for k, v in b["error"].items() if k != "request_id"}  # noqa: E731
+    assert strip(r1.json()) == strip(r2.json())
     # 发消息同理
     r3 = client.post(f"/conversations/{cid}/messages", json=_msg("x"), headers=GLOBEX)
     assert r3.status_code == 404
