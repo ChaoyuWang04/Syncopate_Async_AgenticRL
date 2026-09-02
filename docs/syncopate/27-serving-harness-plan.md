@@ -751,6 +751,19 @@ K9-7 测试八类对照表补齐 migration/replay/idempotency 三类
 
 ## 12 · K10 · 回流飞轮（课件 CH10；~2 天；与训练线的交界章）
 
+> ✅ **K10 已落地（2026-09-02；交界按 verl-22 09-02 回信定形）**：0007/0008 迁移（feedback_items · run_annotations
+> （负样本 reason_code 必填进 CHECK）· training_exports · agent_runs contract/prompt/model 版本列 · tool_calls
+> registry_version）· `flywheel.py`：词表**不另造**（label = verifier 12 个 cap 名 ∪ behavior:* ∪ 多轮六族 F1–F6 前缀
+> ∪ good；reason_code = 病因九类，external 族零进入负样本池）· 四路抽候选 SQL（failed / 负反馈（后条推翻前条）/
+> **业务结果**（跑对了但 D7 结果坏或写调用最终 failed/response_lost）/ 高价值成功）· trace→case 四步（八表聚合 →
+> 深拷贝 → 密钥类字段删除 → expected 只能人签），产物 = **考卷 v4 题形**（id=FB_<batch>_<n> / level=FB / turns / prior=
+> agent_runs 行形状 / judge.type 人选 / note / meta）落 `data/feedback_exports/<batch>/`，**不写训练线文件**，吸入 = 考卷
+> v5（26 线定）· 出局（OR）先于准入（AND），默认拒绝；`training_exports` 留痕 manifest 与条数一致 · 版本归因：run 级
+> 契约/prompt/模型戳 + tool_call 级注册表哈希（verl-22 改 34 个描述后自动翻新）· `/metrics/by_version` 切片。
+> 入口：POST /runs/{id}/feedback（成员）· POST /runs/{id}/annotations（trace 角色）· GET /flywheel/candidates。
+> 门槛①②③④⑤ = `test_flywheel_k10.py` 7 条；⑥ 回归 370 passed。欠账：chatbox 👍👎 前端入口（本机无 node）；
+> `/auto-apply` **永远不实现**（已成纪律）。
+
 > 课件的两把尺子（"执行完成"≠"问题解决"）正是我们项目的核心张力：runtime 说跑通了、
 > 真人一试全是环境的错（00 §3 那四课）。⚠️ 关键判断：**我们已有一套成熟的评测/训练
 > 管线**（冻结考卷 + 判分器负向认证 + DATA_VERSION + 出厂体检 + 影子重建），课件的

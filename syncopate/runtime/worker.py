@@ -608,6 +608,10 @@ class Worker:
                 else:
                     print(f"[decider-route] 🔴 run={run_id} 请求 model={_tag} 但无端点，回退 rl",
                           flush=True)
+        # K10-5：run 级模型版本（dev mode 会话锁定的标签 + decider 的 model 名）
+        from syncopate.runtime.db import stamp_model_version
+        await stamp_model_version(self.db, org_id=org_id, run_id=run_id,
+                                  model_version=str(getattr(chosen, "model", None) or getattr(chosen, "name", type(chosen).__name__)))
         try:
             decider = _TimedDecider(chosen) if _st.ENABLED else chosen
             # K5-2：**任何**一次执行都从最新快照接着走（没有快照 = 空 = 从头）。此前只有审批裁决后

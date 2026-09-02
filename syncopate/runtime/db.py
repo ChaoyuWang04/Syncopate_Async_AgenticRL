@@ -108,6 +108,35 @@ class Database:
 # --------------------------------------------------------------------------
 
 
+def _contract_version() -> str:
+    """K10-5 版本归因：run 行记契约版本（core/schemas.SCHEMA_VERSION 是契约的版本号）。"""
+    from syncopate.core.schemas import SCHEMA_VERSION
+    return SCHEMA_VERSION
+
+
+def _prompt_version() -> str:
+    from syncopate.prompts import PROMPT_VERSION
+    return PROMPT_VERSION
+
+
+_REGISTRY_VERSION: str | None = None
+
+
+def registry_version_cached() -> str:
+    global _REGISTRY_VERSION
+    if _REGISTRY_VERSION is None:
+        from syncopate.runtime.flywheel import registry_version
+        _REGISTRY_VERSION = registry_version()
+    return _REGISTRY_VERSION
+
+
+async def stamp_model_version(db: Database, *, org_id: str, run_id: str, model_version: str | None) -> None:
+    if model_version:
+        async with db.tx() as conn:
+            await conn.execute("UPDATE agent_runs SET model_version=$3 WHERE org_id=$1 AND run_id=$2 AND model_version IS NULL",
+                               org_id, run_id, model_version)
+
+
 def new_run_id() -> str:
     """不可枚举 id（课件 H18）：`run_` + 48 位随机十六进制。api 与测试只许从这里拿。"""
     return f"run_{uuid.uuid4().hex[:12]}"
@@ -385,14 +414,16 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
             """
             INSERT INTO agent_runs (run_id, org_id, idempotency_key, user_message,
                                     intent, automation_tier, status, conversation_id,
-                                    run_type, input_hash, parent_run_id, rerun_reason)
-            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, $11)
+                                    run_type, input_hash, parent_run_id, rerun_reason,
+                                    contract_version, prompt_version)
+            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (org_id, idempotency_key) WHERE idempotency_key IS NOT NULL
             DO NOTHING
             RETURNING run_id
             """,
             run_id, org_id, idempotency_key, user_message, intent, automation_tier,
-            conversation_id, run_type, ihash, parent_run_id, rerun_reason)
+            conversation_id, run_type, ihash, parent_run_id, rerun_reason,
+            _contract_version(), _prompt_version())
         if row is not None:
             # K2-6：run 与 run.created **同生共死**（课件 C6"让系统失败得干净"）。
             # 事务里没有任何 publish；outbox 行 K3-2 加进来。
@@ -952,9 +983,10 @@ async def record_tool_call(
                 row = await conn.fetchrow(
                     """
                     INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                            external_idempotency_key, status, side_effect)
-                    VALUES ($1,$2,$3,$4,$5,$6,'running',$7) RETURNING id
-                    """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect)
+                                            external_idempotency_key, status, side_effect, registry_version)
+                    VALUES ($1,$2,$3,$4,$5,$6,'running',$7,$8) RETURNING id
+                    """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect,
+                    registry_version_cached())
                 call_id = row["id"]
         except UniqueViolationError:
             prior = await _await_settled_prior(db, org_id, external_idempotency_key)
@@ -989,9 +1021,10 @@ async def record_tool_call(
             row = await conn.fetchrow(
                 """
                 INSERT INTO tool_calls (run_id, org_id, step, tool, arguments,
-                                        external_idempotency_key, status, side_effect)
-                VALUES ($1,$2,$3,$4,$5,$6,'running',$7) RETURNING id
-                """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect)
+                                        external_idempotency_key, status, side_effect, registry_version)
+                VALUES ($1,$2,$3,$4,$5,$6,'running',$7,$8) RETURNING id
+                """, run_id, org_id, step, tool, arguments, external_idempotency_key, side_effect,
+                registry_version_cached())
             call_id = row["id"]
 
     # ★ 计时从**执行**开始，不含占坑那次写库 —— §19 量的是"打平台花了多久"。

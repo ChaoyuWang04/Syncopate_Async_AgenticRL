@@ -214,6 +214,24 @@ class RepairToolCallRequest(BaseModel):
     operator: str = Field(min_length=1, max_length=80)
 
 
+class FeedbackRequest(BaseModel):
+    """K10-1：chatbox 👍👎 + 问题标签。同 run 多条，后来的可推翻先前的（两把尺子有时间差）。"""
+
+    rating: Literal[-1, 0, 1]
+    label: str | None = None            # 症状（flywheel.LABELS）
+    reason_code: str | None = None      # 病因（flywheel.REASON_CODES）；反馈时可空，标注时必填
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class AnnotationRequest(BaseModel):
+    """K10-2：人工标注。label 与 reason_code **分列**；负样本 reason_code 必填（DB CHECK 也守着）；expected 只能人签。"""
+
+    label: str
+    reason_code: str | None = None
+    expected: dict[str, Any] | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
 class ResumeRunRequest(BaseModel):
     """resume 是"带着新信息继续"，不只是继续（27 K1-1）。input 落进 run.resumed 事件。"""
 
@@ -529,6 +547,67 @@ def create_app(db: Database | None = None) -> FastAPI:
             conversation_id=parent["conversation_id"], run_type=parent["run_type"] or "chat",
             parent_run_id=run_id, rerun_reason=body.reason)
         return await _run_view(db, org_id, handle.run_id, created=True)
+
+    # ---- K10 · 回流飞轮：反馈（成员）· 标注（trace 角色）· 候选 · 版本切片 ----
+    @app.post("/runs/{run_id}/feedback", status_code=status.HTTP_201_CREATED)
+    async def post_feedback(run_id: str, body: FeedbackRequest, principal: Principal, db: DB) -> dict[str, Any]:
+        from syncopate.runtime.flywheel import REASON_CODES, label_ok
+        if not label_ok(body.label):
+            raise ApiError(422, "VALIDATION_ERROR", "label 不在词表（cap 名 / behavior:* / F1–F6 族前缀 / good）")
+        if body.reason_code is not None and body.reason_code not in REASON_CODES:
+            raise ApiError(422, "VALIDATION_ERROR", f"reason_code 不在词表：{sorted(REASON_CODES)}")
+        async with db.tx() as conn:
+            exists = await conn.fetchval("SELECT 1 FROM agent_runs WHERE org_id=$1 AND run_id=$2", principal.org, run_id)
+            if not exists:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+            fid = await conn.fetchval(
+                "INSERT INTO feedback_items (org_id, run_id, rating, label, reason_code, comment, created_by) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id", principal.org, run_id, body.rating, body.label,
+                body.reason_code, body.comment, "member")
+        return {"id": fid, "run_id": run_id, "rating": body.rating}
+
+    @app.get("/runs/{run_id}/feedback")
+    async def get_feedback(run_id: str, org_id: OrgId, db: DB) -> list[dict[str, Any]]:
+        async with db.tx() as conn:
+            if not await conn.fetchval("SELECT 1 FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, run_id):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+            rows = await conn.fetch("SELECT id, rating, label, reason_code, comment, created_by, created_at "
+                                    "FROM feedback_items WHERE org_id=$1 AND run_id=$2 ORDER BY created_at", org_id, run_id)
+        return json.loads(json.dumps([dict(r) for r in rows], default=str))
+
+    @app.post("/runs/{run_id}/annotations", status_code=status.HTTP_201_CREATED)
+    async def post_annotation(run_id: str, body: AnnotationRequest, principal: Principal, db: DB) -> dict[str, Any]:
+        from syncopate.runtime.flywheel import REASON_CODES, label_ok
+        async with db.tx() as conn:
+            exists = await conn.fetchval("SELECT 1 FROM agent_runs WHERE org_id=$1 AND run_id=$2", principal.org, run_id)
+        if not exists:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+        if "trace" not in principal.roles:
+            raise ApiError(403, "TRACE_FORBIDDEN", "标注需要 trace 角色")
+        if not label_ok(body.label) or (body.reason_code is not None and body.reason_code not in REASON_CODES):
+            raise ApiError(422, "VALIDATION_ERROR", "label/reason_code 必须在词表内且分列")
+        if body.label != "good" and not body.reason_code:
+            raise ApiError(422, "VALIDATION_ERROR", "负样本必须给 reason_code（病因）——没归因的负样本符号可能是反的")
+        async with db.tx() as conn:
+            aid = await conn.fetchval(
+                "INSERT INTO run_annotations (org_id, run_id, label, reason_code, expected_json, notes, annotator) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id", principal.org, run_id, body.label, body.reason_code,
+                body.expected, body.notes, "trace-role")
+        return {"id": aid, "run_id": run_id, "label": body.label, "reason_code": body.reason_code}
+
+    @app.get("/flywheel/candidates")
+    async def flywheel_candidates(principal: Principal, db: DB, window_hours: int = 24, limit: int = 50) -> dict[str, Any]:
+        if "trace" not in principal.roles:
+            raise ApiError(403, "TRACE_FORBIDDEN", "需要 trace 角色")
+        from syncopate.runtime.flywheel import extract_candidates
+        return await extract_candidates(db, org_id=principal.org, window_hours=window_hours, limit=limit)
+
+    @app.get("/metrics/by_version")
+    async def metrics_by_version(principal: Principal, db: DB, key: str = "prompt_version") -> list[dict[str, Any]]:
+        from syncopate.runtime import metrics as _m
+        if key not in ("contract_version", "prompt_version", "model_version"):
+            raise ApiError(422, "VALIDATION_ERROR", "key ∈ contract_version/prompt_version/model_version")
+        return await _m.by_version(db, key=key, org_id=principal.org)
 
     # ---- K8-3 · Repair 管理通道（独立角色位 trace；四样留痕）----
     @app.post("/runs/{run_id}/tool_calls/{call_id}/repair")

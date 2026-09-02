@@ -39,6 +39,9 @@ TABLE agent_runs
   COL max_tokens bigint null=NO default=400000
   COL max_duration_s integer null=NO default=900
   COL budget_exceeded_at timestamp with time zone null=YES default=None
+  COL contract_version text null=YES default=None
+  COL prompt_version text null=YES default=None
+  COL model_version text null=YES default=None
   CONSTRAINT agent_runs_automation_tier_check CHECK ((automation_tier = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'D'::text])))
   CONSTRAINT agent_runs_org_id_run_id_key UNIQUE (org_id, run_id)
   CONSTRAINT agent_runs_pkey PRIMARY KEY (id)
@@ -159,6 +162,20 @@ TABLE feature_lifts
   CONSTRAINT feature_lifts_pkey PRIMARY KEY (id)
   INDEX feature_lifts_feature_region_product_id_key CREATE UNIQUE INDEX feature_lifts_feature_region_product_id_key ON public.feature_lifts USING btree (feature, region, product_id)
   INDEX feature_lifts_pkey CREATE UNIQUE INDEX feature_lifts_pkey ON public.feature_lifts USING btree (id)
+TABLE feedback_items
+  COL id bigint null=NO default=nextval('feedback_items_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL run_id text null=NO default=None
+  COL rating smallint null=NO default=None
+  COL label text null=YES default=None
+  COL reason_code text null=YES default=None
+  COL comment text null=YES default=None
+  COL created_by text null=NO default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT feedback_items_pkey PRIMARY KEY (id)
+  CONSTRAINT feedback_items_rating_check CHECK ((rating = ANY (ARRAY['-1'::integer, 0, 1])))
+  INDEX feedback_by_run CREATE INDEX feedback_by_run ON public.feedback_items USING btree (org_id, run_id, created_at)
+  INDEX feedback_items_pkey CREATE UNIQUE INDEX feedback_items_pkey ON public.feedback_items USING btree (id)
 TABLE geo_performance
   COL id bigint null=NO default=nextval('geo_performance_id_seq'::regclass)
   COL product_id text null=NO default=None
@@ -309,6 +326,20 @@ TABLE policy_clauses
   INDEX policy_clauses_pkey CREATE UNIQUE INDEX policy_clauses_pkey ON public.policy_clauses USING btree (id)
   INDEX policy_clauses_scope_clause_id_key CREATE UNIQUE INDEX policy_clauses_scope_clause_id_key ON public.policy_clauses USING btree (scope, clause_id)
   INDEX policy_supersedes CREATE INDEX policy_supersedes ON public.policy_clauses USING btree (scope, supersedes) WHERE (supersedes IS NOT NULL)
+TABLE run_annotations
+  COL id bigint null=NO default=nextval('run_annotations_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL run_id text null=NO default=None
+  COL label text null=NO default=None
+  COL reason_code text null=YES default=None
+  COL expected_json jsonb null=YES default=None
+  COL notes text null=YES default=None
+  COL annotator text null=NO default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT run_annotations_negative_needs_reason CHECK (((label = 'good'::text) OR (reason_code IS NOT NULL)))
+  CONSTRAINT run_annotations_pkey PRIMARY KEY (id)
+  INDEX annotations_by_run CREATE INDEX annotations_by_run ON public.run_annotations USING btree (org_id, run_id, created_at)
+  INDEX run_annotations_pkey CREATE UNIQUE INDEX run_annotations_pkey ON public.run_annotations USING btree (id)
 TABLE run_events
   COL id bigint null=NO default=nextval('run_events_id_seq'::regclass)
   COL run_id text null=NO default=None
@@ -369,6 +400,7 @@ TABLE tool_calls
   COL duplicate_of bigint null=YES default=None
   COL error_json jsonb null=YES default=None
   COL blocked_by text null=YES default=None
+  COL registry_version text null=YES default=None
   CONSTRAINT tool_calls_duplicate_of_fkey FOREIGN KEY (duplicate_of) REFERENCES tool_calls(id)
   CONSTRAINT tool_calls_pkey PRIMARY KEY (id)
   CONSTRAINT tool_calls_replayed_from_fkey FOREIGN KEY (replayed_from) REFERENCES tool_calls(id)
@@ -377,6 +409,20 @@ TABLE tool_calls
   INDEX tool_calls_external_idem_uniq CREATE UNIQUE INDEX tool_calls_external_idem_uniq ON public.tool_calls USING btree (org_id, external_idempotency_key) WHERE ((external_idempotency_key IS NOT NULL) AND (status <> 'skipped_duplicate'::text))
   INDEX tool_calls_open_side_effects CREATE INDEX tool_calls_open_side_effects ON public.tool_calls USING btree (created_at) WHERE (side_effect AND (status = ANY (ARRAY['running'::text, 'response_lost'::text])))
   INDEX tool_calls_pkey CREATE UNIQUE INDEX tool_calls_pkey ON public.tool_calls USING btree (id)
+TABLE training_exports
+  COL id bigint null=NO default=nextval('training_exports_id_seq'::regclass)
+  COL batch_id text null=NO default=None
+  COL dataset_version text null=NO default=None
+  COL n_cases integer null=NO default=None
+  COL n_rejected integer null=NO default=0
+  COL destination text null=NO default=None
+  COL manifest jsonb null=NO default='{}'::jsonb
+  COL created_by text null=NO default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT training_exports_batch_id_key UNIQUE (batch_id)
+  CONSTRAINT training_exports_pkey PRIMARY KEY (id)
+  INDEX training_exports_batch_id_key CREATE UNIQUE INDEX training_exports_batch_id_key ON public.training_exports USING btree (batch_id)
+  INDEX training_exports_pkey CREATE UNIQUE INDEX training_exports_pkey ON public.training_exports USING btree (id)
 TABLE usage_records
   COL id bigint null=NO default=nextval('usage_records_id_seq'::regclass)
   COL org_id text null=NO default=None

@@ -136,14 +136,14 @@
 | E12 | schema_version / payload `v` | 🔶 09-02（checkpoint ✅；outbox/事件 payload 未加，登记） | 无 | K9-5 |
 | E13 | 发布能力（开关/停队列/禁工具/回滚/drain）+ 演练 | 🔶 09-02（开关/禁工具/drain 三项真演练；停队列/回滚只写命令） | `release.py:70-95` 开关 + fail-closed ✅；其余四项无、零演练 | K9-6 |
 | E14 | 测试八类 | ✅ 09-02（§2.4 对照表；migration/replay/idempotency 三类已有实例） | unit/integration/contract/故障注入/压测 ✅；migration/replay/idempotency(rerun) 缺 | K9-7 |
-| E15 | `feedback_items` / `run_annotations` | ❌ | 无 | K10-1 |
-| E16 | 版本号 run 级 + tool 级 | 🔶 | `conversations.model` 有模型标签（dev mode）；无 contract/prompt/registry 版本 | K10-5 |
-| E17 | `training_exports` 留痕 + 出局/准入清单 | ❌ | 无（26 号管线有 DATA_VERSION，但 runtime→训练无通道） | K10-6 |
+| E15 | `feedback_items` / `run_annotations` | ✅ 09-02（后端 + 词表复用；前端 👍👎 本机无 node 未做） | 无 | K10-1 |
+| E16 | 版本号 run 级 + tool 级 | ✅ 09-02（contract/prompt/model + registry 哈希；/metrics/by_version） | `conversations.model` 有模型标签（dev mode）；无 contract/prompt/registry 版本 | K10-5 |
+| E17 | `training_exports` 留痕 + 出局/准入清单 | ✅ 09-02（考卷 v4 题形导出；manifest 与条数一致） | 无（26 号管线有 DATA_VERSION，但 runtime→训练无通道） | K10-6 |
 | E18 | 上线总清单 / Runbook / 复盘模板 | ❌ | 08/09 有"怎么起"，无 runbook 卡片 | K11 |
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K9 后）**：✅ 71 · 🔶 4 · ❌ 2 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K10 后）**：✅ 74 · 🔶 3 · ❌ 0 · ⛔ 0（合计 77；K11 收口 E18/E19）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

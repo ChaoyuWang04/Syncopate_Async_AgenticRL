@@ -295,3 +295,21 @@ def slo_table(m: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append({"slo": name, "value": v, "ok": (ok(v) if v is not None else None), "owner": owner,
                      "verdict": "✅" if v is not None and ok(v) else ("⬜ 无读数" if v is None else "🔴")})
     return rows
+
+
+async def by_version(db: Database, *, key: str = "prompt_version", org_id: str | None = None,
+                     window_hours: int = 24 * 30) -> list[dict[str, Any]]:
+    """K10-5：任一指标按版本切片（contract/prompt/model）。不切只能报警，切了才能定位。"""
+    assert key in ("contract_version", "prompt_version", "model_version")
+    async with db.tx() as conn:
+        rows = await conn.fetch(f"""
+            SELECT COALESCE({key}, '<unset>') AS version, count(*) AS runs,
+                   sum(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
+                   sum(CASE WHEN status='succeeded' THEN 1 ELSE 0 END) AS succeeded
+              FROM agent_runs
+             WHERE created_at > now() - make_interval(hours => $1) AND ($2::text IS NULL OR org_id=$2)
+             GROUP BY 1 ORDER BY runs DESC
+        """, window_hours, org_id)
+    return [{"version": r["version"], "runs": int(r["runs"]), "failed": int(r["failed"]),
+             "succeeded": int(r["succeeded"]),
+             "failed_ratio": (int(r["failed"]) / int(r["runs"])) if r["runs"] else 0.0} for r in rows]
