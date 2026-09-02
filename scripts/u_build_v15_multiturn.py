@@ -36,13 +36,13 @@ MIN_FIELDS = [
 
 
 def prod_context(bundle: CaseBundle) -> dict[str, Any]:
-    """与 syncopate.runtime.decider._demo_context **同一格式**：只列标识不列指标。"""
+    """与线上 core.demo_context **同一形状**：只有 account_id（Chaoyu 09-02 裁定）。
+    有哪些 campaign 由模型调 campaign.list 自己查——真实账户几万条、每天在变，不进提示词。
+    多轮行不带 campaign_id：上一轮对话里已经出现过对象，本轮靠指代/重查。"""
     camps = (bundle.env.readonly_tables or {}).get("campaigns", {}) or {}
-    rows = [f"{cid}({c.get('name', '')}·产品 {c.get('product_id', '')}·地域 {c.get('region', '')})"
-            for cid, c in camps.items() if not str(cid).startswith("_")]
     acc = bundle.case.context.get("account_id") or next(
         (c.get("account_id") for c in camps.values()), "ACC_DEMO")
-    return {"account_id": acc, "在投 campaign": "；".join(rows)}
+    return {"account_id": acc}
 
 
 def answer_turn(text: str) -> dict:

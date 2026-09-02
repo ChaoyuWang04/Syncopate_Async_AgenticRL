@@ -37,7 +37,7 @@
 |---|---|---|
 | system prompt | `load_system_prompt()`，v15 只换终答段 | `syncopate/prompts/__init__.py:68-88` |
 | 会话历史 | **真 user/assistant 消息对**，插在 system 之后、本轮 user 之前；助手内容 = 上一轮**真实终答人话**（信令收场用信令自己的话），超 400 token 截断 | `syncopate/runtime/decider.py:152-190,222-227` |
-| 本轮 user | `step_user.txt` 渲染：当前时间（**纯日期**，`date.today()`）+ context（`account_id` + 一串「在投 campaign」清单，**不给目标 campaign_id**）+ 用户问题；**没有字段清单**（v15 下 summary/reply 被过滤，整节消失） | `decider.py:216,418-442,219-220`；`syncopate/core/contract.py:88-95` |
+| 本轮 user | `step_user.txt` 渲染：当前时间（**纯日期**）+ context（**只有 `account_id`**；用户在界面选了 campaign 才带 `campaign_id`——09-02 Chaoyu 裁定⑥：几万条每天在变的清单不进提示词，有哪些 campaign 调 `campaign.list` 自己翻）+ 用户问题；**没有字段清单**（v15 一律不列） | `core/demo_context.py`（decider 与建库共用）；`contract.visible_answer_fields` |
 | 工具菜单 | **全量 34 个**（30 业务 + 4 个 session 信令；实测 `REGISTRY.menu(None)`=34） | `decider.py:124,245-247` |
 | think | think-on（`enable_thinking=True`，v15 契约默认） | `syncopate/train/rollout_budget.py:51-56,74`；`decider.py:249-252` |
 | 模型该输出 | `<think>…</think>` + 若干 `<tool_call>` 轮 + 纯人话终答，或终止性 `session.*` 信令 | `25 §3.1` |
@@ -96,7 +96,7 @@ S5 闲聊与表达     闲聊、承接语、说人话
 | 1 | 历史的位置 | 折成文本塞进 `Case.user_message`：`"[上一轮] 用户：…\n[上一轮] 助手：…"`（`scripts/u_build_v14_5.py:609-610,686-693`）；结构根因=`Case` 只有一个 `user_message` 字段（`syncopate/core/schemas.py:76`） | 真消息对（`decider.py:152-190`） | W2 |
 | 2 | 上一轮助手内容 | 机器标签式 summary 截 **120 字符**，缺失时兜底「已给出结论」（`:592,690`）——两种都不是人话 | 上一轮真实终答人话，**400 token** 截断（`decider.py:186-189`） | W2 |
 | 3 | 字段清单 | L2 行带真实机器字段（`rollout_loop.py:165` + `prompts/step_user.txt:9-12`）；L1 行 MIN_FIELDS 在 v15 下**整节消失**（`u_build_v14_5.py:698-699` + `contract.py:88-95`）——同一份数据里两个桶互相都不同形 | 整节消失 | W2 |
-| 4 | 目标对象 | 题面直接给 `campaign_id=CMP_x`（context 继承 v13，`:545-548,585`） | 只给在投清单，要自己挑（`decider.py:441-442`） | W2 |
+| 4 | 目标对象 | 题面直接给 `campaign_id=CMP_x`（context 继承 v13，`:545-548,585`） | ~~只给在投清单~~ → **只给 account_id**，要自己用 `campaign.list` 查（09-02 裁定⑥；08-20 那版「清单塞 context」是演示环境补丁） | W2 ✅（多轮行 context=account_id） |
 | 5 | 当前时间 | ISO 带时区（`schemas.py:102-103`） | 纯日期（`decider.py:216`） | W2（训练改纯日期，已裁定） |
 | 6 | 工具菜单 | 按模板族裁剪（`scripts/set_tool_menus.py`；v8 时代 docstring 记 8–13，文档记 16–17，代码出处查不到，§7） | 全量 34 | W2（训练改全量 34，已裁定） |
 | 7 | 历史里的 think | 训练历史轮带显式空 think 块 | 线上回灌历史只有终答文本、不带 think | W2 |
@@ -565,7 +565,7 @@ think 非空/空块数、空块是否有梯度、菜单工具数、纯日期、�
 历史助手内容 = 上一轮真实终答（人话；同线上 400 token 截断口径，不再是 120 字符机器 summary）
 历史轮不带 think（同线上回灌口径，#7 对齐）
 L1/L2 保持成对照对（该续接的与该查数的成对，24 §7 单侧对照教反）
-对象选择行（#4）：context 给在投清单，让模型自己挑中 gold 指向的那条
+对象选择行（#4）：context 只有 account_id，模型用 campaign.list 翻页找到 gold 指向的那条（09-02 裁定⑥）
 ```
 
 **OPD（R7；设计主体已在 `24 §P4`，此处只记 v15 增量）**：
@@ -591,7 +591,14 @@ prompt 集 v2 = 419 骨架 + chat_bank_v2 + S2 held-out 句式 + 多轮占比 14
 ⑤ 思考率门槛 SFT 出口只记录（预注册预测带 20–50%）；≥50% 硬闸挂 R6 出口       → W0/W3
 ```
 
-**唯一还开着的批准**：W0 产物（修订版 R5 门槛表）做完后一次呈报。
+```
+⑥ 09-02 context 形状  一次真实请求只带 account_id（+用户界面选中的 campaign_id，可选）；campaign 清单
+                      **不进提示词**（真实账户几万条、每天在变），有哪些 campaign 由模型调 campaign.list 翻页
+                      → core/demo_context.py（线上）与 prod_context（训练）同一形状；08-20 那版清单是演示补丁
+⑦ 09-02 空 think 不监督 · CoT 不缩短 · 上限 9216/18432（§4.1 / §W3 / §W2⑤）
+```
+
+**唯一还开着的批准**：W0 产物（修订版 R5 门槛表）做完后一次呈报（09-02 已口头批：按推荐执行）。
 
 ---
 
