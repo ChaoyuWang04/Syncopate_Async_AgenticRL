@@ -23,8 +23,8 @@ from typing import Any
 from syncopate.core.contract import IS_V15, REPORT_TOOL
 from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
-from syncopate.runtime.db import (Database, approved_action, claim_run, finish_run,
-                                  prior_turns)
+from syncopate.runtime.db import (Database, append_event, approved_action, claim_run, finish_run,
+                                  prior_turns, park_run_for_user)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
 from syncopate.runtime.platform import FakeAdPlatform
 from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
@@ -64,32 +64,16 @@ class _TimedDecider:
 
 async def emit(db: Database, *, org_id: str, run_id: str, kind: str,
                payload: dict[str, Any] | None = None) -> int:
-    """写一条事件。**seq 由数据库分配**（见模块 docstring）。
+    """写一条事件。**seq 由 `db.append_event` 的领号器分配**（K2-2，课件 H13）。
 
-    ⚠️ `max(seq)+1` 在 READ COMMITTED 下对**并发写同一条 run** 不是原子的：
-    两个事务同时算出同一个 max ⇒ 唯一键冲突。正常情况下一条 run 只有一个
-    handler，但 lease 交接的窗口（旧 worker 收尾 × 新 worker 已抢到）真的撞过
-    （2026-08-20，把整个 worker 进程炸死了）。冲突是瞬时的 ⇒ 重算重试，有界。
+    历史：这里曾是 `max(seq)+1` + 有界重试——lease 交接窗口（旧 worker 收尾 × 新 worker
+    已抢到）真的撞过唯一键并炸死过 worker（2026-08-20）。重试只是掩盖，领号器才是修：
+    `UPDATE agent_runs SET last_seq=last_seq+1 … RETURNING` 行锁到 COMMIT，两个写者
+    结构上不可能拿到同一个号。
     """
-    from asyncpg.exceptions import UniqueViolationError
-
-    for attempt in range(4):
-        try:
-            async with db.tx() as conn:
-                return await conn.fetchval(
-                    """
-                    INSERT INTO run_events (run_id, org_id, seq, kind, payload)
-                    VALUES ($1, $2,
-                            COALESCE((SELECT max(seq) FROM run_events
-                                       WHERE run_id=$1 AND org_id=$2), 0) + 1,
-                            $3, $4)
-                    RETURNING seq
-                    """, run_id, org_id, kind, payload or {})
-        except UniqueViolationError:
-            if attempt == 3:
-                raise
-            await asyncio.sleep(0.05 * (attempt + 1))
-    raise AssertionError("unreachable")
+    async with db.tx() as conn:
+        return await append_event(conn, org_id=org_id, run_id=run_id, kind=kind,
+                                  payload=payload)
 
 
 async def record_step(db: Database, *, org_id: str, run_id: str, step: int,
@@ -305,7 +289,7 @@ class Worker:
             # ⚠️ started 事件也要在兜底 try 里 —— 它炸了（如 seq 竞态耗尽重试）
             #   不该带走整个 worker 进程（2026-08-20 实测就是这么死的）。
             await emit(self.db, org_id=org_id, run_id=run_id, kind="run.started",
-                       payload={"attempt": claimed["attempt"],
+                       payload={"attempts": claimed["attempts"],
                                 "automation_tier": claimed.get("automation_tier")})
             await self._execute(org_id=org_id, run_id=run_id,
                                 user_message=claimed["user_message"] or "",
@@ -518,7 +502,15 @@ class Worker:
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="succeeded", result=result.final_answer)
         elif result.status == "halted":
-            return                              # 审批单已开、事件已发，等人
+            if result.case_ref is None:
+                # ★ 09-02（`26 §2.5` Ⓐ）：没有审批单的挂起 = session.clarify。
+                #   此前这里一律 return ⇒ run 停在 running 被 lease 重抢；现在置 waiting_for_user。
+                fa = result.final_answer or {}
+                await park_run_for_user(
+                    self.db, org_id=org_id, run_id=run_id, result=fa,
+                    payload={"signal": fa.get("signal"),
+                             "question": (fa.get("arguments") or {}).get("question", "")})
+            return                              # 审批单已开（或已挂起等补充），等人
         elif result.status == "exhausted":
             # 收口的 refused 有两族：政策性拒绝（灰测/成本）= 取消；步数上限 = 失败
             # ★ session_reject 是模型**做对了**（越权/离题该拒），归"取消"不归"失败" ——
@@ -526,8 +518,11 @@ class Worker:
             status = ("cancelled" if result.error in
                       ("release_gate", "daily_cost_cap_exceeded", "session_reject")
                       else "failed")
+            # ★ 09-02（Ⓑ）：拒绝轮要进历史 ⇒ result 存信令自己的话（prior_turns 认它）
             await finish_run(self.db, org_id=org_id, run_id=run_id,
-                             status=status, error=result.error)
+                             status=status, error=result.error,
+                             result=(result.final_answer
+                                     if result.error == "session_reject" else None))
         else:                                   # failed（连续解析失败等）
             await finish_run(self.db, org_id=org_id, run_id=run_id,
                              status="failed", error=result.error)

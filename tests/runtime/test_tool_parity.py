@@ -107,7 +107,9 @@ def test_the_binding_table_and_the_ledger_agree():
     两份名单各写各的，就会出现"账本说实现了、绑定表里没有"——
     而那种不一致**恰恰是本模块要防的东西**，不能自己先犯。
     """
-    assert set(_bare_worker()._bindings()) == IMPLEMENTED
+    from syncopate.runtime.tool_parity import BOUND_SIGNALS
+    # v15：session.report 有 binding（25 §7㉘）但归契约信令族，不算"已实现的工具"
+    assert set(_bare_worker()._bindings()) == IMPLEMENTED | BOUND_SIGNALS
 
 
 def test_the_judge_can_actually_fail():

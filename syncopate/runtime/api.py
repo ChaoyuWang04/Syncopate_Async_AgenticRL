@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid
 from pathlib import Path
 from typing import Literal, Annotated, Any, AsyncIterator
 
@@ -29,8 +28,9 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from syncopate.runtime.db import (Database, conversation_exists, create_conversation,
-                                  create_run, resume_after_approval)
+from syncopate.runtime.db import (Database, close_parked_clarify_runs, conversation_exists,
+                                  create_conversation, create_run, new_conversation_id,
+                                  new_run_id, resume_after_approval)
 
 # --------------------------------------------------------------------------
 # 鉴权：token → org。最小实现，形状是对的。
@@ -269,7 +269,7 @@ def create_app(db: Database | None = None) -> FastAPI:
         重复提交是正常现象，报错会让客户端以为出事了从而**再重试一次**。
         """
         handle = await create_run(
-            db, org_id=org_id, run_id=f"run_{uuid.uuid4().hex[:12]}",
+            db, org_id=org_id, run_id=new_run_id(),
             user_message=body.user_message, idempotency_key=idempotency_key,
             intent=body.intent, automation_tier=body.automation_tier)
         async with db.tx() as conn:
@@ -333,7 +333,7 @@ def create_app(db: Database | None = None) -> FastAPI:
               status_code=status.HTTP_201_CREATED)
     async def create_conversation_endpoint(body: ConversationCreate, org_id: OrgId,
                                            db: DB) -> ConversationView:
-        cid = f"conv_{uuid.uuid4().hex[:12]}"
+        cid = new_conversation_id()
         await create_conversation(db, org_id=org_id, conversation_id=cid,
                                   title=body.title, model=body.model)
         return ConversationView(conversation_id=cid, title=body.title, model=body.model)
@@ -386,8 +386,11 @@ def create_app(db: Database | None = None) -> FastAPI:
         """一条消息 = 一个 run。幂等/审批/事件全部沿用 run 的既有语义。"""
         if not await conversation_exists(db, org_id=org_id, conversation_id=cid):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在")
+        # ★ 09-02（`26 §2.5` Ⓐ）：这条消息可能就是对上一轮 clarify 的回答 ⇒ 先把等补充的
+        #   clarify 轮收尾为 succeeded，它才会作为历史进新 run 的 prompt。等审批的不动。
+        await close_parked_clarify_runs(db, org_id=org_id, conversation_id=cid)
         handle = await create_run(
-            db, org_id=org_id, run_id=f"run_{uuid.uuid4().hex[:12]}",
+            db, org_id=org_id, run_id=new_run_id(),
             user_message=body.user_message, idempotency_key=idempotency_key,
             intent=body.intent, automation_tier=body.automation_tier,
             conversation_id=cid)

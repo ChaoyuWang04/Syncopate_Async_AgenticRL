@@ -174,13 +174,16 @@ class VllmDecider:
             #   也正是 v15 明令不再输出的东西。context_v3 整份考卷都是多轮题，
             #   L1/L2/L3/L4 全部中招。⇒ v15 下上一轮就还原成那句人话。
             #   （v14 走原路径，逐字节不变。）
-            if IS_V15 and isinstance(result, dict):
+            if IS_V15 and isinstance(result, dict) and ("text" in result or "signal" in result):
                 text = str(result.get("text") or "").strip()
                 if not text:                      # 信令收场（defer/clarify/reject）没有终答文本
                     a = result.get("arguments") or {}
                     text = str(a.get("question") or a.get("explanation")
                                or a.get("reason") or "（上一轮以信令收场）")
             else:
+                # v14 形状的历史（{"answer": …}）或规则路径的结果：按原路径渲染。
+                # ⚠️ 09-02：此前 v15 下这类结果也被当成"信令收场"渲染成占位句 ⇒ 历史内容丢失
+                #   （test_decider 三条在 v15 模式下红了很久没人看）。
                 answer = (result or {}).get("answer", result or {})
                 text = json.dumps(answer, ensure_ascii=False)
             ids = self.tokenizer.encode(text, add_special_tokens=False)

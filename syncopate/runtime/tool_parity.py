@@ -95,8 +95,17 @@ CONTRACT_SIGNALS: dict[str, str] = {
     "session.defer": "runtime 由 agent_loop 状态机处理：挂起 + recheck_after_days（R4①）",
     "session.clarify": "runtime 由 agent_loop 状态机处理：转 waiting_for_user（R4①）",
     "session.reject": "runtime 由 agent_loop 状态机处理：终止并写审计（R4①）",
-    "session.report": "非终止信令：收下机器可核字段，轨迹继续（判分取数来源，25 §3.3）",
+    "session.report": "非终止信令：收下机器可核字段，轨迹继续（判分取数来源，25 §3.3）"
+                      "——⚠️ 它**有** runtime binding（25 §7㉘：终止性信令不许有、report 必须有）",
 }
+# ★ report 是信令族里唯一走收口 binding 的（㉘）——它仍归 CONTRACT_SIGNALS（完整性等式不变），
+#   但 worker._bindings() 里**必须**有它。BOUND_SIGNALS 就是"有 binding 的信令"这一小类，
+#   绑定表与账本的一致判据 = IMPLEMENTED ∪ BOUND_SIGNALS（09-02 之前该测试在 v15 下红了两天没人看）。
+try:
+    from syncopate.core.contract import IS_V15 as _IS_V15, REPORT_TOOL as _REPORT_TOOL
+    BOUND_SIGNALS: frozenset[str] = frozenset({_REPORT_TOOL}) if _IS_V15 else frozenset()
+except ImportError:                                  # pragma: no cover
+    BOUND_SIGNALS = frozenset()
 
 
 def sandbox_tools() -> dict[str, Any]:

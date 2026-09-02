@@ -26,6 +26,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import hashlib
+import uuid
+
 import asyncpg
 
 DSN = os.environ.get(
@@ -104,10 +107,48 @@ class Database:
 # --------------------------------------------------------------------------
 
 
+def new_run_id() -> str:
+    """不可枚举 id（课件 H18）：`run_` + 48 位随机十六进制。api 与测试只许从这里拿。"""
+    return f"run_{uuid.uuid4().hex[:12]}"
+
+
+def new_conversation_id() -> str:
+    return f"conv_{uuid.uuid4().hex[:12]}"
+
+
+def input_hash(**fields: Any) -> str:
+    """幂等第二把锁（课件 H11）：同 key 不同 input ⇒ 409。规范化 = 排序键 + 不转义。"""
+    canon = json.dumps(fields, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+async def next_seq(conn: asyncpg.Connection, *, org_id: str, run_id: str) -> int:
+    """seq 领号器（课件 C9 / H13，27 K2-2）：同事务 `last_seq+1`，行锁持到 COMMIT
+    ⇒ 分配顺序 = 可见顺序，两个写者（API 写取消、worker 写工具事件）不可能撞号，
+    SSE 补发无空洞。⛔ 全库禁止 `SELECT max(seq)+1`（K2 门槛②的负向认证就是它）。"""
+    seq = await conn.fetchval(
+        "UPDATE agent_runs SET last_seq = last_seq + 1 "
+        " WHERE org_id=$1 AND run_id=$2 RETURNING last_seq", org_id, run_id)
+    if seq is None:
+        raise LookupError(f"run {run_id!r} 不存在于 org {org_id!r}：无法分配 seq")
+    return int(seq)
+
+
+async def append_event(conn: asyncpg.Connection, *, org_id: str, run_id: str,
+                       kind: str, payload: dict[str, Any] | None = None) -> int:
+    """在**调用方的事务里**写一条事件（领号 + INSERT 同事务）。返回 seq。"""
+    seq = await next_seq(conn, org_id=org_id, run_id=run_id)
+    await conn.execute(
+        "INSERT INTO run_events (run_id, org_id, seq, kind, payload) VALUES ($1,$2,$3,$4,$5)",
+        run_id, org_id, seq, kind, payload or {})
+    return seq
+
+
 @dataclass
 class RunHandle:
     run_id: str
-    created: bool          # False = 命中了已有的那次请求，**没有新建**
+    created: bool               # False = 命中了已有的那次请求，**没有新建**
+    input_matches: bool = True  # 幂等命中时：同 key 的 input 是否相同（False ⇒ K1-3 判 409）
 
 
 # --------------------------------------------------------------------------
@@ -134,17 +175,82 @@ async def prior_turns(db: Database, *, org_id: str, conversation_id: str,
     ⚠️ 取 limit 条不是"省事"，是**预算纪律**：历史无上限地长下去必然撞截断，
       而截断这件事在本项目有前科（budget-truncation-family）。宁可少喂，不可静默砍。
     """
+    # ★ 09-02（`26 §2.5` Ⓑ）：信令收场的轮次**也是历史**。此前只取 succeeded ⇒
+    #   clarify 轮（停在 running）与 reject 轮（cancelled + result=None）都不进历史，
+    #   模型在线上看不到自己上一轮问了什么/拒了什么——L4「clarify 后接着办」结构上不可能。
+    #   现在：succeeded（含 defer、含被 close_parked_clarify_runs 收尾的 clarify 轮）
+    #   ∪ cancelled 且 error='session_reject'（result = 信令自己的话，worker 现在会存）。
+    #   仍然排除：failed / 其它 cancelled（没有可复述的内容）/ 还在跑的。
     async with db.tx() as conn:
         rows = await conn.fetch(
             """
             SELECT run_id, user_message, result
               FROM agent_runs
              WHERE org_id=$1 AND conversation_id=$2 AND run_id <> $3
-               AND status='succeeded' AND result IS NOT NULL
+               AND result IS NOT NULL
+               AND (status='succeeded'
+                    OR (status='cancelled' AND error='session_reject'))
              ORDER BY created_at DESC
              LIMIT $4
             """, org_id, conversation_id, before_run_id, limit)
     return [dict(r) for r in reversed(rows)]
+
+
+async def park_run_for_user(db: Database, *, org_id: str, run_id: str,
+                            result: dict | None, payload: dict | None = None) -> None:
+    """没有审批单的挂起（v15 `session.clarify`）：run 置 waiting_for_user 等用户补充。
+
+    ★ 09-02 之前这条路径**不存在**：agent_loop 对 clarify 返回 halted 且 case_ref=None，
+      worker 当"审批单已开"直接 return ⇒ run 停在 running，60 s lease 过期后被 claim_run
+      当崩溃 run 重抢重跑（R5 考场 L4 第一轮 8/25 正是 status=running）。
+    ★ 形状按 K 线 D25 统一映射：running→waiting_for_user **必须清 lease**；
+      终态事件 run.waiting_for_user 与状态在**同一事务**（同 gateway.open_approval_case）。
+    ★ result 现在就存（信令自己的话），这样 prior_turns 收尾后能直接复述。
+    """
+    async with db.tx() as conn:
+        await conn.execute(
+            """
+            UPDATE agent_runs SET status='waiting_for_user', result=$3,
+                   lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
+             WHERE org_id=$1 AND run_id=$2
+            """, org_id, run_id, result)
+        await conn.execute(
+            """
+            INSERT INTO run_events (run_id, org_id, seq, kind, payload)
+            VALUES ($1, $2,
+                    COALESCE((SELECT max(seq) FROM run_events
+                               WHERE run_id=$1 AND org_id=$2), 0) + 1,
+                    'run.waiting_for_user', $3)
+            """, run_id, org_id, payload or {})
+
+
+async def close_parked_clarify_runs(db: Database, *, org_id: str,
+                                    conversation_id: str) -> list[str]:
+    """同会话来了下一条用户消息 ⇒ 之前等补充的 clarify 轮**收尾为 succeeded**。
+
+    「一条消息 = 一个 run」不变：用户的回答是新 run，这一轮的追问作为历史进新 run 的 prompt
+    （prior_turns 只取 succeeded ⇒ 收尾是它进历史的前提）。
+    ⛔ 只收 requires_approval=FALSE 的：等审批的 run 由 POST /approvals 裁决，不许被一条
+      聊天消息顺手关掉（负向认证在 tests/runtime/test_clarify_turns_enter_history.py）。
+    """
+    async with db.tx() as conn:
+        rows = await conn.fetch(
+            """
+            UPDATE agent_runs SET status='succeeded', ended_at=now(), updated_at=now()
+             WHERE org_id=$1 AND conversation_id=$2
+               AND status='waiting_for_user' AND requires_approval=FALSE
+            RETURNING run_id, result
+            """, org_id, conversation_id)
+        for r in rows:
+            await conn.execute(
+                """
+                INSERT INTO run_events (run_id, org_id, seq, kind, payload)
+                VALUES ($1, $2,
+                        COALESCE((SELECT max(seq) FROM run_events
+                                   WHERE run_id=$1 AND org_id=$2), 0) + 1,
+                        'run.succeeded', $3)
+                """, r["run_id"], org_id, dict(r["result"] or {}))
+    return [r["run_id"] for r in rows]
 
 
 async def conversation_exists(db: Database, *, org_id: str,
@@ -159,34 +265,45 @@ async def conversation_exists(db: Database, *, org_id: str,
 async def create_run(db: Database, *, org_id: str, run_id: str, user_message: str,
                      idempotency_key: str | None = None, intent: str | None = None,
                      automation_tier: str | None = None,
-                     conversation_id: str | None = None) -> RunHandle:
+                     conversation_id: str | None = None,
+                     run_type: str = "chat") -> RunHandle:
     """建一次 run。带 Idempotency-Key 时**同一个 org 内重复请求返回原来那次**。
 
     ★ 用 `ON CONFLICT DO NOTHING` + 回查，而不是"先查再插" ——
     后者在并发下有竞态窗口（两个请求同时查到"不存在"，然后都插）。
     唯一索引是**数据库替我们保证的**，应用层只负责识别冲突。
     """
+    ihash = input_hash(user_message=user_message, intent=intent,
+                       automation_tier=automation_tier, conversation_id=conversation_id,
+                       run_type=run_type)
     async with db.tx() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO agent_runs (run_id, org_id, idempotency_key, user_message,
-                                    intent, automation_tier, status, conversation_id)
-            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7)
+                                    intent, automation_tier, status, conversation_id,
+                                    run_type, input_hash)
+            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9)
             ON CONFLICT (org_id, idempotency_key) WHERE idempotency_key IS NOT NULL
             DO NOTHING
             RETURNING run_id
             """,
             run_id, org_id, idempotency_key, user_message, intent, automation_tier,
-            conversation_id)
+            conversation_id, run_type, ihash)
         if row is not None:
+            # K2-6：run 与 run.created **同生共死**（课件 C6"让系统失败得干净"）。
+            # 事务里没有任何 publish；outbox 行 K3-2 加进来。
+            await append_event(conn, org_id=org_id, run_id=run_id, kind="run.created",
+                               payload={"run_type": run_type, "intent": intent})
             return RunHandle(run_id=row["run_id"], created=True)
         # 冲突 ⇒ 把原来那次捞出来返回。**不报错** —— 重复提交是正常现象，不是错误。
         existing = await conn.fetchrow(
-            "SELECT run_id FROM agent_runs WHERE org_id=$1 AND idempotency_key=$2",
+            "SELECT run_id, input_hash FROM agent_runs WHERE org_id=$1 AND idempotency_key=$2",
             org_id, idempotency_key)
         if existing is None:                      # 理论上到不了：冲突了却查不到
             raise RuntimeError("幂等冲突但找不到原记录，索引和查询条件不一致？")
-        return RunHandle(run_id=existing["run_id"], created=False)
+        # 第二把锁：同 key 不同 input。这里只**判定**，409 由 API 层（K1-3）决定。
+        same = existing["input_hash"] is None or existing["input_hash"] == ihash
+        return RunHandle(run_id=existing["run_id"], created=False, input_matches=same)
 
 
 # --------------------------------------------------------------------------
@@ -242,11 +359,11 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
                    started_at = COALESCE(r.started_at, now()),   -- ★ 只记第一次
                    lease_owner = $1,
                    lease_expires_at = now() + make_interval(secs => $2),
-                   attempt = r.attempt + 1,
+                   attempts = r.attempts + 1,
                    updated_at = now()
               FROM claimable c
              WHERE r.id = c.id
-            RETURNING r.run_id, r.org_id, r.user_message, r.attempt,
+            RETURNING r.run_id, r.org_id, r.user_message, r.attempts,
                       r.intent, r.automation_tier, r.requires_approval,
                       -- ★ 多轮要它：不在 RETURNING 里 = worker 拿不到 = 历史永远为空
                       --   （「字段全程有效，只是没有消费者」那条的镜像）
@@ -284,14 +401,7 @@ async def finish_run(db: Database, *, org_id: str, run_id: str, status: str,
         if kind is not None:
             payload = dict(result) if (status == "succeeded" and result) else (
                 {"error": error} if error else {})
-            await conn.execute(
-                """
-                INSERT INTO run_events (run_id, org_id, seq, kind, payload)
-                VALUES ($1, $2,
-                        COALESCE((SELECT max(seq) FROM run_events
-                                   WHERE run_id=$1 AND org_id=$2), 0) + 1,
-                        $3, $4)
-                """, run_id, org_id, kind, payload)
+            await append_event(conn, org_id=org_id, run_id=run_id, kind=kind, payload=payload)
 
 
 async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> None:
