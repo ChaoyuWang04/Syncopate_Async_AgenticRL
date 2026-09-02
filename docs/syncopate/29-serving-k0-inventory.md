@@ -7,7 +7,7 @@
 > **✅ 已有 · ❌ 缺失 · 🔶 不同形（写清差异与去向）· ⛔ 裁剪（27 已标注理由）**。
 >
 > ⚠️ 课件笔记（`docs/reference/`）只按编号引用"49 条能力清单"（第 25/33/35/39/41 条），
-> **从未逐条展开**。本表按十章各自的"你应该能实现 / 交付物"归纳出 **77 条**，
+> **从未逐条展开**。本表按十章各自的"你应该能实现 / 交付物"归纳出 **77 条**（K1–K10 施工中按阶段又补了 11 条，§1 现为 88 行），
 > 不冒充原 49 条（守则④：匹配不上宁可报没有）。
 
 ---
@@ -16,7 +16,7 @@
 
 | # | 门槛 | 结果 | 证据 |
 |---|---|---|---|
-| ① 对照表零空格 | 77 条 × 状态/证据/差异 | ✅ §1 | 每条 ✅ 行带 file:line；❌/🔶 行带去向 |
+| ① 对照表零空格 | 77→88 条 × 状态/证据/差异 | ✅ §1 | 每条 ✅ 行带 file:line；❌/🔶 行带去向 |
 | ② 重验"已落地"条目 | B-0～B-7 · F-1～F-6 逐条 | 🔶 **11/13 重验通过，2 条本机不可验** | §3；验法 = 本机跑测试 + 读实现，不读登记表 |
 | ③ 选型呈报 | §16 四件 | ✅ 已裁（Chaoyu 09-02 先拍，K0 改为核实） | §4 核实结论 |
 | ④ 差异定性 | 每条 🔶/❌ 标去向 | ✅ | §1 最后一列 |
@@ -28,7 +28,7 @@
 
 ---
 
-## 1 · K0 总表：能力 × 现状（77 条，五组）
+## 1 · K0 总表：能力 × 现状（77 条起，施工中补至 88，五组）
 
 ### 组 A · Run API（课件 CH1，K1 承接）
 
@@ -99,7 +99,7 @@
 | D6 | 快照无"下一步"字段，下一步由模型定 | ✅ | `agent_loop.py:145` 每轮重新 decide | — |
 | D7 | loop 内零横切，横切收口唯一出口 | ✅ | `action_gate.py:167-378`；`test_agent_loop` 源码判据 | — |
 | D8 | 步数上限 = permanent | ✅ | `action_gate.py:187-193` → `worker.py:522-529` failed | — |
-| D9 | timeout 三层（模型 / 工具 / run） | 🔶 | 模型 120s `decider.py:133,140`；工具 30s `tools.py:90` | **run 级无** → K5/K9-2 max_duration |
+| D9 | timeout 三层（模型 / 工具 / run） | ✅ 09-02 | 模型 120s `decider.py:133,140`；工具超时来自治理表（K6）；run 级 = 预算 `max_duration_s`（K9-2） | 模型超时仍硬编码在 decider（26 线共用件，登记不改） |
 | D10 | 错误分层：transient 回队列 / permanent 终态 | ✅ 09-02（K3）+ response_lost ⇒ awaiting_reconciliation（K5） | 只有 permanent 路（failed）；动作失败观测回模型 `agent_loop.py:213-216` | K5-4 |
 | D11 | Tool Runtime 四道闸（找定义→schema→权限→幂等） | ✅ 09-02 对照验收（拦下也落库） | `action_gate.py:201`（存在）`:212`（必填）`tools.py:99`（权限）`db.py:405`（幂等） | 🔶 schema 校验只查**必填缺失**不校验类型（09 §4 ⑧ 字符串数字坑）→ K6-1 |
 | D12 | 注册断言 side_effect ⇒ idempotency_required + key_fn + timeout + output_schema | ✅ 09-02（tool_governance；WRITE_TOOLS 抄本退役） | `tool_registry.py:168` 断言 write⇒fact_key；**runtime 另抄一份 `WRITE_TOOLS`** `tools.py:41`（两份"哪些是写工具"的真相，`test_design_conformance` 靠测试对齐） | K6-3：以 registry `kind=="write"` 为唯一来源，删 WRITE_TOOLS 抄本；补 timeout/output_schema |
@@ -125,7 +125,7 @@
 | E1 | sweeper（三分支顺序 + 四原则） | ✅ 09-02（独立进程；三分支与轮询 claim 共用一份实现） | 无 | K8-1 |
 | E2 | reconciliation 对账（按幂等键查平台去重账本） | ✅ 09-02（platform_ledger 持久化；三写入同事务） | 无；平台侧 `platform._seen_keys` 有去重但无查询接口 | K5-6 建账本查询 + K8-2 |
 | E3 | 四动词 replay/retry/rerun/repair | ✅ 09-02（repair 管理通道四样留痕） | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
-| E4 | 七步排查 SOP + trace 聚合 | ❌ | 无 | K8-4/K11-2 |
+| E4 | 七步排查 SOP + trace 聚合 | ✅ | 30 §2 六张卡（症状→第一步看什么→关键判断→止损/恢复）+ `GET /runs/{id}/trace`（K1-8） | — |
 | E5 | 端到端故障注入联测（分支 A/B/C） | ✅ 09-02（A/C 进程内联测 + B 真 Celery；取消兑现；慢不当死） | `FaultPlan` `platform.py:60-72`（工具超时/限流/5xx/副作用已发生）+ `test_m97_stress` 12 条 + loadtest kill -9 恢复 3/3（11 §5） | 分支 C（写工具执行后记录前 kill）无自动化 → K8-5 |
 | E6 | 九条 SLO 自动读数 | ✅ 09-02（scripts/slo_readout.py；P95 需 --api） | `metrics.py:58-137` 四项（按意图延迟/排队/工具延迟/读写分桶）+ loadtest §19 判定 | 九条对齐 → K9-1 |
 | E7 | run 级预算四字段 + 超限转 waiting | ✅ 09-02 | 步数上限 ✅；org 日成本闸 `worker.py:286,374-379`（超限=failed/cancelled，非 waiting） | max_tokens/max_duration/max_model_calls 无 → K9-2 |
@@ -139,11 +139,11 @@
 | E15 | `feedback_items` / `run_annotations` | ✅ 09-02（后端 + 词表复用；前端 👍👎 本机无 node 未做） | 无 | K10-1 |
 | E16 | 版本号 run 级 + tool 级 | ✅ 09-02（contract/prompt/model + registry 哈希；/metrics/by_version） | `conversations.model` 有模型标签（dev mode）；无 contract/prompt/registry 版本 | K10-5 |
 | E17 | `training_exports` 留痕 + 出局/准入清单 | ✅ 09-02（考卷 v4 题形导出；manifest 与条数一致） | 无（26 号管线有 DATA_VERSION，但 runtime→训练无通道） | K10-6 |
-| E18 | 上线总清单 / Runbook / 复盘模板 | ❌ | 08/09 有"怎么起"，无 runbook 卡片 | K11 |
-| E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
+| E18 | 上线总清单 / Runbook / 复盘模板 | ✅ | 30：42 条清单 + 六张卡 + 复盘回填（K11） | — |
+| E19 | 备份 RPO/RTO + 恢复演练 | 🔶 | `scripts/dr_drill.sh` 数据层重建 RTO 1.5s（K11-4）；生产备份策略与权重那半挂账（30 §1.5 D2/D3） | 灰测放真人前 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K10 后）**：✅ 74 · 🔶 3 · ❌ 0 · ⛔ 0（合计 77；K11 收口 E18/E19）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K11 后）**：✅ 80 · 🔶 7 · ❌ 0 · ⛔ 1（合计 88；K 线全部收口）。🔶 七条都已登记去向：C12 drain 无主动放 lease · C13 压测待 Celery 化重测（S-05）· D26 拒绝/追问轮不进历史（归 26 线）· E11 API/写工具并发限流（30 C5）· E12 outbox/事件 payload 未加 v（30 V4）· E13 停队列/回滚只写命令 · E19 生产备份策略（30 D3）。
 
 ---
 

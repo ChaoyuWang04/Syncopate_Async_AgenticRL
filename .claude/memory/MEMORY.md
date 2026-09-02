@@ -31,4 +31,4 @@
 - [模型填的是我们给的那张表](contract-shapes-behavior.md) — answer_fields 一格 ⇒ 机器标签；改契约 5 分钟拿回一半人话；★但**只要人话会把办事能力换走**（实测）
 - [开训前逐通道体检](audit-every-channel-before-training.md) — ★数据的病不崩任何东西，只是让模型学到更省事的策略；同一个坑三次
 - [训练样例必须和线上同形](train-data-must-match-production-shape.md) — ★★守则⑮；08-31 通查出 7 处不同形，全是造数据时的临时办法
-- [K 线 serving harness 现场](serving-harness-k-line.md) — ★09-02 放行 K0；§16 四件已裁（Celery+Redis·PG+Alembic·快照恢复·id 不迁）；坑表 28；本机 PG/Redis conda 用户态
+- [K 线 serving 生产化 ✅收官](serving-harness-k-line.md) — ★09-02 K0–K11 单日落地；入口 27/28/29/30；挂账与下一轮的料在 27 §14 与本条

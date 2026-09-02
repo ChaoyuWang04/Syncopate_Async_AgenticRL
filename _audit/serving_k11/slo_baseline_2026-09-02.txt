@@ -1,0 +1,10 @@
+[slo] 读数时间 2026-09-02 16:18:15 org=org_acme
+  ⬜ 无读数  POST /runs P95 < 300ms       = None         (K1)
+  🔴  run.created 成功率 > 99.9%      = 0.977        (K2/K3)
+  ✅  普通任务 P95 完成 < 60s            = 0.016        (整链)
+  🔴  run.failed 比例 < 1%           = 0.016        (K5)
+  ✅  写类工具错误率 < 0.1%               = 0.000        (K6)
+  ✅  queue lag P95 < 10s          = 1.419        (K3)
+  ✅  SSE 断线后可通过 after 补齐          = True         (K7)
+  ✅  stuck run 数量 < 10            = 0            (K8)
+  ✅  单 org 每日成本不超预算               = 0.033        (K9)

@@ -26,11 +26,11 @@ U · 统一会话能力训练（M+O+CoT）  训练侧   P0-P2 ✅ 收官（24 §
 F · chatbox 前端壳              产品侧   ✅ 全套落地且在用（08-20）
 A · 出一个 checkpoint           训练侧   ✅ 候选在手（cand_v13r2_e1 RL-100，+0.186，待晋级确认）
 B · 把它跑给用户用               runtime  ✅ 端到端通 + B-4/B-5 压测（goodput 192·22/22，11 §5）
-K · serving harness 生产化       runtime  🔴 **K0–K3 ✅（09-02 单日）→ 下一步 K4 状态机**：
-                                        K2 Alembic 迁移链+领号器 · K1 六入口/幂等三态/信封/协作取消 ·
-                                        K3 Celery+Redis 真跑（outbox→dispatcher→定向 claim→心跳，集成
-                                        测试起真 worker 验 ack 前崩溃）；对照 29（✅42 🔶24 ❌11）·
-                                        坑表 28 · runtime 292 passed；不 gate V 路，只避开同一文件
+K · serving harness 生产化       runtime  ✅ **K0–K11 全部落地（09-02 单日）**：Celery+Redis 真投递 ·
+                                        Alembic 链 0001–0008 · transition_run 唯一入口 · 快照式恢复 ·
+                                        治理表/五态意图日志 · 事件分层 · sweeper/对账 · 预算/metrics ·
+                                        回流导出 · 上线清单+runbook（30）；runtime 372 passed；
+                                        挂账见 27 §14（压测重测/前端 build/权重灾备需训练机）
 ```
 
 ⚠️ runtime 测试 **61 → 226**，全量 **365 → 694**。
