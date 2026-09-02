@@ -326,6 +326,13 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
    放得下直接用；放不下就精简 tool_registry 里的工具描述文字——说明书两侧共用同一份
    （syncopate/core/tool_registry.py 是唯一真相来源），精简后依然同形。
    重量结果回填 rollout_budget，零截断判据沿用
+   ★ 09-02 实测（scripts/v15_w2_menu_budget.py → _audit/v15_w2/menu_budget_v13.json）：
+     修剪前 工具块 6534 tok · 全量菜单最长 prompt 8095（上限 5760 / 真实约束 6144=14336−8192）
+     修剪后 工具块 5468 · 最长 7167（scripts/v15_w2_trim_tool_desc.py：34 条描述按「只留做什么/输入/
+     返回/独有硬规则」改写；跨工具纪律并入 system.txt 既有章节 +262 tok；交叉引用 15 句、原理 4 句删；
+     硬事实逐条核对不丢；登记 _audit/v15_w2/tool_desc_trim.json）
+   ⇒ 精简省 1203 仍差 1407：**上限必须抬**（待 Chaoyu 定数：训练 MAX_PROMPT_LENGTH 9216 +
+     response 8192 = 17408 ⇒ 服务 max_model_len 18432；R6 起跑前按 V0⒠ 重测单步耗时）
 ⑥ 新增同形断言测试家族（守则⑮ 的判据形状=「两边应当相同」，不需要阈值）：
    渲染一条训练多轮样例 与 一条 decider 生产请求，逐项断言结构一致
    （历史位置=消息对 · 助手历史=人话无 think · 无字段清单 · 时间格式 · think 块规则）
