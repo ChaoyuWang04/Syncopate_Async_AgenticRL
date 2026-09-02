@@ -1,0 +1,354 @@
+TABLE account_risk
+  COL org_id text null=NO default=None
+  COL account_id text null=NO default=None
+  COL flags jsonb null=NO default='[]'::jsonb
+  COL state text null=NO default='normal'::text
+  COL allow_increase boolean null=NO default=true
+  CONSTRAINT account_risk_pkey PRIMARY KEY (org_id, account_id)
+  CONSTRAINT account_risk_state_check CHECK ((state = ANY (ARRAY['normal'::text, 'restricted'::text, 'frozen'::text])))
+  INDEX account_risk_pkey CREATE UNIQUE INDEX account_risk_pkey ON public.account_risk USING btree (org_id, account_id)
+TABLE agent_runs
+  COL id bigint null=NO default=nextval('agent_runs_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL idempotency_key text null=YES default=None
+  COL status text null=NO default='queued'::text
+  COL intent text null=YES default=None
+  COL automation_tier text null=YES default=None
+  COL requires_approval boolean null=NO default=false
+  COL lease_owner text null=YES default=None
+  COL lease_expires_at timestamp with time zone null=YES default=None
+  COL attempts integer null=NO default=0
+  COL user_message text null=YES default=None
+  COL started_at timestamp with time zone null=YES default=None
+  COL ended_at timestamp with time zone null=YES default=None
+  COL result jsonb null=YES default=None
+  COL error text null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  COL updated_at timestamp with time zone null=NO default=now()
+  COL conversation_id text null=YES default=None
+  COL run_type text null=NO default='chat'::text
+  COL input_hash text null=YES default=None
+  COL cancel_requested_at timestamp with time zone null=YES default=None
+  COL resume_token text null=YES default=None
+  COL last_seq integer null=NO default=0
+  COL version integer null=NO default=0
+  COL parent_run_id text null=YES default=None
+  COL rerun_reason text null=YES default=None
+  CONSTRAINT agent_runs_automation_tier_check CHECK ((automation_tier = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'D'::text])))
+  CONSTRAINT agent_runs_org_id_run_id_key UNIQUE (org_id, run_id)
+  CONSTRAINT agent_runs_pkey PRIMARY KEY (id)
+  CONSTRAINT agent_runs_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'waiting_for_user'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text])))
+  INDEX agent_runs_by_conversation CREATE INDEX agent_runs_by_conversation ON public.agent_runs USING btree (org_id, conversation_id, created_at)
+  INDEX agent_runs_claimable CREATE INDEX agent_runs_claimable ON public.agent_runs USING btree (status, lease_expires_at)
+  INDEX agent_runs_idem_uniq CREATE UNIQUE INDEX agent_runs_idem_uniq ON public.agent_runs USING btree (org_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)
+  INDEX agent_runs_list CREATE INDEX agent_runs_list ON public.agent_runs USING btree (org_id, status, created_at)
+  INDEX agent_runs_org_id_run_id_key CREATE UNIQUE INDEX agent_runs_org_id_run_id_key ON public.agent_runs USING btree (org_id, run_id)
+  INDEX agent_runs_pkey CREATE UNIQUE INDEX agent_runs_pkey ON public.agent_runs USING btree (id)
+  TRIGGER trg_agent_runs_touch CREATE TRIGGER trg_agent_runs_touch BEFORE UPDATE ON public.agent_runs FOR EACH ROW EXECUTE FUNCTION touch_updated_at()
+TABLE agent_steps
+  COL id bigint null=NO default=nextval('agent_steps_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL step integer null=NO default=None
+  COL phase text null=YES default=None
+  COL data_maturity_at_step text null=YES default=None
+  COL started_at timestamp with time zone null=NO default=now()
+  COL ended_at timestamp with time zone null=YES default=None
+  CONSTRAINT agent_steps_org_id_run_id_step_key UNIQUE (org_id, run_id, step)
+  CONSTRAINT agent_steps_pkey PRIMARY KEY (id)
+  INDEX agent_steps_org_id_run_id_step_key CREATE UNIQUE INDEX agent_steps_org_id_run_id_step_key ON public.agent_steps USING btree (org_id, run_id, step)
+  INDEX agent_steps_pkey CREATE UNIQUE INDEX agent_steps_pkey ON public.agent_steps USING btree (id)
+TABLE approval_cases
+  COL id bigint null=NO default=nextval('approval_cases_id_seq'::regclass)
+  COL case_ref text null=NO default=None
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL action_type text null=NO default=None
+  COL proposed_params jsonb null=NO default='{}'::jsonb
+  COL rationale text null=YES default=None
+  COL evidence jsonb null=NO default='{}'::jsonb
+  COL trigger_reason text null=YES default=None
+  COL status text null=NO default='pending'::text
+  COL reviewer_id text null=YES default=None
+  COL reviewed_at timestamp with time zone null=YES default=None
+  COL modified_params jsonb null=YES default=None
+  COL outcome_checked_at timestamp with time zone null=YES default=None
+  COL outcome_result jsonb null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT approval_cases_org_id_case_ref_key UNIQUE (org_id, case_ref)
+  CONSTRAINT approval_cases_pkey PRIMARY KEY (id)
+  CONSTRAINT approval_cases_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'modified'::text, 'expired'::text])))
+  INDEX approval_awaiting_outcome CREATE INDEX approval_awaiting_outcome ON public.approval_cases USING btree (outcome_checked_at) WHERE (status = ANY (ARRAY['approved'::text, 'modified'::text]))
+  INDEX approval_cases_org_id_case_ref_key CREATE UNIQUE INDEX approval_cases_org_id_case_ref_key ON public.approval_cases USING btree (org_id, case_ref)
+  INDEX approval_cases_pkey CREATE UNIQUE INDEX approval_cases_pkey ON public.approval_cases USING btree (id)
+  INDEX approval_pending CREATE INDEX approval_pending ON public.approval_cases USING btree (org_id, status, created_at)
+TABLE audit_logs
+  COL id bigint null=NO default=nextval('audit_logs_id_seq'::regclass)
+  COL run_id text null=YES default=None
+  COL org_id text null=NO default=None
+  COL action text null=NO default=None
+  COL object_key text null=YES default=None
+  COL param_source text null=YES default=None
+  COL detail jsonb null=NO default='{}'::jsonb
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT audit_logs_param_source_check CHECK ((param_source = ANY (ARRAY['user'::text, 'tool_result'::text, 'system'::text, 'model'::text])))
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id)
+  INDEX audit_by_org CREATE INDEX audit_by_org ON public.audit_logs USING btree (org_id, created_at DESC)
+  INDEX audit_logs_pkey CREATE UNIQUE INDEX audit_logs_pkey ON public.audit_logs USING btree (id)
+TABLE budget_rules
+  COL org_id text null=NO default=None
+  COL max_increase_pct numeric null=NO default=20
+  COL approval_threshold integer null=NO default=100000
+  COL risk_check_required boolean null=NO default=true
+  COL monthly_cap integer null=YES default=None
+  CONSTRAINT budget_rules_pkey PRIMARY KEY (org_id)
+  INDEX budget_rules_pkey CREATE UNIQUE INDEX budget_rules_pkey ON public.budget_rules USING btree (org_id)
+TABLE checkpoints
+  COL id bigint null=NO default=nextval('checkpoints_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL step integer null=NO default=None
+  COL state jsonb null=NO default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT checkpoints_org_id_run_id_step_key UNIQUE (org_id, run_id, step)
+  CONSTRAINT checkpoints_pkey PRIMARY KEY (id)
+  INDEX checkpoints_org_id_run_id_step_key CREATE UNIQUE INDEX checkpoints_org_id_run_id_step_key ON public.checkpoints USING btree (org_id, run_id, step)
+  INDEX checkpoints_pkey CREATE UNIQUE INDEX checkpoints_pkey ON public.checkpoints USING btree (id)
+TABLE conversations
+  COL id bigint null=NO default=nextval('conversations_id_seq'::regclass)
+  COL conversation_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL model text null=NO default='rl'::text
+  COL title text null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT conversations_org_id_conversation_id_key UNIQUE (org_id, conversation_id)
+  CONSTRAINT conversations_pkey PRIMARY KEY (id)
+  INDEX conversations_org_id_conversation_id_key CREATE UNIQUE INDEX conversations_org_id_conversation_id_key ON public.conversations USING btree (org_id, conversation_id)
+  INDEX conversations_pkey CREATE UNIQUE INDEX conversations_pkey ON public.conversations USING btree (id)
+TABLE feature_lifts
+  COL id bigint null=NO default=nextval('feature_lifts_id_seq'::regclass)
+  COL feature text null=NO default=None
+  COL region text null=NO default=None
+  COL product_id text null=YES default=None
+  COL lift numeric null=NO default=None
+  COL ci_low numeric null=YES default=None
+  COL ci_high numeric null=YES default=None
+  COL n_treatment integer null=YES default=None
+  COL n_control integer null=YES default=None
+  CONSTRAINT feature_lifts_feature_region_product_id_key UNIQUE (feature, region, product_id)
+  CONSTRAINT feature_lifts_pkey PRIMARY KEY (id)
+  INDEX feature_lifts_feature_region_product_id_key CREATE UNIQUE INDEX feature_lifts_feature_region_product_id_key ON public.feature_lifts USING btree (feature, region, product_id)
+  INDEX feature_lifts_pkey CREATE UNIQUE INDEX feature_lifts_pkey ON public.feature_lifts USING btree (id)
+TABLE geo_performance
+  COL id bigint null=NO default=nextval('geo_performance_id_seq'::regclass)
+  COL product_id text null=NO default=None
+  COL region text null=NO default=None
+  COL roas_d7 numeric null=YES default=None
+  COL cpi_d7 numeric null=YES default=None
+  COL asset_count integer null=NO default=0
+  CONSTRAINT geo_performance_pkey PRIMARY KEY (id)
+  CONSTRAINT geo_performance_product_id_region_key UNIQUE (product_id, region)
+  INDEX geo_performance_pkey CREATE UNIQUE INDEX geo_performance_pkey ON public.geo_performance USING btree (id)
+  INDEX geo_performance_product_id_region_key CREATE UNIQUE INDEX geo_performance_product_id_region_key ON public.geo_performance USING btree (product_id, region)
+TABLE industry_baselines
+  COL id bigint null=NO default=nextval('industry_baselines_id_seq'::regclass)
+  COL platform text null=NO default=None
+  COL game_genre text null=NO default=None
+  COL metric text null=NO default=None
+  COL p25 numeric null=YES default=None
+  COL p50 numeric null=YES default=None
+  COL p75 numeric null=YES default=None
+  COL sample_size integer null=YES default=None
+  CONSTRAINT industry_baselines_pkey PRIMARY KEY (id)
+  CONSTRAINT industry_baselines_platform_game_genre_metric_key UNIQUE (platform, game_genre, metric)
+  INDEX industry_baselines_pkey CREATE UNIQUE INDEX industry_baselines_pkey ON public.industry_baselines USING btree (id)
+  INDEX industry_baselines_platform_game_genre_metric_key CREATE UNIQUE INDEX industry_baselines_platform_game_genre_metric_key ON public.industry_baselines USING btree (platform, game_genre, metric)
+TABLE insights
+  COL id bigint null=NO default=nextval('insights_id_seq'::regclass)
+  COL scope text null=NO default='global'::text
+  COL claim_id text null=NO default=None
+  COL claim text null=NO default=None
+  COL scope_json jsonb null=NO default='{}'::jsonb
+  COL evidence text null=NO default=''::text
+  COL confidence text null=NO default='medium'::text
+  COL source_doc text null=NO default=''::text
+  COL status text null=NO default='active'::text
+  COL superseded_by text null=YES default=None
+  COL recorded_at timestamp with time zone null=YES default=None
+  COL ingested_at timestamp with time zone null=NO default=now()
+  CONSTRAINT insights_confidence_check CHECK ((confidence = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))
+  CONSTRAINT insights_pkey PRIMARY KEY (id)
+  CONSTRAINT insights_scope_claim_id_key UNIQUE (scope, claim_id)
+  CONSTRAINT insights_status_check CHECK ((status = ANY (ARRAY['active'::text, 'superseded'::text, 'refuted'::text])))
+  INDEX insights_by_scope CREATE INDEX insights_by_scope ON public.insights USING btree (scope, status)
+  INDEX insights_pkey CREATE UNIQUE INDEX insights_pkey ON public.insights USING btree (id)
+  INDEX insights_scope_claim_id_key CREATE UNIQUE INDEX insights_scope_claim_id_key ON public.insights USING btree (scope, claim_id)
+TABLE memory_proposals
+  COL id bigint null=NO default=nextval('memory_proposals_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL run_id text null=NO default=None
+  COL kind text null=NO default=None
+  COL payload jsonb null=NO default=None
+  COL status text null=NO default='pending'::text
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT memory_proposals_kind_check CHECK ((kind = ANY (ARRAY['write'::text, 'invalidate'::text, 'conflict_resolve'::text])))
+  CONSTRAINT memory_proposals_pkey PRIMARY KEY (id)
+  CONSTRAINT memory_proposals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))
+  INDEX memory_proposals_by_run CREATE INDEX memory_proposals_by_run ON public.memory_proposals USING btree (org_id, run_id)
+  INDEX memory_proposals_pkey CREATE UNIQUE INDEX memory_proposals_pkey ON public.memory_proposals USING btree (id)
+TABLE memory_records
+  COL id bigint null=NO default=nextval('memory_records_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL record_id text null=NO default=None
+  COL lane text null=NO default=None
+  COL subject jsonb null=NO default='{}'::jsonb
+  COL content text null=NO default=None
+  COL confidence numeric null=NO default=None
+  COL evidence_refs jsonb null=NO default='[]'::jsonb
+  COL expires_at timestamp with time zone null=YES default=None
+  COL invalidated_at timestamp with time zone null=YES default=None
+  COL invalidate_reason text null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT memory_records_lane_check CHECK ((lane = ANY (ARRAY['episodic'::text, 'semantic'::text, 'business'::text, 'risk'::text])))
+  CONSTRAINT memory_records_org_id_record_id_key UNIQUE (org_id, record_id)
+  CONSTRAINT memory_records_pkey PRIMARY KEY (id)
+  INDEX memory_by_lane CREATE INDEX memory_by_lane ON public.memory_records USING btree (org_id, lane)
+  INDEX memory_records_org_id_record_id_key CREATE UNIQUE INDEX memory_records_org_id_record_id_key ON public.memory_records USING btree (org_id, record_id)
+  INDEX memory_records_pkey CREATE UNIQUE INDEX memory_records_pkey ON public.memory_records USING btree (id)
+TABLE model_calls
+  COL id bigint null=NO default=nextval('model_calls_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL step integer null=YES default=None
+  COL model text null=YES default=None
+  COL prompt_tokens integer null=NO default=0
+  COL output_tokens integer null=NO default=0
+  COL latency_ms integer null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT model_calls_pkey PRIMARY KEY (id)
+  INDEX model_calls_pkey CREATE UNIQUE INDEX model_calls_pkey ON public.model_calls USING btree (id)
+TABLE playbooks
+  COL anomaly_type text null=NO default=None
+  COL steps jsonb null=NO default='[]'::jsonb
+  COL cautions jsonb null=NO default='[]'::jsonb
+  CONSTRAINT playbooks_pkey PRIMARY KEY (anomaly_type)
+  INDEX playbooks_pkey CREATE UNIQUE INDEX playbooks_pkey ON public.playbooks USING btree (anomaly_type)
+TABLE policy_clauses
+  COL id bigint null=NO default=nextval('policy_clauses_id_seq'::regclass)
+  COL scope text null=NO default='global'::text
+  COL clause_id text null=NO default=None
+  COL title text null=NO default=None
+  COL body text null=NO default=None
+  COL section_path text null=NO default=''::text
+  COL platform text null=YES default=None
+  COL region text null=YES default=None
+  COL valid_from timestamp with time zone null=YES default=None
+  COL valid_to timestamp with time zone null=YES default=None
+  COL version text null=NO default='v1'::text
+  COL supersedes text null=YES default=None
+  COL source_doc text null=NO default=''::text
+  COL ingested_at timestamp with time zone null=NO default=now()
+  CONSTRAINT policy_clauses_pkey PRIMARY KEY (id)
+  CONSTRAINT policy_clauses_scope_clause_id_key UNIQUE (scope, clause_id)
+  INDEX policy_by_scope CREATE INDEX policy_by_scope ON public.policy_clauses USING btree (scope)
+  INDEX policy_clauses_pkey CREATE UNIQUE INDEX policy_clauses_pkey ON public.policy_clauses USING btree (id)
+  INDEX policy_clauses_scope_clause_id_key CREATE UNIQUE INDEX policy_clauses_scope_clause_id_key ON public.policy_clauses USING btree (scope, clause_id)
+  INDEX policy_supersedes CREATE INDEX policy_supersedes ON public.policy_clauses USING btree (scope, supersedes) WHERE (supersedes IS NOT NULL)
+TABLE run_events
+  COL id bigint null=NO default=nextval('run_events_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL seq integer null=NO default=None
+  COL kind text null=NO default=None
+  COL payload jsonb null=NO default='{}'::jsonb
+  COL created_at timestamp with time zone null=NO default=now()
+  CONSTRAINT run_events_org_id_run_id_seq_key UNIQUE (org_id, run_id, seq)
+  CONSTRAINT run_events_pkey PRIMARY KEY (id)
+  INDEX run_events_org_id_run_id_seq_key CREATE UNIQUE INDEX run_events_org_id_run_id_seq_key ON public.run_events USING btree (org_id, run_id, seq)
+  INDEX run_events_pkey CREATE UNIQUE INDEX run_events_pkey ON public.run_events USING btree (id)
+  TRIGGER trg_notify_run_event CREATE TRIGGER trg_notify_run_event AFTER INSERT ON public.run_events FOR EACH ROW EXECUTE FUNCTION notify_run_event()
+TABLE safety_lines
+  COL id bigint null=NO default=nextval('safety_lines_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL product_id text null=NO default=None
+  COL region text null=NO default=None
+  COL cpi_d7_max numeric null=YES default=None
+  COL roas_d7_min numeric null=YES default=None
+  COL retention_d1_min numeric null=YES default=None
+  COL daily_budget_max integer null=YES default=None
+  COL valid_from date null=NO default=None
+  COL valid_to date null=NO default=None
+  CONSTRAINT safety_lines_org_id_product_id_region_valid_from_key UNIQUE (org_id, product_id, region, valid_from)
+  CONSTRAINT safety_lines_pkey PRIMARY KEY (id)
+  INDEX safety_lines_lookup CREATE INDEX safety_lines_lookup ON public.safety_lines USING btree (org_id, product_id, region)
+  INDEX safety_lines_org_id_product_id_region_valid_from_key CREATE UNIQUE INDEX safety_lines_org_id_product_id_region_valid_from_key ON public.safety_lines USING btree (org_id, product_id, region, valid_from)
+  INDEX safety_lines_pkey CREATE UNIQUE INDEX safety_lines_pkey ON public.safety_lines USING btree (id)
+TABLE seasonal_events
+  COL id bigint null=NO default=nextval('seasonal_events_id_seq'::regclass)
+  COL region text null=NO default=None
+  COL event text null=NO default=None
+  COL event_date date null=NO default=None
+  COL lift_factor numeric null=YES default=None
+  COL creative_tags jsonb null=NO default='[]'::jsonb
+  CONSTRAINT seasonal_events_pkey PRIMARY KEY (id)
+  CONSTRAINT seasonal_events_region_event_event_date_key UNIQUE (region, event, event_date)
+  INDEX seasonal_events_pkey CREATE UNIQUE INDEX seasonal_events_pkey ON public.seasonal_events USING btree (id)
+  INDEX seasonal_events_region_event_event_date_key CREATE UNIQUE INDEX seasonal_events_region_event_event_date_key ON public.seasonal_events USING btree (region, event, event_date)
+TABLE tool_calls
+  COL id bigint null=NO default=nextval('tool_calls_id_seq'::regclass)
+  COL run_id text null=NO default=None
+  COL org_id text null=NO default=None
+  COL step integer null=YES default=None
+  COL tool text null=NO default=None
+  COL arguments jsonb null=NO default='{}'::jsonb
+  COL ok boolean null=YES default=None
+  COL result jsonb null=YES default=None
+  COL error text null=YES default=None
+  COL external_idempotency_key text null=YES default=None
+  COL replayed_from bigint null=YES default=None
+  COL latency_ms integer null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  COL status text null=NO default='running'::text
+  COL ended_at timestamp with time zone null=YES default=None
+  COL side_effect boolean null=NO default=false
+  COL duplicate_of bigint null=YES default=None
+  CONSTRAINT tool_calls_duplicate_of_fkey FOREIGN KEY (duplicate_of) REFERENCES tool_calls(id)
+  CONSTRAINT tool_calls_pkey PRIMARY KEY (id)
+  CONSTRAINT tool_calls_replayed_from_fkey FOREIGN KEY (replayed_from) REFERENCES tool_calls(id)
+  CONSTRAINT tool_calls_side_effect_needs_key CHECK (((NOT side_effect) OR (external_idempotency_key IS NOT NULL)))
+  CONSTRAINT tool_calls_status_check CHECK ((status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text, 'skipped_duplicate'::text, 'response_lost'::text])))
+  INDEX tool_calls_external_idem_uniq CREATE UNIQUE INDEX tool_calls_external_idem_uniq ON public.tool_calls USING btree (org_id, external_idempotency_key) WHERE ((external_idempotency_key IS NOT NULL) AND (replayed_from IS NULL))
+  INDEX tool_calls_pkey CREATE UNIQUE INDEX tool_calls_pkey ON public.tool_calls USING btree (id)
+TABLE usage_records
+  COL id bigint null=NO default=nextval('usage_records_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL run_id text null=YES default=None
+  COL day date null=NO default=CURRENT_DATE
+  COL tokens_in bigint null=NO default=0
+  COL tokens_out bigint null=NO default=0
+  COL cost_micros bigint null=NO default=0
+  COL created_at timestamp with time zone null=NO default=now()
+  COL call_index integer null=NO default=0
+  CONSTRAINT usage_records_pkey PRIMARY KEY (id)
+  INDEX usage_by_org_day CREATE INDEX usage_by_org_day ON public.usage_records USING btree (org_id, day)
+  INDEX usage_records_once CREATE UNIQUE INDEX usage_records_once ON public.usage_records USING btree (org_id, run_id, call_index) WHERE (run_id IS NOT NULL)
+  INDEX usage_records_pkey CREATE UNIQUE INDEX usage_records_pkey ON public.usage_records USING btree (id)
+FUNCTION notify_run_event
+  CREATE OR REPLACE FUNCTION public.notify_run_event()
+   RETURNS trigger
+   LANGUAGE plpgsql
+  AS $function$
+  BEGIN
+    PERFORM pg_notify('run_events', NEW.org_id || '|' || NEW.run_id);
+    RETURN NULL;
+  END; $function$
+FUNCTION touch_updated_at
+  CREATE OR REPLACE FUNCTION public.touch_updated_at()
+   RETURNS trigger
+   LANGUAGE plpgsql
+  AS $function$
+  BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+  END; $function$

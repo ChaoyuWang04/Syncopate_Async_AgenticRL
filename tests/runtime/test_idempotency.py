@@ -153,7 +153,7 @@ def test_expired_lease_can_be_reclaimed() -> None:
 
     first, second = with_db(go)
     assert first and second
-    assert second["attempt"] > first["attempt"], "重抢没有累加 attempt，重试次数不可见"
+    assert second["attempts"] > first["attempts"], "重抢没有累加 attempts，重试次数不可见"
 
 
 def test_finished_run_is_not_claimable() -> None:

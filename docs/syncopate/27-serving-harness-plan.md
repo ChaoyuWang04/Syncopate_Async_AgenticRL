@@ -180,6 +180,13 @@ K1-8 /trace 单独权限：trace 含完整 prompt/参数/推理，org_id 校验�
 
 ## 4 · K2 · 数据库落库（课件 CH2 + 课件自认缺口的修补；~2 天）
 
+> ✅ **K2 已落地（2026-09-02，与 K1 交错先做）**：迁移链 `syncopate/runtime/migrations/`
+> （0001 baseline 内嵌旧 schema.sql，0002 = K2-1/K2-2/K2-4/K2-5 一次建齐），`schema.sql` 退役为
+> 生成快照 `schema.snapshot.txt`；领号器 `db.next_seq/append_event` 收编全部四处事件写入；
+> 创建事务写 `run.created`（K2-6）。门槛 ①②③④⑤⑦ = `tests/runtime/test_schema_migrations.py`
+> 7 条（含两条负向认证）；⑥ org_id 全表冗余已核（29 B4），trace 子表查询随 K1-8/K8-4；
+> K2-7 归 K8-4。`usage_records` 粒度暂定"每次执行一行"（call_index=attempts，28 P-12）。
+
 ### 目标形状
 
 ```

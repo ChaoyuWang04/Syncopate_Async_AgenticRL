@@ -56,17 +56,17 @@
 |---|---|---|---|---|
 | B1 | 两本账 agent_runs（余额）+ run_events（流水） | ✅ | `schema.sql:24,62` | — |
 | B2 | 八张核心表 | ✅ | 9 张（+approval_cases）`schema.sql:24-216` | model_calls 表**无写入路径**（全仓无 INSERT）→ K5/K9 |
-| B3 | 单调 sequence 同事务领号（last_seq） | 🔶 | `db.py:290-293` `MAX(seq)+1`；`worker.py:65-91` 有界重试掩盖撞号 | H13 → K2-2；`28` P-03 |
+| B3 | 单调 sequence 同事务领号（last_seq） | ✅ 09-02 | `db.py:290-293` `MAX(seq)+1`；`worker.py:65-91` 有界重试掩盖撞号 | H13 → K2-2；`28` P-03 |
 | B4 | 子表冗余 org_id | ✅ | run_events/agent_steps/model_calls/tool_calls/checkpoints/usage/audit 全有 | 可开 RLS 的前提已具备 |
-| B5 | tool_calls `UNIQUE(org,tool,key)` + CHECK 写工具 key 非空 | 🔶 | `schema.sql:130-132` 部分唯一索引 `(org_id, key)` | 无 tool 维度（key 已含 tool 名，等价）；**无 CHECK**（H19）→ K2-1 |
+| B5 | tool_calls `UNIQUE(org,tool,key)` + CHECK 写工具 key 非空 | ✅ 09-02（0002：side_effect 列 + CHECK；side_effect 由 K6 填） | `schema.sql:130-132` 部分唯一索引 `(org_id, key)` | 无 tool 维度（key 已含 tool 名，等价）；**无 CHECK**（H19）→ K2-1 |
 | B6 | tool_calls 两阶段写入（意图日志 created/ended） | 🔶 | `db.py:439-462` 先占坑再执行，`ok` NULL=执行中 | 无 `ended_at`/`status` 列，"执行中"靠 NULL 三值表达 → K2-1/K6-2 五态 |
-| B7 | usage_records UNIQUE 防账单翻倍 | ❌ | `schema.sql:144-153` 零约束 | H15 → K2-1 |
+| B7 | usage_records UNIQUE 防账单翻倍 | ✅ 09-02（call_index=attempts，28 P-12） | `schema.sql:144-153` 零约束 | H15 → K2-1 |
 | B8 | checkpoints UNIQUE(run, index) | ✅ | `schema.sql:141` `(org_id,run_id,step)` | — |
-| B9 | `input_hash / cancel_requested_at / resume_token / last_seq / version` 五列 | ❌ | `schema.sql:24-51` 一列都没有 | K2-1 一次建齐 |
-| B10 | `updated_at` 触发器 | 🔶 | 应用层每处手写 `updated_at=now()` `db.py:245,280,325` | 漏写一处就停摆（H14）→ K2-4 触发器 |
-| B11 | 索引 `(org_id,status,created_at)`；不建与 UNIQUE 重复的 | 🔶 | `schema.sql:58-59` 有 `(status,lease_expires_at)`；`run_events_replay (org,run,seq)` 与 UNIQUE **完全重复** `schema.sql:75` | H16 同病 → K2-5 |
-| B12 | 创建事务 = agent_runs + run.created 同事务 | ❌ | `db.py:169-183` 只 INSERT agent_runs；**全仓无 `run.created` 事件**，事件流从 `run.started` 开始 | K2-6（K3-2 再加 outbox 行） |
-| B13 | 版本化 migration（Alembic） | ❌ | `schema.sql:427` 手工 `ADD COLUMN IF NOT EXISTS` 加列路径 | §16-2 已裁 → K2；`28` P-04/P-05 |
+| B9 | `input_hash / cancel_requested_at / resume_token / last_seq / version` 五列 | ✅ 09-02（0002，另加 run_type/parent_run_id/rerun_reason） | `schema.sql:24-51` 一列都没有 | K2-1 一次建齐 |
+| B10 | `updated_at` 触发器 | ✅ 09-02 | 应用层每处手写 `updated_at=now()` `db.py:245,280,325` | 漏写一处就停摆（H14）→ K2-4 触发器 |
+| B11 | 索引 `(org_id,status,created_at)`；不建与 UNIQUE 重复的 | ✅ 09-02（加 agent_runs_list，删 run_events_replay） | `schema.sql:58-59` 有 `(status,lease_expires_at)`；`run_events_replay (org,run,seq)` 与 UNIQUE **完全重复** `schema.sql:75` | H16 同病 → K2-5 |
+| B12 | 创建事务 = agent_runs + run.created 同事务 | ✅ 09-02（`db.create_run`；原子性测试在案） | `db.py:169-183` 只 INSERT agent_runs；**全仓无 `run.created` 事件**，事件流从 `run.started` 开始 | K2-6（K3-2 再加 outbox 行） |
+| B13 | 版本化 migration（Alembic） | ✅ 09-02 | `schema.sql:427` 手工 `ADD COLUMN IF NOT EXISTS` 加列路径 | §16-2 已裁 → K2；`28` P-04/P-05 |
 | B14 | `now()`=事务时间，排序只认 seq | ✅ | `api.py:426` `ORDER BY seq` | — |
 
 ### 组 C · 队列与 worker（课件 CH3，K3 承接）
@@ -82,7 +82,7 @@
 | C7 | worker 层不改 run 状态（一个写入者） | 🔶 | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
 | C8 | 协作式取消消费端（四个安全点） | ❌ | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
 | C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | 🔶 | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
-| C10 | 三个 attempts 分账 | 🔶 | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
+| C10 | 三个 attempts 分账 | 🔶（列已改名 attempts，其余两个随 K3） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
 | C11 | job payload 只放 run_id | ⛔→K3 | 无 job | K3-4；`28` H23 |
 | C12 | 优雅关停（drain） | 🔶 | 信号置位不 exit，跑完当前动作 `worker.py:576-579` | 中途停的 run 等 lease 过期才可接管（无主动放 lease）→ K9-6 drain 演练 |
 | C13 | 队列 SLO queue lag P95 < 10s | 🔶 | 11 §5 队列最老等待 1.9s（DB 轮询形态） | Celery 化后重测（`28` S-05） |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总**：✅ 20 · 🔶 37 · ❌ 18 · ⛔ 2（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K2 后）**：✅ 28 · 🔶 33 · ❌ 14 · ⛔ 2（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

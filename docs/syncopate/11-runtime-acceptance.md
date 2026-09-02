@@ -206,7 +206,7 @@ runtime 把不在 `WRITE_TOOLS` 里的工具**一律当读工具**：不校验�
 | R1.4 | 按 run_id 做键的表，唯一约束必须含 org_id | ✅ | 逐张核过：agent_runs / run_events / agent_steps / checkpoints 的 UNIQUE 都带 org_id；tool_calls 幂等索引按 `(org_id, key)`；model_calls / usage_records / audit_logs 是追加式无自然键，不需要。**09 §4-① 那个 bug 改干净了，不是只改了三张** |
 | R1.5 | automation_tier 值域 A/B/C/D | ✅ | CHECK 约束在（⚠️ 但没人读，见任务一） |
 | R1.6 | param_source 能区分 user vs tool_result | ✅ | CHECK 四值齐 |
-| R1.7 | schema.sql 是唯一 DDL 真相来源 | ✅ | `pg_bootstrap.sh` 里没有独立 DDL |
+| R1.7 | schema.sql 是唯一 DDL 真相来源 | ✅ | `pg_bootstrap.sh` 里没有独立 DDL。⚠️ 2026-09-02 K2 起真相来源改为 Alembic 迁移链（`migrations/versions/`），schema.sql 退役为快照 |
 
 🟡 附带两条（不算判据）：`tool_calls.latency_ms` 是 **TEXT** 而 `model_calls.latency_ms` 是 INTEGER（09 §5 已记）；
 `schema.sql` 头部注释「PGDATA 放不进 /workspace」**已过期**（换机器后可以放，见 08 §1.1）。

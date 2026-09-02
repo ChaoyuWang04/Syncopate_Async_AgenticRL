@@ -214,14 +214,8 @@ async def park_run_for_user(db: Database, *, org_id: str, run_id: str,
                    lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
              WHERE org_id=$1 AND run_id=$2
             """, org_id, run_id, result)
-        await conn.execute(
-            """
-            INSERT INTO run_events (run_id, org_id, seq, kind, payload)
-            VALUES ($1, $2,
-                    COALESCE((SELECT max(seq) FROM run_events
-                               WHERE run_id=$1 AND org_id=$2), 0) + 1,
-                    'run.waiting_for_user', $3)
-            """, run_id, org_id, payload or {})
+        await append_event(conn, org_id=org_id, run_id=run_id,
+                           kind="run.waiting_for_user", payload=payload or {})
 
 
 async def close_parked_clarify_runs(db: Database, *, org_id: str,
@@ -242,14 +236,8 @@ async def close_parked_clarify_runs(db: Database, *, org_id: str,
             RETURNING run_id, result
             """, org_id, conversation_id)
         for r in rows:
-            await conn.execute(
-                """
-                INSERT INTO run_events (run_id, org_id, seq, kind, payload)
-                VALUES ($1, $2,
-                        COALESCE((SELECT max(seq) FROM run_events
-                                   WHERE run_id=$1 AND org_id=$2), 0) + 1,
-                        'run.succeeded', $3)
-                """, r["run_id"], org_id, dict(r["result"] or {}))
+            await append_event(conn, org_id=org_id, run_id=r["run_id"],
+                               kind=_TERMINAL_EVENT["succeeded"], payload=dict(r["result"] or {}))
     return [r["run_id"] for r in rows]
 
 

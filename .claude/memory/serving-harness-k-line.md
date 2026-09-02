@@ -1,6 +1,6 @@
 ---
 name: serving-harness-k-line
-description: ★K 线（27 serving harness 生产化）现场：09-02 Chaoyu 放行 K0，§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表在 28；本机 PG/Redis 用 conda 用户态
+description: ★K 线（27 serving harness 生产化）现场：09-02 K0 ✅ K2 ✅（Alembic 迁移链=唯一真相、seq 领号器、run.created）；§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表 28 · 对照 29；下一步 K1
 metadata: 
   node_type: memory
   type: project
@@ -20,6 +20,11 @@ metadata:
 
 **Why**：机制一律以课件（`docs/reference/`，不入库）为准，标准=工业级容灾；
 Chaoyu 要求坑表与后续排查/优化项**单独文档集**，不污染 27 的施工纯洁性。
+
+**进度（09-02）**：K0 ✅（29）· K2 ✅（迁移链 `syncopate/runtime/migrations/`，schema.sql 已退役成
+`schema.snapshot.txt`；`db.next_seq/append_event` 领号器；创建事务写 run.created；usage 粒度=每次执行一行）
+· 下一步 K1（cancel/resume/trace 入口、幂等三态 409、错误信封、run_type 分发）。
+Chaoyu 09-02 追加四裁：K1/K2 交错 · Alembic 唯一真相 · 终态事件改名 run.completed（K4-2 时三处同步含前端）· 引入 run_type。
 
 **How to apply**：
 - 每阶段开工前对 28 该阶段的行；每条坑要负向认证（人为制造 → 判据必红）才算 ✅。

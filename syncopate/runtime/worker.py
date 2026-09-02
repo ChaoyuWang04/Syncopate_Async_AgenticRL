@@ -92,8 +92,14 @@ async def record_usage(db: Database, *, org_id: str, run_id: str,
     async with db.tx() as conn:
         await conn.execute(
             """
-            INSERT INTO usage_records (org_id, run_id, tokens_in, tokens_out, cost_micros)
-            VALUES ($1,$2,$3,$4,$5)
+            INSERT INTO usage_records (org_id, run_id, tokens_in, tokens_out, cost_micros,
+                                       call_index)
+            VALUES ($1,$2,$3,$4,$5,
+                    -- K2（H15）：粒度 = 每次执行（attempts）一行。同一次执行重放第二次
+                    -- 会撞 usage_records_once —— 那正是"账单翻倍"要被拒的形状；
+                    -- 审批恢复是**新的一次执行**（attempts+1），合法地多一行。
+                    -- K9-3 改成"每次模型调用一行"时 call_index 换成调用序号。
+                    (SELECT attempts FROM agent_runs WHERE org_id=$1 AND run_id=$2))
             """, org_id, run_id, tokens_in, tokens_out, cost_micros)
 
 

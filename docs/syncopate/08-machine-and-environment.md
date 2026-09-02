@@ -43,7 +43,8 @@ PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这
 PGDATA=/workspace/pgdata/16/syncopate      # 已写进 /workspace/.env
 PG 二进制/库   /workspace/tools/postgres/root
 deb 离线包     /workspace/tools/postgres/debs   ← 断网也能重装
-schema/迁移    仓库 syncopate/runtime/schema.sql（真相来源）
+schema/迁移    仓库 syncopate/runtime/migrations/versions/（Alembic 迁移链 = 唯一真相，K2 2026-09-02；
+               schema.snapshot.txt 是生成的只读快照，pg_bootstrap 末尾 --check 判漂移）
 ```
 
 ```bash

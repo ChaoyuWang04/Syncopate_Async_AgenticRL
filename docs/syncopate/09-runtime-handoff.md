@@ -693,7 +693,7 @@ worker 自己的编排，两条路要过同一道闸（同权限闸那条）。
 `/workspace` 是本地 XFS，`chmod 700` 生效 ⇒ `PGDATA=/workspace/pgdata/16/syncopate`
 （已写进 `/workspace/.env`）。~~旧机器的 mfs 不支持权限位才放不进~~。
 ⚠️ 但**数据库仍然是派生产物**，这条没变：工具在 `/workspace/tools/postgres`、
-schema 在仓库（`syncopate/runtime/schema.sql` 是真相来源）、
+schema 在仓库（`syncopate/runtime/migrations/` 迁移链是真相来源，2026-09-02 起；`schema.snapshot.txt` 为生成快照）、
 `bash scripts/pg_bootstrap.sh` 一条命令重建。详见 `08-machine-and-environment.md` §1.1。
 ⚠️ 干净机器上重建会撞两个坑（都已修进脚本）：`dpkg -x` **不跑 maintainer 脚本**
 ⇒ 不建 `postgres` 用户；`libpq.so.5` 不进 ldconfig ⇒ 要 `LD_LIBRARY_PATH`。

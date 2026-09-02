@@ -178,7 +178,7 @@ def test_idempotency_key_is_scoped_to_org(client) -> None:
 def test_response_never_leaks_internal_fields(client) -> None:
     """★ response_model 是白名单：内部字段不能因为"顺手 return 了整行"漏出去。"""
     body = client.post("/runs", json={"user_message": "x"}, headers=ACME).json()
-    for leaked in ("lease_owner", "lease_expires_at", "attempt", "org_id",
+    for leaked in ("lease_owner", "lease_expires_at", "attempts", "org_id",
                    "idempotency_key", "user_message", "error"):
         assert leaked not in body, f"内部字段 {leaked} 漏出去了"
 

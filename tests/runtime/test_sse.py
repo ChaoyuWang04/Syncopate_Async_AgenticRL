@@ -90,8 +90,10 @@ def test_stream_replays_all_events_from_scratch() -> None:
 
     r = run_case(body)
     events = parse_sse(r.text)
-    assert [e["event"] for e in events] == ["run.started", "tool.result", "run.succeeded"]
-    assert [e["id"] for e in events] == ["1", "2", "3"]
+    # seq 1 = 创建事务写的 run.created（K2-6）；之后才是 worker 侧的事件
+    assert [e["event"] for e in events] == ["run.created", "run.started", "tool.result",
+                                            "run.succeeded"]
+    assert [e["id"] for e in events] == ["1", "2", "3", "4"]
 
 
 def test_last_event_id_resumes_without_duplicates() -> None:
@@ -103,10 +105,10 @@ def test_last_event_id_resumes_without_duplicates() -> None:
         for kind in ("run.started", "tool.result", "tool.result", "run.succeeded"):
             await emit(db, org_id=org, run_id=run_id, kind=kind)
         return await client.get(f"/runs/{run_id}/events",
-                                headers={**ACME, "Last-Event-ID": "2"})
+                                headers={**ACME, "Last-Event-ID": "3"})
 
     events = parse_sse(run_case(body).text)
-    assert [e["id"] for e in events] == ["3", "4"], "补发的位置不对"
+    assert [e["id"] for e in events] == ["4", "5"], "补发的位置不对"
 
 
 def test_garbage_last_event_id_falls_back_to_full_replay() -> None:
@@ -125,7 +127,7 @@ def test_garbage_last_event_id_falls_back_to_full_replay() -> None:
 
     r = run_case(body)
     assert r.status_code == 200
-    assert len(parse_sse(r.text)) == 1
+    assert len(parse_sse(r.text)) == 2          # run.created + run.succeeded
 
 
 # --------------------------------------------------------------------------
@@ -147,7 +149,7 @@ def test_stream_closes_on_terminal_event() -> None:
                                       timeout=10)
 
     events = parse_sse(run_case(body).text)
-    assert [e["event"] for e in events] == ["run.started", "run.failed"]
+    assert [e["event"] for e in events] == ["run.created", "run.started", "run.failed"]
 
 
 @pytest.mark.parametrize("terminal", ["run.succeeded", "run.failed", "run.waiting_for_user"])
@@ -165,7 +167,7 @@ def test_every_terminal_kind_closes_the_stream(terminal: str) -> None:
         return await asyncio.wait_for(client.get(f"/runs/{run_id}/events", headers=ACME),
                                       timeout=10)
 
-    assert [e["event"] for e in parse_sse(run_case(body).text)] == [terminal]
+    assert [e["event"] for e in parse_sse(run_case(body).text)] == ["run.created", terminal]
 
 
 # --------------------------------------------------------------------------

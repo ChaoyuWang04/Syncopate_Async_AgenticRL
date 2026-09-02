@@ -257,7 +257,8 @@ def test_worker_writes_an_ordered_event_stream() -> None:
 
     rows = with_db(go)
     assert [r["seq"] for r in rows] == list(range(1, len(rows) + 1)), "seq 不连续"
-    assert rows[0]["kind"] == "run.started"
+    # K2-6：创建事务写 run.created（seq 1），抢到执行权才 run.started（课件 CH2 §7 口径）
+    assert [r["kind"] for r in rows[:2]] == ["run.created", "run.started"]
 
 
 def test_daily_cost_cap_degrades_before_touching_the_platform() -> None:

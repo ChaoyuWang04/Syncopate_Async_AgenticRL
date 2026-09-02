@@ -120,16 +120,25 @@ if [[ "$(psql_su "select 1 from pg_database where datname='$DB_NAME'")" != "1" ]
   run_pg "LD_LIBRARY_PATH=$PG_LIB $PG_HOME/bin/createdb $PSQL_HOST_OPT -p $PGPORT -O $DB_USER $DB_NAME"
 fi
 
-# ---- schema（真相来源在仓库里，见 syncopate/runtime/schema.sql）----
-SCHEMA="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/syncopate/runtime/schema.sql"
-if [[ -f "$SCHEMA" ]]; then
-  step "应用 schema"
-  PGPASSWORD="$DB_PASS" "$PG_HOME/bin/psql" -h 127.0.0.1 -p "$PGPORT" -U "$DB_USER" -d "$DB_NAME" \
-    -v ON_ERROR_STOP=1 -q -f "$SCHEMA"
-  n=$(PGPASSWORD="$DB_PASS" "$PG_HOME/bin/psql" -h 127.0.0.1 -p "$PGPORT" -U "$DB_USER" -d "$DB_NAME" \
-      -tAc "select count(*) from information_schema.tables where table_schema='public'")
-  echo "    public schema 下 $n 张表"
+# ---- schema：Alembic 迁移链是唯一真相（K2，2026-09-02；schema.sql 已退役为只读快照）----
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${PYTHON:-$REPO/.venv/bin/python}"
+[[ -x "$PY" ]] || die "找不到 $PY（uv sync --inexact --extra runtime --extra dev）"
+export SYNCOPATE_PG_DSN="postgresql://$DB_USER:$DB_PASS@127.0.0.1:$PGPORT/$DB_NAME"
+psql_app() { PGPASSWORD="$DB_PASS" "$PG_HOME/bin/psql" -h 127.0.0.1 -p "$PGPORT" -U "$DB_USER" -d "$DB_NAME" -tAc "$1"; }
+has_ver=$(psql_app "select 1 from information_schema.tables where table_name='alembic_version'")
+has_runs=$(psql_app "select 1 from information_schema.tables where table_name='agent_runs'")
+if [[ "$has_ver" != "1" && "$has_runs" == "1" ]]; then
+  # 存量库（schema.sql 时代建的）：地基已在，只登记版本，不重跑 baseline
+  step "存量库：alembic stamp 0001_baseline"
+  (cd "$REPO" && "$PY" -m alembic stamp 0001_baseline)
 fi
+step "应用 schema：alembic upgrade head"
+(cd "$REPO" && "$PY" -m alembic upgrade head)
+n=$(psql_app "select count(*) from information_schema.tables where table_schema='public' and table_name<>'alembic_version'")
+echo "    public schema 下 $n 张表 · 版本 $(psql_app "select version_num from alembic_version")"
+# 判据：库里的 schema 必须与仓库快照一致（漂移 = 有人绕过迁移链改库，28 P-05）
+(cd "$REPO" && "$PY" scripts/schema_snapshot.py --check) || die "schema 与快照不一致——改 schema 只许走迁移链"
 
 echo
 echo "✅ PostgreSQL 就绪  postgresql://$DB_USER:$DB_PASS@127.0.0.1:$PGPORT/$DB_NAME"
