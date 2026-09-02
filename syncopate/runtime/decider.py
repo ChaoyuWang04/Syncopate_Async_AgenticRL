@@ -130,7 +130,11 @@ class VllmDecider:
     def __init__(self, *, base_url: str, model: str, tokenizer_path: str,
                  context: dict[str, Any] | None = None,
                  answer_fields: list[dict[str, str]] | None = None,
-                 timeout_seconds: float = 120.0) -> None:
+                 timeout_seconds: float | None = None) -> None:
+        # ★ 09-02（K 线 29 号 D9）：模型调用超时不再写死——走 SYNCOPATE_DECIDER_TIMEOUT（秒），默认 120。
+        #   think-on + 8192 生成预算下单次调用可能超过 120s；上限抬高时这里要能跟着改而不改代码。
+        if timeout_seconds is None:
+            timeout_seconds = float(os.environ.get("SYNCOPATE_DECIDER_TIMEOUT", "120"))
         from transformers import AutoTokenizer   # 延迟导入：只有真模型模式才付这个钱
 
         self.model = model
