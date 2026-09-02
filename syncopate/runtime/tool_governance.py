@@ -110,7 +110,19 @@ GOVERNANCE: dict[str, ToolGovernance] = {
     "memory.write_proposal":   _write("memory:write", keys=("proposal_id",)),
     "memory.invalidate":       _write("memory:write", keys=("proposal_id",)),
     "memory.conflict_resolve": _write("memory:write", keys=("proposal_id",)),
+    # ---- v15 信令族（contract.SESSION_TOOL_NAMES；只在 SYNCOPATE_CONTRACT=v15 时进 REGISTRY）----
+    # 不是外部调用：clarify/defer/reject 由 loop 当终止信令处理，report 走收口 binding（零副作用 ack）。
+    # ⚠️ 09-02 verl-22 通报：漏登记 ⇒ v15 生产进程导入即炸（断言做对了，登记漏了）。
+    "session.clarify": _read(timeout=5.0, expected_ms=1_000),
+    "session.defer":   _read(timeout=5.0, expected_ms=1_000),
+    "session.reject":  _read(timeout=5.0, expected_ms=1_000),
+    "session.report":  _read(timeout=5.0, expected_ms=1_000),
 }
+
+# 契约相关的可选条目：v14 下 REGISTRY 没有它们，不算"幽灵"；v15 下必须有且必须登记
+def _optional_by_contract() -> frozenset[str]:
+    from syncopate.core.contract import SESSION_TOOL_NAMES
+    return frozenset(SESSION_TOOL_NAMES)
 
 
 def sandbox_specs() -> dict[str, Any]:
@@ -125,10 +137,10 @@ def assert_governance_complete(governance: dict[str, ToolGovernance] | None = No
     gov = governance if governance is not None else GOVERNANCE
     specs = sandbox_specs()
     missing = sorted(set(specs) - set(gov))
-    ghost = sorted(set(gov) - set(specs))
+    ghost = sorted(set(gov) - set(specs) - _optional_by_contract())
     if missing or ghost:
         raise AssertionError(f"治理表与 REGISTRY 不一致：沙盒有而未登记 {missing}；登记了但沙盒没有 {ghost}")
-    wrong = sorted(n for n, g in gov.items() if g.side_effect != (specs[n].kind == "write"))
+    wrong = sorted(n for n, g in gov.items() if n in specs and g.side_effect != (specs[n].kind == "write"))
     if wrong:
         raise AssertionError(f"side_effect 与 REGISTRY 的 kind 不一致：{wrong}")
 

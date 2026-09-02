@@ -62,7 +62,20 @@ def _gate(db, org, run, bindings, *, permissions=None, amount_threshold=10 ** 9)
 
 def test_governance_covers_the_whole_registry_and_matches_kind() -> None:
     assert_governance_complete()
-    assert len(GOVERNANCE) == 30 and len(WRITE_TOOLS) == 8
+    assert len(GOVERNANCE) == 34 and len(WRITE_TOOLS) == 8       # 30 业务 + 4 个 v15 信令（契约可选）
+
+
+@pytest.mark.parametrize("contract", ["v14", "v15"])
+def test_runtime_imports_under_both_contracts(contract) -> None:
+    """09-02 verl-22 通报的红：v15 下 REGISTRY 多四个 session.* 工具，治理表没登记 ⇒ 生产进程导入即炸。
+    用子进程按两种契约各导入一次 decider（链到 tools.py 的导入时断言）。"""
+    import os
+    import subprocess
+    import sys
+    env = {**os.environ, "SYNCOPATE_CONTRACT": contract}
+    r = subprocess.run([sys.executable, "-c", "import syncopate.runtime.decider, syncopate.runtime.worker; print('ok')"],
+                       env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0 and "ok" in r.stdout, r.stderr[-800:]
 
 
 @pytest.mark.parametrize("bad", [
