@@ -6,7 +6,7 @@ set -u
 cd /workspace/Syncopate_Async_AgenticRL
 set -a; . /workspace/.env; set +a
 source .venv/bin/activate
-MERGED="${1:?合并模型路径}"; ARM="${2:-v15sft}"
+MERGED="${1:?合并模型路径}"; ARM="${2:-v15sft}"; EXAM="${3:-context_v4}"   # 09-03：考卷 v4 为默认
 say(){ echo "[V15-EXAM $(date +%H:%M:%S)] $*"; }
 
 # ⛔ 08-30：上一轮的 worker 没停干净 ⇒ 它认旧模型名，和新 worker 抢同一个队列，
@@ -36,13 +36,13 @@ SYNCOPATE_CONTRACT=v15 SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
   --daily-cost-cap-micros 10000000000 > logs/v15_r5/exam_worker.log 2>&1 &
 W=$!
 sleep 5
-say "③ 考场 v3 跑四遍（方差闸要求）"
+say "③ 考场 $EXAM 跑四遍（方差前置条件）"
 for i in 1 2 3 4; do
-  python scripts/u_exam_run.py --exam context_v3 --arm "${ARM}_r$i" --concurrency 4 \
+  python scripts/u_exam_run.py --exam "$EXAM" --arm "${ARM}_r$i" --concurrency 4 \
     > "logs/v15_r5/exam_v3_r$i.log" 2>&1 || echo "🔴 第 $i 遍失败"
   say "  第 $i 遍完成"
 done
 say "④ 收尾：停端点与服务"
 kill $W $A $V 2>/dev/null; sleep 8
 for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -u); do kill -9 $p 2>/dev/null; done
-say "✅ 四遍完成 → logs/u_route/run_${ARM}_r{1..4}_context_v3.jsonl"
+say "✅ 四遍完成 → logs/u_route/run_${ARM}_r{1..4}_${EXAM}.jsonl"

@@ -438,12 +438,36 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
 7  影子重建判据（如时间允许）：scripts/run_pipeline_shadow_rebuild.sh 只到 3/6（batches SHA）
 ```
 
-### W5 · 重训 + 五点谱 + 考场 v4（训练机，~2.5–3 小时）
+### W5 · 重训 + 五点谱 + 考卷 v4（训练机，~2.5–3 小时）
 
 门槛 = **W0 修订并经 Chaoyu 批准后的 R5 门槛表**（此时表内已无三缺口门槛）。
-方差闸按前置条件执行：任一层双遍差 >8pp ⇒ 先加采样，采够了才许下 PASS/FAIL。
+方差前置条件按 SE 口径执行（W0）：读数与阈值之差 < 2·SE ⇒ 加 4 遍，上限 12 遍。
 
----
+**考卷 v4 受 09-02/03 数据改动的影响逐条核（09-03，Chaoyu 要求数据验收后逐条查）**
+
+| 改动 | 对考场的影响 | 核法 / 结论 |
+|---|---|---|
+| 题面 context 变空（无账户、无清单） | 考题都在 user 话里点名 CMP_x，模型靠 get_metrics / campaign.list 自查；DEF/HARD 不再有清单可抄 | `tests/runtime/test_exam_path_after_w2.py` ✅ 训练与考场同形 |
+| account_id 运行态注入 | 模型不填 account_id 调 campaign.list / risk.check_account，收口按租户注入；worker 进程注册表须已装载 | 真库真 worker：`test_worker_injects_account_when_model_omits_it` ✅（执行记录带 ACC_DEMO） |
+| 工具描述修剪 | 判卷只认工具名与参数，不认描述 | 判卷器 13 判类负向认证 ✅ |
+| 上下文 18432 | 考场链 `v15_r5_exam_chain.sh` 与 decider 默认已同步；链改为 `--exam` 可选（默认 context_v4） | grep 无 14336 残留 ✅ |
+| clarify → waiting_for_user · 拒绝轮进历史 | 考场按 status 判终态，读 session 事件；L4/CLA-F/REJ-F 的历史现在线上能表达 | `test_clarify_turns_enter_history` 4 条 ✅ |
+| demo 加 CMP_7 | 训练机起链前 `seed_demo_data.py --check` 必须看到 7 条（安全线 GAME_SLG×华南 已有） | 起链清单第 0 步 |
+| 历史窗口 6 轮下沉到渲染函数 | WIN 题库里插 8 轮、渲染只见 6 轮，与 prior_turns LIMIT 6 一致 | `test_exam_scripted_prior` ✅ |
+| 空 think 不监督 | 只影响训练；思考率读数口径不变（model.thinking 非空事件） | — |
+| 三查登记表 | 硬预期行为题 161、装置全部到位 | `v15_gate_triage.py --strict` 零缺口 ✅ |
+
+**W5 起链清单（训练机，09-03 定）**
+```
+0  python scripts/seed_demo_data.py --check   ⇒ 7 条 campaign（含 CMP_7）、安全线/基准/记忆表非空
+1  pgrep -f syncopate.runtime.worker 为空（陈旧 worker 抢队列，㉞）
+2  bash scripts/v15_r5_exam_chain.sh <合并模型> v15r4 context_v4（四遍；一遍 ~27 min）
+   ⚠️ 第一遍跑完先做 W1④ 校准：jsonl 的 think_nonempty 之和 == PG 里 model.thinking 计数
+3  scripts/u_exam_judge_v4.py --context logs/u_route/run_v15r4_r{1..4}_context_v4.jsonl
+4  scripts/v15_gate_triage.py 按四遍 judged 读数出表（R5 表：②③⑥ 判、⑤ 只记录、方差前置条件）
+5  盲评：u_exam_judge --blind（v15 vs v14.5 各 100，钥匙另存）+ N1 零命中
+```
+
 
 ## 4 · CoT 专题（Chaoyu 08-31 三问的完整回答）
 
