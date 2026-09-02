@@ -35,7 +35,7 @@ PCIe P2P，5090 同样 —— **这是所有 4×5090 机器的常态，不是这
 ✅ 满载降频已测（08-27）：4×575W 稳态频率 −0.5%、单卡 TFLOPS −0.9%（221→219）、69°C
 ⇒ 多卡对照的非通信损失可忽略。⬜ 还没测：主机内存带宽。
 
-## 1.1 · PostgreSQL 的落盘
+## 1.1 · PostgreSQL 的落盘（训练机 root 路数；本机用户态与 K 线中间件见 §1.2）
 
 `/workspace` 是 XFS，`chmod 700` 生效 ⇒ **PGDATA 直接放持久卷**：
 
@@ -67,6 +67,92 @@ ldconfig 路径。`pg_bootstrap.sh` 已经把这两件都处理了（`LD_LIBRARY
 
 ---
 
+## 1.2 · Serving 生产栈的落盘与重建（K 线，2026-09-02；搬家时照这节）
+
+K 线（27）给 serving 加了三样中间件：**Redis 8**（Celery broker）、**Celery 5.6**（worker 投递）、
+**Alembic**（schema 唯一真相）。PostgreSQL 不换。纪律与 §1.1 相同：**PG 里的 outbox/agent_runs
+是事实来源，Redis 是派生产物**（丢了重投即可，`sweeper` 与 `requeue_outbox` 兜底）。
+
+### 1.2.1 两种机器的落盘位置
+
+| | 训练机（root，/workspace） | 本机 5090 工作站（**无 sudo**，conda 用户态） |
+|---|---|---|
+| PG 二进制 | `/workspace/tools/postgres/root/...`（deb 解包） | conda env `syncopate-infra`（conda-forge `postgresql=16`，实测 16.15） |
+| PGDATA | `/workspace/pgdata/16/syncopate` | `$HOME/.local/share/syncopate/pgdata/16`（socket 在 `/tmp`） |
+| Redis 二进制 | 未装（训练机上 K 线未跑过，见下"搬家步骤"） | 同一 conda env（`redis-server`，实测 8.10） |
+| Redis 数据/配置 | — | `$HOME/.local/share/syncopate/redis/`（redis.conf · AOF · RDB · log · pid） |
+| 判别 | `pg_bootstrap.sh` 按 `id -u` 自动分支（`PG_USER_MODE`） | 同左；`PG_HOME/PG_SHARE/PG_LIB/REDIS_HOME` 都可用环境变量覆盖 |
+
+```bash
+# 本机用户态装法（一次性；训练机用 deb 解包那套，§1.1）
+conda create -n syncopate-infra -c conda-forge postgresql=16 redis-server
+export PG_HOME=$HOME/Downloads/ENTER/envs/syncopate-infra PG_SHARE=$PG_HOME/share PG_LIB=$PG_HOME/lib
+bash scripts/pg_bootstrap.sh          # 幂等：initdb → 起 → 建库 → alembic upgrade head → 快照核对 ✅
+bash scripts/redis_bootstrap.sh       # 幂等：写 redis.conf → 起 → 判据行 [redis-config] appendonly=yes … ✅
+```
+
+### 1.2.2 Python 依赖
+
+`runtime` extra 已含 `alembic sqlalchemy psycopg[binary] celery[redis] redis`（pyproject，uv.lock 已锁）。
+训练机照 §2 `uv sync --frozen --all-extras`；**本机**（不装 train extra，避免拆 torch/vllm）：
+
+```bash
+uv sync --inexact --extra runtime --extra dev     # ⛔ 不带 --inexact 会把手装的 torch/vllm 卸掉（守则⑧同族）
+```
+
+### 1.2.3 环境变量（K 线新增的都在这；默认值就是本机开发值）
+
+| 变量 | 默认 | 读者 | 说明 |
+|---|---|---|---|
+| `SYNCOPATE_PG_DSN` | `postgresql://syncopate:syncopate@127.0.0.1:5432/syncopate` | db/alembic/脚本 | Alembic 也读它（`alembic.ini` 的 `syncopate.dsn` 优先） |
+| `SYNCOPATE_REDIS_URL` | `redis://:syncopate-dev@127.0.0.1:6379/0` | celery_app | ⛔ 生产密码从 secret 注入，**永不进日志/URL 打印**；db0 broker · db1 限流 · db2 信号量 · db3 缓存 |
+| `REDIS_PASS` / `REDIS_PORT` / `REDIS_DIR` | `syncopate-dev` / 6379 / `~/.local/share/syncopate/redis` | redis_bootstrap.sh | 与上一行必须一致 |
+| `SYNCOPATE_WORKER_ORG_ID` | — | celery worker | ★ 常驻 worker 必设 `org_demo`（08-20 抢走测试租户 run 那课） |
+| `SYNCOPATE_API_DB_POOL` / `_WORKER_DB_POOL` / `_DISPATCHER_DB_POOL` / `_SWEEPER_DB_POOL` | 10 / 4（celery 子进程；轮询 worker 10）/ 4 / 3 | 各进程 | prefork N 进程 × 池 ≤ PG `max_connections`（28 P-07） |
+| `SYNCOPATE_VISIBILITY_TIMEOUT_S` | max(2×lease, 900) | celery_app | 必须 > 最长任务，否则 Redis 伪 ack 重投（28 C-02） |
+| `SYNCOPATE_LEASE_TTL_S` | 60 | worker/sweeper | 心跳每 TTL/3 续一次（判据行 `[lease-heartbeat]`） |
+| `SYNCOPATE_SWEEP_INTERVAL_S` / `_RECONCILE_EVERY` / `_STUCK_QUEUED_S` / `_WAITING_TOO_LONG_S` / `_OUTBOX_ARCHIVE_DAYS` | 10s / 每 30 轮 / 300s / 21600s / 30 天 | sweeper | 五类扫描的节拍与阈值（K8） |
+| `SYNCOPATE_ORG_DAILY_TOKENS` / `_ORG_DAILY_COST_MICROS` | 2,000,000 / 10,000,000（=$10） | api/budget | 未建 `org_budgets` 行时的默认两档（K9） |
+| `SYNCOPATE_RELEASE_HALTED=1` | 未设 | release/action_gate | 总开关：写动作全停（发布五能力①） |
+| `SYNCOPATE_DISABLED_TOOLS=a,b` | 未设 | tool_governance | 禁单个工具，读工具照常（发布五能力②） |
+| `SYNCOPATE_DECIDER_URL` / `_MODEL` / `_TOKENIZER` / `_TIMEOUT` / `SYNCOPATE_CONTRACT` | 老变量 | decider | K 线未改；共用件归 26 线 |
+
+起服务的完整命令序列在 **09 §0**（redis_bootstrap → dispatcher → sweeper → celery worker → uvicorn）。
+
+### 1.2.4 恢复数据库（三种情形）
+
+| 情形 | 做法 | 已验 |
+|---|---|---|
+| 库结构丢了（换机/重装） | `bash scripts/pg_bootstrap.sh` 从迁移链 0001→0008 重建，末尾 `schema_snapshot.py --check` 必须 ✅ | `scripts/dr_drill.sh` 09-02 RTO 1.5s |
+| 迁移链改了 | `alembic upgrade head` → `python scripts/schema_snapshot.py --write` → 提交快照；`--check` 红 = 有人手改库，**找人不改快照** | 30 runbook 05 |
+| 业务数据要保（灰测放真人后） | dev 期数据库是派生产物**无备份**（30 D3 挂账）；到时 `pg_dump -Fc` 周期 + 演练恢复 | ⬜ |
+
+Redis 不需要恢复：AOF 在 `REDIS_DIR`，丢了就 `redis_bootstrap.sh --reset`，
+在途消息由 sweeper 的 stuck_queued 分支 + `requeue_outbox` 从 PG 重投（30 runbook 01/02）。
+
+### 1.2.5 K 线新增的仓库内产物（哪些进 git、哪些是派生）
+
+| 路径 | 性质 |
+|---|---|
+| `syncopate/runtime/migrations/versions/0001…0008` + `schema.snapshot.txt` | **进 git**，唯一真相与只读快照 |
+| `scripts/pg_bootstrap.sh` `redis_bootstrap.sh` `schema_snapshot.py` `dr_drill.sh` `runbook_queries.py` `slo_readout.py` | 进 git |
+| `_audit/serving_k11/`（SLO 基线、演练日志） | 进 git（证据本体） |
+| `data/feedback_exports/`（K10 回流导出，考卷 v4 题形） | 派生产物，26 线吸入时再定去向 |
+| `frontend/dist` | 派生产物，`npm ci && npm run build`（本机无 node，三处改名与 👍👎 未 build） |
+
+### 1.2.6 搬家步骤（在 §2 之外多做的三步）
+
+```bash
+bash scripts/redis_bootstrap.sh                                    # §2 之后：起 Redis
+python -m pytest tests/runtime -q                                  # 372 passed · 10 skipped（skip 的是无 node/无端点那几条）
+bash scripts/dr_drill.sh                                           # 干净目录重建演练，末行 RTO；新暴露前提=0 才算搬完
+```
+
+⚠️ 训练机上 K 线**从未跑过**：Redis 要按 §1.1 的 deb 解包路数装（`REDIS_HOME` 指过去），
+Celery prefork 与四卡舰队的连接数账（28 P-07/S-05）要重算，压测 goodput 重测（27 §14 挂账）。
+
+---
+
 ## 2 · 从零搭环境（新机器按顺序做）
 
 ```bash
@@ -76,7 +162,8 @@ hf download Qwen/Qwen3-4B   --local-dir models/Qwen3-4B     # 7.6G
 hf download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B   # 1.4G，31 个测试要它
 python scripts/check_flash_attn_backward.py        # ★ 退出码 0 才算环境可用（反向恒 0 比 nan 更毒）
 python scripts/ingest_external.py                  # ★ 派生数据，不跑的话 27 个测试红
-bash scripts/pg_bootstrap.sh                       # ★ 不起 PG 的话 45 条 runtime 测试 skip
+bash scripts/pg_bootstrap.sh                       # ★ 不起 PG 的话 45 条 runtime 测试 skip；末尾 alembic 链 + 快照核对
+bash scripts/redis_bootstrap.sh                    # ★ K3 起：Celery 集成测试要真 Redis（§1.2）
 python scripts/ingest_corpus.py                    # ★ RAG 语料入 PG，不跑的话 3 条 retrieval 测试红
 # reference/ 870M 只能手动 scp —— 版权所有（深圳途明智启科技），永不进 git
 python -m pytest -q                                # 应为全 passed, 0 skipped（2026-08-27 实测 694 passed·1 xfailed）

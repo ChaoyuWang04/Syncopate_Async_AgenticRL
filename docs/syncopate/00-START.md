@@ -159,6 +159,8 @@ syncopate/core/tool_registry.py        工具 spec 的**唯一真相来源**（r
 ② ⬜ 三件等 Chaoyu：cap_hits 生产者 · 灰测阶梯节奏 · §19 P50/P95 判据改判（11 §5）
 ③ ✅ F 路 chatbox 全套 · B-4 端点 · 压测（B-5 后 22/22，goodput 192 · 11 §5）·
    档位改推导；serving 生产默认 = 四卡舰队（logs/runtime/start_serving.sh，09 §0）
+④ ✅ K 线 serving 生产化 K0–K11（09-02 单日，27/28/29/30；搬家配置 08 §1.2）；
+   本机验不了的 5 项与下一轮优化清单：27 §14 · 28 §0 收官快照
 ```
 
 ⚠️ **起 RL 的三条纪律**（`01 §2`）：不用 lr 1e-4 出候选 · 不用训练分选 ckpt · 必挂 `rl_guard.sh`。

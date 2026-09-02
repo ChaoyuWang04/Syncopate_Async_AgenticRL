@@ -108,3 +108,14 @@ v11/v12 的 splits 重跑**与 git 存档不同**（EVAL 198→258 / 254→319�
 split 逻辑演进过，当前链路不消费，恢复 git 版即可，别当 bug 追。
 xlsx 重生成永远有字节差（zip 时间戳），内容逐单元格比对一致就恢复 git 版。
 验收口径已长大：365 → **694 passed · 0 skipped**。
+
+---
+
+## 2026-09-02 追加：第三次重建（K 线灾备演练）——第一次「新暴露前提 = 0」
+
+`scripts/dr_drill.sh` 在干净目录从零重建 serving 数据层（conda 用户态 PG 16 + Redis 8 + alembic 0001→0008 +
+快照核对 + 建 run/领取/收尾冒烟），**RTO 1.5s，没有挖出新的隐形前提**。三条已知前提都已写进 08 §1.2：
+① 本机无 sudo ⇒ PG/Redis 走 conda-forge 用户态，`pg_bootstrap.sh` 按 `id -u` 自动分支；
+② 本机 `.venv` 必须 `uv sync --inexact --extra runtime --extra dev`（裸 `uv sync` 拆 torch/vllm，②的老病）；
+③ Redis 是派生产物（事实在 PG outbox），丢了 `--reset` 重起 + `requeue_outbox`，不算数据丢失。
+⚠️ 训练机上 K 线从未跑过：Redis 要走 deb 解包路数，那是下一次搬家才会暴露的那半。
