@@ -126,6 +126,21 @@ TABLE conversations
   CONSTRAINT conversations_pkey PRIMARY KEY (id)
   INDEX conversations_org_id_conversation_id_key CREATE UNIQUE INDEX conversations_org_id_conversation_id_key ON public.conversations USING btree (org_id, conversation_id)
   INDEX conversations_pkey CREATE UNIQUE INDEX conversations_pkey ON public.conversations USING btree (id)
+TABLE dead_letter_jobs
+  COL id bigint null=NO default=nextval('dead_letter_jobs_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL source text null=NO default=None
+  COL original_job_id bigint null=YES default=None
+  COL job_type text null=NO default=None
+  COL payload jsonb null=NO default='{}'::jsonb
+  COL attempts integer null=NO default=0
+  COL error jsonb null=NO default='{}'::jsonb
+  COL created_at timestamp with time zone null=NO default=now()
+  COL reprocessed_at timestamp with time zone null=YES default=None
+  CONSTRAINT dead_letter_jobs_pkey PRIMARY KEY (id)
+  CONSTRAINT dead_letter_jobs_source_check CHECK ((source = ANY (ARRAY['outbox'::text, 'worker'::text])))
+  INDEX dead_letter_jobs_pkey CREATE UNIQUE INDEX dead_letter_jobs_pkey ON public.dead_letter_jobs USING btree (id)
+  INDEX dead_letter_open CREATE INDEX dead_letter_open ON public.dead_letter_jobs USING btree (org_id, created_at) WHERE (reprocessed_at IS NULL)
 TABLE feature_lifts
   COL id bigint null=NO default=nextval('feature_lifts_id_seq'::regclass)
   COL feature text null=NO default=None
@@ -228,6 +243,25 @@ TABLE model_calls
   COL created_at timestamp with time zone null=NO default=now()
   CONSTRAINT model_calls_pkey PRIMARY KEY (id)
   INDEX model_calls_pkey CREATE UNIQUE INDEX model_calls_pkey ON public.model_calls USING btree (id)
+TABLE outbox_jobs
+  COL id bigint null=NO default=nextval('outbox_jobs_id_seq'::regclass)
+  COL org_id text null=NO default=None
+  COL job_type text null=NO default=None
+  COL payload jsonb null=NO default='{}'::jsonb
+  COL queue text null=NO default='interactive'::text
+  COL status text null=NO default='pending'::text
+  COL attempts integer null=NO default=0
+  COL max_attempts integer null=NO default=10
+  COL next_attempt_at timestamp with time zone null=NO default=now()
+  COL last_error jsonb null=YES default=None
+  COL created_at timestamp with time zone null=NO default=now()
+  COL dispatched_at timestamp with time zone null=YES default=None
+  CONSTRAINT outbox_jobs_pkey PRIMARY KEY (id)
+  CONSTRAINT outbox_jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'dispatched'::text, 'failed'::text])))
+  INDEX outbox_jobs_by_run CREATE INDEX outbox_jobs_by_run ON public.outbox_jobs USING btree (((payload ->> 'run_id'::text)))
+  INDEX outbox_jobs_pending CREATE INDEX outbox_jobs_pending ON public.outbox_jobs USING btree (status, next_attempt_at)
+  INDEX outbox_jobs_pkey CREATE UNIQUE INDEX outbox_jobs_pkey ON public.outbox_jobs USING btree (id)
+  TRIGGER trg_notify_outbox CREATE TRIGGER trg_notify_outbox AFTER INSERT ON public.outbox_jobs FOR EACH ROW EXECUTE FUNCTION notify_outbox()
 TABLE playbooks
   COL anomaly_type text null=NO default=None
   COL steps jsonb null=NO default='[]'::jsonb
@@ -334,6 +368,15 @@ TABLE usage_records
   INDEX usage_by_org_day CREATE INDEX usage_by_org_day ON public.usage_records USING btree (org_id, day)
   INDEX usage_records_once CREATE UNIQUE INDEX usage_records_once ON public.usage_records USING btree (org_id, run_id, call_index) WHERE (run_id IS NOT NULL)
   INDEX usage_records_pkey CREATE UNIQUE INDEX usage_records_pkey ON public.usage_records USING btree (id)
+FUNCTION notify_outbox
+  CREATE OR REPLACE FUNCTION public.notify_outbox()
+   RETURNS trigger
+   LANGUAGE plpgsql
+  AS $function$
+  BEGIN
+    PERFORM pg_notify('outbox_jobs', NEW.id::text);
+    RETURN NULL;
+  END; $function$
 FUNCTION notify_run_event
   CREATE OR REPLACE FUNCTION public.notify_run_event()
    RETURNS trigger

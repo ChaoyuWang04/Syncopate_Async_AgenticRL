@@ -73,17 +73,17 @@
 
 | # | 能力 | 状态 | 证据 | 差异 / 去向 |
 |---|---|---|---|---|
-| C1 | Outbox 表 + dispatcher | ❌ | 全仓 0 处（11 §3 R5.6） | K3-1～K3-3 |
-| C2 | 队列本体（broker） | 🔶 | 无 broker：worker 每 0.2s 轮询 `claim_run` `worker.py:144-145,535-541` | §16-1 已裁 Celery+Redis → K3-4 |
+| C1 | Outbox 表 + dispatcher | ✅ 09-02 | 全仓 0 处（11 §3 R5.6） | K3-1～K3-3 |
+| C2 | 队列本体（broker） | ✅ 09-02 Celery+Redis（轮询入口保留给测试/考场链） | 无 broker：worker 每 0.2s 轮询 `claim_run` `worker.py:144-145,535-541` | §16-1 已裁 Celery+Redis → K3-4 |
 | C3 | claim = 条件 UPDATE + lease + COALESCE(started_at) | ✅ | `db.py:197-262`（SKIP LOCKED · org 公平分配 · attempt+1） | 🔶 **顺手接管过期 lease**（`db.py:230`）= 与 sweeper 双写入者 → `28` S-01，K3-6 收窄为只认 queued |
-| C4 | lease 心跳续租 | ❌ | 全仓无 renew/heartbeat；`lease_expires_at` 只在 claim 写一次 `db.py:244` | H30 → K3-7 |
-| C5 | 先写库再 ack | ⛔→K3 | 无 ack 概念（无 broker） | K3-8 |
-| C6 | 错误分类 transient/permanent + 退避 + DLQ | 🔶 | 工具级 retriable 重试 `tools.py:114-136`；run 级异常一律 `failed` `worker.py:318-322`；无 DLQ | K3-9 |
+| C4 | lease 心跳续租 | ✅ 09-02（Celery 路径；轮询路径无心跳） | 全仓无 renew/heartbeat；`lease_expires_at` 只在 claim 写一次 `db.py:244` | H30 → K3-7 |
+| C5 | 先写库再 ack | ✅ 09-02（acks_late；集成测试③） | 无 ack 概念（无 broker） | K3-8 |
+| C6 | 错误分类 transient/permanent + 退避 + DLQ | ✅ 09-02（副作用感知归 K5/K6） | 工具级 retriable 重试 `tools.py:114-136`；run 级异常一律 `failed` `worker.py:318-322`；无 DLQ | K3-9 |
 | C7 | worker 层不改 run 状态（一个写入者） | 🔶 | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
 | C8 | 协作式取消消费端（四个安全点） | 🔶（1/4：工具调用前已接；模型调用前/step 后/下轮前 K5-5） | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
-| C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | 🔶 | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
-| C10 | 三个 attempts 分账 | 🔶（列已改名 attempts，其余两个随 K3） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
-| C11 | job payload 只放 run_id | ⛔→K3 | 无 job | K3-4；`28` H23 |
+| C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | ✅ 09-02（三队列建好；告警线 60s；面板归 K9） | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
+| C10 | 三个 attempts 分账 | ✅ 09-02（outbox.attempts / Celery retries / agent_runs.attempts） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
+| C11 | job payload 只放 run_id | ✅ 09-02 | 无 job | K3-4；`28` H23 |
 | C12 | 优雅关停（drain） | 🔶 | 信号置位不 exit，跑完当前动作 `worker.py:576-579` | 中途停的 run 等 lease 过期才可接管（无主动放 lease）→ K9-6 drain 演练 |
 | C13 | 队列 SLO queue lag P95 < 10s | 🔶 | 11 §5 队列最老等待 1.9s（DB 轮询形态） | Celery 化后重测（`28` S-05） |
 
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1+K2 后）**：✅ 34 · 🔶 28 · ❌ 13 · ⛔ 2（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1+K2+K3 后）**：✅ 42 · 🔶 24 · ❌ 11 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

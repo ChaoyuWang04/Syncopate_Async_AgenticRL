@@ -24,10 +24,10 @@ from syncopate.core.contract import IS_V15, REPORT_TOOL
 from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
 from syncopate.runtime.db import (Database, append_event, approved_action, cancel_requested,
-                                  claim_run, finish_run,
+                                  claim_run, finish_run, renew_lease, schedule_run_retry,
                                   prior_turns, park_run_for_user)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
-from syncopate.runtime.platform import FakeAdPlatform
+from syncopate.runtime.platform import FakeAdPlatform, PlatformError
 from syncopate.runtime.retrieval import RetrievalService, RetrievalStatus
 from syncopate.runtime import stage_timing as _st
 from syncopate.runtime.tools import PermissionDenied, ToolRuntime
@@ -129,6 +129,76 @@ async def _session_report_invoke(**arguments: Any) -> dict[str, Any]:
     return ack_payload(REPORT_TOOL, dict(arguments))
 
 
+# --------------------------------------------------------------------------
+# K3-7 · lease 心跳（课件 H30 跨六章未给，这里定死：TTL = 3×心跳；续租失败 = 立即停）
+# --------------------------------------------------------------------------
+
+
+class LeaseHeartbeat:
+    """worker 正常运行时定期续租。`lost=True` = 续租返回 0 行（lease 被收走 / run 离开 running），
+    ActionGate 的安全点会读它并拒绝再执行（同取消意图一条路）。判据行 `[lease-heartbeat]` 每次必打。"""
+
+    def __init__(self, db: Database, *, org_id: str, run_id: str, worker_id: str,
+                 ttl_seconds: int, interval_seconds: float | None = None) -> None:
+        self.db, self.org_id, self.run_id, self.worker_id = db, org_id, run_id, worker_id
+        self.ttl = ttl_seconds
+        self.interval = interval_seconds if interval_seconds is not None else max(1, ttl_seconds // 3)
+        self.lost = False
+        self.renewals = 0
+        self._task: asyncio.Task | None = None
+
+    async def _loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.interval)
+            try:
+                ok = await renew_lease(self.db, org_id=self.org_id, run_id=self.run_id,
+                                       worker_id=self.worker_id, lease_seconds=self.ttl)
+            except Exception as exc:                # noqa: BLE001 —— 续不上 = 视同丢失
+                ok = False
+                print(f"[lease-heartbeat] run={self.run_id} 续租异常 {exc!r}", flush=True)
+            if ok:
+                self.renewals += 1
+                print(f"[lease-heartbeat] run={self.run_id} owner={self.worker_id} "
+                      f"ttl={self.ttl}s renewed#{self.renewals}", flush=True)
+                continue
+            self.lost = True
+            print(f"[lease-heartbeat] 🔴 run={self.run_id} owner={self.worker_id} lease LOST ⇒ 停止执行",
+                  flush=True)
+            return
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+
+
+# 课件 §9.4 急诊分诊表："拿到错误先问再试会不会好"。
+MAX_RUN_ATTEMPTS = 3                       # agent_runs.attempts 上限（执行次数，与 outbox 投递次数分账）
+RUN_RETRY_BACKOFF_S = (60, 300, 900)       # 1 / 5 / 15 分钟
+
+
+def classify_error(exc: BaseException) -> str:
+    """'transient'（退避重试）| 'permanent'（立即 failed）。⚠️ 超时后能否安全重试还要看副作用
+    （K5/K6 意图日志）；本阶段保守：只有**明确未发出/连接层**的错误算 transient。"""
+    try:
+        import httpx
+        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError,
+                            httpx.PoolTimeout)):
+            return "transient"
+    except ImportError:                            # pragma: no cover
+        pass
+    if isinstance(exc, PlatformError) and getattr(exc, "retriable", False):
+        return "transient"
+    if isinstance(exc, (ConnectionError, asyncio.TimeoutError)):
+        return "transient"
+    return "permanent"
+
+
 @dataclass
 class WorkerConfig:
     worker_id: str = "worker-1"
@@ -173,6 +243,7 @@ class Worker:
         # ⚠️ 显式传入才生效，且入口会打判据行 —— 静默切换是第一失效形状。
         self.decider = decider
         self.alt_deciders: dict = {}   # dev mode：{'sft':…, 'base':…}
+        self._heartbeats: dict[str, LeaseHeartbeat] = {}   # run_id → 心跳（Celery 路径才有）
 
     # ---- 工具名 → 真正打外部世界的那个协程 --------------------------------
     #
@@ -272,9 +343,16 @@ class Worker:
             emit=emit, audit=audit,
             amount_threshold=self.config.amount_threshold,
             # K1-4：安全点「工具调用前」读取消意图；命中 ⇒ refused(cancel_requested) ⇒ 下面映射成 cancelled
-            cancel_check=lambda: cancel_requested(self.db, org_id=org_id, run_id=run_id))
+            cancel_check=lambda: self._should_stop(org_id, run_id))
 
     # ---- 成本闸：压测场景⑤ ------------------------------------------------
+
+    async def _should_stop(self, org_id: str, run_id: str) -> bool:
+        """安全点判定：用户取消意图 ∨ lease 已丢（K3-7：续租失败 = 立即停止执行不再写库）。"""
+        hb = self._heartbeats.get(run_id)
+        if hb is not None and hb.lost:
+            return True
+        return await cancel_requested(self.db, org_id=org_id, run_id=run_id)
 
     async def _over_budget(self, org_id: str) -> bool:
         async with self.db.tx() as conn:
@@ -286,13 +364,26 @@ class Worker:
     # ---- 主循环 ------------------------------------------------------------
 
     async def run_once(self) -> str | None:
-        """抢一条并跑完。返回 run_id；没活干返回 None。"""
+        """轮询模式：抢**任意**一条并跑完。返回 run_id；没活干返回 None。
+        ⚠️ 生产投递走 Celery（celery_app._execute → execute_claimed）；这条轮询路只给
+        测试、探针与 26 线的考场链（它们直接起 `python -m syncopate.runtime.worker`）。
+        两条入口共用 `execute_claimed` 这**一条**执行路径。"""
         claimed = await claim_run(self.db, worker_id=self.config.worker_id,
                                   lease_seconds=self.config.lease_seconds,
                                   org_id=self.config.org_id)
         if claimed is None:
             return None
+        return await self.execute_claimed(claimed)
+
+    async def execute_claimed(self, claimed: dict, *, heartbeat: LeaseHeartbeat | None = None) -> str:
+        """已经 claim 到手的 run 跑完（唯一的执行路径）。
+
+        错误分层（课件 §14.3）：业务错误在这里被消化并走状态迁移——transient ⇒ 回 queued +
+        outbox 延迟重投（`schedule_run_retry`），permanent ⇒ failed；⛔ 不向调用方抛业务异常。
+        """
         org_id, run_id = claimed["org_id"], claimed["run_id"]
+        if heartbeat is not None:
+            self._heartbeats[run_id] = heartbeat
         _tok = _st.begin_run(run_id)         # B-5 分账（默认 no-op）
         try:
             # ⚠️ started 事件也要在兜底 try 里 —— 它炸了（如 seq 竞态耗尽重试）
@@ -308,10 +399,20 @@ class Worker:
         except Exception as exc:                      # noqa: BLE001
             # ★ 兜底：worker 不能因为一条 run 挂掉而停摆（压测场景②）。
             #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
-            await finish_run(self.db, org_id=org_id, run_id=run_id,
-                             status="failed", error=str(exc)[:500])
+            kind = classify_error(exc)
+            attempts = int(claimed.get("attempts") or 1)
+            if kind == "transient" and attempts < MAX_RUN_ATTEMPTS:
+                delay = RUN_RETRY_BACKOFF_S[min(attempts - 1, len(RUN_RETRY_BACKOFF_S) - 1)]
+                await schedule_run_retry(self.db, org_id=org_id, run_id=run_id,
+                                         error=str(exc)[:500], delay_seconds=delay)
+                print(f"[run-retry] run={run_id} attempt={attempts} transient {exc!r} ⇒ {delay}s 后重投",
+                      flush=True)
+            else:
+                await finish_run(self.db, org_id=org_id, run_id=run_id,
+                                 status="failed", error=str(exc)[:500])
         finally:
             _st.end_run(_tok)
+            self._heartbeats.pop(run_id, None)
         return run_id
 
     async def _execute(self, *, org_id: str, run_id: str, user_message: str,
@@ -568,18 +669,14 @@ class Worker:
 # --------------------------------------------------------------------------
 
 
-async def _serve(config: WorkerConfig) -> None:
+async def build_worker(config: WorkerConfig, *, pool_size: int | None = None) -> tuple[Database, "Worker"]:
+    """轮询入口（_serve）与 Celery 入口（celery_app.worker_process_init）共用的构造：
+    连接池 + decider（env 显式接入，判据行必打）+ 假平台 fixture。"""
     import os
-    import signal
 
     db = Database()
     # B-5 S1：池容量 env 可配（默认 10 不变）。S0 实测 C=96 借连接等待占 24-29%。
-    await db.connect(max_size=int(os.environ.get("SYNCOPATE_WORKER_DB_POOL", "10")))
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        # 收到信号只置位，不 sys.exit —— 让在飞的 run 走完当前动作再放 lease。
-        loop.add_signal_handler(sig, stop.set)
+    await db.connect(max_size=pool_size or int(os.environ.get("SYNCOPATE_WORKER_DB_POOL", "10")))
     # B-4：SYNCOPATE_DECIDER_URL 显式设了才接真模型；判据行必打（没有 = 没接上）。
     from syncopate.runtime.decider import build_decider_from_env, build_alt_deciders_from_env
     decider = build_decider_from_env()
@@ -589,15 +686,34 @@ async def _serve(config: WorkerConfig) -> None:
               f"—— agent_loop 驱动", flush=True)
     else:
         print("[decider] 未配置（SYNCOPATE_DECIDER_URL 空）⇒ 写死三步计划", flush=True)
-    worker = Worker(db, FakeAdPlatform.from_fixture(), config, decider=decider)
+    platform = FakeAdPlatform.from_fixture()
+    slow = float(os.environ.get("SYNCOPATE_TEST_SLOW_SECONDS", "0") or 0)
+    if slow > 0:                                    # 测试钩子：给 kill 注入留出窗口
+        platform.faults.latency_seconds = slow
+        print(f"[worker] TEST 钩子：平台每次调用慢 {slow}s", flush=True)
+    worker = Worker(db, platform, config, decider=decider)
     worker.alt_deciders = alt_deciders
     if alt_deciders:
         print(f"[decider] dev mode 多模型：{sorted(alt_deciders)}（会话级锁定）", flush=True)
+    return db, worker
+
+
+async def _serve(config: WorkerConfig) -> None:
+    import signal
+
+    db, worker = await build_worker(config)
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        # 收到信号只置位，不 sys.exit —— 让在飞的 run 走完当前动作再放 lease。
+        loop.add_signal_handler(sig, stop.set)
+    print(f"[worker] mode=poll worker_id={config.worker_id} org={config.org_id or '*'} "
+          f"concurrency={config.concurrency}（生产投递 = Celery，见 celery_app）", flush=True)
     try:
         await worker.serve(stop=stop)
     finally:
-        if decider is not None:
-            await decider.aclose()
+        if worker.decider is not None:
+            await worker.decider.aclose()
         await db.close()
 
 

@@ -21,10 +21,15 @@ python -m pytest tests/runtime/ -q                      # 226 条
 #   高并发三瓶颈=池 10 条/单进程 GIL/SSE 轮询已修——goodput 64→192 的来源，账在 E33）
 SYNCOPATE_API_DB_POOL=12 \
 uvicorn syncopate.runtime.api:app --port 8000 --workers 4          # 起 API（4 进程）
-for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 \
-  SYNCOPATE_WORKER_DB_POOL=32 \
-  python -m syncopate.runtime.worker --org-id org_demo \
-    --worker-id demo-$w --concurrency 16 & done          # 起 worker×4（不设 URL = 假计划）
+# ★ K3（09-02）起，生产投递 = Outbox → dispatcher → Celery/Redis → worker（27 §5；坑表 28 §1/§2）：
+bash scripts/redis_bootstrap.sh                          # 起 Redis（requirepass/AOF/noeviction 判据行）
+python -m syncopate.runtime.dispatcher &                  # outbox 搬运工（判据行 [dispatcher] listener 就位）
+for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 SYNCOPATE_WORKER_DB_POOL=4 \
+  celery -A syncopate.runtime.celery_app worker -Q interactive -c 4 -n w$w@%h & done
+                                                          # 每子进程判据行 [worker-init] pid=… ；心跳 [lease-heartbeat]
+# 旧的轮询 worker 仍可用（测试/探针/考场链）：不走 Redis，直接抢 queued
+# for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 SYNCOPATE_WORKER_DB_POOL=32 \
+#   python -m syncopate.runtime.worker --org-id org_demo --worker-id demo-$w --concurrency 16 & done
 python scripts/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
 # 模型端点（★ 生产默认=四卡舰队，router 顶 :8100；单卡=让卡后备）：
 bash logs/runtime/start_serving.sh          # 4×引擎+router（fp8KV·ngram·priority 全默认）

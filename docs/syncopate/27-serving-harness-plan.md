@@ -258,6 +258,18 @@ K2-7 trace 聚合查询：先验 org 再查子表的写法废除，子表查询�
 
 ## 5 · K3 · 队列与 worker（课件 CH3；~3 天）
 
+> ✅ **K3 已落地（2026-09-02，Celery 5.6 + Redis 8）**：0003 迁移（outbox_jobs + dead_letter_jobs +
+> 门铃触发器）· 创建/resume 事务写 outbox · `dispatcher.py`（先 publish 后标记同事务 run.enqueued，
+> 退避 cap 300s，超限死信，LISTEN 门铃 + 2s 轮询）· `celery_app.py`（acks_late / prefetch 1 /
+> reject_on_worker_lost / ignore_result / json / visibility_timeout / 三队列；⛔ 无硬 time_limit）·
+> 定向 claim 只认 queued（K3-6）· lease 心跳 `[lease-heartbeat]`（TTL 60 = 3×20s，丢失即在安全点停）·
+> transient→queued+outbox 延迟重投 / permanent→failed / 3 次封顶 · 三个 attempts 分账 ·
+> `metrics.queue_backlog`（告警挂 oldest_queued_run_age）。
+> 门槛①②④⑤⑥⑧⑫ = `test_outbox_k3.py` 12 条；③ = `test_celery_integration.py`（真 worker 子进程：
+> 终态已写、ack 前 os._exit ⇒ 重投后跳过并 ack）；⑦ 取消 = K1 已接的安全点；⑨ 回归 292 passed。
+> 欠账：轮询入口（26 线考场链在用）仍保留"接管过期 lease"到 K8 sweeper 落地为止（S-01）；
+> 分队列的价值验证（O-06）与 Celery 化后 goodput 重测（S-05）留给优化实验。
+
 ### 目标形状（三道防线）
 
 ```

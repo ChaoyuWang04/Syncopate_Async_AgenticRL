@@ -145,6 +145,128 @@ async def append_event(conn: asyncpg.Connection, *, org_id: str, run_id: str,
     return seq
 
 
+# --------------------------------------------------------------------------
+# K3（课件 CH3）：Outbox · 分队列 · 定向 claim · lease 续租 · 死信
+# --------------------------------------------------------------------------
+
+QUEUE_INTERACTIVE, QUEUE_BATCH, QUEUE_MAINTENANCE = "interactive", "batch", "maintenance"
+OUTBOX_BACKOFF_CAP_S = 300          # H103：2^n 不设 cap，重试 20 次 = 12 天后
+
+
+def queue_for(run_type: str) -> str:
+    """分队列（课件 §12.3）：用户在等的走 interactive；离线批处理走 batch。"""
+    return QUEUE_BATCH if run_type == "batch" else QUEUE_INTERACTIVE
+
+
+async def enqueue_outbox(conn: asyncpg.Connection, *, org_id: str, run_id: str,
+                         queue: str = QUEUE_INTERACTIVE, job_type: str = "execute_run",
+                         delay_seconds: float = 0) -> int:
+    """在**调用方的事务里**写"要投递"（Outbox）。⛔ 这里没有、也永远不会有 queue.publish。"""
+    return int(await conn.fetchval(
+        """
+        INSERT INTO outbox_jobs (org_id, job_type, payload, queue, next_attempt_at)
+        VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+        RETURNING id
+        """, org_id, job_type, {"run_id": run_id, "org_id": org_id}, queue, float(delay_seconds)))
+
+
+async def fetch_due_outbox(db: Database, *, limit: int = 100, org_id: str | None = None) -> list[dict]:
+    """dispatcher 扫表：pending 且到期，LIMIT（不限批会在积压时拉爆内存与连接，H24）。
+    `org_id` = 只投一个租户（测试隔离 / 按租户切 dispatcher，同 worker 的 --org-id）。"""
+    async with db.tx() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, org_id, job_type, payload, queue, attempts, max_attempts
+              FROM outbox_jobs
+             WHERE status='pending' AND next_attempt_at <= now()
+               AND ($2::text IS NULL OR org_id = $2)
+             ORDER BY id LIMIT $1
+            """, limit, org_id)
+    return [dict(r) for r in rows]
+
+
+async def mark_outbox_dispatched(db: Database, *, job_id: int) -> bool:
+    """publish 成功后**同一事务**做两件事：标 dispatched + 写 run.enqueued（H107）。
+    条件更新（status='pending'）：重投时第二次标记是 no-op，事件不会重复。"""
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE outbox_jobs SET status='dispatched', dispatched_at=now()
+             WHERE id=$1 AND status='pending'
+            RETURNING org_id, payload
+            """, job_id)
+        if row is None:
+            return False
+        payload = row["payload"]
+        if payload.get("run_id"):
+            await append_event(conn, org_id=row["org_id"], run_id=payload["run_id"],
+                               kind="run.enqueued", payload={"outbox_job_id": job_id})
+        return True
+
+
+async def mark_outbox_retry(db: Database, *, job_id: int, error: str,
+                            cap_seconds: int = OUTBOX_BACKOFF_CAP_S) -> str:
+    """投递失败：不丢，退避重试 next_attempt_at = now + min(cap, 2^(attempts-1))；
+    超 max_attempts ⇒ status=failed + 死信（病历）。返回 'retry' | 'dead'。"""
+    async with db.tx() as conn:
+        row = await conn.fetchrow(
+            "UPDATE outbox_jobs SET attempts=attempts+1, last_error=$2 WHERE id=$1 "
+            "RETURNING org_id, job_type, payload, attempts, max_attempts", job_id,
+            {"error": error})
+        if row["attempts"] >= row["max_attempts"]:
+            await conn.execute("UPDATE outbox_jobs SET status='failed' WHERE id=$1", job_id)
+            await dead_letter(conn, org_id=row["org_id"], source="outbox", job_type=row["job_type"],
+                              payload=row["payload"], attempts=row["attempts"],
+                              error={"error": error}, original_job_id=job_id)
+            return "dead"
+        delay = min(cap_seconds, 2 ** (row["attempts"] - 1))
+        await conn.execute(
+            "UPDATE outbox_jobs SET next_attempt_at = now() + make_interval(secs => $2) WHERE id=$1",
+            job_id, float(delay))
+        return "retry"
+
+
+async def dead_letter(conn: asyncpg.Connection, *, org_id: str, source: str, job_type: str,
+                      payload: dict, attempts: int, error: dict,
+                      original_job_id: int | None = None) -> int:
+    """死信 = 病历，不是垃圾桶（课件 §9.2）：能答"哪个 job 死了 / 试了几次 / 最后错误 / payload"。"""
+    return int(await conn.fetchval(
+        """
+        INSERT INTO dead_letter_jobs (org_id, source, original_job_id, job_type, payload, attempts, error)
+        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+        """, org_id, source, original_job_id, job_type, payload, attempts, error))
+
+
+async def renew_lease(db: Database, *, org_id: str, run_id: str, worker_id: str,
+                      lease_seconds: int) -> bool:
+    """心跳续租（课件 H30 全书未给，我们定死）：只续**自己的**且仍 running 的 lease。
+    0 行 = lease 已被收走或 run 已离开 running ⇒ 调用方必须停止执行。"""
+    async with db.tx() as conn:
+        tag = await conn.execute(
+            """
+            UPDATE agent_runs SET lease_expires_at = now() + make_interval(secs => $4)
+             WHERE org_id=$1 AND run_id=$2 AND lease_owner=$3 AND status='running'
+            """, org_id, run_id, worker_id, lease_seconds)
+    return tag.endswith(" 1")
+
+
+async def schedule_run_retry(db: Database, *, org_id: str, run_id: str, error: str,
+                             delay_seconds: float, queue: str = QUEUE_INTERACTIVE) -> None:
+    """transient 错误（课件 §9.4 / §14.3）：running → queued + run.retry_scheduled + outbox（延迟投递）。
+    退避不用 Celery countdown/eta（28 C-14），用 outbox 的 next_attempt_at。"""
+    async with db.tx() as conn:
+        await conn.execute(
+            """
+            UPDATE agent_runs SET status='queued', error=$3,
+                   lease_owner=NULL, lease_expires_at=NULL
+             WHERE org_id=$1 AND run_id=$2 AND status='running'
+            """, org_id, run_id, error)
+        await append_event(conn, org_id=org_id, run_id=run_id, kind="run.retry_scheduled",
+                           payload={"error": error, "delay_seconds": delay_seconds})
+        await enqueue_outbox(conn, org_id=org_id, run_id=run_id, queue=queue,
+                             delay_seconds=delay_seconds)
+
+
 @dataclass
 class RunHandle:
     run_id: str
@@ -283,6 +405,8 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
             # 事务里没有任何 publish；outbox 行 K3-2 加进来。
             await append_event(conn, org_id=org_id, run_id=run_id, kind="run.created",
                                payload={"run_type": run_type, "intent": intent})
+            # K3-2：agent_runs + run.created + outbox 三 INSERT 同事务（课件 §6.7）
+            await enqueue_outbox(conn, org_id=org_id, run_id=run_id, queue=queue_for(run_type))
             return RunHandle(run_id=row["run_id"], created=True)
         # 冲突 ⇒ 把原来那次捞出来返回。**不报错** —— 重复提交是正常现象，不是错误。
         existing = await conn.fetchrow(
@@ -301,7 +425,7 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
 
 
 async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
-                    org_id: str | None = None) -> dict | None:
+                    org_id: str | None = None, run_id: str | None = None) -> dict | None:
     """抢一个待跑的 run。**原子**：同一条 run 不可能被两个 worker 同时抢到。
 
     ★ `FOR UPDATE SKIP LOCKED` 是这里的关键：没有它，多个 worker 会锁在同一行上
@@ -321,6 +445,27 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
         而**手动步骤一定会被忘** —— `test_retrieval.py` 就没排，它正是那条偶发红的来源。
       ⇒ 结构上拿不到别人的活，比"记得排空"可靠。
     """
+    if run_id is not None:
+        # ★ K3-6 定向 claim（Celery 投递给了我 run_id）：课件 §8.2 原型——**只有 queued 可以被首次抢占**。
+        #   过期 lease 的回收不在这里（那是 sweeper 的活，K8；一个可变状态一个写入者，S-01）。
+        #   返回 None = 终态或别人正持有 ⇒ 调用方退出并 ack。
+        assert org_id is not None, "定向 claim 必须带 org_id（payload 里有）"
+        async with db.tx() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE agent_runs r
+                   SET status = 'running',
+                       started_at = COALESCE(r.started_at, now()),
+                       lease_owner = $1,
+                       lease_expires_at = now() + make_interval(secs => $2),
+                       attempts = r.attempts + 1,
+                       updated_at = now()
+                 WHERE r.org_id = $3 AND r.run_id = $4 AND r.status = 'queued'
+                RETURNING r.run_id, r.org_id, r.user_message, r.attempts,
+                          r.intent, r.automation_tier, r.requires_approval, r.conversation_id
+                """, worker_id, lease_seconds, org_id, run_id)
+            return dict(row) if row else None
+
     async with db.tx() as conn:
         row = await conn.fetchrow(
             """
@@ -429,6 +574,7 @@ async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> No
             # 必须重新走队列被领取，保住"同一时刻只有一个 worker 持有"
             await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
                                payload={"actor": "approval"})
+            await enqueue_outbox(conn, org_id=org_id, run_id=run_id)   # 回 queued 必须重新走队列
 
 
 
@@ -525,6 +671,7 @@ async def resume_run(db: Database, *, org_id: str, run_id: str, resume_token: st
             """, org_id, run_id)
         await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
                            payload={"actor": "api", "input": input or {}})
+        await enqueue_outbox(conn, org_id=org_id, run_id=run_id)       # 回 queued 必须重新走队列
         return "resumed"
 
 

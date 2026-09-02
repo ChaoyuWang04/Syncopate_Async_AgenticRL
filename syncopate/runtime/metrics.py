@@ -151,3 +151,36 @@ def verdict(rows: list[LatencyRow], budgets: dict[str, float]) -> list[str]:
                    f"p95={row.p95_ms}/{int(budget*1000)} "
                    f"p99={row.p99_ms}/{int(budget*1000*P99_RATIO)} ms")
     return out
+
+
+# --------------------------------------------------------------------------
+# K3-11 · 积压（课件 §12）：告警挂用户视角的 oldest_job_age，不挂系统视角的 queue_length
+# --------------------------------------------------------------------------
+
+OLDEST_JOB_AGE_ALERT_S = 60.0     # 27 §15 queue lag SLO 的告警线（P95 < 10s 是目标，60s 是"用户已经在等"）
+
+
+async def queue_backlog(db: Database, *, org_id: str | None = None,
+                        redis_client: Any | None = None) -> dict[str, Any]:
+    """八指标里本阶段先落地五个 + Redis 队列长度（有客户端时）。
+    `oldest_queued_run_age_s` = 最老一条 queued run 从创建到现在（用户等了多久）——告警判据。"""
+    async with db.tx() as conn:
+        row = await conn.fetchrow("""
+            SELECT
+              (SELECT count(*) FROM outbox_jobs WHERE status='pending'
+                 AND ($1::text IS NULL OR org_id=$1))                                     AS outbox_pending,
+              (SELECT COALESCE(max(extract(epoch FROM (now()-created_at))),0) FROM outbox_jobs
+                WHERE status='pending' AND ($1::text IS NULL OR org_id=$1))                AS oldest_pending_age_s,
+              (SELECT count(*) FROM agent_runs WHERE status='queued'
+                 AND ($1::text IS NULL OR org_id=$1))                                     AS queued_runs,
+              (SELECT COALESCE(max(extract(epoch FROM (now()-created_at))),0) FROM agent_runs
+                WHERE status='queued' AND ($1::text IS NULL OR org_id=$1))                 AS oldest_queued_run_age_s,
+              (SELECT count(*) FROM dead_letter_jobs WHERE reprocessed_at IS NULL
+                 AND ($1::text IS NULL OR org_id=$1))                                     AS dead_letter_open
+        """, org_id)
+    out = {k: (float(v) if k.endswith("_s") else int(v)) for k, v in dict(row).items()}
+    if redis_client is not None:
+        out["redis_queue_lengths"] = {q: int(redis_client.llen(q))
+                                      for q in ("interactive", "batch", "maintenance")}
+    out["alert"] = out["oldest_queued_run_age_s"] > OLDEST_JOB_AGE_ALERT_S
+    return out

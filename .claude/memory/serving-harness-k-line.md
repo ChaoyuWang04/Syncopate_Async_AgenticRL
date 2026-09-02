@@ -1,6 +1,6 @@
 ---
 name: serving-harness-k-line
-description: ★K 线（27 serving harness 生产化）现场：09-02 K0 ✅ K2 ✅ K1 ✅（六入口/幂等三态/错误信封/协作式取消第一安全点）；§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表 28 · 对照 29；下一步 K1
+description: ★K 线（27 serving harness 生产化）现场：09-02 K0/K2/K1/K3 ✅（Celery+Redis 已真跑：outbox→dispatcher→定向 claim→心跳；下一步 K4 状态机）；§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表 28 · 对照 29；下一步 K1
 metadata: 
   node_type: memory
   type: project
@@ -23,7 +23,8 @@ Chaoyu 要求坑表与后续排查/优化项**单独文档集**，不污染 27 �
 
 **进度（09-02）**：K0 ✅（29）· K2 ✅（迁移链 `syncopate/runtime/migrations/`，schema.sql 已退役成
 `schema.snapshot.txt`；`db.next_seq/append_event` 领号器；创建事务写 run.created；usage 粒度=每次执行一行）
-· K1 ✅（cancel/resume/trace、幂等三态 409、错误信封 13 码、run_type、resume_token 一次性；取消只接了 ActionGate 入口这一个安全点，其余 K5-5）· 下一步 K3（Celery+Redis：outbox/dispatcher/lease 心跳/DLQ/分队列；28 §1/§2 逐条负向认证）。
+· K1 ✅（cancel/resume/trace、幂等三态 409、错误信封 13 码、run_type、resume_token 一次性；取消只接了 ActionGate 入口这一个安全点，其余 K5-5）· K3 ✅（0003 outbox/DLQ/门铃；dispatcher.py；celery_app.py；定向 claim 只认 queued；LeaseHeartbeat；transient→queued+outbox 延迟；集成测试起真 celery 子进程验 ack 前崩溃）· 下一步 K4 状态机（transition_run 唯一入口；届时 sweeper 前置项 S-01 的轮询接管仍保留到 K8）。
+⚠️ 轮询 worker 入口（`python -m syncopate.runtime.worker`）必须保留：26 线考场链、b4_stack、start_worker.sh 都在用；Celery 是新增的生产投递路径，两者共用 `Worker.execute_claimed`。
 Chaoyu 09-02 追加四裁：K1/K2 交错 · Alembic 唯一真相 · 终态事件改名 run.completed（K4-2 时三处同步含前端）· 引入 run_type。
 
 **How to apply**：
