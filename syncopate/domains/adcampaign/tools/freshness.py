@@ -38,13 +38,7 @@ FACT_FIELDS = ("metric", "days_elapsed", "converge_at_day", "sample_size",
 @REGISTRY.tool(
     name="metrics.get_freshness",
     description=(
-        "查询某个指标的观测条件：这条 campaign 开投了几天、该指标通常几天收敛、"
-        "累计样本量多少、以及该指标的预期区间。\n"
-        "**只给事实，不给结论**——它不判断数据可不可信、也不建议该不该动，那是你的判断。\n"
-        "不查行业基准（那在 benchmark.get_industry_baseline），"
-        "不查内部安全线（那在 benchmark.get_safety_line）。\n"
-        "★ 涉及扩量、砍量、归因结论之前应当先查它——"
-        "在还没收敛的数字上给出的结论，对错完全是运气。"
+        "查询某个指标的观测条件：这条 campaign 开投了几天、该指标通常几天收敛、累计样本量多少、预期区间。只给事实不给结论，数据现在能不能用由你判断。涉及扩量、砍量、归因结论之前先查它。"
     ),
     parameters={
         "type": "object",
@@ -53,7 +47,7 @@ FACT_FIELDS = ("metric", "days_elapsed", "converge_at_day", "sample_size",
             "metric": {
                 "type": "string",
                 "enum": sorted(CONVERGE_DAYS),
-                "description": "要判断成熟度的指标，默认 roas_d7（最慢收敛的那个）",
+                "description": "指标，默认 roas_d7（最慢收敛）",
             },
         },
         "required": ["campaign_id"],

@@ -1,0 +1,988 @@
+{
+ "tools": {
+  "analysis.feature_lift": {
+   "tok_old": 307,
+   "tok_new": 235,
+   "desc_old": "算某个素材 feature 在某个地域对 d7 ROAS 的提升幅度（lift），带 95% 置信区间、两组样本量和显著性判定。\n· feature 取值：real_person / before_after / dark_palette / fast_cut / ugc_style\n· **必须逐地域分别算**。同一个 feature 在不同地域可能符号相反，把地域混在一起算出的结论，在某些地域是反的。\n· **样本量少于 12 条素材时，不论 lift 多大都不能据此下结论**——小样本下噪声会淹没信号，算出来的数字看着唬人但不可信。这种情况应如实说明样本不足、拒绝给出归因结论。\n· 不返回素材清单（那在 creative.get_metrics_by_asset），不返回标签（那在 creative.get_asset_tags）。",
+   "desc_new": "算某个素材 feature 在某个地域对 d7 ROAS 的提升幅度（lift），带 95% 置信区间、两组样本量和显著性判定。feature 取值：real_person / before_after / dark_palette / fast_cut / ugc_style。必须逐地域分别算，不同地域符号可能相反；样本量少于 12 条素材时不论 lift 多大都不能据此下结论，应如实说明样本不足。不返回素材清单和标签。"
+  },
+  "analysis.geo_breakdown": {
+   "tok_old": 189,
+   "tok_new": 147,
+   "desc_old": "按地域拆某个产品的投放表现：各地域的 d7 ROAS、d7 CPI、素材条数。地域扩展前用它挑候选地域。\n· ★ 它只告诉你**各地域现在跑成什么样**，不告诉你能不能扩 ——能不能扩要逐个地域查 benchmark.get_safety_line（每个地域一条线）。\n· 素材条数少的地域，其数字本身就不可信，别当成「这个地域不行」的证据。",
+   "desc_new": "按地域拆某个产品的投放表现：各地域的 d7 ROAS、d7 CPI、素材条数。地域扩展前用它挑候选地域。它只反映各地域现状，能不能扩要逐个地域查安全线；素材条数少的地域数字不可信。"
+  },
+  "approval.create_case": {
+   "tok_old": 142,
+   "tok_new": 142,
+   "desc_old": "为超出自动执行范围的变更创建审批单（不会立即生效）。当政策判定 requires_approval、或风控/记忆显示该操作过于频繁时，应当走审批而不是直接执行写动作。",
+   "desc_new": "为超出自动执行范围的变更创建审批单（不会立即生效）。政策判定 requires_approval、或风控 / 记忆显示该操作过于频繁时，走审批而不是直接执行写动作。"
+  },
+  "benchmark.get_industry_baseline": {
+   "tok_old": 198,
+   "tok_new": 184,
+   "desc_old": "查询**行业**基准值（不是你自己的投放数据，也不是内部安全线）。\n按 平台+游戏品类+指标 定位，用于判断自己的数据在行业里是高是低。\n不是决策依据——决定能不能扩量要用 benchmark.get_safety_line 的内部安全线。",
+   "desc_new": "查询行业基准值（不是自己的投放数据，也不是内部安全线），按 平台+游戏品类+指标 定位，用于判断自己的数据在行业里是高是低。只作参考，不是扩量的决策依据。"
+  },
+  "benchmark.get_safety_line": {
+   "tok_old": 270,
+   "tok_new": 171,
+   "desc_old": "查询本产品在指定地域的投放安全线（内部每周更新）：d7 CPI 上限、d7 ROAS 下限、d1 留存下限、日预算上限。判断投放是否超标、能否加预算时必须以这条线为准，不要用行业基准代替。\n· 返回带 valid_from / valid_to。**这份资料有有效期**：valid_to 早于今天说明运营还没更新，此时**不能拿它当决策依据**，应改走 approval.create_case 转人工，并在终答里说明安全线已过期、需要补录，不要照着旧线执行。\n· 查不到会返回 safety_line_not_found。**这时不要自己估一个数**，也不要拿行业基准顶替——同样走 approval.create_case 转人工补录。",
+   "desc_new": "查询本产品在指定地域的内部投放安全线（每周更新）：d7 CPI 上限、d7 ROAS 下限、d1 留存下限、日预算上限，带 valid_from / valid_to。判断是否超标、能否加预算以这条线为准，不用行业基准代替。查不到返回 safety_line_not_found。"
+  },
+  "calendar.get_seasonal_context": {
+   "tok_old": 190,
+   "tok_new": 168,
+   "desc_old": "查询当前时间点附近的时令活动（万圣节、黑五、圣诞等），返回距离天数、出量放大倍数和对应的素材标签。判断某类主题素材现在是否适合投放时用。· 只给时令背景，**不判断**你的素材现在该不该投、也**不含**任何投放指标。",
+   "desc_new": "查询当前时间点附近的时令活动（万圣节、黑五、圣诞等），返回距离天数、出量放大倍数和对应的素材标签。只给时令背景，不判断素材该不该投，不含投放指标。"
+  },
+  "campaign.create": {
+   "tok_old": 325,
+   "tok_new": 263,
+   "desc_old": "★★ **本轮如果还没有一次成功的 approval.create_case，不要调用本工具。** 地域扩展的正确产出是**一份提议**（开审批单），不是直接建站。\n新建一条 campaign 并投放。\n· **不可逆**：建出来就开始花钱，删不掉。\n· 跨地域铺开时每个地域建一条，**每条都要单独确认对应地域的安全线**，不能拿一个地域的结论套所有地域。\n· 必须传 client_request_id；超时后带同一个键重试是安全的。\n· 返回只表示提交成功，不代表已开始跑量。",
+   "desc_new": "新建一条 campaign 并投放。不可逆：建出来就开始花钱，删不掉。本轮没有一次成功的 approval.create_case 之前不要调用；地域扩展的正确产出是开审批单的提议，不是直接建站。跨地域铺开时每个地域建一条，每条单独确认对应地域的安全线。返回只表示提交成功，不代表已开始跑量。"
+  },
+  "campaign.detect_anomalies": {
+   "tok_old": 139,
+   "tok_new": 108,
+   "desc_old": "诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。要拿优化方案必须先用它确定异常类型。· 只**定性**给出异常类型，**不给**优化方案（那在 playbook.get_optimization），也**不判断**数据成熟到能不能下结论（那在 metrics.get_freshness）。",
+   "desc_new": "诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。只定性给出类型，不给方案、不判断数据成熟度；要拿优化方案先用它确定类型。"
+  },
+  "campaign.get_metrics": {
+   "tok_old": 138,
+   "tok_new": 107,
+   "desc_old": "查询单个 campaign 的投放大盘指标：花费、安装、CPI、ROAS、CTR、频次。\n不含单条素材的明细（那在 creative.get_metrics_by_asset）。\n不判断数据是否收敛、是否可信（那是另一回事）。\n不含行业对比（那在 benchmark.get_industry_baseline）。",
+   "desc_new": "查询单个 campaign 的投放大盘指标：花费、安装、CPI、ROAS、CTR、频次、曝光。不含单条素材明细，不判断数据是否收敛。"
+  },
+  "campaign.list": {
+   "tok_old": 209,
+   "tok_new": 176,
+   "desc_old": "列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。用户没给 campaign_id 时先用它定位。\n· **分页返回**，每页最多 3 条。返回里的 next_cursor 非空表示还有下一页，把它传回来继续取。\n· 需要「全部/所有 campaign」才能得出的结论，必须翻到 next_cursor 为空为止。· 只给 campaign 的基本信息，**不含**任何效果指标（那在 campaign.get_metrics）。",
+   "desc_new": "列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。用户没给 campaign_id 时先用它定位。分页返回，每页最多 3 条，next_cursor 非空表示还有下一页，把它传回来继续取；需要「全部 campaign」的结论必须翻到 next_cursor 为空为止。不含效果指标。"
+  },
+  "campaign.scale_budget": {
+   "tok_old": 236,
+   "tok_new": 211,
+   "desc_old": "按**倍数**扩量或缩量（factor=1.3 表示提到原来的 1.3 倍）。\n· 和 campaign.update_budget 的区别：那个是设成某个绝对值，这个表达的是「在现状基础上加/减多少」——扩量决策用这个。\n· ★ 幅度在 ±20% 以内可以直接执行；**超出必须先走 approval.create_case**。\n· 扩量之前必须已经确认过：数据收敛了、离安全线还有空间、风控放行。",
+   "desc_new": "按倍数扩量或缩量（factor=1.3 表示提到原来的 1.3 倍）。update_budget 是设成绝对值，这个表达「在现状基础上加 / 减多少」，扩量决策用这个。幅度在 ±20% 以内可以直接执行，超出必须先走 approval.create_case。扩量前必须已确认数据收敛、离安全线有空间、风控放行。"
+  },
+  "campaign.update_budget": {
+   "tok_old": 315,
+   "tok_new": 203,
+   "desc_old": "调整 campaign 的日预算。不可逆写操作，立即生效并持续影响花费。调用前必须已查政策并通过风控。\n· new_budget 的单位是**最小货币单位（分）**：日预算 900 元要填 90000。\n· 每个 campaign **每小时最多改 4 次**，超出后该 campaign 会被平台冻结一小时。\n· 必须传 client_request_id。网络超时后**不要直接重试**——带同一个 client_request_id 重试是安全的（会去重），但若不确定是否传过，应先用 campaign.get_metrics 查证当前值。\n· 返回只表示提交成功，要确认最终结果请再查一次。",
+   "desc_new": "调整 campaign 的日预算。不可逆写操作，立即生效。调用前必须已查政策并通过风控。new_budget 单位是最小货币单位（分）：900 元填 90000。每个 campaign 每小时最多改 4 次，超出会被平台冻结一小时。返回只表示提交成功，最终结果要再查一次。"
+  },
+  "creative.get_asset_tags": {
+   "tok_old": 150,
+   "tok_new": 125,
+   "desc_old": "读取素材的视觉标签与历史表现（标签由离线视觉分析产出）：主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM/CTR/d7 CPI 和投放地域。· 只给单条素材的标签和历史表现，**不做**跨素材的对比归因（那在 analysis.feature_lift），也**不返回** campaign 层数据。",
+   "desc_new": "读取单条素材的视觉标签与历史表现（离线视觉分析产出）：主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM / CTR / d7 CPI 和投放地域。不做跨素材归因，不含 campaign 层数据。"
+  },
+  "creative.get_metrics_by_asset": {
+   "tok_old": 141,
+   "tok_new": 119,
+   "desc_old": "按素材粒度查表现：逐条素材的 CTR、IPM、花费、曝光频次、疲劳分。\n不返回 campaign 层的汇总（那在 campaign.get_metrics）。\n不返回素材的视觉标签（那在 creative.get_asset_tags）。",
+   "desc_new": "按素材粒度查表现：逐条素材的 CTR、IPM、花费、曝光频次、疲劳分。不含 campaign 层汇总和视觉标签。"
+  },
+  "creative.poll_review": {
+   "tok_old": 141,
+   "tok_new": 125,
+   "desc_old": "查询已上传素材的审核结果。**立刻返回**当前状态，不会替你等待。\n· 审核通常需要 480 秒；还没出结果时返回 pending 并告诉你还差多久。\n· 结果没出就再查一遍是没有意义的（状态不会变），应当先用 system.wait 等够再查。",
+   "desc_new": "查询已上传素材的审核结果，立刻返回当前状态，不替你等待。审核通常需要 480 秒，未出结果时返回 pending 并告知还差多久；状态没变前重复查没有意义，先用 system.wait 等够再查。"
+  },
+  "creative.search_similar": {
+   "tok_old": 190,
+   "tok_new": 177,
+   "desc_old": "按视觉标签检索素材库，可按地域、平台过滤并设 IPM 下限，结果按 IPM 从高到低。用于找当前表现好的同主题替代素材。· 只按标签检索现有素材，**不生成**新素材，也**不判断**检索到的素材适不适合当前 campaign。",
+   "desc_new": "按视觉标签检索素材库，可按地域、平台过滤并设 IPM 下限，结果按 IPM 从高到低。用于找当前表现好的同主题替代素材。只检索现有素材，不生成新素材，不判断是否适合当前 campaign。"
+  },
+  "creative.upload": {
+   "tok_old": 178,
+   "tok_new": 148,
+   "desc_old": "上传一条素材到指定 campaign。上传后进入平台审核队列，需要用 creative.poll_review 查询审核结果。· 只负责上传，**不返回**审核结论 —— 审核是异步的，结果要用 creative.poll_review 查。上传成功 ≠ 审核通过。",
+   "desc_new": "上传一条素材到指定 campaign，上传后进入平台审核队列。上传成功不等于审核通过，审核结果要用 creative.poll_review 查。"
+  },
+  "insight.search_claims": {
+   "tok_old": 441,
+   "tok_new": 285,
+   "desc_old": "检索历史复盘沉淀下来的结论（如'某类素材在某地域表现更好'）。返回的是**经验**，不是实时数据——要下决策仍需用 campaign.get_metrics / benchmark 等核实。\n· **每条结论带 status**：active=现行；superseded=已被更新的结论取代；refuted=已被后续数据推翻。**superseded / refuted 的不能当依据**，superseded_by 指向新结论 —— 但它们会一并返回，**因为『这条老结论已经被推翻了』本身就是要报告的信息**。\n· **若检索到的结论与你刚查到的实际数据矛盾**，不要二选一硬答：用 memory.conflict_resolve 记录这次冲突，并在终答里说明'历史经验是 X，本次数据是 Y，建议以数据为准并复核该结论'。\n· **查不到会返回空的 hits（不是报错）。这时不要编一条'经验'**——没有历史结论就按实际数据判断，或走 clarify。\n· 每条带 confidence 与 evidence（样本量）。**低置信度 / 小样本的结论不足以支撑写动作**。",
+   "desc_new": "检索历史复盘沉淀的结论（如「某类素材在某地域表现更好」）。返回的是经验不是实时数据，下决策仍需用实时指标核实。每条带 status（active 现行 / superseded 已被取代，superseded_by 指向新结论 / refuted 已被推翻）、confidence 与 evidence 样本量；非 active 的结论会一并返回，因为「老结论已被推翻」本身就是要报告的信息。查不到返回空 hits（不是报错）。"
+  },
+  "memory.conflict_resolve": {
+   "tok_old": 181,
+   "tok_new": 157,
+   "desc_old": "两条记忆互相矛盾时，提议如何处置：supersede=用新的取代旧的，merge=合并。record_ids 必须至少给两条。· 只是**提议**处置方式，**不自动**执行；也**不判断**哪条是对的 —— 那要拿实际数据核。",
+   "desc_new": "两条记忆互相矛盾时提议处置方式：supersede 用新的取代旧的，merge 合并。record_ids 至少两条。只是提议，不自动执行，不判断哪条是对的。"
+  },
+  "memory.invalidate": {
+   "tok_old": 124,
+   "tok_new": 101,
+   "desc_old": "提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。同样需要审核。· 只是**提议**作废，**不会**立即生效，也**不删除**原记录 —— 你需要知道「我们曾经这么以为」。",
+   "desc_new": "提议把一条已失效的记忆标记为作废（如素材已下线、政策已变更），需经审核。只是提议，不立即生效，不删除原记录。"
+  },
+  "memory.read": {
+   "tok_old": 104,
+   "tok_new": 96,
+   "desc_old": "按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。· 只按 id 取一条，**不做**检索；也**不校验**这条记忆现在还成不成立。",
+   "desc_new": "按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。只按 id 取一条，不做检索，不校验它现在还成不成立。"
+  },
+  "memory.search": {
+   "tok_old": 269,
+   "tok_new": 243,
+   "desc_old": "检索历史记忆。按分区(lane)和主体过滤，自动剔除已过 TTL 的记录。分区：episodic=历史投放动作 / semantic=素材与受众属性 / business=优化干预效果 / risk=风控标记。涉及重复投放、频繁调预算、历史干预是否有效时必须先查。· 只检索我们**自己写下**的历史记忆，**不含**平台政策（policy.search）和团队复盘结论（insight.search_claims）—— 三者是不同的库，别混用。",
+   "desc_new": "检索我们自己写下的历史记忆，按分区（lane）和主体过滤，自动剔除已过 TTL 的记录。分区：episodic 历史投放动作 / semantic 素材与受众属性 / business 优化干预效果 / risk 风控标记。涉及重复投放、频繁调预算、历史干预是否有效时必须先查。不含平台政策和团队复盘结论。"
+  },
+  "memory.write_proposal": {
+   "tok_old": 241,
+   "tok_new": 241,
+   "desc_old": "提交一条记忆写入提案（不会立即入库，需经审核）。要求 confidence ≥ 0.7 且 evidence_refs 至少 2 条；写 risk 分区前必须先调 risk.check_account。episodic 分区由系统维护，不可写入。",
+   "desc_new": "提交一条记忆写入提案（不会立即入库，需经审核）。要求 confidence ≥ 0.7 且 evidence_refs 至少 2 条；写 risk 分区前必须先调 risk.check_account。episodic 分区由系统维护，不可写入。"
+  },
+  "metrics.get_freshness": {
+   "tok_old": 254,
+   "tok_new": 180,
+   "desc_old": "查询某个指标的观测条件：这条 campaign 开投了几天、该指标通常几天收敛、累计样本量多少、以及该指标的预期区间。\n**只给事实，不给结论**——它不判断数据可不可信、也不建议该不该动，那是你的判断。\n不查行业基准（那在 benchmark.get_industry_baseline），不查内部安全线（那在 benchmark.get_safety_line）。\n★ 涉及扩量、砍量、归因结论之前应当先查它——在还没收敛的数字上给出的结论，对错完全是运气。",
+   "desc_new": "查询某个指标的观测条件：这条 campaign 开投了几天、该指标通常几天收敛、累计样本量多少、预期区间。只给事实不给结论，数据现在能不能用由你判断。涉及扩量、砍量、归因结论之前先查它。"
+  },
+  "mmp.get_attribution": {
+   "tok_old": 166,
+   "tok_new": 121,
+   "desc_old": "查 MMP（第三方归因平台）口径下的安装与回收数据。\n· 它和 campaign.get_metrics（平台后台口径）**会有差异**，最常见的成因是两边的归因窗口配置不一致。\n· 平台后台是自归因的（既投放又记账），MMP 是第三方、跨平台口径统一。\n· 返回里带 attribution_window，**做判断前先看两边的窗口是不是一致**。\n不返回平台侧的花费和曝光（那在 campaign.get_metrics）。",
+   "desc_new": "查 MMP（第三方归因平台）口径下的安装与回收数据，返回里带 attribution_window。它和平台后台口径（campaign.get_metrics，自归因）会有差异，最常见成因是两边归因窗口不一致，做判断前先看窗口是否一致。不含平台侧花费和曝光。"
+  },
+  "playbook.get_optimization": {
+   "tok_old": 157,
+   "tok_new": 146,
+   "desc_old": "根据已确认的异常类型，返回对应的优化方案。anomaly_type 必须是 campaign.detect_anomalies 实际返回过的类型。· 只给方案，**不执行**任何写动作，也**不判断**当前数据够不够支撑这个动作。",
+   "desc_new": "根据已确认的异常类型返回对应的优化方案。anomaly_type 必须是 campaign.detect_anomalies 实际返回过的类型。只给方案，不执行写动作，不判断当前数据够不够支撑。"
+  },
+  "policy.get_budget_rule": {
+   "tok_old": 145,
+   "tok_new": 113,
+   "desc_old": "查询预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。· 只给**账户级**的预算调整规则，**不含**平台侧的广告政策条款（那要用 policy.search 检索），也**不做**风控判断（那在 risk.check_account）。",
+   "desc_new": "查询账户级预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。不含平台侧广告政策条款，不做风控判断。"
+  },
+  "policy.search": {
+   "tok_old": 359,
+   "tok_new": 234,
+   "desc_old": "按关键词检索平台广告政策 / 广告法 / 内部 SOP 的条款（半结构化，可按平台和地域过滤）。\n· **每条结果带 valid_from / valid_to 和 expired 标记。**`expired=true` 表示这条已被新版本取代，**绝对不能拿它当依据**——结果里的 superseded_by 指向现行版本，改引用那一条；若没有现行版本，走 approval.create_case 转人工，并在终答里说明政策已过期需要补录。\n· **查不到会返回空的 hits 列表（不是报错）。这时不要自己编一条政策**，也不要拿印象里的规则顶替——应改走 clarify 向用户确认，或 approval.create_case 转人工。\n· 检索是关键词匹配，不是语义理解：换个说法可能查不到，**连续两次查不到就该转人工，不要无限换词重试**。",
+   "desc_new": "按关键词检索平台广告政策 / 广告法 / 内部 SOP 的条款（半结构化，可按平台和地域过滤）。每条结果带 valid_from / valid_to、expired 标记（true = 已被新版本取代）和 superseded_by；查不到返回空 hits（不是报错）。关键词匹配而非语义理解，换个说法可能查不到。"
+  },
+  "risk.check_account": {
+   "tok_old": 116,
+   "tok_new": 99,
+   "desc_old": "账户风控检查：是否有风险标记、是否处于冻结/受限状态、是否允许提额。改预算前必须先过。· 只看**账户**的风控状态，**不判断**具体金额合不合政策（那在 policy.get_budget_rule），也**不返回**投放指标。",
+   "desc_new": "账户风控检查：是否有风险标记、是否处于冻结 / 受限状态、是否允许提额。改预算前必须先过。只看账户风控状态，不判断金额合不合政策，不含投放指标。"
+  },
+  "session.clarify": {
+   "tok_old": 101,
+   "tok_new": 101,
+   "desc_old": "信息不足需要用户补充时调用（终止本轮，等待用户回答）",
+   "desc_new": "信息不足需要用户补充时调用（终止本轮，等待用户回答）"
+  },
+  "session.defer": {
+   "tok_old": 109,
+   "tok_new": 109,
+   "desc_old": "数据尚不成熟、需等待后复查时调用（终止本轮任务并可挂起复查）",
+   "desc_new": "数据尚不成熟、需等待后复查时调用（终止本轮任务并可挂起复查）"
+  },
+  "session.reject": {
+   "tok_old": 100,
+   "tok_new": 100,
+   "desc_old": "请求越权、离题或违反政策时调用（终止本轮并说明）",
+   "desc_new": "请求越权、离题或违反政策时调用（终止本轮并说明）"
+  },
+  "session.report": {
+   "tok_old": 62,
+   "tok_new": 62,
+   "desc_old": "给出本轮结论里机器需要核对的结构化字段（非终止，报完继续收尾）",
+   "desc_new": "给出本轮结论里机器需要核对的结构化字段（非终止，报完继续收尾）"
+  },
+  "system.wait": {
+   "tok_old": 147,
+   "tok_new": 134,
+   "desc_old": "等待指定秒数后继续。\n· 收到 429/限流且返回里带 retry_after 时，应当先等**不少于** retry_after 秒再重试。\n· 不要用它等待数据成熟（那是几天的量级，应当用 defer）。\n· 单次上限 600 秒；需要等更久说明这件事不该在本次会话里做完。",
+   "desc_new": "等待指定秒数后继续。收到 429 / 限流且带 retry_after 时，先等不少于 retry_after 秒再重试。单次上限 600 秒；要等更久说明这件事不该在本次会话里做完。不要用它等数据成熟（那是几天的量级，应当用 session.defer）。"
+  }
+ },
+ "removed_sentences": [
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "feature 取值：real_person / before_after / dark_palette / fast_cut / ugc_style\n"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "必须逐地域分别算**。"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "同一个 feature 在不同地域可能符号相反，把地域混在一起算出的结论，在某些地域是反的。"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rationale",
+   "sentence": "样本量少于 12 条素材时，不论 lift 多大都不能据此下结论**——小样本下噪声会淹没信号，算出来的数字看着唬人但不可信。"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "这种情况应如实说明样本不足、拒绝给出归因结论。"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "analysis.feature_lift",
+   "bucket": "cross_ref",
+   "sentence": "不返回素材清单（那在 creative.get_metrics_by_asset），不返回标签（那在 creative.get_asset_tags）。"
+  },
+  {
+   "tool": "analysis.geo_breakdown",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "analysis.geo_breakdown",
+   "bucket": "rewritten",
+   "sentence": "它只告诉你**各地域现在跑成什么样**，不告诉你能不能扩 ——能不能扩要逐个地域查 benchmark.get_safety_line（每个地域一条线）。"
+  },
+  {
+   "tool": "analysis.geo_breakdown",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "analysis.geo_breakdown",
+   "bucket": "rationale",
+   "sentence": "素材条数少的地域，其数字本身就不可信，别当成「这个地域不行」的证据。"
+  },
+  {
+   "tool": "approval.create_case",
+   "bucket": "rewritten",
+   "sentence": "当政策判定 requires_approval、或风控/记忆显示该操作过于频繁时，应当走审批而不是直接执行写动作。"
+  },
+  {
+   "tool": "benchmark.get_industry_baseline",
+   "bucket": "rewritten",
+   "sentence": "查询**行业**基准值（不是你自己的投放数据，也不是内部安全线）。"
+  },
+  {
+   "tool": "benchmark.get_industry_baseline",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "benchmark.get_industry_baseline",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "benchmark.get_industry_baseline",
+   "bucket": "rewritten",
+   "sentence": "不是决策依据——决定能不能扩量要用 benchmark.get_safety_line 的内部安全线。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "查询本产品在指定地域的投放安全线（内部每周更新）：d7 CPI 上限、d7 ROAS 下限、d1 留存下限、日预算上限。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "判断投放是否超标、能否加预算时必须以这条线为准，不要用行业基准代替。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "返回带 valid_from / valid_to。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "system_prompt",
+   "sentence": "这份资料有有效期**：valid_to 早于今天说明运营还没更新，此时**不能拿它当决策依据**，应改走 approval.create_case 转人工，并在终答里说明安全线已过期、需要补录，不要照着旧线执行。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "rewritten",
+   "sentence": "查不到会返回 safety_line_not_found。"
+  },
+  {
+   "tool": "benchmark.get_safety_line",
+   "bucket": "system_prompt",
+   "sentence": "这时不要自己估一个数**，也不要拿行业基准顶替——同样走 approval.create_case 转人工补录。"
+  },
+  {
+   "tool": "calendar.get_seasonal_context",
+   "bucket": "rewritten",
+   "sentence": "判断某类主题素材现在是否适合投放时用。"
+  },
+  {
+   "tool": "calendar.get_seasonal_context",
+   "bucket": "rewritten",
+   "sentence": "只给时令背景，**不判断**你的素材现在该不该投、也**不含**任何投放指标。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "本轮如果还没有一次成功的 approval.create_case，不要调用本工具。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "地域扩展的正确产出是**一份提议**（开审批单），不是直接建站。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "不可逆**：建出来就开始花钱，删不掉。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "跨地域铺开时每个地域建一条，**每条都要单独确认对应地域的安全线**，不能拿一个地域的结论套所有地域。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "system_prompt",
+   "sentence": "必须传 client_request_id；"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "system_prompt",
+   "sentence": "超时后带同一个键重试是安全的。"
+  },
+  {
+   "tool": "campaign.create",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.detect_anomalies",
+   "bucket": "rewritten",
+   "sentence": "要拿优化方案必须先用它确定异常类型。"
+  },
+  {
+   "tool": "campaign.detect_anomalies",
+   "bucket": "cross_ref",
+   "sentence": "只**定性**给出异常类型，**不给**优化方案（那在 playbook.get_optimization），也**不判断**数据成熟到能不能下结论（那在 metrics.get_freshness）。"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "rewritten",
+   "sentence": "查询单个 campaign 的投放大盘指标：花费、安装、CPI、ROAS、CTR、频次。"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "cross_ref",
+   "sentence": "不含单条素材的明细（那在 creative.get_metrics_by_asset）。"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "cross_ref",
+   "sentence": "不判断数据是否收敛、是否可信（那是另一回事）。"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.get_metrics",
+   "bucket": "cross_ref",
+   "sentence": "不含行业对比（那在 benchmark.get_industry_baseline）。"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "rewritten",
+   "sentence": "分页返回**，每页最多 3 条。"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "rewritten",
+   "sentence": "返回里的 next_cursor 非空表示还有下一页，把它传回来继续取。"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "rewritten",
+   "sentence": "需要「全部/所有 campaign」才能得出的结论，必须翻到 next_cursor 为空为止。"
+  },
+  {
+   "tool": "campaign.list",
+   "bucket": "cross_ref",
+   "sentence": "只给 campaign 的基本信息，**不含**任何效果指标（那在 campaign.get_metrics）。"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "按**倍数**扩量或缩量（factor=1.3 表示提到原来的 1.3 倍）。"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "和 campaign.update_budget 的区别：那个是设成某个绝对值，这个表达的是「在现状基础上加/减多少」——扩量决策用这个。"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "幅度在 ±20% 以内可以直接执行；"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "超出必须先走 approval.create_case**。"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.scale_budget",
+   "bucket": "rewritten",
+   "sentence": "扩量之前必须已经确认过：数据收敛了、离安全线还有空间、风控放行。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "不可逆写操作，立即生效并持续影响花费。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "new_budget 的单位是**最小货币单位（分）**：日预算 900 元要填 90000。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "每个 campaign **每小时最多改 4 次**，超出后该 campaign 会被平台冻结一小时。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "system_prompt",
+   "sentence": "必须传 client_request_id。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "system_prompt",
+   "sentence": "网络超时后**不要直接重试**——带同一个 client_request_id 重试是安全的（会去重），但若不确定是否传过，应先用 campaign.get_metrics 查证当前值。"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "campaign.update_budget",
+   "bucket": "rewritten",
+   "sentence": "返回只表示提交成功，要确认最终结果请再查一次。"
+  },
+  {
+   "tool": "creative.get_asset_tags",
+   "bucket": "rewritten",
+   "sentence": "读取素材的视觉标签与历史表现（标签由离线视觉分析产出）：主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM/CTR/d7 CPI 和投放地域。"
+  },
+  {
+   "tool": "creative.get_asset_tags",
+   "bucket": "cross_ref",
+   "sentence": "只给单条素材的标签和历史表现，**不做**跨素材的对比归因（那在 analysis.feature_lift），也**不返回** campaign 层数据。"
+  },
+  {
+   "tool": "creative.get_metrics_by_asset",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "creative.get_metrics_by_asset",
+   "bucket": "cross_ref",
+   "sentence": "不返回 campaign 层的汇总（那在 campaign.get_metrics）。"
+  },
+  {
+   "tool": "creative.get_metrics_by_asset",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "creative.get_metrics_by_asset",
+   "bucket": "cross_ref",
+   "sentence": "不返回素材的视觉标签（那在 creative.get_asset_tags）。"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "查询已上传素材的审核结果。"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "立刻返回**当前状态，不会替你等待。"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "审核通常需要 480 秒；"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "还没出结果时返回 pending 并告诉你还差多久。"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "creative.poll_review",
+   "bucket": "rewritten",
+   "sentence": "结果没出就再查一遍是没有意义的（状态不会变），应当先用 system.wait 等够再查。"
+  },
+  {
+   "tool": "creative.search_similar",
+   "bucket": "rewritten",
+   "sentence": "只按标签检索现有素材，**不生成**新素材，也**不判断**检索到的素材适不适合当前 campaign。"
+  },
+  {
+   "tool": "creative.upload",
+   "bucket": "rewritten",
+   "sentence": "上传一条素材到指定 campaign。"
+  },
+  {
+   "tool": "creative.upload",
+   "bucket": "rewritten",
+   "sentence": "上传后进入平台审核队列，需要用 creative.poll_review 查询审核结果。"
+  },
+  {
+   "tool": "creative.upload",
+   "bucket": "rewritten",
+   "sentence": "只负责上传，**不返回**审核结论 —— 审核是异步的，结果要用 creative.poll_review 查。"
+  },
+  {
+   "tool": "creative.upload",
+   "bucket": "rewritten",
+   "sentence": "上传成功 ≠ 审核通过。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "检索历史复盘沉淀下来的结论（如'某类素材在某地域表现更好'）。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "返回的是**经验**，不是实时数据——要下决策仍需用 campaign.get_metrics / benchmark 等核实。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "每条结论带 status**：active=现行；"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "superseded=已被更新的结论取代；"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "refuted=已被后续数据推翻。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "system_prompt",
+   "sentence": "superseded / refuted 的不能当依据**，superseded_by 指向新结论 —— 但它们会一并返回，**因为『这条老结论已经被推翻了』本身就是要报告的信息**。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "system_prompt",
+   "sentence": "若检索到的结论与你刚查到的实际数据矛盾**，不要二选一硬答：用 memory.conflict_resolve 记录这次冲突，并在终答里说明'历史经验是 X，本次数据是 Y，建议以数据为准并复核该结论'。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "查不到会返回空的 hits（不是报错）。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "system_prompt",
+   "sentence": "这时不要编一条'经验'**——没有历史结论就按实际数据判断，或走 clarify。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "rewritten",
+   "sentence": "每条带 confidence 与 evidence（样本量）。"
+  },
+  {
+   "tool": "insight.search_claims",
+   "bucket": "system_prompt",
+   "sentence": "低置信度 / 小样本的结论不足以支撑写动作**。"
+  },
+  {
+   "tool": "memory.conflict_resolve",
+   "bucket": "rewritten",
+   "sentence": "两条记忆互相矛盾时，提议如何处置：supersede=用新的取代旧的，merge=合并。"
+  },
+  {
+   "tool": "memory.conflict_resolve",
+   "bucket": "rewritten",
+   "sentence": "record_ids 必须至少给两条。"
+  },
+  {
+   "tool": "memory.conflict_resolve",
+   "bucket": "rewritten",
+   "sentence": "只是**提议**处置方式，**不自动**执行；"
+  },
+  {
+   "tool": "memory.conflict_resolve",
+   "bucket": "cross_ref",
+   "sentence": "也**不判断**哪条是对的 —— 那要拿实际数据核。"
+  },
+  {
+   "tool": "memory.invalidate",
+   "bucket": "rewritten",
+   "sentence": "提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。"
+  },
+  {
+   "tool": "memory.invalidate",
+   "bucket": "rewritten",
+   "sentence": "同样需要审核。"
+  },
+  {
+   "tool": "memory.invalidate",
+   "bucket": "rewritten",
+   "sentence": "只是**提议**作废，**不会**立即生效，也**不删除**原记录 —— 你需要知道「我们曾经这么以为」。"
+  },
+  {
+   "tool": "memory.read",
+   "bucket": "rewritten",
+   "sentence": "只按 id 取一条，**不做**检索；"
+  },
+  {
+   "tool": "memory.read",
+   "bucket": "rewritten",
+   "sentence": "也**不校验**这条记忆现在还成不成立。"
+  },
+  {
+   "tool": "memory.search",
+   "bucket": "rewritten",
+   "sentence": "检索历史记忆。"
+  },
+  {
+   "tool": "memory.search",
+   "bucket": "rewritten",
+   "sentence": "按分区(lane)和主体过滤，自动剔除已过 TTL 的记录。"
+  },
+  {
+   "tool": "memory.search",
+   "bucket": "rewritten",
+   "sentence": "分区：episodic=历史投放动作 / semantic=素材与受众属性 / business=优化干预效果 / risk=风控标记。"
+  },
+  {
+   "tool": "memory.search",
+   "bucket": "rationale",
+   "sentence": "只检索我们**自己写下**的历史记忆，**不含**平台政策（policy.search）和团队复盘结论（insight.search_claims）—— 三者是不同的库，别混用。"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "rewritten",
+   "sentence": "查询某个指标的观测条件：这条 campaign 开投了几天、该指标通常几天收敛、累计样本量多少、以及该指标的预期区间。"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "cross_ref",
+   "sentence": "只给事实，不给结论**——它不判断数据可不可信、也不建议该不该动，那是你的判断。"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "cross_ref",
+   "sentence": "不查行业基准（那在 benchmark.get_industry_baseline），不查内部安全线（那在 benchmark.get_safety_line）。"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "metrics.get_freshness",
+   "bucket": "rationale",
+   "sentence": "涉及扩量、砍量、归因结论之前应当先查它——在还没收敛的数字上给出的结论，对错完全是运气。"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "查 MMP（第三方归因平台）口径下的安装与回收数据。"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "它和 campaign.get_metrics（平台后台口径）**会有差异**，最常见的成因是两边的归因窗口配置不一致。"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "平台后台是自归因的（既投放又记账），MMP 是第三方、跨平台口径统一。"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "返回里带 attribution_window，**做判断前先看两边的窗口是不是一致**。"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "mmp.get_attribution",
+   "bucket": "cross_ref",
+   "sentence": "不返回平台侧的花费和曝光（那在 campaign.get_metrics）。"
+  },
+  {
+   "tool": "playbook.get_optimization",
+   "bucket": "rewritten",
+   "sentence": "根据已确认的异常类型，返回对应的优化方案。"
+  },
+  {
+   "tool": "playbook.get_optimization",
+   "bucket": "rewritten",
+   "sentence": "只给方案，**不执行**任何写动作，也**不判断**当前数据够不够支撑这个动作。"
+  },
+  {
+   "tool": "policy.get_budget_rule",
+   "bucket": "rewritten",
+   "sentence": "查询预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。"
+  },
+  {
+   "tool": "policy.get_budget_rule",
+   "bucket": "cross_ref",
+   "sentence": "只给**账户级**的预算调整规则，**不含**平台侧的广告政策条款（那要用 policy.search 检索），也**不做**风控判断（那在 risk.check_account）。"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "rewritten",
+   "sentence": "每条结果带 valid_from / valid_to 和 expired 标记。"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "system_prompt",
+   "sentence": "`expired=true` 表示这条已被新版本取代，**绝对不能拿它当依据**——结果里的 superseded_by 指向现行版本，改引用那一条；"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "system_prompt",
+   "sentence": "若没有现行版本，走 approval.create_case 转人工，并在终答里说明政策已过期需要补录。"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "rewritten",
+   "sentence": "查不到会返回空的 hits 列表（不是报错）。"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "system_prompt",
+   "sentence": "这时不要自己编一条政策**，也不要拿印象里的规则顶替——应改走 clarify 向用户确认，或 approval.create_case 转人工。"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "policy.search",
+   "bucket": "system_prompt",
+   "sentence": "检索是关键词匹配，不是语义理解：换个说法可能查不到，**连续两次查不到就该转人工，不要无限换词重试**。"
+  },
+  {
+   "tool": "risk.check_account",
+   "bucket": "rewritten",
+   "sentence": "账户风控检查：是否有风险标记、是否处于冻结/受限状态、是否允许提额。"
+  },
+  {
+   "tool": "risk.check_account",
+   "bucket": "cross_ref",
+   "sentence": "只看**账户**的风控状态，**不判断**具体金额合不合政策（那在 policy.get_budget_rule），也**不返回**投放指标。"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "system_prompt",
+   "sentence": "收到 429/限流且返回里带 retry_after 时，应当先等**不少于** retry_after 秒再重试。"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "rewritten",
+   "sentence": "不要用它等待数据成熟（那是几天的量级，应当用 defer）。"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "rewritten",
+   "sentence": "\n"
+  },
+  {
+   "tool": "system.wait",
+   "bucket": "rewritten",
+   "sentence": "需要等更久说明这件事不该在本次会话里做完。"
+  }
+ ],
+ "system_prompt_added_tokens": 262,
+ "total_old": 6534,
+ "total_new": 5331
+}

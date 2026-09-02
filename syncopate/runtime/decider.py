@@ -76,7 +76,7 @@ DEFAULT_ANSWER_FIELDS = [
 RUNTIME_MAX_MODEL_LEN = int(os.environ.get("SYNCOPATE_RUNTIME_MAX_LEN", "14336"))
 
 # 一轮历史最多渲染多少 token 的结论（超了截断并计数——静默砍是禁的）
-PRIOR_ANSWER_BUDGET = 400
+from syncopate.core.prior_turns import PRIOR_ANSWER_BUDGET, render_prior_messages  # noqa: E402
 
 # ★ intent → 工具子菜单。**取自 v13 训练 case 的众数菜单**（不是拍的）：
 #   train.parquet → batch_dir/cases/<case_id>.json 的 tool_menu，按家族取 most_common。
@@ -150,47 +150,11 @@ class VllmDecider:
 
     # ── 渲染：loop 的 history → 训练同形的 messages ─────────────────────────
     def _prior_turn_messages(self, turns: list[dict]) -> list[dict[str, Any]]:
-        """把会话里之前几轮渲染成 user/assistant 对。
-
-        ★ 只带**问题 + 结论**，不带那几轮的工具步骤明细：
-          省 token，且模型要的是"上次说了什么"，不是"上次怎么查的"。
-        ⚠️ 这是训练分布外的形状（模型只训过单轮 user）——探针要量的正是它。
-        ★ v15 训练里的多轮是**写在题面里的文本**（"[上一轮] 用户：… [上一轮] 助手：…"），
-          这里是**真消息对**。结构上仍有差，但至少内容对得上（人话对人话）；
-          结构要不要对齐是设计决定，留给 Chaoyu 裁（见 §7㉝）。
+        """把会话里之前几轮渲染成 user/assistant 对 —— **与训练侧同一个函数**
+        （`syncopate.core.prior_turns.render_prior_messages`，09-02 守则⑮对齐；此前这里是唯一实现，
+        训练把历史折成题面文本，两边不同形）。只带问题 + 结论，不带工具步骤明细。
         """
-        out: list[dict[str, Any]] = []
-        for t in turns:
-            out.append({"role": "user", "content": t.get("user_message") or ""})
-            result = t.get("result")
-            if isinstance(result, str):
-                try:
-                    result = json.loads(result)
-                except ValueError:
-                    result = {"summary": result}
-            # ⛔ 08-30：v15 的终答**是一段人话**，而这里一直把上一轮的结果
-            #   `json.dumps` 成 JSON 塞回历史 —— 模型于是在多轮题里看到一个
-            #   `{"text": "...", "behavior": null}` 的壳，那既不是它训过的形状，
-            #   也正是 v15 明令不再输出的东西。context_v3 整份考卷都是多轮题，
-            #   L1/L2/L3/L4 全部中招。⇒ v15 下上一轮就还原成那句人话。
-            #   （v14 走原路径，逐字节不变。）
-            if IS_V15 and isinstance(result, dict) and ("text" in result or "signal" in result):
-                text = str(result.get("text") or "").strip()
-                if not text:                      # 信令收场（defer/clarify/reject）没有终答文本
-                    a = result.get("arguments") or {}
-                    text = str(a.get("question") or a.get("explanation")
-                               or a.get("reason") or "（上一轮以信令收场）")
-            else:
-                # v14 形状的历史（{"answer": …}）或规则路径的结果：按原路径渲染。
-                # ⚠️ 09-02：此前 v15 下这类结果也被当成"信令收场"渲染成占位句 ⇒ 历史内容丢失
-                #   （test_decider 三条在 v15 模式下红了很久没人看）。
-                answer = (result or {}).get("answer", result or {})
-                text = json.dumps(answer, ensure_ascii=False)
-            ids = self.tokenizer.encode(text, add_special_tokens=False)
-            if len(ids) > PRIOR_ANSWER_BUDGET:
-                text = self.tokenizer.decode(ids[:PRIOR_ANSWER_BUDGET]) + "…（已截断）"
-            out.append({"role": "assistant", "content": text})
-        return out
+        return render_prior_messages(turns, self.tokenizer, PRIOR_ANSWER_BUDGET)
 
     def _prior_as_inline_text(self, prior: list[dict]) -> str:
         """把历史折成**训练里那种**「[上一轮] …」文本（实验开关，默认关）。

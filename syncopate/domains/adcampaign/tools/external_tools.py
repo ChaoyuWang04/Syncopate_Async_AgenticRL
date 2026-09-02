@@ -26,14 +26,7 @@ _STR = {"type": "string"}
 @REGISTRY.tool(
     name="benchmark.get_safety_line",
     description=(
-        "查询本产品在指定地域的投放安全线（内部每周更新）："
-        "d7 CPI 上限、d7 ROAS 下限、d1 留存下限、日预算上限。"
-        "判断投放是否超标、能否加预算时必须以这条线为准，不要用行业基准代替。\n"
-        "· 返回带 valid_from / valid_to。**这份资料有有效期**：valid_to 早于今天说明"
-        "运营还没更新，此时**不能拿它当决策依据**，应改走 approval.create_case 转人工，"
-        "并在终答里说明安全线已过期、需要补录，不要照着旧线执行。\n"
-        "· 查不到会返回 safety_line_not_found。**这时不要自己估一个数**，"
-        "也不要拿行业基准顶替——同样走 approval.create_case 转人工补录。"
+        "查询本产品在指定地域的内部投放安全线（每周更新）：d7 CPI 上限、d7 ROAS 下限、d1 留存下限、日预算上限，带 valid_from / valid_to。判断是否超标、能否加预算以这条线为准，不用行业基准代替。查不到返回 safety_line_not_found。"
     ),
     parameters={
         "type": "object",
@@ -56,10 +49,7 @@ def get_safety_line(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="calendar.get_seasonal_context",
     description=(
-        "查询当前时间点附近的时令活动（万圣节、黑五、圣诞等），"
-        "返回距离天数、出量放大倍数和对应的素材标签。"
-        "判断某类主题素材现在是否适合投放时用。"
-        "· 只给时令背景，**不判断**你的素材现在该不该投、也**不含**任何投放指标。"),
+        "查询当前时间点附近的时令活动（万圣节、黑五、圣诞等），返回距离天数、出量放大倍数和对应的素材标签。只给时令背景，不判断素材该不该投，不含投放指标。"),
     parameters={
         "type": "object",
         "properties": {
@@ -106,9 +96,7 @@ def get_seasonal_context(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="creative.get_asset_tags",
     description=(
-        "读取素材的视觉标签与历史表现（标签由离线视觉分析产出）："
-        "主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM/CTR/d7 CPI 和投放地域。"
-        "· 只给单条素材的标签和历史表现，**不做**跨素材的对比归因（那在 analysis.feature_lift），也**不返回** campaign 层数据。"),
+        "读取单条素材的视觉标签与历史表现（离线视觉分析产出）：主题标签、开头钩子类型、主色、是否有人脸、文字占比，以及历史 IPM / CTR / d7 CPI 和投放地域。不做跨素材归因，不含 campaign 层数据。"),
     parameters={
         "type": "object",
         "properties": {"creative_id": _STR, "creative_name": _STR},
@@ -130,9 +118,7 @@ def get_asset_tags(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="creative.search_similar",
     description=(
-        "按视觉标签检索素材库，可按地域、平台过滤并设 IPM 下限，"
-        "结果按 IPM 从高到低。用于找当前表现好的同主题替代素材。"
-        "· 只按标签检索现有素材，**不生成**新素材，也**不判断**检索到的素材适不适合当前 campaign。"),
+        "按视觉标签检索素材库，可按地域、平台过滤并设 IPM 下限，结果按 IPM 从高到低。用于找当前表现好的同主题替代素材。只检索现有素材，不生成新素材，不判断是否适合当前 campaign。"),
     parameters={
         "type": "object",
         "properties": {

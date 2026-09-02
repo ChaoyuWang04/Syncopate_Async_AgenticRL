@@ -23,6 +23,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol
 
+from syncopate.core.prior_turns import render_prior_messages
 from syncopate.core.contract import (IS_V15, REPORT_TOOL, TERMINAL_SIGNALS,
                                      visible_answer_fields)
 from syncopate.core.parsing import ParsedStep, parse_step
@@ -127,11 +128,18 @@ class RolloutOutput:
     metrics: dict[str, Any] = field(default_factory=dict)
 
 
-def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> list[dict[str, str]]:
-    """首轮 messages：system 规则书 + 本 case 的任务描述。
+def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None,
+                   prior: list[dict] | None = None, tokenizer: Any = None) -> list[dict[str, str]]:
+    """首轮 messages：system 规则书 + [历史消息对] + 本 case 的任务描述。
 
     SFT 和 RL 必须走同一个函数——两阶段 prompt 不一致是最难查的一类 bug
     （老师包 T10：`tool_schema_hash` 算了但从没比对过）。
+
+    ★ 09-02（`26 §W2①`）：`prior`（或 `bundle.prior`）= 之前几轮 {user_message, result}，
+      按线上 decider **同一个函数** render_prior_messages 渲染成真消息对，插在 system 之后、
+      本轮 user 之前 —— 此前训练把历史折成「[上一轮] …」文本塞进题面（守则⑮ 不同形 #1#2#7）。
+      截断口径要 tokenizer；没给 tokenizer 时按字符近似（4 字符≈1 token，只在没有 tokenizer 的
+      渲染路径用，建库/rollout 一律传 tokenizer）。
     """
     # ★★★ context 必须**按 key 排序**渲染（模板里的 `| dictsort`）。
     #
@@ -159,12 +167,30 @@ def build_messages(bundle: CaseBundle, tool_menu_names: list[str] | None) -> lis
         #
         # 放在模板变量而不是塞进 context：context 参与内容哈希（去重 / 泄漏检测），
         # 往里加 key 会让所有已有 case 的指纹变化，两件事就纠缠在一起了。
-        "reference_now": bundle.env.reference_now,
+        # ★ 09-02（Chaoyu 08-31 裁定③，守则⑮ #5）：**纯日期**，同线上 decider（date.today().isoformat()）。
+        #   v15 之前渲染 ISO 带时区，线上是纯日期 ⇒ 不同形；随 W4 全量重建生效（DATA_VERSION 升版）。
+        "reference_now": (bundle.env.reference_now or "")[:10] if IS_V15 else bundle.env.reference_now,
         "context": bundle.case.context,
         "user_message": bundle.case.user_message,
         "answer_fields": visible_answer_fields(bundle.verifier.required_answer_fields),
     })
-    return [{"role": "system", "content": system_text}, {"role": "user", "content": user_text}]
+    turns = prior if prior is not None else getattr(bundle, "prior", None)
+    messages = [{"role": "system", "content": system_text}]
+    if turns:
+        tok = tokenizer or _CharTokenizer()
+        messages += render_prior_messages(turns, tok)
+    messages.append({"role": "user", "content": user_text})
+    return messages
+
+
+class _CharTokenizer:
+    """没有真 tokenizer 时的近似（只用于纯渲染路径）：4 字符 ≈ 1 token。"""
+
+    def encode(self, text: str, add_special_tokens: bool = False) -> list[int]:
+        return list(range((len(text) + 3) // 4))
+
+    def decode(self, ids: list[int]) -> str:
+        return ""
 
 
 def observation_message(tool_name: str, observation: dict[str, Any]) -> dict[str, str]:
@@ -205,7 +231,7 @@ async def run_rollout(
     sandbox = Sandbox(bundle.env, namespace_id=namespace_id)
     trajectory = Trajectory(case_id=bundle.case_id, rollout_id=rollout_id, namespace_id=namespace_id)
 
-    messages = build_messages(bundle, tool_names)
+    messages = build_messages(bundle, tool_names, tokenizer=tokenizer)
     prompt_ids: list[int] = tokenizer.apply_chat_template(
         messages, tools=tools, add_generation_prompt=True, tokenize=True, **CHAT_TEMPLATE_KWARGS,
     )

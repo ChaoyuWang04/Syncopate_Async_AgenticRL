@@ -39,15 +39,7 @@ def _insight_text(row: dict[str, Any]) -> str:
 @REGISTRY.tool(
     name="policy.search",
     description=(
-        "按关键词检索平台广告政策 / 广告法 / 内部 SOP 的条款（半结构化，可按平台和地域过滤）。\n"
-        "· **每条结果带 valid_from / valid_to 和 expired 标记。**"
-        "`expired=true` 表示这条已被新版本取代，**绝对不能拿它当依据**——"
-        "结果里的 superseded_by 指向现行版本，改引用那一条；"
-        "若没有现行版本，走 approval.create_case 转人工，并在终答里说明政策已过期需要补录。\n"
-        "· **查不到会返回空的 hits 列表（不是报错）。这时不要自己编一条政策**，"
-        "也不要拿印象里的规则顶替——应改走 clarify 向用户确认，或 approval.create_case 转人工。\n"
-        "· 检索是关键词匹配，不是语义理解：换个说法可能查不到，"
-        "**连续两次查不到就该转人工，不要无限换词重试**。"
+        "按关键词检索平台广告政策 / 广告法 / 内部 SOP 的条款（半结构化，可按平台和地域过滤）。每条结果带 valid_from / valid_to、expired 标记（true = 已被新版本取代）和 superseded_by；查不到返回空 hits（不是报错）。关键词匹配而非语义理解，换个说法可能查不到。"
     ),
     parameters={
         "type": "object",
@@ -94,18 +86,7 @@ def policy_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="insight.search_claims",
     description=(
-        "检索历史复盘沉淀下来的结论（如'某类素材在某地域表现更好'）。返回的是**经验**，"
-        "不是实时数据——要下决策仍需用 campaign.get_metrics / benchmark 等核实。\n"
-        "· **每条结论带 status**：active=现行；superseded=已被更新的结论取代；"
-        "refuted=已被后续数据推翻。**superseded / refuted 的不能当依据**，"
-        "superseded_by 指向新结论 —— 但它们会一并返回，"
-        "**因为『这条老结论已经被推翻了』本身就是要报告的信息**。\n"
-        "· **若检索到的结论与你刚查到的实际数据矛盾**，不要二选一硬答："
-        "用 memory.conflict_resolve 记录这次冲突，并在终答里说明"
-        "'历史经验是 X，本次数据是 Y，建议以数据为准并复核该结论'。\n"
-        "· **查不到会返回空的 hits（不是报错）。这时不要编一条'经验'**——"
-        "没有历史结论就按实际数据判断，或走 clarify。\n"
-        "· 每条带 confidence 与 evidence（样本量）。**低置信度 / 小样本的结论不足以支撑写动作**。"
+        "检索历史复盘沉淀的结论（如「某类素材在某地域表现更好」）。返回的是经验不是实时数据，下决策仍需用实时指标核实。每条带 status（active 现行 / superseded 已被取代，superseded_by 指向新结论 / refuted 已被推翻）、confidence 与 evidence 样本量；非 active 的结论会一并返回，因为「老结论已被推翻」本身就是要报告的信息。查不到返回空 hits（不是报错）。"
     ),
     parameters={
         "type": "object",
@@ -115,8 +96,7 @@ def policy_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
             "product_id": {**_STR, "description": "只看某产品的结论"},
             "active_only": {
                 "type": "boolean",
-                "description": "只要现行结论，默认 false（默认连已被取代/推翻的一起给，"
-                               "并按 status 标明）。确认只需要当前口径时才设 true",
+                "description": "只要 active 结论；默认 false（连已被取代 / 推翻的一起给并标 status）",
             },
             "top_k": {"type": "integer", "description": "最多返回几条，默认 3"},
         },

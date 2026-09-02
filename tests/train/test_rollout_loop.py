@@ -456,3 +456,24 @@ def test_stops_before_exhausting_response_budget(tokenizer):
     prompt_len = len(output.prompt_ids)
     for context_len in engine.prompt_lengths:
         assert context_len - prompt_len <= budget - MIN_GENERATION_HEADROOM
+
+
+# ── 09-02（26 §W2①）：多轮行的 prior 进 prompt 后，SFT 与 RL 仍逐 token 同构 ────────────
+def test_sft_sample_with_prior_is_token_identical_to_rl_rollout(tokenizer):
+    """历史消息对由 build_messages 一处渲染，SFT（gold 回放）与 RL（真循环）走同一条路径。"""
+    from syncopate.pipeline.sft_replay import build_sft_sample
+    bundle = SEED_BUILDERS["FRESH_0001"]() if "FRESH_0001" in SEED_BUILDERS else \
+        next(iter(SEED_BUILDERS.values()))()
+    bundle.prior = [{"user_message": "CMP_1 最近消耗多少", "result": {"text": "CMP_1 近 7 天消耗 31500。"}},
+                    {"user_message": "能扩量吗", "result": {"text": "", "signal": "defer",
+                                                            "arguments": {"reason": "数据还没收敛。"}}}]
+    config = RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
+    sample = asyncio.run(build_sft_sample(bundle, tokenizer=tokenizer, registry=DOMAIN.registry, config=config))
+    engine = ScriptedEngine(tokenizer, _gold_script(bundle))
+    out = asyncio.run(run_rollout(bundle, registry=DOMAIN.registry, tokenizer=tokenizer,
+                                  generate=engine, config=config, rollout_id="r", run_id="t"))
+    assert sample.input_ids == out.prompt_ids + out.response_ids
+    prompt_text = tokenizer.decode(out.prompt_ids)
+    assert "CMP_1 近 7 天消耗 31500。" in prompt_text and "数据还没收敛。" in prompt_text
+    assert "[上一轮]" not in prompt_text, "历史不许再折成题面文本"
+    assert prompt_text.index("数据还没收敛。") < prompt_text.index(bundle.case.user_message), "历史必须在本轮 user 之前"

@@ -56,12 +56,7 @@ def discrepancy(mmp_window: str) -> float:
 @REGISTRY.tool(
     name="mmp.get_attribution",
     description=(
-        "查 MMP（第三方归因平台）口径下的安装与回收数据。\n"
-        "· 它和 campaign.get_metrics（平台后台口径）**会有差异**，"
-        "最常见的成因是两边的归因窗口配置不一致。\n"
-        "· 平台后台是自归因的（既投放又记账），MMP 是第三方、跨平台口径统一。\n"
-        "· 返回里带 attribution_window，**做判断前先看两边的窗口是不是一致**。\n"
-        "不返回平台侧的花费和曝光（那在 campaign.get_metrics）。"
+        "查 MMP（第三方归因平台）口径下的安装与回收数据，返回里带 attribution_window。它和平台后台口径（campaign.get_metrics，自归因）会有差异，最常见成因是两边归因窗口不一致，做判断前先看窗口是否一致。不含平台侧花费和曝光。"
     ),
     parameters={
         "type": "object",

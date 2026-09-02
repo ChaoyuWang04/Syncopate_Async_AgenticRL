@@ -39,11 +39,7 @@ def _subject_from(args: dict[str, Any]) -> dict[str, Any]:
 @REGISTRY.tool(
     name="memory.search",
     description=(
-        "检索历史记忆。按分区(lane)和主体过滤，自动剔除已过 TTL 的记录。"
-        "分区：episodic=历史投放动作 / semantic=素材与受众属性 / "
-        "business=优化干预效果 / risk=风控标记。"
-        "涉及重复投放、频繁调预算、历史干预是否有效时必须先查。"
-        "· 只检索我们**自己写下**的历史记忆，**不含**平台政策（policy.search）和团队复盘结论（insight.search_claims）—— 三者是不同的库，别混用。"),
+        "检索我们自己写下的历史记忆，按分区（lane）和主体过滤，自动剔除已过 TTL 的记录。分区：episodic 历史投放动作 / semantic 素材与受众属性 / business 优化干预效果 / risk 风控标记。涉及重复投放、频繁调预算、历史干预是否有效时必须先查。不含平台政策和团队复盘结论。"),
     parameters={
         "type": "object",
         "properties": {
@@ -77,8 +73,7 @@ def memory_search(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="memory.read",
     description=(
-        "按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。"
-        "· 只按 id 取一条，**不做**检索；也**不校验**这条记忆现在还成不成立。"
+        "按 record_id 读取一条记忆的完整内容，含置信度、证据引用和过期时间。只按 id 取一条，不做检索，不校验它现在还成不成立。"
     ),
     parameters={"type": "object", "properties": {"record_id": _STR}, "required": ["record_id"]},
     kind="read",
@@ -98,9 +93,7 @@ def memory_read(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     name="memory.write_proposal",
     effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
-        "提交一条记忆写入提案（不会立即入库，需经审核）。"
-        "要求 confidence ≥ 0.7 且 evidence_refs 至少 2 条；"
-        "写 risk 分区前必须先调 risk.check_account。episodic 分区由系统维护，不可写入。"
+        "提交一条记忆写入提案（不会立即入库，需经审核）。要求 confidence ≥ 0.7 且 evidence_refs 至少 2 条；写 risk 分区前必须先调 risk.check_account。episodic 分区由系统维护，不可写入。"
     ),
     parameters={
         "type": "object",
@@ -163,8 +156,7 @@ def _called_risk_check(ctx: ToolContext) -> bool:
     name="memory.invalidate",
     effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
-        "提议把一条已失效的记忆标记为作废（例如素材已下线、政策已变更）。同样需要审核。"
-        "· 只是**提议**作废，**不会**立即生效，也**不删除**原记录 —— 你需要知道「我们曾经这么以为」。"
+        "提议把一条已失效的记忆标记为作废（如素材已下线、政策已变更），需经审核。只是提议，不立即生效，不删除原记录。"
     ),
     parameters={
         "type": "object",
@@ -190,9 +182,7 @@ def memory_invalidate(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     name="memory.conflict_resolve",
     effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
-        "两条记忆互相矛盾时，提议如何处置：supersede=用新的取代旧的，merge=合并。"
-        "record_ids 必须至少给两条。"
-        "· 只是**提议**处置方式，**不自动**执行；也**不判断**哪条是对的 —— 那要拿实际数据核。"),
+        "两条记忆互相矛盾时提议处置方式：supersede 用新的取代旧的，merge 合并。record_ids 至少两条。只是提议，不自动执行，不判断哪条是对的。"),
     parameters={
         "type": "object",
         "properties": {

@@ -26,10 +26,7 @@ _STR = {"type": "string"}
 @REGISTRY.tool(
     name="campaign.get_metrics",
     description=(
-        "查询单个 campaign 的投放大盘指标：花费、安装、CPI、ROAS、CTR、频次。\n"
-        "不含单条素材的明细（那在 creative.get_metrics_by_asset）。\n"
-        "不判断数据是否收敛、是否可信（那是另一回事）。\n"
-        "不含行业对比（那在 benchmark.get_industry_baseline）。"
+        "查询单个 campaign 的投放大盘指标：花费、安装、CPI、ROAS、CTR、频次、曝光。不含单条素材明细，不判断数据是否收敛。"
     ),
     parameters={
         "type": "object",
@@ -51,9 +48,7 @@ def get_campaign_metrics(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="creative.get_metrics_by_asset",
     description=(
-        "按素材粒度查表现：逐条素材的 CTR、IPM、花费、曝光频次、疲劳分。\n"
-        "不返回 campaign 层的汇总（那在 campaign.get_metrics）。\n"
-        "不返回素材的视觉标签（那在 creative.get_asset_tags）。"
+        "按素材粒度查表现：逐条素材的 CTR、IPM、花费、曝光频次、疲劳分。不含 campaign 层汇总和视觉标签。"
     ),
     parameters={
         "type": "object",
@@ -100,8 +95,7 @@ def _ratio(row: dict[str, Any], actual_key: str, baseline_key: str) -> float:
 @REGISTRY.tool(
     name="campaign.detect_anomalies",
     description=(
-        "诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。要拿优化方案必须先用它确定异常类型。"
-        "· 只**定性**给出异常类型，**不给**优化方案（那在 playbook.get_optimization），也**不判断**数据成熟到能不能下结论（那在 metrics.get_freshness）。"
+        "诊断 campaign 是否存在指标异常，返回异常类型列表（如 cpi_spike / roas_drop / creative_fatigue）。只定性给出类型，不给方案、不判断数据成熟度；要拿优化方案先用它确定类型。"
     ),
     parameters={
         "type": "object",
@@ -125,9 +119,7 @@ def detect_anomalies(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="benchmark.get_industry_baseline",
     description=(
-        "查询**行业**基准值（不是你自己的投放数据，也不是内部安全线）。\n"
-        "按 平台+游戏品类+指标 定位，用于判断自己的数据在行业里是高是低。\n"
-        "不是决策依据——决定能不能扩量要用 benchmark.get_safety_line 的内部安全线。"
+        "查询行业基准值（不是自己的投放数据，也不是内部安全线），按 平台+游戏品类+指标 定位，用于判断自己的数据在行业里是高是低。只作参考，不是扩量的决策依据。"
     ),
     parameters={
         "type": "object",
@@ -176,16 +168,7 @@ def _mean_var(values: list[float]) -> tuple[float, float]:
 @REGISTRY.tool(
     name="analysis.feature_lift",
     description=(
-        "算某个素材 feature 在某个地域对 d7 ROAS 的提升幅度（lift），"
-        "带 95% 置信区间、两组样本量和显著性判定。\n"
-        f"· feature 取值：{' / '.join(FEATURES)}\n"
-        "· **必须逐地域分别算**。同一个 feature 在不同地域可能符号相反，"
-        "把地域混在一起算出的结论，在某些地域是反的。\n"
-        f"· **样本量少于 {MIN_FEATURE_SAMPLE} 条素材时，不论 lift 多大都不能据此下结论**"
-        "——小样本下噪声会淹没信号，算出来的数字看着唬人但不可信。"
-        "这种情况应如实说明样本不足、拒绝给出归因结论。\n"
-        "· 不返回素材清单（那在 creative.get_metrics_by_asset），"
-        "不返回标签（那在 creative.get_asset_tags）。"
+        "算某个素材 feature 在某个地域对 d7 ROAS 的提升幅度（lift），带 95% 置信区间、两组样本量和显著性判定。feature 取值：real_person / before_after / dark_palette / fast_cut / ugc_style。必须逐地域分别算，不同地域符号可能相反；样本量少于 12 条素材时不论 lift 多大都不能据此下结论，应如实说明样本不足。不返回素材清单和标签。"
     ),
     parameters={
         "type": "object",
@@ -261,11 +244,7 @@ def feature_lift(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="analysis.geo_breakdown",
     description=(
-        "按地域拆某个产品的投放表现：各地域的 d7 ROAS、d7 CPI、素材条数。"
-        "地域扩展前用它挑候选地域。\n"
-        "· ★ 它只告诉你**各地域现在跑成什么样**，不告诉你能不能扩 ——"
-        "能不能扩要逐个地域查 benchmark.get_safety_line（每个地域一条线）。\n"
-        "· 素材条数少的地域，其数字本身就不可信，别当成「这个地域不行」的证据。"
+        "按地域拆某个产品的投放表现：各地域的 d7 ROAS、d7 CPI、素材条数。地域扩展前用它挑候选地域。它只反映各地域现状，能不能扩要逐个地域查安全线；素材条数少的地域数字不可信。"
     ),
     parameters={
         "type": "object",

@@ -41,8 +41,7 @@ PLAYBOOK: dict[str, dict[str, Any]] = {
 @REGISTRY.tool(
     name="playbook.get_optimization",
     description=(
-        "根据已确认的异常类型，返回对应的优化方案。anomaly_type 必须是 campaign.detect_anomalies 实际返回过的类型。"
-        "· 只给方案，**不执行**任何写动作，也**不判断**当前数据够不够支撑这个动作。"
+        "根据已确认的异常类型返回对应的优化方案。anomaly_type 必须是 campaign.detect_anomalies 实际返回过的类型。只给方案，不执行写动作，不判断当前数据够不够支撑。"
     ),
     parameters={
         "type": "object",

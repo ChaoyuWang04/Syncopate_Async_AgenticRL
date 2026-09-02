@@ -30,8 +30,7 @@ def _asset_id(campaign_id: str, creative_name: str) -> str:
 @REGISTRY.tool(
     name="creative.upload",
     description=(
-        "上传一条素材到指定 campaign。上传后进入平台审核队列，需要用 creative.poll_review 查询审核结果。"
-        "· 只负责上传，**不返回**审核结论 —— 审核是异步的，结果要用 creative.poll_review 查。上传成功 ≠ 审核通过。"
+        "上传一条素材到指定 campaign，上传后进入平台审核队列。上传成功不等于审核通过，审核结果要用 creative.poll_review 查。"
     ),
     parameters={
         "type": "object",
@@ -77,9 +76,7 @@ def upload_creative(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="creative.poll_review",
     description=(
-        "查询已上传素材的审核结果。**立刻返回**当前状态，不会替你等待。\n"
-        f"· 审核通常需要 {int(REVIEW_LATENCY_SECONDS)} 秒；还没出结果时返回 pending 并告诉你还差多久。\n"
-        "· 结果没出就再查一遍是没有意义的（状态不会变），应当先用 system.wait 等够再查。"
+        "查询已上传素材的审核结果，立刻返回当前状态，不替你等待。审核通常需要 480 秒，未出结果时返回 pending 并告知还差多久；状态没变前重复查没有意义，先用 system.wait 等够再查。"
     ),
     parameters={
         "type": "object",

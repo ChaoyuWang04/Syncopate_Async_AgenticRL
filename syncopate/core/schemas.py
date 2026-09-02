@@ -271,6 +271,10 @@ class CaseBundle:
     env: EnvSnapshot
     verifier: VerifierSpec
     gold: GoldPath | None = None
+    # ★ 09-02（`26 §W2`）：多轮训练行的**之前几轮**（{user_message, result}，形状 = 线上 agent_runs 行）。
+    #   只在内存里（建库时由生成器赋值），**不落盘、不进内容指纹**：`Case` 结构不动（改法 1）。
+    #   None = 单轮（RL/评测/压舱行），行为与之前逐字节相同。
+    prior: list[dict[str, Any]] | None = None
 
     @property
     def case_id(self) -> str:

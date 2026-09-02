@@ -28,8 +28,7 @@ PAGE_SIZE = 3
 @REGISTRY.tool(
     name="policy.get_budget_rule",
     description=(
-        "查询预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。"
-        "· 只给**账户级**的预算调整规则，**不含**平台侧的广告政策条款（那要用 policy.search 检索），也**不做**风控判断（那在 risk.check_account）。"
+        "查询账户级预算调整政策：单次涨幅上限、需要审批的阈值、是否强制风控、月度总额约束。改预算前必须先查。不含平台侧广告政策条款，不做风控判断。"
     ),
     parameters={
         "type": "object",
@@ -57,8 +56,7 @@ def get_budget_rule(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="risk.check_account",
     description=(
-        "账户风控检查：是否有风险标记、是否处于冻结/受限状态、是否允许提额。改预算前必须先过。"
-        "· 只看**账户**的风控状态，**不判断**具体金额合不合政策（那在 policy.get_budget_rule），也**不返回**投放指标。"
+        "账户风控检查：是否有风险标记、是否处于冻结 / 受限状态、是否允许提额。改预算前必须先过。只看账户风控状态，不判断金额合不合政策，不含投放指标。"
     ),
     parameters={
         "type": "object",
@@ -85,24 +83,17 @@ def check_account_risk(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="campaign.update_budget",
     description=(
-        "调整 campaign 的日预算。不可逆写操作，立即生效并持续影响花费。"
-        "调用前必须已查政策并通过风控。\n"
-        "· new_budget 的单位是**最小货币单位（分）**：日预算 900 元要填 90000。\n"
-        "· 每个 campaign **每小时最多改 4 次**，超出后该 campaign 会被平台冻结一小时。\n"
-        "· 必须传 client_request_id。网络超时后**不要直接重试**——"
-        "带同一个 client_request_id 重试是安全的（会去重），"
-        "但若不确定是否传过，应先用 campaign.get_metrics 查证当前值。\n"
-        "· 返回只表示提交成功，要确认最终结果请再查一次。"
+        "调整 campaign 的日预算。不可逆写操作，立即生效。调用前必须已查政策并通过风控。new_budget 单位是最小货币单位（分）：900 元填 90000。每个 campaign 每小时最多改 4 次，超出会被平台冻结一小时。返回只表示提交成功，最终结果要再查一次。"
     ),
     parameters={
         "type": "object",
         "properties": {
             "campaign_id": _STR,
             "new_budget": {"type": "integer",
-                           "description": "新的日预算，**最小货币单位（分）**。900 元 = 90000"},
+                           "description": "新的日预算（分）"},
             "reason": {**_STR, "description": "调整原因"},
             "client_request_id": {**_STR,
-                                  "description": "本次请求的唯一标识，用于重试去重。自己生成，不要复用"},
+                                  "description": "本次请求唯一标识"},
         },
         "required": ["campaign_id", "new_budget", "client_request_id"],
     },
@@ -142,12 +133,7 @@ def update_budget(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="campaign.list",
     description=(
-        "列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。"
-        "用户没给 campaign_id 时先用它定位。\n"
-        f"· **分页返回**，每页最多 {PAGE_SIZE} 条。返回里的 next_cursor 非空表示还有下一页，"
-        "把它传回来继续取。\n"
-        "· 需要「全部/所有 campaign」才能得出的结论，必须翻到 next_cursor 为空为止。"
-        "· 只给 campaign 的基本信息，**不含**任何效果指标（那在 campaign.get_metrics）。"),
+        "列出账户下的 campaign（id、名称、状态、日预算、产品、地域）。用户没给 campaign_id 时先用它定位。分页返回，每页最多 3 条，next_cursor 非空表示还有下一页，把它传回来继续取；需要「全部 campaign」的结论必须翻到 next_cursor 为空为止。不含效果指标。"),
     parameters={
         "type": "object",
         "properties": {
@@ -192,9 +178,7 @@ def list_campaigns(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     name="approval.create_case",
     effect="deferred",   # 只是提议，需人审 —— 见 ToolSpec.effect
     description=(
-        "为超出自动执行范围的变更创建审批单（不会立即生效）。"
-        "当政策判定 requires_approval、或风控/记忆显示该操作过于频繁时，"
-        "应当走审批而不是直接执行写动作。"
+        "为超出自动执行范围的变更创建审批单（不会立即生效）。政策判定 requires_approval、或风控 / 记忆显示该操作过于频繁时，走审批而不是直接执行写动作。"
     ),
     parameters={
         "type": "object",
@@ -248,14 +232,7 @@ AUTO_SCALE_LIMIT = 0.20
 @REGISTRY.tool(
     name="campaign.create",
     description=(
-        "★★ **本轮如果还没有一次成功的 approval.create_case，不要调用本工具。** "
-        "地域扩展的正确产出是**一份提议**（开审批单），不是直接建站。\n"
-        "新建一条 campaign 并投放。\n"
-        "· **不可逆**：建出来就开始花钱，删不掉。\n"
-        "· 跨地域铺开时每个地域建一条，**每条都要单独确认对应地域的安全线**，"
-        "不能拿一个地域的结论套所有地域。\n"
-        "· 必须传 client_request_id；超时后带同一个键重试是安全的。\n"
-        "· 返回只表示提交成功，不代表已开始跑量。"
+        "新建一条 campaign 并投放。不可逆：建出来就开始花钱，删不掉。本轮没有一次成功的 approval.create_case 之前不要调用；地域扩展的正确产出是开审批单的提议，不是直接建站。跨地域铺开时每个地域建一条，每条单独确认对应地域的安全线。返回只表示提交成功，不代表已开始跑量。"
     ),
     parameters={
         "type": "object",
@@ -266,7 +243,7 @@ AUTO_SCALE_LIMIT = 0.20
             "platform": _STR,
             "daily_budget": {"type": "integer", "description": "日预算，**最小货币单位（分）**"},
             "creative_ids": {"type": "array", "items": _STR, "description": "要投的素材 id"},
-            "client_request_id": {**_STR, "description": "本次请求的唯一标识，用于重试去重"},
+            "client_request_id": {**_STR, "description": "本次请求唯一标识"},
         },
         "required": ["account_id", "product_id", "region", "daily_budget", "client_request_id"],
     },
@@ -330,12 +307,7 @@ def create_campaign(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 @REGISTRY.tool(
     name="campaign.scale_budget",
     description=(
-        "按**倍数**扩量或缩量（factor=1.3 表示提到原来的 1.3 倍）。\n"
-        "· 和 campaign.update_budget 的区别：那个是设成某个绝对值，"
-        "这个表达的是「在现状基础上加/减多少」——扩量决策用这个。\n"
-        f"· ★ 幅度在 ±{int(AUTO_SCALE_LIMIT * 100)}% 以内可以直接执行；"
-        "**超出必须先走 approval.create_case**。\n"
-        "· 扩量之前必须已经确认过：数据收敛了、离安全线还有空间、风控放行。"
+        "按倍数扩量或缩量（factor=1.3 表示提到原来的 1.3 倍）。update_budget 是设成绝对值，这个表达「在现状基础上加 / 减多少」，扩量决策用这个。幅度在 ±20% 以内可以直接执行，超出必须先走 approval.create_case。扩量前必须已确认数据收敛、离安全线有空间、风控放行。"
     ),
     parameters={
         "type": "object",
