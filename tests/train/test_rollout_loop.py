@@ -218,6 +218,9 @@ def test_tool_outside_menu_is_refused(tokenizer):
 
     否则模型可以靠调用「隐藏工具」绕过能力缺口，这条 case 就白设计了。
     """
+    from syncopate.core.contract import IS_V15
+    if IS_V15:
+        pytest.skip("v15：训练与线上同为全量菜单（守则⑮ #6，contract.effective_tool_menu），不再靠裁菜单造缺工具")
     bundle = SEED_BUILDERS["SIG_TOOLMISS_001"]()
     script = [
         render_tool_call("campaign.detect_anomalies", {"campaign_id": "CMP_6144"}),   # 不在菜单里
@@ -288,7 +291,12 @@ def test_prompt_hash_is_stable_and_menu_sensitive(tokenizer):
     c, _ = asyncio.run(_run(missing, tokenizer, _gold_script(missing)))
 
     assert a.token_trace["prompt_hash"] == b.token_trace["prompt_hash"]
-    assert a.token_trace["prompt_hash"] != c.token_trace["prompt_hash"]
+    from syncopate.core.contract import IS_V15
+    if IS_V15:
+        # v15：菜单一律全量（contract.effective_tool_menu）⇒ 指纹只随 system+工具块变，两条 case 相同是**对的**
+        assert a.token_trace["prompt_hash"] == c.token_trace["prompt_hash"]
+    else:
+        assert a.token_trace["prompt_hash"] != c.token_trace["prompt_hash"]
 
 
 def test_prompt_includes_tools_and_required_fields(tokenizer):

@@ -47,7 +47,7 @@ launch_one() {  # $1=idx
   CUDA_VISIBLE_DEVICES=$i taskset -c "${CPUS[$i]}" vllm serve "$MODEL" \
     --served-model-name sft-base \
     --enable-lora --lora-modules candidate="$ADAPTER" \
-    --max-lora-rank 32 --max-model-len 14336 --kv-cache-dtype fp8 \
+    --max-lora-rank 32 --max-model-len 18432 --kv-cache-dtype fp8 \
     --host 127.0.0.1 --port "$port" "${EXTRA[@]}" > "$D/vllm_$i.log" 2>&1 &
   echo $! >> "$D/pids"
   for _ in $(seq 1 90); do

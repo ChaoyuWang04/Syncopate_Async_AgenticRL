@@ -530,6 +530,32 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 
 ---
 
+## 4.5 · 全链路设定一览（09-02 核对；每个数只有一份定义，其余是消费者）
+
+| 设定 | 唯一来源 | 当前值 | 消费者（不许另写数） |
+|---|---|---|---|
+| 训练 prompt 上限 | `rollout_budget.MAX_PROMPT_LENGTH` | **9216** | launch_rl `--max-prompt-length` 默认 · sft.py `SFT_MAX_LENGTH`=prompt+response · rollout 左截断计数 · `v15_r2_gates --prompt-budget` |
+| 思考回复预算 | `rollout_budget.MAX_RESPONSE_LENGTH` | 8192（think-on）/2048 | launch_rl · eval_local `--max-new-tokens` 默认 · decider 单轮生成上限 · `MAX_TURN_ACCUMULATION`=+2048 |
+| RL/训练 max_model_len | launch_rl 算 prompt+response | 17408 | verl `rollout.max_model_len` |
+| 服务 max_model_len | 启动脚本 `--max-model-len` | **18432** | `logs/runtime/start_vllm*.sh` · `scripts/b4_serve_4x.sh` · `scripts/v15_r5_exam_chain.sh`；decider `RUNTIME_MAX_MODEL_LEN` 默认 18432（ctx_cap=−256，生成上限 = min(8192, 余量)） |
+| think 开关 | `rollout_budget.THINK_ON`（v15 默认 on；`SYNCOPATE_THINK`） | on | `CHAT_TEMPLATE_KWARGS` · decider（`SYNCOPATE_RUNTIME_THINKING` 分叉待 R8④ 删） · launch_rl `[think-train]` 判据行 |
+| 采样参数 | `rollout_budget.SAMPLING_*` | T=1.0 · top_p=1.0 · top_k=−1 | RL · eval · decider（一份） |
+| 轮数上限 | `rollout_budget.assistant_turn_budget(max_steps)` | max_steps+1（v15 report 占一步） | build_sft_sample · build_dataset · RL extra_info |
+| 工具菜单 | `contract.effective_tool_menu` | v15 一律全量 34 | run_rollout（SFT/RL 同源）· decider `FULL_MENU_MODE` 默认 full |
+| 历史窗口 | `core/prior_turns.PRIOR_TURNS_LIMIT` / `PRIOR_ANSWER_BUDGET` | 6 轮 / 每轮 400 tok | db.prior_turns 默认 · decider 渲染 · 训练 build_messages（同一渲染函数） |
+| 当前时间格式 | build_messages（v15 取 `reference_now[:10]`）· decider `date.today()` | 纯日期 | 同形断言 tests/train/test_train_prod_same_shape.py |
+| 字段清单 | `contract.visible_answer_fields`（PROSE_FIELDS 过滤） | v15 多轮行=空 | step_user.txt `{% if answer_fields %}` |
+| 空 think 块 | `sft_replay._mask_empty_think` | 不监督 | SFT 样本 · 同构测试期望 |
+| 教师 think 采样 | `u_build_v14_5.THINK_MAX_*` | 900 tok / 4096 字 / 不限段（不缩短） | gen_cot_v15 · behavior 探针 |
+| 数据份额带宽 | `u_build_v14_5.bands` | v13 .48–.62 · l2 .10–.17 · l1 .03–.09 · chat .01–.07 · fam .04–.12 · cot .05–.30 | 份额闸（W4 首测回填） |
+| 数据版本 | `pipeline/split.DATA_VERSION` | v13（case 库）；渲染版本记在 `data/sft/v15/manifest.json` 的 `render` | `assert_same_data_version` |
+
+**怎么看喂进去的数据长什么样**：训练数据存为 parquet（`data/sft/v15/train.parquet`，每行 = `input_ids` + `loss_mask` +
+`prompt_length` + 桶/轴/行为等元列，文本不直接存），`scripts/v15_data_gallery.py --parquet <文件>` 把每桶抽样解码成
+Markdown：system 折叠 · 历史消息对 · 本轮 user 原文 · 逐轮 response，**被监督的 token 用 ⟦ ⟧ 包起来**，元信息含
+think 非空/空块数、空块是否有梯度、菜单工具数、纯日期、字段清单四项同形标记 + 全量桶统计表。本机演练产物：
+`_audit/v15_w2/gallery_dry.md`（DRY 行，教师文案是占位）；W4 建库后对真 parquet 再出一份。
+
 ## 5 · 多轮与 OPD 的设计要点（W2 之后的目标形状）
 
 **多轮训练行（对齐 §1.1，逐项同形）**：

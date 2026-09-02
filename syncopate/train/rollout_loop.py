@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol
 
 from syncopate.core.prior_turns import render_prior_messages
-from syncopate.core.contract import (IS_V15, REPORT_TOOL, TERMINAL_SIGNALS,
+from syncopate.core.contract import (IS_V15, REPORT_TOOL, TERMINAL_SIGNALS, effective_tool_menu,
                                      visible_answer_fields)
 from syncopate.core.parsing import ParsedStep, parse_step
 from syncopate.core.parsing_v15 import derive_behavior, parse_step_v15
@@ -215,7 +215,8 @@ async def run_rollout(
     """跑一条完整 rollout：生成 → 解析 → 执行工具 → 回灌 observation → 循环。"""
     config = config or RolloutConfig()
     sampling_params = dict(sampling_params or {})
-    tool_names = bundle.case.tool_menu  # None = 全量菜单
+    # ★ 09-02（守则⑮ #6，裁定②）：菜单策略只在 contract.effective_tool_menu 一处——v15 全量 34、v14 按 case 裁剪
+    tool_names = effective_tool_menu(bundle.case.tool_menu)  # None = 全量菜单
     tools = registry.menu(tool_names)
     # ★ 执行白名单必须和**模型看得见的那份**同源，不许各算一份。
     #   ⛔ 2026-08-30 实案：`menu()` 已让信令族豁免 case 菜单裁剪（模型看得见），

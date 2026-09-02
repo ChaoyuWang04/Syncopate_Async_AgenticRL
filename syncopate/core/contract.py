@@ -146,3 +146,14 @@ def prose_expresses(behavior: str, text: str) -> bool:
     """终答的人话里有没有把这个行为**说出来**（只对三条信令行为有意义）。"""
     pat = _PROSE_SIGNAL.get(behavior)
     return bool(pat and text and pat.search(text))
+
+
+def effective_tool_menu(case_menu):
+    """训练/评测 prompt 里的工具菜单：v15 下**一律全量**（None），v14 按 case 裁剪（逐字节不变）。
+
+    ★ 09-02（Chaoyu 08-31 裁定②，守则⑮ #6）：线上 decider 默认给全量 34 个工具让模型自选，
+      训练还按模板族裁剪 16–17 个 = 不同形。判据挂在这里一处，run_rollout / build_dataset / split
+      都从它取；case.tool_menu 仍保留给 verifier/routing（tool_missing 类 case 的"缺工具"改由沙盒
+      不实现该工具来表达，不再靠裁菜单）。
+    """
+    return None if IS_V15 else case_menu

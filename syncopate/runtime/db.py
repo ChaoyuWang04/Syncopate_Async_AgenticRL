@@ -314,7 +314,7 @@ async def create_conversation(db: Database, *, org_id: str, conversation_id: str
 
 
 async def prior_turns(db: Database, *, org_id: str, conversation_id: str,
-                      before_run_id: str, limit: int = 6) -> list[dict]:
+                      before_run_id: str, limit: int | None = None) -> list[dict]:
     """同一会话里**这条 run 之前**已经收尾的轮次（最近 limit 条，按时间正序）。
 
     ★ 只取有结论的（succeeded）：还在跑的、被取消的没有可复述的内容，
@@ -328,6 +328,9 @@ async def prior_turns(db: Database, *, org_id: str, conversation_id: str,
     #   现在：succeeded（含 defer、含被 close_parked_clarify_runs 收尾的 clarify 轮）
     #   ∪ cancelled 且 error='session_reject'（result = 信令自己的话，worker 现在会存）。
     #   仍然排除：failed / 其它 cancelled（没有可复述的内容）/ 还在跑的。
+    if limit is None:
+        from syncopate.core.prior_turns import PRIOR_TURNS_LIMIT   # 窗口只有一份定义（09-02 收口）
+        limit = PRIOR_TURNS_LIMIT
     async with db.tx() as conn:
         rows = await conn.fetch(
             """

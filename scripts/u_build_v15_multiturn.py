@@ -149,7 +149,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
     # DEF-F：上一轮 defer → 「现在够了吗」；仍不成熟(FRESH defer) vs 已成熟(FRESH tool_call) 成对
     for i in range(n):
         for b, still in ((fresh_defer[i % len(fresh_defer)], True), (fresh_ok[i % len(fresh_ok)], False)):
-            cid = b.case.context.get("campaign_id") or "这条"
+            cid = b.case.context.get("campaign_id") or next(
+                iter((b.env.readonly_tables or {}).get("campaigns", {})), "这条 campaign")
             prior = [(b.case.user_message, signal_turn("defer", {
                 "reason": rng.choice(DEFER_REASONS).format(c=cid), "recheck_after_days": 5}))]
             b2 = as_multiturn(b, case_id=f"{b.case_id}_DEFF", user_message=rng.choice(DEFF_ASK), prior=prior)

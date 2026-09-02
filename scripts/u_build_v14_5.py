@@ -38,10 +38,8 @@ PERSONA_LEAK = re.compile(r"我(每天)?(喝|吃|睡觉|跑步|锻炼|健身)|�
 #   ⇒ 修法：用真正的 AnswerField；同时把 L1 循环的裸 except 改成记录首个异常（见下）。
 from syncopate.core.schemas import AnswerField  # noqa: E402
 
-MIN_FIELDS = [
-    AnswerField(key="summary", description="结论的机器可校验形式（简短标签或数值）"),
-    AnswerField(key="reply", description="给用户读的完整回复：一到三句自然语言，说清结论和依据"),
-]
+# MIN_FIELDS 唯一定义在 u_build_v15_multiturn（09-02 收口副本；两处各写一份会漂）
+from u_build_v15_multiturn import MIN_FIELDS  # noqa: E402
 # ★ v15 契约分支（Chaoyu 08-29 立项，25 号）：**同一份脚本、两个契约**，不复制第二份。
 #   副本会漂——R0 已经为「spec 三份副本」付过一次学费（25 §7⑥）。
 from syncopate.core.contract import IS_V15  # noqa: E402
@@ -1230,6 +1228,10 @@ async def main() -> int:
         print(f"   ✗ {cid}: {why}")
     assert not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形"
     if DRY:
+        _dry = pd.DataFrame(list(t13.to_dict("records")) + l2 + l1 + chat_rows + fam + cot)
+        _dp = Path("_audit/v15_w2/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
+        _dry.to_parquet(_dp)
+        print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）")
         print(f"[DRY] 演练完成：行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"
               f" · 缺真实终答的历史 {sc['missing_real_reply'][:5]}")
         return 0
