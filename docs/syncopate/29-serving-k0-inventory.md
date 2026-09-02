@@ -36,7 +36,7 @@
 |---|---|---|---|---|
 | A1 | `POST /runs` 快速返回 run_id | ✅ | `api.py:259-280` | — |
 | A2 | `GET /runs/{id}` | ✅ | `api.py:282-298` | — |
-| A3 | `GET /runs/{id}/events`（拉历史 + 流） | 🔶 | `api.py:455-480` | 课件分两入口（`events?after=N` 拉历史 / `events/stream` 推）；我们一个入口只走 SSE，**无 `after` 查询参数**，只认 `Last-Event-ID` 头 → K7-1 |
+| A3 | `GET /runs/{id}/events`（拉历史 + 流） | ✅ 09-02（`after` 查询路 + Last-Event-ID 头，query 优先） | `api.py:455-480` | 课件分两入口（`events?after=N` 拉历史 / `events/stream` 推）；我们一个入口只走 SSE，**无 `after` 查询参数**，只认 `Last-Event-ID` 头 → K7-1 |
 | A4 | `GET /runs/{id}/trace`（八表聚合，独立权限） | ✅ 09-02 | 路由表 `api.py:235-483` 无 | K1-8 建入口，K8-4 聚合 |
 | A5 | `POST /runs/{id}/cancel`（协作式） | ✅ 09-02（安全点：ActionGate 入口；其余 K5-5） | 无路由；`schema.sql:24-51` 无 `cancel_requested_at` | K1-4 + K2-1 |
 | A6 | `POST /runs/{id}/resume`（resume_token + 新 input） | ✅ 09-02（input 落 run.resumed 事件，loop 消费归 K5-2） | 只有 `POST /approvals/{case_ref}` 间接恢复 `api.py:310-329` → `db.py:297` | 无 resume_token、无 input 带入、任何 pending 审批单裁决即恢复 → K1-5 收编 |
@@ -110,10 +110,10 @@
 | D17 | 拦下也落库（tool_calls 行） | ✅ 09-02（blocked_by 八种） | 权限/步数/成本拦下只写 audit+event `action_gate.py:243-247,281-286` | 不写 tool_calls 行 → K6-1 |
 | D18 | 幂等命中"执行中"返回处理中不冒充 | ✅ | `db.py:366-402` `_await_settled_prior` | 课件 `response_lost` 语义的雏形，K6-2 收编 |
 | D19 | SSE 先落库再推 + heartbeat + terminal 关流 | ✅ | `api.py:409-452`；B-6a 终态事件并入 finish_run 事务 `db.py:265-293` | — |
-| D20 | 双路续传 `after` + `Last-Event-ID` | 🔶 | 只有 header 路 `api.py:458-475` | K7-1 补 query 路（优先级 query > header） |
-| D21 | 事件分层 public/internal/audit 过滤 | ❌ | payload 全量直推；`model.thinking` 6000 字直推 `agent_loop.py:148-151` | K7-2 |
+| D20 | 双路续传 `after` + `Last-Event-ID` | ✅ 09-02 | 只有 header 路 `api.py:458-475` | K7-1 补 query 路（优先级 query > header） |
+| D21 | 事件分层 public/internal/audit 过滤 | ✅ 09-02（event_layer；未登记默认不推 + 结构测试） | payload 全量直推；`model.thinking` 6000 字直推 `agent_loop.py:148-151` | K7-2 |
 | D22 | 通知唤醒替代扫库 | ✅ | PG NOTIFY 触发器 `schema.sql:432-440` + api sse_bell（E33） | — |
-| D23 | SSE 鉴权 | 🔶 | Bearer dev-token 头（fetch 流）09 §0 | 同域 Cookie 方案未做 → K7-4 |
+| D23 | SSE 鉴权 | ✅ 09-02（同域 Cookie + Bearer 同一张表；前端 URL 无凭证 grep） | Bearer dev-token 头（fetch 流）09 §0 | 同域 Cookie 方案未做 → K7-4 |
 | D24 | 前端三步：拉状态→重放历史→接实时流 | ✅ | `frontend/src/lib/sse.ts:4,51` | 本机未构建，见 §3 F-2 |
 | D25 | `waiting_for_user` 语义统一（等审批 / 等用户补充都映射到它，resume 回 queued） | ✅ 09-02（park_run_for_user 与 open_approval_case 同走 transition_run；clarify 收尾 = 改造边 waiting→succeeded） | `agent_loop.py:195-197` clarify 返回 halted 且 case_ref=None；`worker.py:519` halted 一律 return；**全库只有 `gateway.py:143` 写 waiting_for_user** ⇒ clarify 后 run 停在 running，60s 后被 `claim_run` 当崩溃重抢重跑（R5 考场 L4 8/25 status=running 即此） | K4 取舍表"waiting_for_user 改造"的实测依据；修法待裁在 `26 §2.5`/`25 §7㊱`（26 线只改 worker halted 分支，改前会通报）→ K1-5/K4-4 收编 |
 | D26 | 会话历史回灌覆盖所有收场（含 reject/clarify 轮） | 🔶 | `db.py:143` `prior_turns` 只取 `status='succeeded'`；reject 收场归 cancelled 且 result=NULL | 拒绝/追问轮不进下一轮历史（守则⑮同形问题）；归 26 线 W2，K 线不动 `prior_turns` |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K6 后）**：✅ 58 · 🔶 11 · ❌ 8 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K7 后）**：✅ 62 · 🔶 8 · ❌ 7 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 
@@ -180,6 +180,18 @@
 | 11 | 写 run_events | `ActionGate` ⑦ `tool.result`（拦下也发） | ✅ |
 | 12 | 写 audit_logs | `ActionGate` ⑦（写工具带 param_source） | ✅ |
 | 13 | 返回结构化结果给 loop | `GateOutcome`（status/observation/error/replayed） | ✅ |
+
+### 2.3 K7-1 · 课件"七样交付物" × api.py / event_layer / 前端（2026-09-02）
+
+| # | 交付物 | 落点 | 结论 |
+|---|---|---|---|
+| 1 | SSE 文本格式（id/event/data + 空行） | `api._event_stream` | ✅ |
+| 2 | 双路续传，优先级 query > header | `stream_events(after, Last-Event-ID)` | ✅ 09-02 |
+| 3 | heartbeat 注释行 + `retry:` | `: keepalive`（4s）+ `: retry / retry: 3000` 前导块 | ✅ |
+| 4 | terminal 双侧关闭 | 服务端收到 TERMINAL 即 return；前端 `isTerminalEvent` 停流 | ✅（前端本机未构建） |
+| 5 | 取号无洞无撞 | K2 领号器（`db.append_event`） | ✅ |
+| 6 | 事件分层 + payload 两视图 | `event_layer.public_view`；trace 全量 | ✅ 09-02 |
+| 7 | 鉴权（同域 Cookie 首选） | `current_org(Cookie syncopate_token)`；跨租户 404 | ✅ 09-02 |
 
 ---
 

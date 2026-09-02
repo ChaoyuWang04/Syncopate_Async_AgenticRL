@@ -564,6 +564,15 @@ K6-6 output_schema 逐工具登记并在回灌前校验；不符 → 不进 cont
 
 ## 9 · K7 · SSE 事件流（课件 CH7；~1.5 天）
 
+> ✅ **K7 已落地（2026-09-02，对照收编 + 三样真缺口）**：`event_layer.py` 事件分层注册表（public/internal/
+> audit；public 视图剥 INTERNAL_FIELDS + 按 kind 白名单；**未登记 kind 默认不外推**，配结构测试"代码里每个
+> emit 的 kind 都已登记"）· `GET /runs/{id}/events?after=N` 查询路，优先级 query > header · `retry: 3000`
+> 注释块 · 同域 Cookie `syncopate_token` 与 Bearer 同一张 token 表（K7-4）· 只读纪律 AST 断言（SSE 路径无
+> 模型/工具/迁移调用）· 前端 URL 无长效凭证 grep。**改造**：门槛④"静默期查询计数=0"不采纳——E33 的门铃 +
+> 2s 兜底轮询是刻意的（拔铃仍活，同 outbox nudge 的"通知是优化、扫表是正确性"），登记为 ≤1 次/2s；
+> 事件写入到推出 <1s 靠门铃已在 E33 实测。门槛①②③⑤⑥ = `test_events_k7.py` 9 条；⑦ 前端时间线实测
+> 本机无 node，**未验**（29 D24）。
+
 > 我们已有：SSE + `Last-Event-ID` 重连（F-2，Node 冒烟过）· 多路 SSE 归约 · 终态事件
 > 并入 finish_run 同一事务（B-6a）· emit seq 竞态修过（B-6）· `model.thinking` 独立
 > 事件种类（"模型在想也是事实"课件要点已实现）· 前端历史回放+审批中断恢复。

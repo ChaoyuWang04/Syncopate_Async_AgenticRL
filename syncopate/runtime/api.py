@@ -26,7 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Literal, Annotated, Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -63,22 +63,34 @@ class _Principal:
     roles: frozenset[str]
 
 
-def _parse_token(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "缺少 Bearer token")
-    token = authorization.split(" ", 1)[1].strip()
+AUTH_COOKIE = "syncopate_token"
+
+
+def _parse_token(authorization: str | None, cookie_token: str | None = None) -> str:
+    """凭证两条通道，**同一张 token 表**：Authorization: Bearer（API 调用方）或同域 Cookie
+    `syncopate_token`（浏览器 SSE，K7-4：前端 dist 由 API 同源挂载 /app ⇒ 同域 Cookie 零成本）。
+    ⛔ 长效 key 永不进 URL（CI grep 守着 frontend/src）。"""
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    elif cookie_token:
+        token = cookie_token.strip()
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "缺少 Bearer token 或同域 Cookie")
     if token not in _DEV_TOKENS:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token 无效")
     return token
 
 
-async def current_org(authorization: Annotated[str | None, Header()] = None) -> str:
-    """从 Authorization 头解析出 org_id。**这是 org_id 的唯一来源。**"""
-    return _DEV_TOKENS[_parse_token(authorization)]
+async def current_org(authorization: Annotated[str | None, Header()] = None,
+                      syncopate_token: Annotated[str | None, Cookie()] = None) -> str:
+    """从 Authorization 头（或同域 Cookie）解析出 org_id。**这是 org_id 的唯一来源。**"""
+    return _DEV_TOKENS[_parse_token(authorization, syncopate_token)]
 
 
-async def current_principal(authorization: Annotated[str | None, Header()] = None) -> _Principal:
-    token = _parse_token(authorization)
+async def current_principal(authorization: Annotated[str | None, Header()] = None,
+                            syncopate_token: Annotated[str | None, Cookie()] = None) -> _Principal:
+    token = _parse_token(authorization, syncopate_token)
     return _Principal(org=_DEV_TOKENS[token], roles=_DEV_ROLES.get(token, _DEFAULT_ROLES))
 
 
@@ -625,6 +637,9 @@ def create_app(db: Database | None = None) -> FastAPI:
         idle = 0.0
         waiters: dict[str, set[asyncio.Event]] = request.app.state.sse_waiters
         wkey = f"{org_id}|{run_id}"
+        # SSE 特殊行（课件 §6.1.1）：retry 告诉客户端重连间隔；放在注释块里，不算一条事件
+        yield ": retry\nretry: 3000\n\n"
+        from syncopate.runtime.event_layer import public_view
         while True:
             # ★ 客户端断开就停 —— 不检查的话，浏览器关了标签页我们还在轮询数据库。
             if await request.is_disconnected():
@@ -639,10 +654,14 @@ def create_app(db: Database | None = None) -> FastAPI:
                         org_id, run_id, last)
                 for row in rows:
                     last = row["seq"]
-                    # ★ `id:` 就是客户端下次带回来的 Last-Event-ID。
-                    yield (f"id: {row['seq']}\n"
-                           f"event: {row['kind']}\n"
-                           f"data: {json.dumps(row['payload'], ensure_ascii=False)}\n\n")
+                    # K7-2 事件分层：internal/audit/未登记的不外推（游标照样推进：补发无空洞靠 seq，
+                    # 客户端拿到的是"下一条 public"之前最后一个 seq）
+                    data = public_view(row["kind"], row["payload"])
+                    if data is not None:
+                        # ★ `id:` 就是客户端下次带回来的 Last-Event-ID。
+                        yield (f"id: {row['seq']}\n"
+                               f"event: {row['kind']}\n"
+                               f"data: {json.dumps(data, ensure_ascii=False)}\n\n")
                     if row["kind"] in TERMINAL:
                         return
                 if rows:
@@ -668,6 +687,7 @@ def create_app(db: Database | None = None) -> FastAPI:
     async def stream_events(
         run_id: str, org_id: OrgId, db: DB, request: Request,
         last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+        after: int | None = None,
     ) -> StreamingResponse:
         """★★ 断线补发：客户端带 `Last-Event-ID` 回来，我们从那之后接着推。
 
@@ -682,7 +702,8 @@ def create_app(db: Database | None = None) -> FastAPI:
         if not exists:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
         try:
-            after = int(last_event_id) if last_event_id else 0
+            # K7-1 双路续传：query `after` 优先于 `Last-Event-ID`（课件：query > header）
+            after = int(after) if after is not None else (int(last_event_id) if last_event_id else 0)
         except ValueError:
             after = 0          # 客户端给了脏值 ⇒ 从头推，总比 500 好
         return StreamingResponse(
