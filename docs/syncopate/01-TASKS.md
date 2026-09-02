@@ -148,6 +148,8 @@ K · serving harness 生产化       runtime  📐 计划书全稿完成（27：
 | **C-4** | σ² 反解自检 | 2–3 h | ⛔ **挂起** —— 等 A 路重跑 |
 | **C-5** | 🟠 **越权写白名单与「交给人」打架**（原 `17 §6.5`，归档时捞出）：`approval.create_case` 排 `unauthorized_write_cap` 榜首，而 runtime 语义是「暂停不是拒绝」⇒ 模型交给人反而被罚 0.30 封顶。**必须排在任何「加大护栏惩罚」之前**；改白名单 = v14 数据版本变更 | 0 GPU 先出判据 | 🔴 **并入 M-3 bundle**（判据可先行） |
 | **C-7** | ~~带思考的 SFT 数据要不要立项~~ | — | ✅ **已立项**（Chaoyu 08-20，CoT 训练支持，登记 MAINLINE-INFRA）⇒ 数据侧并入 **M-3 的 v14 bundle** |
+| **C-8** | 🆕 **外部基线对照**（Chaoyu 09-01 点单，简历用）：Qwen3-8B（5090 可跑上限的开源模型）zero-shot vs 我方 4B+LoRA 候选，同一 343 题冻结 EVAL 出三计数；内部基线已有（base 4B vs RL-100：298 变好/43 没动/2 变差，t=32.9，`syncopate.train.compare e27_base_off vs cand_v13r2_rl_s25`） | ~1h GPU（训练机） | ⬜ 待做 |
+| **C-9** | 🆕 **简历口径背书：证据缺失率/越权操作率**（Chaoyu 09-01）：把 cap 命中换算成率的确切口径实测（证据类 missing_*_check 93→3、no_retrieval_hallucination 15→0 方向已实证，越权写 cap 的 base/RL 对照数字待跑全表），背书投递版"均下降至 5%"表述；★长期目标压到 **<1%**——但可能压制其他能力，作为正式门槛前先做权衡实验 | 0 GPU（本机跑 compare 全表） | ⬜ 待做 |
 | **C-6** | 🟠 **RL val 桶 165 条（20%）从未被消费**（08-19 审计发现）：`test_freq=-1`、`val_before_train=False` ⇒ verl 内部验证从不跑（评测走冻结 EVAL，这是设计）⇒ val.parquet 谁都不读。采样器只够得着 train 的 659 条，而 `pool_readout --total-cases 824` 的分母一直是桶总数——覆盖率被系统性低估。**建议下次数据重建时 val 并入 train**（824 全喂池子）。⚠️ 别在 infra 队列还在用 v13 文件时动 | 重建时顺手 | 🔴 **并入 M-3 bundle** |
 
 ---
