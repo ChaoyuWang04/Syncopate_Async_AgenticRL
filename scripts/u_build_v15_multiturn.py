@@ -255,4 +255,20 @@ def shape_check(tokenizer, rows: list[dict]) -> dict:
             bad.append((r["case_id"], "当前时间不是纯日期"))
         if r.get("bucket", "").startswith(("multiturn", "fam")) and txt.count("<|im_start|>assistant") < 1:
             bad.append((r["case_id"], "多轮行没有历史助手消息"))
+        # ★ 空 think 块不许有梯度（Chaoyu 09-02 裁定；闲聊行曾漏掉——画廊抓到）
+        resp, rm = list(r["input_ids"])[r["prompt_length"]:], list(r["loss_mask"])[r["prompt_length"]:]
+        pat = _empty_think_ids(tokenizer)
+        if any(resp[i:i + len(pat)] == pat and any(rm[i:i + len(pat)]) for i in range(len(resp) - len(pat) + 1)):
+            bad.append((r["case_id"], "空 think 块有梯度"))
     return {"n": len(rows), "bad": bad, "missing_real_reply": list(_missing)}
+
+
+_ET: dict[int, list[int]] = {}
+
+
+def _empty_think_ids(tokenizer):
+    k = id(tokenizer)
+    if k not in _ET:
+        from syncopate.pipeline.sft_replay import EMPTY_THINK
+        _ET[k] = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
+    return _ET[k]

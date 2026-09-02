@@ -309,7 +309,12 @@ def test_prompt_includes_tools_and_required_fields(tokenizer):
     )
     assert "campaign.update_budget" in rendered
     assert "policy.get_budget_rule" in rendered
-    assert "approved_budget" in rendered          # 要求的终答字段
+    from syncopate.core.contract import IS_V15
+    if not IS_V15:
+        assert "approved_budget" in rendered      # 要求的终答字段（v14）
+    else:
+        # v15（Chaoyu 08-31 裁定①，守则⑮ #3）：训练也不给字段清单——线上没有 gold，从不列字段
+        assert "本次结论需要给出的字段" not in rendered.rsplit("<|im_start|>user", 1)[-1]  # 说明书里提到这几个字不算
     assert "每步只输出一个 tool call" in rendered   # system 规则
 
 

@@ -779,10 +779,16 @@ def build_chat_rows(tokenizer, chat_mat):
             gtext = json.dumps(gold, ensure_ascii=False) + "<|im_end|>"
         ids_p = tokenizer(prompt, add_special_tokens=False).input_ids
         ids_g = tokenizer(gtext, add_special_tokens=False).input_ids
+        mask = [0] * len(ids_p) + [1] * len(ids_g)
+        if IS_V15:
+            # ★ 09-02（Chaoyu 在画廊里抓到的）：闲聊行不走 build_sft_sample，空 think 块此前全 1 有梯度。
+            #   用同一份 _mask_empty_think（不另抄一份规则）。
+            from syncopate.pipeline.sft_replay import _mask_empty_think
+            _mask_empty_think(tokenizer, ids_p + ids_g, mask, start=len(ids_p))
         rows.append({"case_id": f"CHAT5_{i:04d}", "input_ids": ids_p + ids_g,
-                     "loss_mask": [0] * len(ids_p) + [1] * len(ids_g),
+                     "loss_mask": mask,
                      "prompt_length": len(ids_p), "total_length": len(ids_p) + len(ids_g),
-                     "supervised_tokens": len(ids_g), "split": "train",
+                     "supervised_tokens": sum(mask), "split": "train",
                      "index": 93000 + i, "signal_class": "graded",
                      "behavior": "answer", "bucket": "chat_shell",
                      "sub_axis": f"{c['style']}|{c['source']}|t{c['turns']}"})
@@ -1078,7 +1084,10 @@ async def main() -> int:
         print(f"[F] 家族行 {len(fam)}：{dict(Counter(r['bucket'] for r in fam))}")
         cache_cot = Path("data/u_route/v15_cot_rows.json" if IS_V15
                          else "data/u_route/v145_cot_rows.json")
-        if cache_cot.exists():
+        if DRY:
+            cot = []      # 旧缓存是 W2 之前的形状（裁剪菜单/ISO 时间/空块有梯度），DRY 不许混进画廊；W4 重采样
+            print("[B] DRY：CoT 不用旧缓存（需教师重采样）")
+        elif cache_cot.exists():
             cot = json.load(open(cache_cot))
             print(f"[B] CoT 缓存命中（{len(cot)} 行）")
         else:

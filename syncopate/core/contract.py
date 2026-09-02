@@ -104,12 +104,16 @@ def n1_hits(text: str) -> list[str]:
 
 
 def visible_answer_fields(fields):
-    """渲染给模型看的字段清单。v15 下过滤掉人话字段；v14 原样返回（逐字节不变）。"""
+    """渲染给模型看的字段清单。v14 原样返回（逐字节不变）。
+
+    ★ v15：**一律不给**（Chaoyu 08-31 裁定①，守则⑮ #3）。线上没有 gold，从不列"本次要交哪些字段"；
+      训练里列了 = 永远有人告诉它交几格，上线一格都不说 —— 这解释了 L2「查了不读数」。
+      模型该报哪些机器字段由 gold 的 session.report 步教（终答自带数字教"读数在场"）。
+      09-02 之前只过滤人话字段、机器字段仍列出 ⇒ 压舱 419 行与线上不同形（画廊抓到）。
+    """
     if not IS_V15:
         return fields
-    return [f for f in fields
-            if (getattr(f, "key", None) or (f.get("key") if isinstance(f, dict) else f))
-            not in PROSE_FIELDS]
+    return []
 
 
 # ── ★ 人话也算表达了行为（Chaoyu 2026-08-30 裁定）────────────────────────────

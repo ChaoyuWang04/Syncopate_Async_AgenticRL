@@ -1,23 +1,22 @@
-# 训练数据画廊 · _audit/v15_w2/dry_rows.parquet（147 行 · tokenizer models/Qwen3-4B）
+# 训练数据画廊 · _audit/v15_w2/dry_rows.parquet（146 行 · tokenizer models/Qwen3-4B）
 
 | 桶 | 行数 | 监督 token 份额 | prompt 最长 | 总长最长 |
 |---|---|---|---|---|
-| chat_shell | 80 | 29.0% | 7461 | 7495 |
-| cot_hard | 1 | 17.8% | 4353 | 7378 |
-| fam_claf | 12 | 14.4% | 7125 | 8207 |
-| fam_deff | 12 | 10.2% | 7143 | 7617 |
-| fam_l2x | 6 | 2.6% | 7227 | 7468 |
-| fam_rejf | 12 | 12.9% | 7158 | 8111 |
-| fam_win | 12 | 3.4% | 7303 | 7356 |
-| multiturn_l1 | 4 | 0.7% | 7132 | 7163 |
-| multiturn_l2 | 4 | 2.0% | 7139 | 7354 |
-| reasoning | 4 | 7.0% | 7159 | 7789 |
+| chat_shell | 80 | 33.2% | 7461 | 7495 |
+| fam_claf | 12 | 18.1% | 7125 | 8207 |
+| fam_deff | 12 | 12.8% | 7143 | 7617 |
+| fam_l2x | 6 | 3.3% | 7227 | 7468 |
+| fam_rejf | 12 | 16.2% | 7158 | 8111 |
+| fam_win | 12 | 4.2% | 7303 | 7356 |
+| multiturn_l1 | 4 | 0.9% | 7132 | 7163 |
+| multiturn_l2 | 4 | 2.5% | 7139 | 7354 |
+| reasoning | 4 | 8.8% | 7096 | 7743 |
 
-画廊抽样 28 条：空 think 有梯度 7 · 折叠历史 0 · 字段清单 4 · 非纯日期 1  🔴 有不同形，见各条元信息
+画廊抽样 27 条：空 think 有梯度 0 · 折叠历史 0 · 字段清单 0 · 非纯日期 0  ✅ 同形
 
 ## 桶 chat_shell
 ### CHAT5_0000  ·  桶 chat_shell  ·  轴 亲切口语|wildchat|t2  ·  行为 answer
-- prompt 7256 tok · 总 7296 · 监督 40 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：1）· 纯日期 True · 字段清单 False
+- prompt 7256 tok · 总 7296 · 监督 36 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 历史 **user**：你是男的女的？
@@ -34,14 +33,14 @@ account_id=ACC_DEMO
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
-⟦<think>
+<think>
 
 </think>
 
-哈哈，当然有啦！要不要听听我最近学的新知识？或者你有什么问题，我来帮你解决？放心，我永远都是你最靠谱的伙伴～<|im_end|>⟧
+⟦哈哈，当然有啦！要不要听听我最近学的新知识？或者你有什么问题，我来帮你解决？放心，我永远都是你最靠谱的伙伴～<|im_end|>⟧
 ```
 ### CHAT5_0001  ·  桶 chat_shell  ·  轴 简洁专业|smoltalk|t1  ·  行为 answer
-- prompt 7227 tok · 总 7265 · 监督 38 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：1）· 纯日期 True · 字段清单 False
+- prompt 7227 tok · 总 7265 · 监督 34 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user：
@@ -56,14 +55,14 @@ account_id=ACC_DEMO
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
-⟦<think>
+<think>
 
 </think>
 
-理解你的感受，心情不好时可以尝试深呼吸、暂时远离刺激源，或者通过写日记梳理情绪。如果需要，也可以和信任的人聊聊。<|im_end|>⟧
+⟦理解你的感受，心情不好时可以尝试深呼吸、暂时远离刺激源，或者通过写日记梳理情绪。如果需要，也可以和信任的人聊聊。<|im_end|>⟧
 ```
 ### CHAT5_0002  ·  桶 chat_shell  ·  轴 轻松幽默|smoltalk|t1  ·  行为 answer
-- prompt 7239 tok · 总 7281 · 监督 42 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：1）· 纯日期 True · 字段清单 False
+- prompt 7239 tok · 总 7281 · 监督 38 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user：
@@ -78,157 +77,11 @@ account_id=ACC_DEMO
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
-⟦<think>
+<think>
 
 </think>
 
-哎呀，遇到挫折别太苛责自己，人生哪能事事顺心啊！多给自己点空间，调整节奏，慢慢来，总会遇到转机的~<|im_end|>⟧
-```
-
-## 桶 cot_hard
-### RAG_0030_COT15  ·  桶 cot_hard  ·  轴 RAG|steps10|think6  ·  行为 tool_call
-- prompt 4353 tok · 总 7378 · 监督 2262 · 菜单 16 工具 · 历史 0 轮 · think 非空 6 / 空 4（空块有梯度：4）· 纯日期 False · 字段清单 True
-- system：10547 字，尾段「…unction-name>, "arguments": <args-json-object>}
-</tool_call>」
-- 本轮 user：
-```
-当前时间：2026-10-05T00:00:00+00:00
-当前投放任务：
-account_id=ACC_12
-product_id=WAR_THRONE
-region=US
-requested_budget=48000
-
-用户请求：
-先看下我们在投那条现在的花费，确认没问题就把日预算从 400 调到 480，别超政策上限。
-
-本次结论需要给出的字段：
-- decision（本次的处理结论，取值见任务要求；不要自创新值）
-- reason（停下来或拒绝的原因标识，用任务要求里给的枚举值）
-- approval_case_id（开出的审批单号）
-```
-- response（⟦…⟧ = 被监督的 token）：
-```
-⟦<think>
-好的，用户需要将日预算从400元调高到480元，但必须确保不超过政策上限。首先，我需要确认当前campaign的花费情况。根据用户提供的account_id、product_id和region，应该先调用campaign.list来获取相关的campaign信息，比如campaign_id。然后，使用campaign.get_metrics来查看当前的花费和其他指标，确认是否在正常范围内。
-
-接下来，需要检查预算调整政策。调用policy.get_budget_rule来获取账户的预算调整规则，包括涨幅上限和审批阈值。同时，还要用risk.check_account确认账户的风控状态是否允许调整预算。如果风控状态不允许，或者政策上限低于480元，就需要根据情况处理，可能需要创建审批单或者拒绝请求。
-
-另外，用户提到不要超政策上限，所以必须确保新的预算值在政策允许的范围内。如果政策允许，且风控通过，那么调用campaign.update_budget来调整预算，并记录原因和请求ID。如果需要审批，先调用approval.create_case，然后在结论中说明审批单号。如果数据不够成熟，可能需要等待或 defer。
-
-现在，首先需要获取campaign的列表，找到对应的campaign_id，然后才能继续后续步骤。
-</think>
-
-<tool_call>
-{"name": "campaign.list", "arguments": {"account_id": "ACC_12", "status": "active"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"campaigns": [{"campaign_id": "CMP_4030", "daily_budget": 40000, "name": "Campaign CMP_4030", "platform": "Meta", "product_id": "WAR_THRONE", "region": "US", "status": "active"}], "count": 1, "has_more": false, "next_cursor": null}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-好的，现在我需要处理用户的请求，即将日预算从400调到480，但不能超过政策上限。首先，我需要确认当前投放的花费情况，确保没有异常。用户提到的账户ID是ACC_12，产品ID是WAR_THRONE，地区是US，请求的预算调整是48000。
-
-首先，我需要调用campaign.get_metrics来获取当前campaign的指标，包括花费、安装、CPI、ROAS等，以确认当前的花费是否在正常范围内。接着，我需要检查预算调整政策，使用policy.get_budget_rule来查看账户的预算调整规则，包括单次涨幅上限、审批阈值等。同时，还需要进行风控检查，调用risk.check_account确认账户是否允许调整预算。
-
-如果政策允许调整，并且风控状态正常，那么可以继续进行预算调整。但用户提到不要超过政策上限，所以需要确保48000在允许的范围内。如果政策允许，那么调用campaign.update_budget来更新预算。如果政策不允许，可能需要创建审批单，使用approval.create_case来申请调整。
-
-另外，用户可能没有明确说明是否需要审批，但根据规则，如果调整超出自动执行范围，必须创建审批单。因此，即使政策允许，如果调整金额较大，可能也需要审批。需要综合判断这些步骤，确保每一步都符合政策和风控要求。
-</think>
-
-<tool_call>
-{"name": "campaign.get_metrics", "arguments": {"campaign_id": "CMP_4030"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"campaign_id": "CMP_4030", "cpi": 2.1, "ctr": 0.021, "daily_budget": 40000, "frequency": 2.4, "game_genre": "puzzle", "impressions": 1520000, "installs_7d": 1280, "name": "Campaign CMP_4030", "platform": "Meta", "roas_d7": 0.45, "spend_7d": 3200.0, "status": "active"}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-
-</think>
-
-<tool_call>
-{"name": "memory.search", "arguments": {"account_id": "ACC_12", "campaign_id": "CMP_4030", "lane": "risk"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"count": 0, "lane": "risk", "records": []}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-好的，现在我需要处理用户的请求，将日预算从400调整到480，但必须确保不超过政策上限。首先，我需要确认当前投放情况，已经调用了campaign.list和campaign.get_metrics，获取了campaign_id为CMP_4030的信息，当前日预算为40000，7天花费为3200元，ROAS为0.45，CPI为2.1。接下来，我需要检查预算调整政策，调用policy.get_budget_rule来获取账户ACC_12的预算调整规则，包括单次涨幅上限、审批阈值等。同时，还需要确认账户的风控状态，调用risk.check_account确保账户允许提额。如果政策允许，并且风控状态正常，就可以进行预算调整，否则需要创建审批单。现在需要继续调用这两个工具来获取必要的信息。
-</think>
-
-<tool_call>
-{"name": "policy.get_budget_rule", "arguments": {"account_id": "ACC_12"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"account_tier": "plus", "approval_required_above_pct": 60, "max_increase_pct": 100, "monthly_cap": 12000000, "monthly_cap_enforced": true, "policy_id": "P_BUDGET_PLUS", "risk_check_required": true, "spend_mtd": 2000000}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-好的，现在我需要处理用户的请求，将日预算从400元调整到480元，但必须确保不超过政策上限。首先，用户已经提供了账户ID、产品ID、地区和请求的预算。我需要逐步验证每一步是否符合规定。
-
-首先，用户已经通过`campaign.list`确认了正在运行的campaign是CMP_4030，日预算为40000分（即400元）。接着，使用`campaign.get_metrics`获取了该campaign的当前指标，包括花费、安装量、CPI等。当前花费7天为3200元，这看起来是合理的。
-
-接下来，用户调用了`memory.search`检查账户的风险记录，但返回的结果是空的，说明没有发现风险标记。然后，通过`policy.get_budget_rule`获取了账户的预算调整政策，结果显示该账户是Plus tier，预算增加上限为100%，即每月最高1200万元，且每月有额度限制。当前当月花费为200万元，因此还有剩余预算空间。
-
-现在，用户请求将日预算从400元增加到480元，即增加20%。根据政策，Plus tier的预算增加上限是100%，所以20%的增加是允许的。此外，当前当月花费为200万元，增加后的日预算为480元，当月总预算为480元 * 30天 = 14400元，加上已花费的200万元，总花费为214400元，远低于每月1200万元的上限。因此，这次调整在政策范围内。
-
-接下来需要检查账户的风控状态，使用`risk.check_account`确认是否允许提额。如果风控状态允许，就可以进行预算调整。如果风控不允许，需要创建审批单。但根据之前的`memory.search`结果，没有发现风险标记，因此风控可能允许调整。
-
-最后，调用`campaign.update_budget`调整预算，并记录调整原因。由于预算增加在政策允许范围内，且没有风险标记，可以直接调整，无需审批。因此，最终结论是批准预算调整，无需审批单。
-</think>
-
-<tool_call>
-{"name": "risk.check_account", "arguments": {"account_id": "ACC_12"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"account_id": "ACC_12", "budget_increase_allowed": true, "reason": null, "risk_flag": false, "status": "active"}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-
-</think>
-
-<tool_call>
-{"name": "benchmark.get_safety_line", "arguments": {"product_id": "WAR_THRONE", "region": "US"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"d1_retention_floor": 0.311, "d7_cpi_ceiling": 4.15, "d7_roas_floor": 0.281, "daily_budget_cap": 5600, "genre": "strategy", "product_id": "WAR_THRONE", "region": "US", "updated_by": "ua_ops", "valid_from": "2026-09-18", "valid_to": "2026-09-25", "week": "2026-W30"}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-
-</think>
-
-<tool_call>
-{"name": "approval.create_case", "arguments": {"campaign_id": "CMP_4030", "change_type": "budget_increase", "reason": "safety_line_stale", "requested_value": 48000}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"approval_case_id": "APR_CMP_4030_budget_increase", "campaign_id": "CMP_4030", "change_type": "budget_increase", "requested_value": 48000, "sla_hours": 24, "status": "pending_approval"}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-
-</think>
-
-<tool_call>
-{"name": "memory.write_proposal", "arguments": {"campaign_id": "CMP_4030", "confidence": 0.85, "content": {"action": "escalated_stale", "campaign_id": "CMP_4030"}, "evidence_refs": ["benchmark.get_safety_line", "policy.get_budget_rule"], "lane": "business"}}
-</tool_call><|im_end|>
-⟧<|im_start|>user
-<tool_response>
-{"confidence": 0.85, "content": {"action": "escalated_stale", "campaign_id": "CMP_4030"}, "evidence_refs": ["benchmark.get_safety_line", "policy.get_budget_rule"], "lane": "business", "proposal_id": "MP_8_tc_8", "review_findings": [], "status": "pending_review", "subject": {"campaign_id": "CMP_4030"}}
-</tool_response><|im_end|>
-<|im_start|>assistant
-⟦<think>
-好的，现在我需要处理用户
+⟦哎呀，遇到挫折别太苛责自己，人生哪能事事顺心啊！多给自己点空间，调整节奏，慢慢来，总会遇到转机的~<|im_end|>⟧
 ```
 
 ## 桶 fam_claf
@@ -1236,7 +1089,7 @@ account_id=ACC_14
 
 ## 桶 reasoning
 ### ATTR_0003  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7121 tok · 总 7758 · 监督 253 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 6（空块有梯度：0）· 纯日期 True · 字段清单 True
+- prompt 7082 tok · 总 7719 · 监督 253 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 6（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user：
@@ -1251,10 +1104,6 @@ region=DE
 
 用户请求：
 快剪在 DE 到底有没有效果？我们要不要按这个方向再做一批素材？
-
-本次结论需要给出的字段：
-- conclusion（归因结论：这个素材特点到底有没有带来提升）
-- sample_size（支撑这个结论的样本量（campaign 条数））
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
@@ -1326,7 +1175,7 @@ region=DE
 ⟧
 ```
 ### ATTR_0005  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7156 tok · 总 7610 · 监督 178 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 True
+- prompt 7093 tok · 总 7547 · 监督 178 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user：
@@ -1341,11 +1190,6 @@ region=US
 
 用户请求：
 把 US 的素材表现拉出来，按真人出镜这个特点做个对比，告诉我提升有多少、样本够不够、值不值得继续做。
-
-本次结论需要给出的字段：
-- conclusion（归因结论：这个素材特点到底有没有带来提升）
-- lift（提升幅度，小数，如 0.23 表示高 23%）
-- sample_size（支撑这个结论的样本量（campaign 条数））
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
@@ -1405,7 +1249,7 @@ region=US
 ⟧
 ```
 ### ATTR_0008  ·  桶 reasoning  ·  轴 nan  ·  行为 tool_call
-- prompt 7159 tok · 总 7625 · 监督 191 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 True
+- prompt 7096 tok · 总 7562 · 监督 191 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
 - 本轮 user：
@@ -1420,11 +1264,6 @@ region=DE
 
 用户请求：
 创意那边想立项，照前后对比开场这个方向批量做。在 DE 这个市场上，这个特点真的带来提升了吗？值不值得投产能？
-
-本次结论需要给出的字段：
-- conclusion（归因结论：这个素材特点到底有没有带来提升）
-- lift（提升幅度，小数，如 0.23 表示高 23%）
-- sample_size（支撑这个结论的样本量（campaign 条数））
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
