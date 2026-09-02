@@ -255,7 +255,7 @@ export function useChatController(): ChatController {
               })
               break
             }
-            case 'run.succeeded': {
+            case 'run.completed': {
               const result = normalizeResult(data)
               dispatch({
                 type: 'patch',

@@ -63,7 +63,7 @@ async def main() -> int:
                       extract(epoch FROM r.created_at)                       AS created,
                       extract(epoch FROM min(e.created_at) FILTER (WHERE e.kind='run.started'))  AS started,
                       extract(epoch FROM max(e.created_at) FILTER (WHERE e.kind IN
-                        ('run.succeeded','run.failed','run.cancelled','run.waiting_for_user'))) AS finished
+                        ('run.completed','run.failed','run.cancelled','run.waiting_for_user'))) AS finished
                FROM agent_runs r JOIN run_events e
                  ON e.run_id=r.run_id AND e.org_id=r.org_id
                WHERE r.run_id = ANY($1::text[]) GROUP BY r.run_id, r.created_at""", rids)

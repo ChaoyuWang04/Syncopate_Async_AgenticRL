@@ -321,10 +321,8 @@ class ActionGate:
                     evidence={"triggers": [t.reason for t in triggers],
                               "tier": effective_tier, "tier_reason": decision.reason},
                     triggers=triggers)
-                await self._emit(self.db, org_id=self.org_id, run_id=self.run_id,
-                                 kind="run.waiting_for_user",
-                                 payload={"case_ref": case_ref,
-                                          "triggers": [t.reason for t in triggers]})
+                # run.waiting_for_user 事件由 open_approval_case 里的 transition_run 写（K4：
+                # 状态 + 事件 + 审计同一事务）；这里不再补发——补了就是重复
                 return GateOutcome(
                     status="halted",
                     observation={"tool": tool, "ok": False, "error": "waiting_for_approval"},

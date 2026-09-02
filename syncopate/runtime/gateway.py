@@ -28,7 +28,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from syncopate.runtime.db import Database, new_resume_token
+from syncopate.runtime.db import Database, transition_run
 
 # 金额阈值（微单位，和 usage_records.cost_micros 同口径）。
 # ⚠️ 这个数**该由业务定**，设计文档附录 A 的 A2 还空着（"扩量的常见幅度档位？
@@ -138,10 +138,11 @@ async def open_approval_case(db: Database, *, org_id: str, run_id: str, action_t
             """,
             case_ref, run_id, org_id, action_type, proposed_params, rationale, evidence,
             ",".join(t.reason for t in triggers))
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status='waiting_for_user', requires_approval=TRUE,
-                   lease_owner=NULL, lease_expires_at=NULL, resume_token=$3, updated_at=now()
-             WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id, new_resume_token())
+        # K4：走唯一迁移入口——状态 + run.waiting_for_user 事件 + 审计同事务；resume_token 由入口发
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="waiting_for_user",
+                             reason="approval:" + ",".join(t.reason for t in triggers),
+                             actor_type="worker", actor_id="gateway",
+                             fields={"requires_approval": True},
+                             event_payload={"case_ref": case_ref, "action_type": action_type,
+                                            "triggers": [t.reason for t in triggers]})
     return case_ref

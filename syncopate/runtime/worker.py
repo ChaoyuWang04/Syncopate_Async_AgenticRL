@@ -23,7 +23,8 @@ from typing import Any
 from syncopate.core.contract import IS_V15, REPORT_TOOL
 from syncopate.core.session_signals import ack_payload
 from syncopate.runtime.action_gate import ActionGate, ToolBinding
-from syncopate.runtime.db import (Database, append_event, approved_action, cancel_requested,
+from syncopate.runtime.db import (MAX_RUN_ATTEMPTS, Database, InvalidRunTransition, append_event,
+                                  approved_action, cancel_requested,
                                   claim_run, finish_run, renew_lease, schedule_run_retry,
                                   prior_turns, park_run_for_user)
 from syncopate.runtime.gateway import DecisionContext, evaluate_triggers, open_approval_case
@@ -178,7 +179,6 @@ class LeaseHeartbeat:
 
 
 # 课件 §9.4 急诊分诊表："拿到错误先问再试会不会好"。
-MAX_RUN_ATTEMPTS = 3                       # agent_runs.attempts 上限（执行次数，与 outbox 投递次数分账）
 RUN_RETRY_BACKOFF_S = (60, 300, 900)       # 1 / 5 / 15 分钟
 
 
@@ -386,11 +386,7 @@ class Worker:
             self._heartbeats[run_id] = heartbeat
         _tok = _st.begin_run(run_id)         # B-5 分账（默认 no-op）
         try:
-            # ⚠️ started 事件也要在兜底 try 里 —— 它炸了（如 seq 竞态耗尽重试）
-            #   不该带走整个 worker 进程（2026-08-20 实测就是这么死的）。
-            await emit(self.db, org_id=org_id, run_id=run_id, kind="run.started",
-                       payload={"attempts": claimed["attempts"],
-                                "automation_tier": claimed.get("automation_tier")})
+            # run.started / run.restarted 由 claim 时的 transition_run 写（K4），这里不再补发
             await self._execute(org_id=org_id, run_id=run_id,
                                 user_message=claimed["user_message"] or "",
                                 automation_tier=claimed.get("automation_tier"),
@@ -401,15 +397,19 @@ class Worker:
             #   终态事件由 finish_run 在同一事务里发，这里不再补发（发了就是重复）。
             kind = classify_error(exc)
             attempts = int(claimed.get("attempts") or 1)
-            if kind == "transient" and attempts < MAX_RUN_ATTEMPTS:
-                delay = RUN_RETRY_BACKOFF_S[min(attempts - 1, len(RUN_RETRY_BACKOFF_S) - 1)]
-                await schedule_run_retry(self.db, org_id=org_id, run_id=run_id,
-                                         error=str(exc)[:500], delay_seconds=delay)
-                print(f"[run-retry] run={run_id} attempt={attempts} transient {exc!r} ⇒ {delay}s 后重投",
-                      flush=True)
-            else:
-                await finish_run(self.db, org_id=org_id, run_id=run_id,
-                                 status="failed", error=str(exc)[:500])
+            try:
+                if kind == "transient" and attempts < MAX_RUN_ATTEMPTS:
+                    delay = RUN_RETRY_BACKOFF_S[min(attempts - 1, len(RUN_RETRY_BACKOFF_S) - 1)]
+                    await schedule_run_retry(self.db, org_id=org_id, run_id=run_id,
+                                             error=str(exc)[:500], delay_seconds=delay)
+                    print(f"[run-retry] run={run_id} attempt={attempts} transient {exc!r} ⇒ {delay}s 后重投",
+                          flush=True)
+                else:
+                    await finish_run(self.db, org_id=org_id, run_id=run_id,
+                                     status="failed", error=str(exc)[:500])
+            except InvalidRunTransition as it:
+                # run 已不在 running（被 sweeper/取消收走）：状态机说不许，就不许——只留一行日志
+                print(f"[worker] 🔴 run={run_id} 兜底写终态被状态机拒绝：{it}", flush=True)
         finally:
             _st.end_run(_tok)
             self._heartbeats.pop(run_id, None)

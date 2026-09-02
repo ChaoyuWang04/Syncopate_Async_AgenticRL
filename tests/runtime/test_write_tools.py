@@ -52,6 +52,9 @@ def _ids() -> tuple[str, str]:
 
 async def _seed_run(db, org, run):
     await create_run(db, org_id=org, run_id=run, user_message="扩量")
+    # K4：审批单只能在 running 的 run 上开（queued→waiting_for_user 不在白名单）⇒ 先 claim
+    from syncopate.runtime.db import claim_run
+    assert await claim_run(db, worker_id="t", org_id=org, run_id=run)
 
 
 # ── 前置条件①：campaign.create 必须先有审批单 ───────────────────────────

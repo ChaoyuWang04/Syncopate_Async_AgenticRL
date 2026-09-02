@@ -255,14 +255,9 @@ async def schedule_run_retry(db: Database, *, org_id: str, run_id: str, error: s
     """transient 错误（课件 §9.4 / §14.3）：running → queued + run.retry_scheduled + outbox（延迟投递）。
     退避不用 Celery countdown/eta（28 C-14），用 outbox 的 next_attempt_at。"""
     async with db.tx() as conn:
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status='queued', error=$3,
-                   lease_owner=NULL, lease_expires_at=NULL
-             WHERE org_id=$1 AND run_id=$2 AND status='running'
-            """, org_id, run_id, error)
-        await append_event(conn, org_id=org_id, run_id=run_id, kind="run.retry_scheduled",
-                           payload={"error": error, "delay_seconds": delay_seconds})
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="queued", reason="transient_error",
+                             actor_type="worker", actor_id="worker", fields={"error": error},
+                             event_payload={"error": error, "delay_seconds": delay_seconds})
         await enqueue_outbox(conn, org_id=org_id, run_id=run_id, queue=queue,
                              delay_seconds=delay_seconds)
 
@@ -331,14 +326,9 @@ async def park_run_for_user(db: Database, *, org_id: str, run_id: str,
     ★ result 现在就存（信令自己的话），这样 prior_turns 收尾后能直接复述。
     """
     async with db.tx() as conn:
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status='waiting_for_user', result=$3,
-                   lease_owner=NULL, lease_expires_at=NULL, resume_token=$4, updated_at=now()
-             WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id, result, new_resume_token())
-        await append_event(conn, org_id=org_id, run_id=run_id,
-                           kind="run.waiting_for_user", payload=payload or {})
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="waiting_for_user",
+                             reason="clarify", actor_type="worker", actor_id="worker",
+                             fields={"result": result}, event_payload=payload or {})
 
 
 async def close_parked_clarify_runs(db: Database, *, org_id: str,
@@ -353,14 +343,16 @@ async def close_parked_clarify_runs(db: Database, *, org_id: str,
     async with db.tx() as conn:
         rows = await conn.fetch(
             """
-            UPDATE agent_runs SET status='succeeded', ended_at=now(), updated_at=now()
+            SELECT run_id, result FROM agent_runs
              WHERE org_id=$1 AND conversation_id=$2
                AND status='waiting_for_user' AND requires_approval=FALSE
-            RETURNING run_id, result
+             FOR UPDATE
             """, org_id, conversation_id)
         for r in rows:
-            await append_event(conn, org_id=org_id, run_id=r["run_id"],
-                               kind=_TERMINAL_EVENT["succeeded"], payload=dict(r["result"] or {}))
+            # waiting_for_user→succeeded 是我们的改造边（ALLOWED_RUN_TRANSITIONS 有注）
+            await transition_run(conn, org_id=org_id, run_id=r["run_id"], to="succeeded",
+                                 reason="clarify_answered_by_next_message", actor_type="api",
+                                 actor_id="post_message", event_payload=dict(r["result"] or {}))
     return [r["run_id"] for r in rows]
 
 
@@ -377,7 +369,8 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
                      idempotency_key: str | None = None, intent: str | None = None,
                      automation_tier: str | None = None,
                      conversation_id: str | None = None,
-                     run_type: str = "chat") -> RunHandle:
+                     run_type: str = "chat", parent_run_id: str | None = None,
+                     rerun_reason: str | None = None) -> RunHandle:
     """建一次 run。带 Idempotency-Key 时**同一个 org 内重复请求返回原来那次**。
 
     ★ 用 `ON CONFLICT DO NOTHING` + 回查，而不是"先查再插" ——
@@ -392,19 +385,21 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
             """
             INSERT INTO agent_runs (run_id, org_id, idempotency_key, user_message,
                                     intent, automation_tier, status, conversation_id,
-                                    run_type, input_hash)
-            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9)
+                                    run_type, input_hash, parent_run_id, rerun_reason)
+            VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, $11)
             ON CONFLICT (org_id, idempotency_key) WHERE idempotency_key IS NOT NULL
             DO NOTHING
             RETURNING run_id
             """,
             run_id, org_id, idempotency_key, user_message, intent, automation_tier,
-            conversation_id, run_type, ihash)
+            conversation_id, run_type, ihash, parent_run_id, rerun_reason)
         if row is not None:
             # K2-6：run 与 run.created **同生共死**（课件 C6"让系统失败得干净"）。
             # 事务里没有任何 publish；outbox 行 K3-2 加进来。
             await append_event(conn, org_id=org_id, run_id=run_id, kind="run.created",
-                               payload={"run_type": run_type, "intent": intent})
+                               payload={"run_type": run_type, "intent": intent,
+                                        **({"parent_run_id": parent_run_id, "rerun_reason": rerun_reason}
+                                           if parent_run_id else {})})
             # K3-2：agent_runs + run.created + outbox 三 INSERT 同事务（课件 §6.7）
             await enqueue_outbox(conn, org_id=org_id, run_id=run_id, queue=queue_for(run_type))
             return RunHandle(run_id=row["run_id"], created=True)
@@ -428,114 +423,101 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
                     org_id: str | None = None, run_id: str | None = None) -> dict | None:
     """抢一个待跑的 run。**原子**：同一条 run 不可能被两个 worker 同时抢到。
 
-    ★ `FOR UPDATE SKIP LOCKED` 是这里的关键：没有它，多个 worker 会锁在同一行上
-    互相等待（吞吐塌成串行）；有了它，抢不到的直接跳过看下一条。
+    两种模式共用 `transition_run(queued→running)`（K4：状态只有一个入口）：
+      · 定向（run_id 给定，Celery 路径）：只认 queued（课件 §8.2 原型）；None = 终态/他人持有 ⇒ 退出并 ack
+      · 轮询（run_id 为空，测试/探针/考场链）：`FOR UPDATE SKIP LOCKED` 挑一条，org 公平分配；
+        撞到 lease 过期的 running 时**内联 sweeper 三分支**（取消→次数→重投，顺序不可换，课件 §8.1），
+        每一步都走状态机并留痕（run.requeued_by_sweeper）。K8 把它抽成独立进程后这里只剩 queued。
 
-    ★ lease 过期才能被重抢 —— worker 崩了不会让任务永远卡住，
-    而正常在跑的任务也不会被别人偷走。这就是"队列重投不重复执行"的实现。
-
-    ★★ `org_id` = **把这个 worker 限定在一个租户上**（None = 全局，老行为）。
-
-    ⚠️ 它不只是测试用的开关，是一条真实的生产能力：worker 池按租户切分
-      （大客户独占一组 worker）是标准做法。
-    ⚠️⚠️ 但它**首先修的是一个探针污染问题**：队列是全局的 ⇒ 任何调 `run_once`
-      的测试/探针都会抢走别人遗留的活。2026-08-19 我自己就中过一次 ——
-      探针报「C 档没走审批」，实际是它抢到了别的 run，**得出了一个完全错误的结论**。
-      ⇒ 此前的修法是"每处记得先排空"（`test_worker._drain`），
-        而**手动步骤一定会被忘** —— `test_retrieval.py` 就没排，它正是那条偶发红的来源。
-      ⇒ 结构上拿不到别人的活，比"记得排空"可靠。
+    ★★ `org_id` = 把这个 worker 限定在一个租户上（None = 全局）。它首先修的是一个探针污染
+    问题：队列是全局的，不限定就会抢走别人遗留的活并得出错误结论（2026-08-19 中过）。
     """
     if run_id is not None:
-        # ★ K3-6 定向 claim（Celery 投递给了我 run_id）：课件 §8.2 原型——**只有 queued 可以被首次抢占**。
-        #   过期 lease 的回收不在这里（那是 sweeper 的活，K8；一个可变状态一个写入者，S-01）。
-        #   返回 None = 终态或别人正持有 ⇒ 调用方退出并 ack。
         assert org_id is not None, "定向 claim 必须带 org_id（payload 里有）"
         async with db.tx() as conn:
             row = await conn.fetchrow(
-                """
-                UPDATE agent_runs r
-                   SET status = 'running',
-                       started_at = COALESCE(r.started_at, now()),
-                       lease_owner = $1,
-                       lease_expires_at = now() + make_interval(secs => $2),
-                       attempts = r.attempts + 1,
-                       updated_at = now()
-                 WHERE r.org_id = $3 AND r.run_id = $4 AND r.status = 'queued'
-                RETURNING r.run_id, r.org_id, r.user_message, r.attempts,
-                          r.intent, r.automation_tier, r.requires_approval, r.conversation_id
-                """, worker_id, lease_seconds, org_id, run_id)
-            return dict(row) if row else None
+                "SELECT status FROM agent_runs WHERE org_id=$1 AND run_id=$2 FOR UPDATE", org_id, run_id)
+            if row is None or row["status"] != "queued":
+                return None
+            new = await transition_run(conn, org_id=org_id, run_id=run_id, to="running",
+                                       reason="claimed", actor_type="worker", actor_id=worker_id,
+                                       lease_seconds=lease_seconds,
+                                       event_payload={"worker_id": worker_id})
+            return _claimed_view(new)
 
     async with db.tx() as conn:
-        row = await conn.fetchrow(
+        cand = await conn.fetchrow(
             """
             WITH inflight AS (
                 -- 每个 org 当前有多少条在跑（含 lease 还没过期的）
                 SELECT org_id, count(*) AS n FROM agent_runs
                  WHERE status='running' AND lease_expires_at >= now()
                  GROUP BY org_id
-            ), claimable AS (
-                SELECT r.id FROM agent_runs r
-                LEFT JOIN inflight i ON i.org_id = r.org_id
-                WHERE ($3::text IS NULL OR r.org_id = $3)     -- ★ 可选的租户限定，见下
-                  AND (r.status = 'queued'
-                       OR (r.status = 'running' AND r.lease_expires_at < now()))
-                -- ★★ 公平分配：先按"这个 org 手上已经有几条在跑"排，再按先来后到。
-                -- 之前是纯全局 FIFO ⇒ **一个 org 灌满队列就把别人饿死**
-                -- （压测场景⑤「单 org 刷爆预算」考的正是这个）。
-                -- 它同时也是"长任务不阻塞其他任务"的一半：另一半是并发（见 Worker.serve）。
-                ORDER BY COALESCE(i.n, 0), r.created_at
-                LIMIT 1
-                FOR UPDATE SKIP LOCKED
             )
-            UPDATE agent_runs r
-               SET status = 'running',
-                   started_at = COALESCE(r.started_at, now()),   -- ★ 只记第一次
-                   lease_owner = $1,
-                   lease_expires_at = now() + make_interval(secs => $2),
-                   attempts = r.attempts + 1,
-                   updated_at = now()
-              FROM claimable c
-             WHERE r.id = c.id
-            RETURNING r.run_id, r.org_id, r.user_message, r.attempts,
-                      r.intent, r.automation_tier, r.requires_approval,
-                      -- ★ 多轮要它：不在 RETURNING 里 = worker 拿不到 = 历史永远为空
-                      --   （「字段全程有效，只是没有消费者」那条的镜像）
-                      r.conversation_id
-            """,
-            worker_id, lease_seconds, org_id)
-        return dict(row) if row else None
+            SELECT r.run_id, r.org_id, r.status, r.attempts, r.cancel_requested_at, r.lease_owner
+              FROM agent_runs r
+              LEFT JOIN inflight i ON i.org_id = r.org_id
+             WHERE ($1::text IS NULL OR r.org_id = $1)
+               AND (r.status = 'queued'
+                    OR (r.status = 'running' AND r.lease_expires_at < now()))
+             -- ★★ 公平分配：先按"这个 org 手上已经有几条在跑"排，再按先来后到
+             ORDER BY COALESCE(i.n, 0), r.created_at
+             LIMIT 1
+             FOR UPDATE OF r SKIP LOCKED
+            """, org_id)
+        if cand is None:
+            return None
+        o, rid = cand["org_id"], cand["run_id"]
+        if cand["status"] == "running":
+            # sweeper 三分支内联（顺序：先取消 → 再次数 → 才重投；换序会把"用户已取消"记成失败）
+            if cand["cancel_requested_at"] is not None:
+                await transition_run(conn, org_id=o, run_id=rid, to="cancelled",
+                                     reason="lease_expired_with_cancel_request", actor_type="sweeper",
+                                     actor_id=worker_id, fields={"error": "cancelled_by_sweeper"},
+                                     event_payload={"actor": "sweeper", "lease_owner_was": cand["lease_owner"]})
+                return None
+            if cand["attempts"] >= MAX_RUN_ATTEMPTS:
+                await transition_run(conn, org_id=o, run_id=rid, to="failed",
+                                     reason="max_attempts_exhausted", actor_type="sweeper",
+                                     actor_id=worker_id, fields={"error": "max_attempts_exhausted"},
+                                     event_payload={"error": "max_attempts_exhausted", "actor": "sweeper"})
+                return None
+            await transition_run(conn, org_id=o, run_id=rid, to="queued", reason="lease_expired",
+                                 actor_type="sweeper", actor_id=worker_id,
+                                 event_payload={"actor": "sweeper", "lease_owner_was": cand["lease_owner"]})
+        new = await transition_run(conn, org_id=o, run_id=rid, to="running", reason="claimed",
+                                   actor_type="worker", actor_id=worker_id, lease_seconds=lease_seconds,
+                                   event_payload={"worker_id": worker_id})
+        return _claimed_view(new)
+
+
+def _claimed_view(new: dict[str, Any]) -> dict[str, Any]:
+    return {k: new[k] for k in ("run_id", "org_id", "user_message", "attempts", "intent",
+                                "automation_tier", "requires_approval", "conversation_id")}
 
 
 # 终态 status → 终态事件。SSE 的关流判据（api.TERMINAL）必须与这张表一致。
-_TERMINAL_EVENT = {"succeeded": "run.succeeded",
+_TERMINAL_EVENT = {"succeeded": "run.completed",      # K4-2：状态叫 succeeded，事件叫 run.completed（课件口径）
                    "failed": "run.failed",
                    "cancelled": "run.cancelled"}
 
 
 async def finish_run(db: Database, *, org_id: str, run_id: str, status: str,
-                     result: dict | None = None, error: str | None = None) -> None:
-    """收尾 run，并在**同一事务里**发终态事件。
+                     result: dict | None = None, error: str | None = None,
+                     actor_type: str = "worker", actor_id: str = "worker",
+                     reason: str | None = None) -> None:
+    """收尾 run（走唯一迁移入口）：状态 + 终态事件 + 审计**同一事务**。
 
     ★★ 2026-08-20 冒烟实测抓到的结构 bug：此前终态事件由各调用方自己补发，
-    而 release_gate / 成本闸 / refused 这几条退出路径**谁都没发** ——
-    run 在库里已经 cancelled，SSE 客户端却永远等不到关流事件，挂死。
-    ⇒ 修法同「审批单和 run 状态同一事务」那条：**状态翻终态 = 必有终态事件**，
-    做成结构保证，调用方不再各自补发（补了就是重复）。
+    release_gate / 成本闸 / refused 这几条退出路径**谁都没发** ⇒ SSE 客户端挂死。
+    ⇒ 「状态翻终态 = 必有终态事件」做成结构保证；K4 起这条保证由 transition_run 承担。
     """
+    payload = dict(result) if (status == "succeeded" and result) else ({"error": error} if error else {})
     async with db.tx() as conn:
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status=$3, result=$4, error=$5,
-                   ended_at=now(),
-                   lease_owner=NULL, lease_expires_at=NULL, updated_at=now()
-             WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id, status, result, error)
-        kind = _TERMINAL_EVENT.get(status)
-        if kind is not None:
-            payload = dict(result) if (status == "succeeded" and result) else (
-                {"error": error} if error else {})
-            await append_event(conn, org_id=org_id, run_id=run_id, kind=kind, payload=payload)
+        await transition_run(conn, org_id=org_id, run_id=run_id, to=status,
+                             reason=reason or error or "completed", actor_type=actor_type,
+                             actor_id=actor_id, fields={"result": result, "error": error},
+                             event_payload=payload)
 
 
 async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> None:
@@ -562,18 +544,12 @@ async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> No
     ⇒ 记在这里，因为"为什么不做断点续"以后一定会被再问一次。
     """
     async with db.tx() as conn:
-        tag = await conn.execute(
-            """
-            UPDATE agent_runs
-               SET status='queued', lease_owner=NULL, lease_expires_at=NULL,
-                   resume_token=NULL, updated_at=now()
-             WHERE org_id=$1 AND run_id=$2 AND status='waiting_for_user'
-            """, org_id, run_id)
-        if tag.endswith(" 1"):
-            # K1-5：恢复留痕（课件 CH4 事件名 run.resumed）；回到 queued 不是 running——
-            # 必须重新走队列被领取，保住"同一时刻只有一个 worker 持有"
-            await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
-                               payload={"actor": "approval"})
+        st = await conn.fetchval("SELECT status FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, run_id)
+        if st == "waiting_for_user":
+            # K1-5：回到 queued 不是 running——必须重新走队列被领取；事件 run.resumed 由迁移入口写
+            await transition_run(conn, org_id=org_id, run_id=run_id, to="queued",
+                                 reason="approval_decided", actor_type="approval", actor_id="approval_api",
+                                 event_payload={"actor": "approval"})
             await enqueue_outbox(conn, org_id=org_id, run_id=run_id)   # 回 queued 必须重新走队列
 
 
@@ -584,6 +560,137 @@ async def resume_after_approval(db: Database, *, org_id: str, run_id: str) -> No
 
 RUN_STATUSES = ("queued", "running", "waiting_for_user", "succeeded", "failed", "cancelled")
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+MAX_RUN_ATTEMPTS = 3                       # agent_runs.attempts 上限（执行次数；与 outbox 投递次数分账，H25）
+
+# --------------------------------------------------------------------------
+# K4（课件 CH4）：白名单 · 唯一迁移入口 · 一事务写全（状态 + 事件 + 审计）
+#   `run.status` 不是一个可以随手赋值的字段，是系统对外的执行契约。
+#   ⛔ 全库只有 transition_run 一处 `UPDATE agent_runs SET status=`（K4 门槛② grep 判据守着）。
+# --------------------------------------------------------------------------
+
+ACTOR_TYPES = frozenset({"api", "worker", "sweeper", "approval", "system"})
+
+# 九条课件边 + 一条我们的改造边（waiting_for_user→succeeded：clarify 轮被下一条消息收尾，26 §2.5）；
+# 三个终态出边为**空集**——用数据结构表达禁止，不用 if。
+ALLOWED_RUN_TRANSITIONS: dict[str, frozenset[str]] = {
+    "queued":           frozenset({"running", "cancelled"}),
+    "running":          frozenset({"succeeded", "failed", "cancelled", "waiting_for_user", "queued"}),
+    "waiting_for_user": frozenset({"queued", "cancelled", "succeeded"}),
+    "succeeded":        frozenset(),
+    "failed":           frozenset(),
+    "cancelled":        frozenset(),
+}
+
+# 触发者矩阵（课件 §9 的轻量版：单租户 dev mode，防的是我们自己的代码走错路，不是恶意用户）
+ALLOWED_ACTORS: dict[tuple[str, str], frozenset[str]] = {
+    ("queued", "running"):               frozenset({"worker"}),
+    ("queued", "cancelled"):             frozenset({"api", "sweeper", "system"}),
+    ("running", "succeeded"):            frozenset({"worker"}),
+    ("running", "failed"):               frozenset({"worker", "sweeper"}),
+    ("running", "cancelled"):            frozenset({"worker", "sweeper"}),
+    ("running", "waiting_for_user"):     frozenset({"worker"}),
+    ("running", "queued"):               frozenset({"worker", "sweeper"}),
+    ("waiting_for_user", "queued"):      frozenset({"api", "approval"}),
+    ("waiting_for_user", "cancelled"):   frozenset({"api", "sweeper", "system"}),
+    ("waiting_for_user", "succeeded"):   frozenset({"api"}),
+}
+
+# 只有这些列允许随迁移一起写（其余列各有自己的写入者）
+_TRANSITION_FIELDS = frozenset({"result", "error", "requires_approval"})
+
+
+class InvalidRunTransition(Exception):
+    """携带 from/to（课件 B③）：API 层能说清"从 succeeded 不能到 running"，而不是「操作失败」。"""
+
+    def __init__(self, *, run_id: str, from_status: str, to_status: str,
+                 actor_type: str | None = None) -> None:
+        self.run_id, self.from_status, self.to_status, self.actor_type = run_id, from_status, to_status, actor_type
+        who = f" by actor {actor_type!r}" if actor_type else ""
+        super().__init__(f"run {run_id!r}: cannot transition from {from_status!r} to {to_status!r}{who}")
+
+
+def event_type_for_transition(from_status: str, to_status: str, actor_type: str, *,
+                              attempts: int = 1) -> str:
+    """事件名映射（课件 B⑤，吃二元组 + actor）。状态命名结果，事件命名时刻：
+    succeeded → run.completed（⛔ 禁 run.succeeded）；attempts>1 的 →running 是 run.restarted；
+    running→queued 按 actor 分：sweeper ⇒ run.requeued_by_sweeper，worker ⇒ run.retry_scheduled。"""
+    if to_status == "succeeded":
+        return "run.completed"
+    if to_status == "failed":
+        return "run.failed"
+    if to_status == "cancelled":
+        return "run.cancelled"
+    if to_status == "waiting_for_user":
+        return "run.waiting_for_user"
+    if to_status == "running":
+        return "run.started" if attempts <= 1 else "run.restarted"
+    if to_status == "queued":
+        if from_status == "waiting_for_user":
+            return "run.resumed"
+        return "run.requeued_by_sweeper" if actor_type == "sweeper" else "run.retry_scheduled"
+    raise ValueError(f"没有 {from_status}→{to_status} 的事件名")   # 兜底分支：新状态必须显式定名
+
+
+async def transition_run(conn: asyncpg.Connection, *, org_id: str, run_id: str, to: str,
+                         reason: str, actor_type: str, actor_id: str,
+                         fields: dict[str, Any] | None = None,
+                         event_payload: dict[str, Any] | None = None,
+                         lease_seconds: float | None = None) -> dict[str, Any]:
+    """唯一迁移入口，五节流水线（课件 §8）：行锁 → 白名单/触发者 → 派生字段 → 事件 → 审计。
+    ③④⑤ 在**调用方的事务**里同生共死（"签名即制度"：reason/actor 必填，漏了就炸）。
+    非法迁移**不写事件不写审计**（它没发生；写了会污染 K8 重放）——直接 raise。"""
+    if actor_type not in ACTOR_TYPES:
+        raise ValueError(f"actor_type 必须在 {sorted(ACTOR_TYPES)}，收到 {actor_type!r}")
+    if not reason:
+        raise ValueError("transition_run 的 reason 必填（审计要答'为什么'）")
+    if fields and not set(fields) <= _TRANSITION_FIELDS:
+        raise ValueError(f"迁移只许顺带写 {sorted(_TRANSITION_FIELDS)}，收到 {sorted(fields)}")
+    row = await conn.fetchrow(
+        "SELECT status FROM agent_runs WHERE org_id=$1 AND run_id=$2 FOR UPDATE", org_id, run_id)
+    if row is None:
+        raise LookupError(f"run {run_id!r} 不在 org {org_id!r}")
+    frm = row["status"]
+    if to not in ALLOWED_RUN_TRANSITIONS.get(frm, frozenset()):
+        raise InvalidRunTransition(run_id=run_id, from_status=frm, to_status=to)
+    if actor_type not in ALLOWED_ACTORS[(frm, to)]:
+        raise InvalidRunTransition(run_id=run_id, from_status=frm, to_status=to, actor_type=actor_type)
+
+    args: list[Any] = [org_id, run_id, to]
+
+    def bind(v: Any) -> str:
+        args.append(v)
+        return f"${len(args)}"
+
+    sets = ["status = $3", "updated_at = now()", "version = version + 1"]      # version：CAS 守卫（K8 消费）
+    if to == "running":
+        sets += ["started_at = COALESCE(started_at, now())",                  # 事实不可修改：只记第一次
+                 "attempts = attempts + 1",                                    # attempts 在 claim 时 +1（H28 定死）
+                 f"lease_owner = {bind(actor_id)}",
+                 f"lease_expires_at = now() + make_interval(secs => {bind(float(lease_seconds or 60))})"]
+    elif to in TERMINAL_STATUSES:
+        sets += ["ended_at = now()", "lease_owner = NULL", "lease_expires_at = NULL", "resume_token = NULL"]
+        if to == "cancelled":
+            sets.append("cancel_requested_at = COALESCE(cancel_requested_at, now())")
+    elif to == "waiting_for_user":
+        # 等人：清 lease（"等待"是数据里的一行，不是执行槽）、发一次性 resume_token；不设 ended_at
+        sets += ["lease_owner = NULL", "lease_expires_at = NULL", f"resume_token = {bind(new_resume_token())}"]
+    elif to == "queued":
+        sets += ["lease_owner = NULL", "lease_expires_at = NULL", "resume_token = NULL"]
+    for col, val in (fields or {}).items():
+        sets.append(f"{col} = {bind(val)}")
+    new = await conn.fetchrow(
+        f"UPDATE agent_runs SET {', '.join(sets)} WHERE org_id=$1 AND run_id=$2 "
+        "RETURNING run_id, org_id, user_message, attempts, intent, automation_tier, "
+        "requires_approval, conversation_id, version", *args)
+    kind = event_type_for_transition(frm, to, actor_type, attempts=int(new["attempts"]))
+    await append_event(conn, org_id=org_id, run_id=run_id, kind=kind, payload=event_payload or {})
+    await conn.execute(
+        "INSERT INTO audit_logs (run_id, org_id, action, param_source, detail) VALUES ($1,$2,'run.transition','system',$3)",
+        run_id, org_id, {"from": frm, "to": to, "event": kind, "reason": reason,
+                         "actor_type": actor_type, "actor_id": actor_id})
+    out = dict(new)
+    out.update({"from": frm, "to": to, "event": kind})
+    return out
 
 
 def new_resume_token() -> str:
@@ -619,19 +726,10 @@ async def request_cancel(db: Database, *, org_id: str, run_id: str, reason: str,
             await append_event(conn, org_id=org_id, run_id=run_id, kind="run.cancel_requested",
                                payload={"reason": reason, "actor": actor})
             return "requested"
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status='cancelled', error=$3, ended_at=now(),
-                   lease_owner=NULL, lease_expires_at=NULL, resume_token=NULL,
-                   cancel_requested_at = COALESCE(cancel_requested_at, now())
-             WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id, f"cancelled_by_{actor}")
-        await append_event(conn, org_id=org_id, run_id=run_id, kind=_TERMINAL_EVENT["cancelled"],
-                           payload={"reason": reason, "actor": actor, "from": st})
-        await conn.execute(
-            "INSERT INTO audit_logs (run_id, org_id, action, param_source, detail) "
-            "VALUES ($1,$2,'run.cancelled','user',$3)",
-            run_id, org_id, {"reason": reason, "from": st, "actor": actor})
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="cancelled",
+                             reason=reason or "user_cancel", actor_type="api", actor_id=actor,
+                             fields={"error": f"cancelled_by_{actor}"},
+                             event_payload={"reason": reason, "actor": actor, "from": st})
         return "cancelled"
 
 
@@ -663,14 +761,9 @@ async def resume_run(db: Database, *, org_id: str, run_id: str, resume_token: st
             return "not_waiting"
         if not row["resume_token"] or not secrets.compare_digest(row["resume_token"], resume_token):
             return "bad_token"
-        await conn.execute(
-            """
-            UPDATE agent_runs SET status='queued', lease_owner=NULL, lease_expires_at=NULL,
-                   resume_token=NULL
-             WHERE org_id=$1 AND run_id=$2
-            """, org_id, run_id)
-        await append_event(conn, org_id=org_id, run_id=run_id, kind="run.resumed",
-                           payload={"actor": "api", "input": input or {}})
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="queued", reason="resume",
+                             actor_type="api", actor_id="resume_api",
+                             event_payload={"actor": "api", "input": input or {}})
         await enqueue_outbox(conn, org_id=org_id, run_id=run_id)       # 回 queued 必须重新走队列
         return "resumed"
 

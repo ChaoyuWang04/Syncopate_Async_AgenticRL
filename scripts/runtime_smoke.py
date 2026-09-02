@@ -27,7 +27,7 @@ from typing import Any
 
 import httpx
 
-TERMINAL = {"run.succeeded", "run.failed", "run.cancelled", "run.waiting_for_user"}
+TERMINAL = {"run.completed", "run.failed", "run.cancelled", "run.waiting_for_user"}
 
 # 跟单条 run 的事件流最多等这么久 —— 冒烟里"永远等不到终态"本身就是一种失败，
 # 必须响亮地报出来（第一版没有死线，正是被"cancelled 不发终态事件"的 bug 挂死的）。
@@ -51,7 +51,7 @@ class Case:
     # 到 waiting_for_user 后是否演「人批准 → 恢复 → 跑完」的后半段（False = 人拒绝）
     approve: bool = False
     # 裁决后第二段要等到的终态（拒绝路径应是 run.cancelled）
-    expect_after_approval: str = "run.succeeded"
+    expect_after_approval: str = "run.completed"
 
 
 # ⚠️ tier 的选法对齐灰测闸门的**默认**上限 C（release.py：忘了配置就该太严）：

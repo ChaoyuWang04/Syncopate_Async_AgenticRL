@@ -358,6 +358,17 @@ K3-12 三个 attempts 分账（H22/H25）：outbox.attempts=投递次数（max 1
 
 ## 6 · K4 · 状态机（课件 CH4；~1.5 天）
 
+> ✅ **K4 已落地（2026-09-02）**：`db.transition_run` 唯一入口（行锁→白名单→触发者矩阵→派生字段→事件→审计，
+> 同事务；非法迁移不写事件不写审计直接 raise）· `ALLOWED_RUN_TRANSITIONS` 九条课件边 + **一条改造边**
+> `waiting_for_user→succeeded`（clarify 轮被下一条消息收尾，26 §2.5；三终态出边空集）· `event_type_for_transition`
+> 吃 (from,to,actor,attempts)：succeeded→**run.completed**（全仓改名，前端/脚本/测试同步；文档历史文字不动）、
+> attempts>1→run.restarted、sweeper→run.requeued_by_sweeper、worker→run.retry_scheduled ·
+> 全部八处状态裸改收编（claim 两模式/finish/park/close_parked/resume×2/cancel/retry/open_approval_case）·
+> 轮询 claim 撞过期 lease 时**内联 sweeper 三分支**（取消→次数→重投，全走状态机留痕；K8 抽成独立进程）·
+> rerun 通道 `POST /runs/{id}/rerun`（终态才许，parent_run_id/rerun_reason）· API 409 INVALID_RUN_TRANSITION。
+> 门槛①–⑤ = `test_state_machine_k4.py` 9 条（36 组合、错误 actor、SET 段 grep、原子性、映射、留痕、钱已动、rerun）；
+> ⑥ 回归 311 passed。
+
 ### 取舍总表（准则五）
 
 | 课件机制 | 处置 | 理由 |

@@ -83,7 +83,7 @@ def test_stream_replays_all_events_from_scratch() -> None:
 
     async def body(db, client):
         await create_run(db, org_id=org, run_id=run_id, user_message="x")
-        for kind in ("run.started", "tool.result", "run.succeeded"):
+        for kind in ("run.started", "tool.result", "run.completed"):
             await emit(db, org_id=org, run_id=run_id, kind=kind, payload={"k": kind})
         r = await client.get(f"/runs/{run_id}/events", headers=ACME)
         return r
@@ -92,7 +92,7 @@ def test_stream_replays_all_events_from_scratch() -> None:
     events = parse_sse(r.text)
     # seq 1 = 创建事务写的 run.created（K2-6）；之后才是 worker 侧的事件
     assert [e["event"] for e in events] == ["run.created", "run.started", "tool.result",
-                                            "run.succeeded"]
+                                            "run.completed"]
     assert [e["id"] for e in events] == ["1", "2", "3", "4"]
 
 
@@ -102,7 +102,7 @@ def test_last_event_id_resumes_without_duplicates() -> None:
 
     async def body(db, client):
         await create_run(db, org_id=org, run_id=run_id, user_message="x")
-        for kind in ("run.started", "tool.result", "tool.result", "run.succeeded"):
+        for kind in ("run.started", "tool.result", "tool.result", "run.completed"):
             await emit(db, org_id=org, run_id=run_id, kind=kind)
         return await client.get(f"/runs/{run_id}/events",
                                 headers={**ACME, "Last-Event-ID": "3"})
@@ -121,13 +121,13 @@ def test_garbage_last_event_id_falls_back_to_full_replay() -> None:
 
     async def body(db, client):
         await create_run(db, org_id=org, run_id=run_id, user_message="x")
-        await emit(db, org_id=org, run_id=run_id, kind="run.succeeded")
+        await emit(db, org_id=org, run_id=run_id, kind="run.completed")
         return await client.get(f"/runs/{run_id}/events",
                                 headers={**ACME, "Last-Event-ID": "not-a-number"})
 
     r = run_case(body)
     assert r.status_code == 200
-    assert len(parse_sse(r.text)) == 2          # run.created + run.succeeded
+    assert len(parse_sse(r.text)) == 2          # run.created + run.completed
 
 
 # --------------------------------------------------------------------------
@@ -152,7 +152,7 @@ def test_stream_closes_on_terminal_event() -> None:
     assert [e["event"] for e in events] == ["run.created", "run.started", "run.failed"]
 
 
-@pytest.mark.parametrize("terminal", ["run.succeeded", "run.failed", "run.waiting_for_user"])
+@pytest.mark.parametrize("terminal", ["run.completed", "run.failed", "run.waiting_for_user"])
 def test_every_terminal_kind_closes_the_stream(terminal: str) -> None:
     """★ 三种终态都要关流 —— 漏一种就是一类 run 永远挂着连接。
 
@@ -181,7 +181,7 @@ def test_cannot_stream_another_orgs_run() -> None:
 
     async def body(db, client):
         await create_run(db, org_id=org, run_id=run_id, user_message="x")
-        await emit(db, org_id=org, run_id=run_id, kind="run.succeeded")
+        await emit(db, org_id=org, run_id=run_id, kind="run.completed")
         return await client.get(f"/runs/{run_id}/events", headers=GLOBEX)
 
     assert run_case(body).status_code == 404

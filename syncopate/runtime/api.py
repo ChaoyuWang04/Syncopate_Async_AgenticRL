@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 from syncopate.runtime.db import (Database, close_parked_clarify_runs, conversation_exists,
                                   create_conversation, create_run, new_conversation_id,
                                   new_run_id, request_cancel, resume_after_approval,
-                                  resume_run, trace)
+                                  resume_run, trace, InvalidRunTransition, TERMINAL_STATUSES)
 
 # --------------------------------------------------------------------------
 # 鉴权：token → org。最小实现，形状是对的。
@@ -96,7 +96,7 @@ ERROR_CODES = frozenset({
     "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CONFLICT", "VALIDATION_ERROR", "INTERNAL_ERROR",
     "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_KEY_TOO_SHORT", "INVALID_RUN_INPUT",
     "RUN_ALREADY_TERMINAL", "RUN_NOT_WAITING_FOR_USER", "INVALID_RESUME_TOKEN",
-    "TRACE_FORBIDDEN",
+    "TRACE_FORBIDDEN", "INVALID_RUN_TRANSITION", "RUN_NOT_TERMINAL",
 })
 _STATUS_DEFAULT_CODE = {401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND",
                         409: "CONFLICT", 422: "VALIDATION_ERROR"}
@@ -184,6 +184,13 @@ class RunView(BaseModel):
 
 class CancelRunRequest(BaseModel):
     reason: str = Field(default="", max_length=500)
+
+
+class RerunRequest(BaseModel):
+    """rerun = 新建 run 串上 parent（课件 §5.4：终态后只能新建，不能把旧 run 改回 running）。"""
+
+    reason: str = Field(min_length=1, max_length=500)
+    user_message: str | None = Field(default=None, min_length=1, max_length=4000)
 
 
 class ResumeRunRequest(BaseModel):
@@ -306,6 +313,12 @@ def create_app(db: Database | None = None) -> FastAPI:
         return JSONResponse(status_code=exc.status_code,
                             content=_error_body(request, exc.status_code, exc.detail),
                             headers=getattr(exc, "headers", None))
+
+    @app.exception_handler(InvalidRunTransition)
+    async def _bad_transition(request: Request, exc: InvalidRunTransition) -> JSONResponse:
+        # K4-1：非法迁移 → 409，message 带 from/to（"cannot transition from succeeded to running"）
+        return JSONResponse(status_code=409, content=_error_body(
+            request, 409, {"code": "INVALID_RUN_TRANSITION", "message": str(exc)}))
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -462,6 +475,25 @@ def create_app(db: Database | None = None) -> FastAPI:
             raise ApiError(403, "INVALID_RESUME_TOKEN", "resume_token 不匹配")
         return await _run_view(db, org_id, run_id)
 
+    # ---- K4-5 · rerun 通道：终态永不回队，只能新建并用 parent_run_id 串起来 ----
+    @app.post("/runs/{run_id}/rerun", response_model=RunView, status_code=status.HTTP_201_CREATED)
+    async def rerun(run_id: str, body: RerunRequest, org_id: OrgId, db: DB) -> RunView:
+        async with db.tx() as conn:
+            parent = await conn.fetchrow(
+                "SELECT status, user_message, intent, automation_tier, conversation_id, run_type "
+                "FROM agent_runs WHERE org_id=$1 AND run_id=$2", org_id, run_id)
+        if parent is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "run 不存在")
+        if parent["status"] not in TERMINAL_STATUSES:
+            raise ApiError(409, "RUN_NOT_TERMINAL", "只有已结束的 run 才能 rerun（进行中的请用 cancel/resume）")
+        handle = await create_run(
+            db, org_id=org_id, run_id=new_run_id(),
+            user_message=body.user_message or parent["user_message"] or "",
+            intent=parent["intent"], automation_tier=parent["automation_tier"],
+            conversation_id=parent["conversation_id"], run_type=parent["run_type"] or "chat",
+            parent_run_id=run_id, rerun_reason=body.reason)
+        return await _run_view(db, org_id, handle.run_id, created=True)
+
     # ---- K1-8 · trace（独立角色位；跨租户 404 先于角色 403）----
     @app.get("/runs/{run_id}/trace")
     async def get_trace(run_id: str, principal: Principal, db: DB) -> dict[str, Any]:
@@ -583,7 +615,7 @@ def create_app(db: Database | None = None) -> FastAPI:
     # 而服务端也永远留着一个连接（压测场景①：连接数才是先撑爆的东西）。
     # ⚠️ 与 db._TERMINAL_EVENT 必须一致：库里翻终态 = 必发其中之一（同一事务，
     #   2026-08-20 冒烟抓到 cancelled 各路径不发事件 ⇒ SSE 挂死，已改成结构保证）。
-    TERMINAL = {"run.succeeded", "run.failed", "run.cancelled", "run.waiting_for_user"}
+    TERMINAL = {"run.completed", "run.failed", "run.cancelled", "run.waiting_for_user"}   # K4-2：run.completed
 
     async def _event_stream(db: Database, org_id: str, run_id: str,
                             after_seq: int, request: Request) -> AsyncIterator[str]:

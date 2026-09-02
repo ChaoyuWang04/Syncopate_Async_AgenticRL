@@ -218,7 +218,7 @@ function render(rid, ev, dataStr) {
     logLine(`${t}  ⚠ 降级：${d.reason}`, "err");
   else logLine(`${t}  ${ev}`);
 
-  if (ev === "run.succeeded") { setStatus(rid, "succeeded"); showAnswer(d); usage(); }
+  if (ev === "run.completed") { setStatus(rid, "succeeded"); showAnswer(d); usage(); }
   else if (ev === "run.failed") { setStatus(rid, "failed"); usage(); }
   else if (ev === "run.cancelled") { setStatus(rid, "cancelled"); usage(); }
   else if (ev === "run.waiting_for_user") { setStatus(rid, "waiting_for_user"); showApproval(rid); }

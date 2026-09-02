@@ -151,7 +151,7 @@ def test_approval_case_carries_the_tier_reason():
     """
     import uuid as _uuid
 
-    from syncopate.runtime.db import Database, create_run
+    from syncopate.runtime.db import Database, claim_run, create_run
     from syncopate.runtime.worker import audit as w_audit, emit as w_emit
 
     org = f"org_{_uuid.uuid4().hex[:8]}"
@@ -162,6 +162,8 @@ def test_approval_case_carries_the_tier_reason():
         await db.connect(max_size=4)
         try:
             await create_run(db, org_id=org, run_id=run, user_message="x")
+            # K4：审批单只能在 running 的 run 上开（queued→waiting_for_user 不在白名单）
+            assert await claim_run(db, worker_id="t", org_id=org, run_id=run)
 
             async def _ob() -> bool:
                 return False

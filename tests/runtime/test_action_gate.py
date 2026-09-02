@@ -175,7 +175,9 @@ def test_triggers_halt_before_the_write_happens(monkeypatch):
                            ctx=ctx, param_source="user"))
     assert out.status == "halted" and out.case_ref == "CASE_1"
     assert executed == [], "★ 审批单开了，但写动作**已经执行了** —— 那审批就只是记账"
-    assert rec.events[-1][0] == "run.waiting_for_user"
+    # K4：run.waiting_for_user 由 open_approval_case 内的 transition_run 与状态同事务写；
+    # 收口自己**不许再发**（发了就是重复事件）。真事件在 test_state_machine_k4 / test_worker 里验。
+    assert all(kind != "run.waiting_for_user" for kind, _ in rec.events)
 
 
 def test_decided_actions_skip_triggers():

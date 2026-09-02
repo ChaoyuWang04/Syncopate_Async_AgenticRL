@@ -36,7 +36,7 @@ TOKEN_ACME = "dev-token-acme"
 TOKEN_GLOBEX = "dev-token-globex"
 DSN = os.environ.get("SYNCOPATE_PG_DSN",
                      "postgresql://syncopate:syncopate@127.0.0.1:5432/syncopate")
-TERMINAL = {"run.succeeded", "run.failed", "run.cancelled", "run.waiting_for_user"}
+TERMINAL = {"run.completed", "run.failed", "run.cancelled", "run.waiting_for_user"}
 
 # §19 门槛（延迟 ms）；gold tokens_out 中位数来自 data/sft/v13 家族中位（×3 为门槛）
 INTENTS = {

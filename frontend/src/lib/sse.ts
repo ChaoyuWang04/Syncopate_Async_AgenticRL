@@ -11,7 +11,7 @@ export interface SseEvent {
 }
 
 const TERMINAL_EVENTS = new Set([
-  'run.succeeded',
+  'run.completed',
   'run.failed',
   'run.cancelled',
   'run.waiting_for_user',

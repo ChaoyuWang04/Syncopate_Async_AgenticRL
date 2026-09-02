@@ -81,7 +81,7 @@ run 状态机、事务、幂等、lease、工具安全、可观测全部还是�
 
 | # | 坑 | 出处 | 后果 | 防法 / 判据 | 归属 | 状态 |
 |---|---|---|---|---|---|---|
-| S-01 | 现有 `claim_run` **顺手接管 lease 过期的 running**（自动 requeue 语义写在 claim 里） | `db.py:197` | 与 K8 sweeper 成为同一件事的**两个写入者**（H102 同族）：sweeper 迁 queued 写事件，claim 又静默接管不写事件 ⇒ 恢复不留痕 | 一个所有者：claim 只认 `status='queued'`（课件 §8.2 原型），过期 lease 的回收**只**由 sweeper 走 `transition_run` + `run.requeued_by_sweeper` | K3/K8 | 🔶 09-02：Celery 定向 claim 只认 queued ✅（test_targeted_claim…）；轮询入口仍接管过期 lease，K8 sweeper 落地时撤 |
+| S-01 | 现有 `claim_run` **顺手接管 lease 过期的 running**（自动 requeue 语义写在 claim 里） | `db.py:197` | 与 K8 sweeper 成为同一件事的**两个写入者**（H102 同族）：sweeper 迁 queued 写事件，claim 又静默接管不写事件 ⇒ 恢复不留痕 | 一个所有者：claim 只认 `status='queued'`（课件 §8.2 原型），过期 lease 的回收**只**由 sweeper 走 `transition_run` + `run.requeued_by_sweeper` | K3/K8 | ✅ 09-02：过期 lease 的回收只剩一个写入者=状态机（轮询 claim 内联 sweeper 三分支全走 transition_run 留痕；Celery 定向 claim 只认 queued）；K8 把内联段抽成独立进程 |
 | S-02 | 幂等键**从 run_id 推** | `11 §3.9`（validation_errors 那段：client_request_id 从 run_id 推） | 课件 §11.4：同 run 内重试正常，**rerun 换 run_id 就双重扣款** | 写工具 key 绑业务实体+版本位（`campaign_id:动作:v`），只读工具才可带 run_id；K5-6 逐工具登记 key_fn；判据：rerun 同一业务意图 ⇒ 平台去重账本命中 | K5/K6 | ⬜ |
 | S-03 | `finish_run` / `emit` 的 `MAX(seq)+1` | `db.py:283`、`worker.py:65` | 见 P-03 | 同 P-03 | K2 | 🔶 |
 | S-04 | `system.wait` 睡到 lease 的一半 | 09 §4.5.9 | 引入心跳后 lease TTL 变短（60s）⇒ 可等时长跟着缩到 30s，模型被教过"先等够再查" | 心跳期间 wait 可跨多个 TTL（续租在跑就不是死），`truncated_by_lease` 语义改成"被 max_duration 截断"；训练侧描述不变（守则⑮：改 runtime 语义前先对照沙盒 spec） | K3/K5 | ⬜ |
@@ -91,11 +91,13 @@ run 状态机、事务、幂等、lease、工具安全、可观测全部还是�
 | S-08 | `resume_after_approval` 只把状态改回 queued，恢复靠 worker 读 checkpoint | `db.py:297` + `agent_loop.py:140` | 若 claim 后没带 `resume=True` 就从头跑（重复模型调用、重复读工具配额） | K0 核实 worker 调用链；判据：审批恢复后模型调用次数 = 剩余轮数 | K0/K5 | ⬜ |
 | S-09 | 取消：现有 cancelled 终态由 `finish_run` 写，但 running 中的**协作式取消**（cancel_requested_at）不存在 | 11 §0 / 27 K1-4 | running 的 run 无法取消或只能强杀 | K1-4 + K3-10 + K4-4 | K1 | ✅ 09-02（`db.request_cancel` + ActionGate 入口安全点；`test_cancel_request_is_honoured_by_worker_at_safety_point`） |
 | S-13 | 测试把两个 404 的**整个响应体**做相等比较当"不可枚举"判据 | 09-02 K1-7 信封加 request_id 后两条老测试红 | 判据量的是"响应体逐字节相同"，而它真正要防的是 code/message 可探测——判据形状比它要防的事宽 | 比较时剔除 request_id（探测面 = code + message）；新写此类判据先问"哪些字段是探测面" | K1 | ✅ 09-02 |
+| S-17 | 状态机上线后，"在 queued 的 run 上开审批单/停等"变成非法迁移 | 09-02 三条老测试红（write_tools/tier_policy 直接对未 claim 的 run 调 approval.create_case） | 老测试的前提本来就不成立（没执行就停等）；判据是对的，改的是测试前置 | 测试先 claim；生产路径永远先 claim 再执行 | K4 | ✅ 09-02 |
+| S-18 | 测试留下的"被污染 run"（孤儿事件 + queued）会被后面**全局 claim** 的老测试抢到并撞 seq | 09-02 K4 原子性测试首跑 | 与 C-1/S-14 同族：共享队列 + 测试造脏数据 = 别的测试替你炸 | 造脏数据的测试必须自己终态化/清理；长期解法 = 每测试独立 org + worker 一律 --org-id | K4 | ✅ 09-02（测试卫生） |
 | S-16 | `run.enqueued` 可能排在 `run.started` 之后 | 09-02 集成测试实测 | 前端时间线按 seq 展示会出现"先开跑后入队"；若有判据假设顺序会误红 | 这是"先 publish 后标记"顺序铁律的必然：worker 比标记事务快。判据只断言两者都在、run.created 在首位；时间线展示按事件语义不按 seq 排这两条 | K3/K7 | ✅ 登记（不修：修它 = 反转顺序铁律） |
 | S-15 | `record_tool_call` 占坑是"先查再插"：并发同键两次调用都查到"没有"，第二个 INSERT 撞 `tool_calls_external_idem_uniq` 直接抛异常 | 09-02 K1 全套连跑暴露（老竞态，K2 的领号写入改变了时序才稳定复现；`test_concurrent_same_key_returns_the_original_result`） | 撞唯一键的那次调用带异常回到 worker ⇒ run failed，而另一路可能已经在执行副作用——"返回失败但钱在花"的形状 | 课件 H01 工具级形态：UniqueViolation = 命中，回到 `_await_settled_prior` 等原结果；救你的是约束不是查询 | ✅ 09-02（三遍 278/278 稳定） | K1/K6 | ✅ |
 | S-14 | worker-驱动的 API 测试假设"队列里只有我这条" | 09-02 K1 测试首跑：p95 测试留下 100 条 queued，后续 claim 抢到别人的 | 与 C-1 同族：全局/同 org 队列 ⇒ 任何 run_once 都会抢别人的活，结论跟着错 | 测试内 `_drain(org, keep)`；Celery 化后按队列名隔离（S-06） | K1/K3 | ✅ 09-02（测试卫生） |
 | S-10 | `tests/runtime/test_retrieval.py` 偶发红（09-02 本机：语料灌入后首跑 1 红、复跑全绿） | 本机实测 | 偶发红的测试 = 不可信的尺子（09 §4.5.5 原话）；K3 门槛⑨"零失败"会被它污染 | 复现三次定位（怀疑：生效期按 `now()` 算、与灌入时间戳同秒；或队列全局污染 C-1 同族）；定位前不许改判据 | K0/K2 | ⬜ |
-| S-12 | clarify 收场后 run 停在 `running`（无人置 waiting_for_user）⇒ lease 过期被 `claim_run` 当崩溃重抢 | verl-22 09-02 通报；29 D25 | 追问一次 = 60s 后整条 run 重跑一遍（重复模型调用 + 读工具配额）；引入 sweeper 后会变成 `run.requeued_by_sweeper` 假恢复 | 与 S-01 同根：过期 lease 的处置只能有一个所有者且必须先分清"等人"和"死了"——waiting 必须清 lease（课件 CH4 ④） | K1/K4 | 🔶 已复现（R5 L4 记录） |
+| S-12 | clarify 收场后 run 停在 `running`（无人置 waiting_for_user）⇒ lease 过期被 `claim_run` 当崩溃重抢 | verl-22 09-02 通报；29 D25 | 追问一次 = 60s 后整条 run 重跑一遍（重复模型调用 + 读工具配额）；引入 sweeper 后会变成 `run.requeued_by_sweeper` 假恢复 | 与 S-01 同根：过期 lease 的处置只能有一个所有者且必须先分清"等人"和"死了"——waiting 必须清 lease（课件 CH4 ④） | K1/K4 | ✅ 09-02：park_run_for_user 走 transition_run（清 lease、发 resume_token、同事务事件） |
 | S-11 | "哪些是写工具"有两份真相：`tool_registry` 的 `kind=="write"` 与 runtime 的 `WRITE_TOOLS` 抄本（`tools.py:41`） | 29 D12 | 登记≠实现的温床：一边加了写工具另一边不知道（08-19 已中过一次） | K6-3 删抄本，权限/幂等/五态全部从 registry 派生；判据 = `WRITE_TOOLS` 符号在 runtime 里不再存在 | K6 | ⬜ |
 
 ---

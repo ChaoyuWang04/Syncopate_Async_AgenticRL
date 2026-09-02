@@ -120,7 +120,7 @@ def test_next_message_closes_clarify_turn_and_it_enters_history() -> None:
 
     before, closed, after, st, last = _with_db(go)
     assert before == [], "收尾之前不该进历史（还在等补充）"
-    assert closed == ["r1"] and st == "succeeded" and last == "run.succeeded"
+    assert closed == ["r1"] and st == "succeeded" and last == "run.completed"
     assert [t["run_id"] for t in after] == ["r1"]
     assert after[0]["result"]["arguments"]["question"] == "投哪个地域？", "历史里要有那句追问"
 

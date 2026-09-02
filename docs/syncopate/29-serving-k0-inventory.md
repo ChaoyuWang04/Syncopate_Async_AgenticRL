@@ -79,7 +79,7 @@
 | C4 | lease 心跳续租 | ✅ 09-02（Celery 路径；轮询路径无心跳） | 全仓无 renew/heartbeat；`lease_expires_at` 只在 claim 写一次 `db.py:244` | H30 → K3-7 |
 | C5 | 先写库再 ack | ✅ 09-02（acks_late；集成测试③） | 无 ack 概念（无 broker） | K3-8 |
 | C6 | 错误分类 transient/permanent + 退避 + DLQ | ✅ 09-02（副作用感知归 K5/K6） | 工具级 retriable 重试 `tools.py:114-136`；run 级异常一律 `failed` `worker.py:318-322`；无 DLQ | K3-9 |
-| C7 | worker 层不改 run 状态（一个写入者） | 🔶 | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
+| C7 | worker 层不改 run 状态（一个写入者） | ✅ 09-02（Celery task 层零状态写；业务错误在 execute_claimed 内经 transition_run 消化） | `run_once` 兜底 `finish_run(failed)` `worker.py:319-322` = worker 层写状态 | H102 → K3-5/K4-6 |
 | C8 | 协作式取消消费端（四个安全点） | 🔶（1/4：工具调用前已接；模型调用前/step 后/下轮前 K5-5） | 无 cancel_requested_at 读点 | K3-10/K4-4/K5-5 |
 | C9 | 积压指标 `oldest_job_age` + 告警 + 分队列 | ✅ 09-02（三队列建好；告警线 60s；面板归 K9） | `metrics.py:75` `queue_wait_seconds`（排队等待）；无告警、无分队列 | K3-11；分队列 = `28` C-10 |
 | C10 | 三个 attempts 分账 | ✅ 09-02（outbox.attempts / Celery retries / agent_runs.attempts） | 只有 `agent_runs.attempt`（claim +1）`db.py:245` | K3-12；列名 `attempt` vs 课件 `attempts`，K2 迁移时统一 |
@@ -91,9 +91,9 @@
 
 | # | 能力 | 状态 | 证据 | 差异 / 去向 |
 |---|---|---|---|---|
-| D1 | 迁移白名单 + `transition_run` 唯一入口 + reason/actor 必填 | ❌ | 状态裸改四处：`db.py:241`（claim）`db.py:278`（finish）`db.py:324`（resume）`gateway.py:143`（open_approval_case） | K4-1/K4-6；K4 门槛② grep 判据 |
-| D2 | 事件名映射（succeeded→`run.completed`） | 🔶 | `db.py:259` `_TERMINAL_EVENT` 用 **`run.succeeded`**；`api.py:406` TERMINAL 同名 | 课件口径 `run.completed`；前端 `sse.ts` 也认现名 ⇒ K4-2 改名要三处同步（含前端） |
-| D3 | 非法迁移 → 409 `INVALID_RUN_TRANSITION` | ❌ | 无 | K4-1 |
+| D1 | 迁移白名单 + `transition_run` 唯一入口 + reason/actor 必填 | ✅ 09-02 | 状态裸改四处：`db.py:241`（claim）`db.py:278`（finish）`db.py:324`（resume）`gateway.py:143`（open_approval_case） | K4-1/K4-6；K4 门槛② grep 判据 |
+| D2 | 事件名映射（succeeded→`run.completed`） | ✅ 09-02（前端 sse.ts/controller.ts 改名，本机未构建验证） | `db.py:259` `_TERMINAL_EVENT` 用 **`run.succeeded`**；`api.py:406` TERMINAL 同名 | 课件口径 `run.completed`；前端 `sse.ts` 也认现名 ⇒ K4-2 改名要三处同步（含前端） |
+| D3 | 非法迁移 → 409 `INVALID_RUN_TRANSITION` | ✅ 09-02 | 无 | K4-1 |
 | D4 | checkpoint 每 append 一条存一次，带 `last`/`completed_tool_calls` | 🔶 | `agent_loop.py:174-180` action+observation **一起 append 后存一次**；`agent_loop.py:93-105` 快照只有 `history` | **缺"模型已点名工具、结果未回"那一档** ⇒ 分支 C 无解（`28` S-07）→ K5-2 |
 | D5 | 恢复 = 读最新快照重入 loop，不重跑已完成工具 | ✅ | `agent_loop.py:108-119,140` `load_transcript(resume=True)` | 🔶 resume 判定 = "有已裁决审批单" `worker.py:445-452`；崩溃恢复路径（sweeper 重投后 resume）不存在 → K5-2/K8 |
 | D6 | 快照无"下一步"字段，下一步由模型定 | ✅ | `agent_loop.py:145` 每轮重新 decide | — |
@@ -115,7 +115,7 @@
 | D22 | 通知唤醒替代扫库 | ✅ | PG NOTIFY 触发器 `schema.sql:432-440` + api sse_bell（E33） | — |
 | D23 | SSE 鉴权 | 🔶 | Bearer dev-token 头（fetch 流）09 §0 | 同域 Cookie 方案未做 → K7-4 |
 | D24 | 前端三步：拉状态→重放历史→接实时流 | ✅ | `frontend/src/lib/sse.ts:4,51` | 本机未构建，见 §3 F-2 |
-| D25 | `waiting_for_user` 语义统一（等审批 / 等用户补充都映射到它，resume 回 queued） | 🔶 **真缺口（verl-22 09-02 通报，代码核实）** | `agent_loop.py:195-197` clarify 返回 halted 且 case_ref=None；`worker.py:519` halted 一律 return；**全库只有 `gateway.py:143` 写 waiting_for_user** ⇒ clarify 后 run 停在 running，60s 后被 `claim_run` 当崩溃重抢重跑（R5 考场 L4 8/25 status=running 即此） | K4 取舍表"waiting_for_user 改造"的实测依据；修法待裁在 `26 §2.5`/`25 §7㊱`（26 线只改 worker halted 分支，改前会通报）→ K1-5/K4-4 收编 |
+| D25 | `waiting_for_user` 语义统一（等审批 / 等用户补充都映射到它，resume 回 queued） | ✅ 09-02（park_run_for_user 与 open_approval_case 同走 transition_run；clarify 收尾 = 改造边 waiting→succeeded） | `agent_loop.py:195-197` clarify 返回 halted 且 case_ref=None；`worker.py:519` halted 一律 return；**全库只有 `gateway.py:143` 写 waiting_for_user** ⇒ clarify 后 run 停在 running，60s 后被 `claim_run` 当崩溃重抢重跑（R5 考场 L4 8/25 status=running 即此） | K4 取舍表"waiting_for_user 改造"的实测依据；修法待裁在 `26 §2.5`/`25 §7㊱`（26 线只改 worker halted 分支，改前会通报）→ K1-5/K4-4 收编 |
 | D26 | 会话历史回灌覆盖所有收场（含 reject/clarify 轮） | 🔶 | `db.py:143` `prior_turns` 只取 `status='succeeded'`；reject 收场归 cancelled 且 result=NULL | 拒绝/追问轮不进下一轮历史（守则⑮同形问题）；归 26 线 W2，K 线不动 `prior_turns` |
 
 ### 组 E · 恢复 · 硬化 · 回流 · 上线（课件 CH8–CH10 + 附录 A，K8–K11 承接）
@@ -124,7 +124,7 @@
 |---|---|---|---|---|
 | E1 | sweeper（三分支顺序 + 四原则） | ❌ | 无 | K8-1 |
 | E2 | reconciliation 对账（按幂等键查平台去重账本） | ❌ | 无；平台侧 `platform._seen_keys` 有去重但无查询接口 | K5-6 建账本查询 + K8-2 |
-| E3 | 四动词 replay/retry/rerun/repair | 🔶 | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
+| E3 | 四动词 replay/retry/rerun/repair | 🔶（rerun ✅ 09-02；replay 只读 ✅；repair 归 K8） | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
 | E4 | 七步排查 SOP + trace 聚合 | ❌ | 无 | K8-4/K11-2 |
 | E5 | 端到端故障注入联测（分支 A/B/C） | 🔶 | `FaultPlan` `platform.py:60-72`（工具超时/限流/5xx/副作用已发生）+ `test_m97_stress` 12 条 + loadtest kill -9 恢复 3/3（11 §5） | 分支 C（写工具执行后记录前 kill）无自动化 → K8-5 |
 | E6 | 九条 SLO 自动读数 | 🔶 | `metrics.py:58-137` 四项（按意图延迟/排队/工具延迟/读写分桶）+ loadtest §19 判定 | 九条对齐 → K9-1 |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1+K2+K3 后）**：✅ 42 · 🔶 24 · ❌ 11 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K4 后）**：✅ 47 · 🔶 20 · ❌ 10 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

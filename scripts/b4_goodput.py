@@ -67,7 +67,7 @@ async def level(client: httpx.AsyncClient, conc: int) -> dict:
         for r in grp:
             terms[r["terminal"]] = terms.get(r["terminal"], 0) + 1
         good = [r for r in grp
-                if r["terminal"] in ("run.succeeded", "run.waiting_for_user")]
+                if r["terminal"] in ("run.completed", "run.waiting_for_user")]
         lat = [r["e2e_ms"] for r in good]
         p95 = lt.pct(lat, .95)
         thr = lt.INTENTS[intent]["p95_ms"]
