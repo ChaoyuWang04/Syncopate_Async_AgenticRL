@@ -205,6 +205,15 @@ class RerunRequest(BaseModel):
     user_message: str | None = Field(default=None, min_length=1, max_length=4000)
 
 
+class RepairToolCallRequest(BaseModel):
+    """Repair 的底线（课件 CH8 §5.5）：不偷偷改库——留四样：审计 / reason / operator / before-after。"""
+
+    status: Literal["succeeded", "failed"]
+    result: dict[str, Any] | None = None
+    reason: str = Field(min_length=1, max_length=500)
+    operator: str = Field(min_length=1, max_length=80)
+
+
 class ResumeRunRequest(BaseModel):
     """resume 是"带着新信息继续"，不只是继续（27 K1-1）。input 落进 run.resumed 事件。"""
 
@@ -505,6 +514,36 @@ def create_app(db: Database | None = None) -> FastAPI:
             conversation_id=parent["conversation_id"], run_type=parent["run_type"] or "chat",
             parent_run_id=run_id, rerun_reason=body.reason)
         return await _run_view(db, org_id, handle.run_id, created=True)
+
+    # ---- K8-3 · Repair 管理通道（独立角色位 trace；四样留痕）----
+    @app.post("/runs/{run_id}/tool_calls/{call_id}/repair")
+    async def repair_tool_call(run_id: str, call_id: int, body: RepairToolCallRequest,
+                               principal: Principal, db: DB) -> dict[str, Any]:
+        org_id = principal.org
+        async with db.tx() as conn:
+            before = await conn.fetchrow(
+                "SELECT id, tool, status, ok, result, error FROM tool_calls WHERE org_id=$1 AND run_id=$2 AND id=$3",
+                org_id, run_id, call_id)
+            if before is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "tool_call 不存在")
+            if "trace" not in principal.roles:
+                raise ApiError(403, "TRACE_FORBIDDEN", "repair 需要 trace 角色")
+            if before["status"] not in ("response_lost", "running", "failed"):
+                raise ApiError(409, "CONFLICT", f"只能修 response_lost/running/failed 的调用（现在 {before['status']}）")
+            await conn.execute(
+                "UPDATE tool_calls SET status=$2, ok=$3, result=$4, error=$5, ended_at=now() WHERE id=$1",
+                call_id, body.status, body.status == "succeeded", body.result,
+                None if body.status == "succeeded" else f"repaired_by_{body.operator}: {body.reason}")
+            from syncopate.runtime.db import append_event as _append
+            await _append(conn, org_id=org_id, run_id=run_id, kind="tool.repaired",
+                          payload={"tool": before["tool"], "tool_call_id": call_id,
+                                   "resolved_status": body.status, "operator": body.operator})
+            await conn.execute(
+                "INSERT INTO audit_logs (run_id, org_id, action, param_source, detail) VALUES ($1,$2,'tool.repair','user',$3)",
+                run_id, org_id, {"tool_call_id": call_id, "operator": body.operator, "reason": body.reason,
+                                 "before": json.loads(json.dumps(dict(before), default=str)),
+                                 "after": {"status": body.status, "result": body.result}})
+        return {"tool_call_id": call_id, "status": body.status}
 
     # ---- K1-8 · trace（独立角色位；跨租户 404 先于角色 403）----
     @app.get("/runs/{run_id}/trace")

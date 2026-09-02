@@ -623,6 +623,18 @@ K7-5 SSE endpoint 只读纪律固化：endpoint 代码路径零业务调用（�
 
 ## 10 · K8 · 恢复与重放（课件 CH8；~2 天）
 
+> ✅ **K8 已落地（2026-09-02）**：`sweeper.py` 独立进程（`python -m syncopate.runtime.sweeper`）：A 过期 lease
+> 三分支（`db.sweep_expired_run` **一份实现**，轮询 claim 的内联段也调它）· B waiting 超龄提醒事件 · C 僵尸
+> queued 告警**不自动重投**（人工 `requeue_outbox` 留痕）· D 写类 tool_calls 超龄按治理表 expected_max_ms 标
+> response_lost · E outbox 30 天归档；对账 `reconcile_once`：按幂等键查 **platform_ledger（0005，假平台写穿
+> 到 PG，跨进程可见）** → 回填 succeeded / failed / 账本不可用 → tool.manual_review 事件（不是状态），三写入
+> 同一事务，每 5 分钟兜底 + response_lost 产生即触发。四动词：Replay=只读事件流（K7 AST 守）· Rerun=K4 ·
+> Repair=`POST /runs/{id}/tool_calls/{id}/repair`（trace 角色；audit/reason/operator/before-after 四样）。
+> 门槛①③④⑤⑦ = `test_recovery_k8.py` 11 条（分支 A 续跑不重调只读、分支 C sweeper→对账→回填→续跑且平台
+> 副作用=1、账本无键→failed、账本不可用→manual_review 不改状态、取消先于次数、慢不当死 3×TTL 零误回收、僵尸
+> queued 告警 + 人工重投、账本跨实例去重、Repair 留痕）；② 分支 B = K3；⑥ 结构断言；⑧ 回归 352 passed。
+> 欠账：七步排查 SOP 文档归 K11-2；trace 聚合已在（K1-8）。
+
 > 课件这章的核心认知：**恢复不是一层，是前面各层做对之后"涌现"的能力**——K8 自己
 > 不建新表，只把 K2 的证据表、K3 的 lease/心跳、K5 的意图日志、K6 的五态串起来。
 > 所以 K8 的施工一半是两个新角色（sweeper/对账），另一半是**端到端故障注入联测**。

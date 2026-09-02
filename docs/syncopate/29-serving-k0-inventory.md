@@ -122,11 +122,11 @@
 
 | # | 能力 | 状态 | 证据 | 差异 / 去向 |
 |---|---|---|---|---|
-| E1 | sweeper（三分支顺序 + 四原则） | ❌ | 无 | K8-1 |
-| E2 | reconciliation 对账（按幂等键查平台去重账本） | ❌ | 无；平台侧 `platform._seen_keys` 有去重但无查询接口 | K5-6 建账本查询 + K8-2 |
-| E3 | 四动词 replay/retry/rerun/repair | 🔶（rerun ✅ 09-02；replay 只读 ✅；repair 归 K8） | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
+| E1 | sweeper（三分支顺序 + 四原则） | ✅ 09-02（独立进程；三分支与轮询 claim 共用一份实现） | 无 | K8-1 |
+| E2 | reconciliation 对账（按幂等键查平台去重账本） | ✅ 09-02（platform_ledger 持久化；三写入同事务） | 无；平台侧 `platform._seen_keys` 有去重但无查询接口 | K5-6 建账本查询 + K8-2 |
+| E3 | 四动词 replay/retry/rerun/repair | ✅ 09-02（repair 管理通道四样留痕） | 前端历史回放 = 只读 replay ✅；rerun/repair 无 | K8-3；`parent_run_id` 列 K4-5 |
 | E4 | 七步排查 SOP + trace 聚合 | ❌ | 无 | K8-4/K11-2 |
-| E5 | 端到端故障注入联测（分支 A/B/C） | 🔶 | `FaultPlan` `platform.py:60-72`（工具超时/限流/5xx/副作用已发生）+ `test_m97_stress` 12 条 + loadtest kill -9 恢复 3/3（11 §5） | 分支 C（写工具执行后记录前 kill）无自动化 → K8-5 |
+| E5 | 端到端故障注入联测（分支 A/B/C） | ✅ 09-02（A/C 进程内联测 + B 真 Celery；取消兑现；慢不当死） | `FaultPlan` `platform.py:60-72`（工具超时/限流/5xx/副作用已发生）+ `test_m97_stress` 12 条 + loadtest kill -9 恢复 3/3（11 §5） | 分支 C（写工具执行后记录前 kill）无自动化 → K8-5 |
 | E6 | 九条 SLO 自动读数 | 🔶 | `metrics.py:58-137` 四项（按意图延迟/排队/工具延迟/读写分桶）+ loadtest §19 判定 | 九条对齐 → K9-1 |
 | E7 | run 级预算四字段 + 超限转 waiting | 🔶 | 步数上限 ✅；org 日成本闸 `worker.py:286,374-379`（超限=failed/cancelled，非 waiting） | max_tokens/max_duration/max_model_calls 无 → K9-2 |
 | E8 | usage 一轮一行 | 🔶 | 一 run 一行 `worker.py:495-500`（loop 结束后汇总写） | K9-3 |
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | ❌ | PG 是派生产物（08 §1.1）；业务数据无备份策略 | K11-4 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K1–K7 后）**：✅ 62 · 🔶 8 · ❌ 7 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
+**汇总（09-02 K1–K8 后）**：✅ 66 · 🔶 7 · ❌ 4 · ⛔ 0（合计 77）。缺失集中在四块：**Outbox/队列（C1–C5）· 状态机入口（D1–D3）· sweeper/对账（E1–E2）· 回流与运维（E15–E19）**；不同形集中在 **幂等键含 run_id（D14）· 存档密度（D4）· seq 分配（B3）· worker 写状态（C7）** 四条老病，都已在 `28` 有对应行。
 
 ---
 

@@ -37,6 +37,11 @@ KIND_LAYER: dict[str, str] = {
     "retrieval.result": PUBLIC,
     "tool.manual_review": INTERNAL,
     "tool.repaired_from_intent_log": INTERNAL,
+    "tool.response_lost": INTERNAL,
+    "tool.repaired": INTERNAL,
+    "run.waiting_too_long": PUBLIC,
+    "run.stuck_queued": INTERNAL,
+    "run.requeued_manually": INTERNAL,
     # ---- v15 信令族（decider/loop：session.<signal>）----
     "session.defer": PUBLIC,
     "session.clarify": PUBLIC,

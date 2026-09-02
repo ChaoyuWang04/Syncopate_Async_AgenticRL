@@ -137,9 +137,32 @@ class _Budget:
         return None
 
 
+class PlatformLedger:
+    """平台侧去重账本（K8-2）：`idempotency_key → 原响应`，落 PG（platform_ledger）。
+    ★ 这是"下游按 key 能查到真相"的物理载体——对账任务（sweeper.reconcile_once）查的就是它。
+    真 Meta 没有这个；我们自家平台必须用满这个优势（27 K5 取舍表）。"""
+
+    def __init__(self, db: Any) -> None:
+        self.db = db
+
+    async def get(self, key: str) -> dict[str, Any] | None:
+        async with self.db.tx() as conn:
+            row = await conn.fetchrow("SELECT response FROM platform_ledger WHERE idempotency_key=$1", key)
+        return dict(row["response"]) if row else None
+
+    async def put(self, key: str, tool: str, response: dict[str, Any]) -> None:
+        async with self.db.tx() as conn:
+            await conn.execute(
+                "INSERT INTO platform_ledger (idempotency_key, tool, response) VALUES ($1,$2,$3) "
+                "ON CONFLICT (idempotency_key) DO NOTHING", key, tool, response)
+
+
 @dataclass
 class FakeAdPlatform:
     """内存态的假平台。**不是 mock**：它有真实的状态，写动作真的改数字。"""
+
+    # K8-2：可选的持久账本；None = 只有进程内 `_seen_keys`（测试/沙盒用）
+    ledger: PlatformLedger | None = None
 
     budgets: dict[str, int] = field(default_factory=dict)
     faults: FaultPlan = field(default_factory=FaultPlan)
@@ -183,8 +206,8 @@ class FakeAdPlatform:
           给 `running` 就等于替模型断言了一件平台还没做完的事。
         """
         self.calls += 1
-        if idempotency_key and idempotency_key in self._seen_keys:
-            return {**self._seen_keys[idempotency_key], "deduped_by_platform": True}
+        if (hit := await self._ledger_get(idempotency_key)) is not None:
+            return {**hit, "deduped_by_platform": True}
         self._charge(WRITE_POINTS)
         self._campaign_seq += 1
         cid = f"CMP_N{self._campaign_seq:04d}"
@@ -193,8 +216,7 @@ class FakeAdPlatform:
                                "region": region, "account_id": account_id}
         self.budgets[cid] = daily_budget
         out = {"campaign_id": cid, "status": "submitted", "daily_budget": daily_budget}
-        if idempotency_key:
-            self._seen_keys[idempotency_key] = out
+        await self._ledger_put(idempotency_key, "campaign.create", out)
         return out
 
     async def scale_budget(self, *, campaign_id: str, factor: float,
@@ -239,8 +261,8 @@ class FakeAdPlatform:
         ⚠️ 真实审核 2–4 小时；这里用异步任务表达，默认 480 秒（取下界的保守值）。
         """
         self.calls += 1
-        if idempotency_key and idempotency_key in self._seen_keys:
-            return {**self._seen_keys[idempotency_key], "deduped_by_platform": True}
+        if (hit := await self._ledger_get(idempotency_key)) is not None:
+            return {**hit, "deduped_by_platform": True}
         self._charge(WRITE_POINTS)
         self._asset_seq += 1
         asset_id = f"AST_{self._asset_seq:04d}"
@@ -253,8 +275,7 @@ class FakeAdPlatform:
                                  "review_job_id": job_id,
                                  "tags": {}, "metrics": {}}
         out = {"asset_id": asset_id, "review_job_id": job_id, "status": "in_review"}
-        if idempotency_key:
-            self._seen_keys[idempotency_key] = out
+        await self._ledger_put(idempotency_key, "creative.upload", out)
         return out
 
     # ── 异步任务（实查 P1-1 / P1-2）─────────────────────────────────────
@@ -389,8 +410,8 @@ class FakeAdPlatform:
         # ⚠️ 这一步必须在扣分和频次检查**之前**：重放没有真的改动世界，
         #   既不该消耗 BUC 配额，也不该算作"这一小时又改了一次"。
         #   放在后面的话，一次重试就会白白吃掉一次改动额度 —— 而额度只有 4 次。
-        if idempotency_key and idempotency_key in self._seen_keys:
-            return {**self._seen_keys[idempotency_key], "deduped_by_platform": True}
+        if (hit := await self._ledger_get(idempotency_key)) is not None:
+            return {**hit, "deduped_by_platform": True}
 
         # ★ 真实 API 的两条硬机制。⚠️ 频次检查在扣分**之后**：
         #   真实世界里请求已经打过去了才会被判定超频，配额是照扣的。
@@ -408,8 +429,8 @@ class FakeAdPlatform:
             if self.faults.side_effect_applied:
                 self.budgets[campaign_id] = new_budget
                 if idempotency_key:
-                    self._seen_keys[idempotency_key] = {
-                        "campaign_id": campaign_id, "new_budget": new_budget}
+                    await self._ledger_put(idempotency_key, "campaign.update_budget",
+                        {"campaign_id": campaign_id, "new_budget": new_budget})
             raise PlatformError(TIMEOUT_MESSAGE, code="timeout", retriable=True)
 
         self.budgets[campaign_id] = new_budget
@@ -418,8 +439,7 @@ class FakeAdPlatform:
         job_id = self._new_job("budget", settle_after=0.0,
                                result={"campaign_id": campaign_id, "new_budget": new_budget})
         result = {"campaign_id": campaign_id, "new_budget": new_budget, "change_id": job_id}
-        if idempotency_key:
-            self._seen_keys[idempotency_key] = result
+        await self._ledger_put(idempotency_key, "campaign.update_budget", result)
         return result
 
     async def submit_budget_change(self, *, campaign_id: str, new_budget: int,
@@ -449,6 +469,23 @@ class FakeAdPlatform:
             self._jobs[done["change_id"]]["settle_at"] = self.clock() + settle_after
         return {"change_id": done["change_id"], "status": "pending",
                 "campaign_id": campaign_id}
+
+    async def _ledger_get(self, key: str | None) -> dict[str, Any] | None:
+        if not key:
+            return None
+        hit = self._seen_keys.get(key)
+        if hit is None and self.ledger is not None:
+            hit = await self.ledger.get(key)
+            if hit is not None:
+                self._seen_keys[key] = hit
+        return hit
+
+    async def _ledger_put(self, key: str | None, tool: str, response: dict[str, Any]) -> None:
+        if not key:
+            return
+        self._seen_keys[key] = response
+        if self.ledger is not None:
+            await self.ledger.put(key, tool, response)
 
     @classmethod
     def from_fixture(cls, path: str = "data/demo/platform_state.json") -> "FakeAdPlatform":

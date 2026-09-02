@@ -1,6 +1,6 @@
 ---
 name: serving-harness-k-line
-description: ★K 线（27 serving harness 生产化）现场：09-02 K0–K7 ✅（事件分层 fail-closed、after 查询路、Cookie 鉴权）；下一步 K8 恢复与重放；§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表 28 · 对照 29；下一步 K1
+description: ★K 线（27 serving harness 生产化）现场：09-02 K0–K8 ✅（sweeper 进程 + 对账 + platform_ledger + repair）；下一步 K9 生产硬化；§16 四件已裁（Celery+Redis · PG+Alembic · 快照式恢复 · id 不迁）；坑表 28 · 对照 29；下一步 K1
 metadata: 
   node_type: memory
   type: project
@@ -23,7 +23,7 @@ Chaoyu 要求坑表与后续排查/优化项**单独文档集**，不污染 27 �
 
 **进度（09-02）**：K0 ✅（29）· K2 ✅（迁移链 `syncopate/runtime/migrations/`，schema.sql 已退役成
 `schema.snapshot.txt`；`db.next_seq/append_event` 领号器；创建事务写 run.created；usage 粒度=每次执行一行）
-· K1 ✅（cancel/resume/trace、幂等三态 409、错误信封 13 码、run_type、resume_token 一次性；取消只接了 ActionGate 入口这一个安全点，其余 K5-5）· K3 ✅（0003 outbox/DLQ/门铃；dispatcher.py；celery_app.py；定向 claim 只认 queued；LeaseHeartbeat；transient→queued+outbox 延迟；集成测试起真 celery 子进程验 ack 前崩溃）· K4 ✅（transition_run 唯一入口 + 10 条边（含改造边 waiting→succeeded）+ 触发者矩阵；事件 run.succeeded→**run.completed** 全仓改名；轮询 claim 内联 sweeper 三分支全走状态机；rerun 端点）· K5 ✅（一轮两档快照 + last；恢复两路读意图日志：succeeded 回填/response_lost 转对账 awaiting_reconciliation；任何执行都 resume；record_tool_call 五态；幂等键去 run_id；安全点 loop 顶+收口入口）· K6 ✅（`tool_governance.py` 30 工具治理表 + 导入时对 REGISTRY 完整性断言，**没动** tool_registry；WRITE_TOOLS 派生；0004 error_json/blocked_by/五态唯一索引；四闸拦下也落库；写工具带键可重试是登记的改造）· K7 ✅（event_layer 分层注册表，未登记默认不推 + 结构测试；after 查询路；retry 前导；Cookie 与 Bearer 同表；只读 AST 断言；门槛④"静默零查询"改造为 2s 兜底轮询）· 下一步 K8（sweeper 独立进程：running∧lease 过期三分支 / waiting·queued 超龄 / 写 tool_calls 超龄→response_lost；对账任务按幂等键查平台账本——**平台去重账本要先持久化**；四动词；trace SOP；分支 A/B/C 联测）。
+· K1 ✅（cancel/resume/trace、幂等三态 409、错误信封 13 码、run_type、resume_token 一次性；取消只接了 ActionGate 入口这一个安全点，其余 K5-5）· K3 ✅（0003 outbox/DLQ/门铃；dispatcher.py；celery_app.py；定向 claim 只认 queued；LeaseHeartbeat；transient→queued+outbox 延迟；集成测试起真 celery 子进程验 ack 前崩溃）· K4 ✅（transition_run 唯一入口 + 10 条边（含改造边 waiting→succeeded）+ 触发者矩阵；事件 run.succeeded→**run.completed** 全仓改名；轮询 claim 内联 sweeper 三分支全走状态机；rerun 端点）· K5 ✅（一轮两档快照 + last；恢复两路读意图日志：succeeded 回填/response_lost 转对账 awaiting_reconciliation；任何执行都 resume；record_tool_call 五态；幂等键去 run_id；安全点 loop 顶+收口入口）· K6 ✅（`tool_governance.py` 30 工具治理表 + 导入时对 REGISTRY 完整性断言，**没动** tool_registry；WRITE_TOOLS 派生；0004 error_json/blocked_by/五态唯一索引；四闸拦下也落库；写工具带键可重试是登记的改造）· K7 ✅（event_layer 分层注册表，未登记默认不推 + 结构测试；after 查询路；retry 前导；Cookie 与 Bearer 同表；只读 AST 断言；门槛④"静默零查询"改造为 2s 兜底轮询）· K8 ✅（sweeper.py：A/B/C/D/E 五类扫描 + reconcile_once；`db.sweep_expired_run` 一份实现供 sweeper 与轮询 claim；platform_ledger（0005）假平台写穿；repair 端点；11 条联测）· 下一步 K9 生产硬化（SLO 九条读数脚本、run 级预算四字段 + 超限转 waiting、usage 一轮一行、结构化日志、/metrics + duplicate_prevented_total、限流三维度、schema_version 版本网关、发布五能力演练、测试八类对照）。
 ⚠️ 轮询 worker 入口（`python -m syncopate.runtime.worker`）必须保留：26 线考场链、b4_stack、start_worker.sh 都在用；Celery 是新增的生产投递路径，两者共用 `Worker.execute_claimed`。
 Chaoyu 09-02 追加四裁：K1/K2 交错 · Alembic 唯一真相 · 终态事件改名 run.completed（K4-2 时三处同步含前端）· 引入 run_type。
 

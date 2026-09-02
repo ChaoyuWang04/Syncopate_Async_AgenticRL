@@ -419,6 +419,34 @@ async def create_run(db: Database, *, org_id: str, run_id: str, user_message: st
 # --------------------------------------------------------------------------
 
 
+async def sweep_expired_run(conn: asyncpg.Connection, *, org_id: str, run_id: str, attempts: int,
+                            cancel_requested_at: Any, lease_owner_was: str | None,
+                            actor_id: str, enqueue: bool = True) -> str:
+    """lease 过期的 running run 的三分支（课件 CH8 §8.1，顺序不可换）：
+        ① cancel_requested_at 非空 ⇒ cancelled（用户意图优先；换序会把"已取消"记成失败）
+        ② attempts ≥ MAX ⇒ failed（避免无限恢复风暴）
+        ③ 否则 ⇒ queued + run.requeued_by_sweeper（+ outbox 重投）
+    **唯一实现**：sweeper 进程与轮询 claim 的内联段都调它（一个可变状态一个写入者=状态机）。"""
+    if cancel_requested_at is not None:
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="cancelled",
+                             reason="lease_expired_with_cancel_request", actor_type="sweeper",
+                             actor_id=actor_id, fields={"error": "cancelled_by_sweeper"},
+                             event_payload={"actor": "sweeper", "lease_owner_was": lease_owner_was})
+        return "cancelled"
+    if attempts >= MAX_RUN_ATTEMPTS:
+        await transition_run(conn, org_id=org_id, run_id=run_id, to="failed",
+                             reason="max_attempts_exhausted", actor_type="sweeper", actor_id=actor_id,
+                             fields={"error": "max_attempts_exhausted"},
+                             event_payload={"error": "max_attempts_exhausted", "actor": "sweeper"})
+        return "failed"
+    await transition_run(conn, org_id=org_id, run_id=run_id, to="queued", reason="lease_expired",
+                         actor_type="sweeper", actor_id=actor_id,
+                         event_payload={"actor": "sweeper", "lease_owner_was": lease_owner_was})
+    if enqueue:
+        await enqueue_outbox(conn, org_id=org_id, run_id=run_id)
+    return "requeued"
+
+
 async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
                     org_id: str | None = None, run_id: str | None = None) -> dict | None:
     """抢一个待跑的 run。**原子**：同一条 run 不可能被两个 worker 同时抢到。
@@ -469,22 +497,13 @@ async def claim_run(db: Database, *, worker_id: str, lease_seconds: int = 60,
             return None
         o, rid = cand["org_id"], cand["run_id"]
         if cand["status"] == "running":
-            # sweeper 三分支内联（顺序：先取消 → 再次数 → 才重投；换序会把"用户已取消"记成失败）
-            if cand["cancel_requested_at"] is not None:
-                await transition_run(conn, org_id=o, run_id=rid, to="cancelled",
-                                     reason="lease_expired_with_cancel_request", actor_type="sweeper",
-                                     actor_id=worker_id, fields={"error": "cancelled_by_sweeper"},
-                                     event_payload={"actor": "sweeper", "lease_owner_was": cand["lease_owner"]})
+            # 轮询模式撞到过期 lease：调 sweeper 的**同一段**三分支（不投 outbox——马上自己接着抢）
+            outcome = await sweep_expired_run(conn, org_id=o, run_id=rid, attempts=cand["attempts"],
+                                              cancel_requested_at=cand["cancel_requested_at"],
+                                              lease_owner_was=cand["lease_owner"], actor_id=worker_id,
+                                              enqueue=False)
+            if outcome != "requeued":
                 return None
-            if cand["attempts"] >= MAX_RUN_ATTEMPTS:
-                await transition_run(conn, org_id=o, run_id=rid, to="failed",
-                                     reason="max_attempts_exhausted", actor_type="sweeper",
-                                     actor_id=worker_id, fields={"error": "max_attempts_exhausted"},
-                                     event_payload={"error": "max_attempts_exhausted", "actor": "sweeper"})
-                return None
-            await transition_run(conn, org_id=o, run_id=rid, to="queued", reason="lease_expired",
-                                 actor_type="sweeper", actor_id=worker_id,
-                                 event_payload={"actor": "sweeper", "lease_owner_was": cand["lease_owner"]})
         new = await transition_run(conn, org_id=o, run_id=rid, to="running", reason="claimed",
                                    actor_type="worker", actor_id=worker_id, lease_seconds=lease_seconds,
                                    event_payload={"worker_id": worker_id})

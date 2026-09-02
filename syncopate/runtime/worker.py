@@ -696,6 +696,9 @@ async def build_worker(config: WorkerConfig, *, pool_size: int | None = None) ->
     else:
         print("[decider] 未配置（SYNCOPATE_DECIDER_URL 空）⇒ 写死三步计划", flush=True)
     platform = FakeAdPlatform.from_fixture()
+    # K8-2：平台去重账本写穿到 PG，对账任务才查得到"钱动没动"（跨进程/重启仍在）
+    from syncopate.runtime.platform import PlatformLedger
+    platform.ledger = PlatformLedger(db)
     slow = float(os.environ.get("SYNCOPATE_TEST_SLOW_SECONDS", "0") or 0)
     if slow > 0:                                    # 测试钩子：给 kill 注入留出窗口
         platform.faults.latency_seconds = slow

@@ -24,6 +24,7 @@ uvicorn syncopate.runtime.api:app --port 8000 --workers 4          # 起 API（4
 # ★ K3（09-02）起，生产投递 = Outbox → dispatcher → Celery/Redis → worker（27 §5；坑表 28 §1/§2）：
 bash scripts/redis_bootstrap.sh                          # 起 Redis（requirepass/AOF/noeviction 判据行）
 python -m syncopate.runtime.dispatcher &                  # outbox 搬运工（判据行 [dispatcher] listener 就位）
+python -m syncopate.runtime.sweeper &                     # K8：过期 lease 回收 + 对账（判据行 [sweeper] 就位 / [reconcile]）
 for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 SYNCOPATE_WORKER_DB_POOL=4 \
   celery -A syncopate.runtime.celery_app worker -Q interactive -c 4 -n w$w@%h & done
                                                           # 每子进程判据行 [worker-init] pid=… ；心跳 [lease-heartbeat]
