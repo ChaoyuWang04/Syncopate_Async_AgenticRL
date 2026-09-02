@@ -116,7 +116,7 @@
 | D23 | SSE 鉴权 | ✅ 09-02（同域 Cookie + Bearer 同一张表；前端 URL 无凭证 grep） | Bearer dev-token 头（fetch 流）09 §0 | 同域 Cookie 方案未做 → K7-4 |
 | D24 | 前端三步：拉状态→重放历史→接实时流 | ✅ | `frontend/src/lib/sse.ts:4,51` | 本机未构建，见 §3 F-2 |
 | D25 | `waiting_for_user` 语义统一（等审批 / 等用户补充都映射到它，resume 回 queued） | ✅ 09-02（park_run_for_user 与 open_approval_case 同走 transition_run；clarify 收尾 = 改造边 waiting→succeeded） | `agent_loop.py:195-197` clarify 返回 halted 且 case_ref=None；`worker.py:519` halted 一律 return；**全库只有 `gateway.py:143` 写 waiting_for_user** ⇒ clarify 后 run 停在 running，60s 后被 `claim_run` 当崩溃重抢重跑（R5 考场 L4 8/25 status=running 即此） | K4 取舍表"waiting_for_user 改造"的实测依据；修法待裁在 `26 §2.5`/`25 §7㊱`（26 线只改 worker halted 分支，改前会通报）→ K1-5/K4-4 收编 |
-| D26 | 会话历史回灌覆盖所有收场（含 reject/clarify 轮） | 🔶 | `db.py:143` `prior_turns` 只取 `status='succeeded'`；reject 收场归 cancelled 且 result=NULL | 拒绝/追问轮不进下一轮历史（守则⑮同形问题）；归 26 线 W2，K 线不动 `prior_turns` |
+| D26 | 会话历史回灌覆盖所有收场（含 reject/clarify 轮） | ✅ 已落地（26 §2.5 Ⓑ，018773f） | `db.prior_turns` 取 succeeded ∪ cancelled+session_reject；clarify 轮由 close_parked_clarify_runs 收尾后进历史；`tests/runtime/test_clarify_turns_enter_history.py` 4 条 | 26 线所有，K 线不碰 |
 
 ### 组 E · 恢复 · 硬化 · 回流 · 上线（课件 CH8–CH10 + 附录 A，K8–K11 承接）
 
@@ -143,7 +143,7 @@
 | E19 | 备份 RPO/RTO + 恢复演练 | 🔶 | `scripts/dr_drill.sh` 数据层重建 RTO 1.5s（K11-4）；生产备份策略与权重那半挂账（30 §1.5 D2/D3） | 灰测放真人前 |
 | E20 | 多实例 SSE fanout / Model Gateway / K8s | ⛔ | 27 K7/K9 已裁剪，复活条件已登记 | — |
 
-**汇总（09-02 K11 后）**：✅ 80 · 🔶 7 · ❌ 0 · ⛔ 1（合计 88；K 线全部收口）。🔶 七条都已登记去向：C12 drain 无主动放 lease · C13 压测待 Celery 化重测（S-05）· D26 拒绝/追问轮不进历史（归 26 线）· E11 API/写工具并发限流（30 C5）· E12 outbox/事件 payload 未加 v（30 V4）· E13 停队列/回滚只写命令 · E19 生产备份策略（30 D3）。
+**汇总（09-02 K11 后）**：✅ 81 · 🔶 6 · ❌ 0 · ⛔ 1（合计 88；K 线全部收口）。🔶 六条都已登记去向：C12 drain 无主动放 lease · C13 压测待 Celery 化重测（S-05）· E11 API/写工具并发限流（30 C5）· E12 outbox/事件 payload 未加 v（30 V4）· E13 停队列/回滚只写命令 · E19 生产备份策略（30 D3）。
 
 ---
 
