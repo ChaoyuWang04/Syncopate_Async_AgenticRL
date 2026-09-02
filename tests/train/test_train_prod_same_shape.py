@@ -101,3 +101,13 @@ def test_same_shape_assertion_fails_on_iso_time(monkeypatch):
     prod = _prod_messages(PRIOR, b.case.user_message, b.case.context, [])
     with pytest.raises(AssertionError):
         assert_same_shape(bad, prod)
+
+
+def test_history_window_is_applied_in_the_shared_renderer():
+    """线上只回灌最近 6 轮 ⇒ 训练渲染同一函数也只能看到最近 6 轮（09-02 画廊抓到 8 轮全进去）。"""
+    from syncopate.core.prior_turns import PRIOR_TURNS_LIMIT
+    turns = [{"user_message": f"q{i}", "result": {"text": f"a{i}"}} for i in range(9)]
+    msgs = render_prior_messages(turns, _Tok())
+    assert len(msgs) == 2 * PRIOR_TURNS_LIMIT
+    assert msgs[0]["content"] == f"q{9 - PRIOR_TURNS_LIMIT}", "必须是最近 6 轮，最早的被裁掉"
+    assert "q0" not in [m["content"] for m in msgs]

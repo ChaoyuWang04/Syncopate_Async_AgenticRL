@@ -108,10 +108,19 @@ CLAF_OFF = ["先别管这个，这个账户现在的预算政策是什么？", "
 L2X_ASK = [("差的那条", "worse"), ("好的那条", "better"), ("烧钱多的那条", "spend"), ("第一个", "first"), ("第二个", "second")]
 L2X_METRIC = [("消耗", "spend_7d"), ("安装量", "installs_7d"), ("CPI", "cpi"), ("点击率", "ctr")]
 WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着"]
-WIN_FILL = ["ROAS 是什么意思？", "那 CPI 呢", "CTR 呢？", "回本周期是什么", "频次呢", "什么是安全线", "eCPM 呢"]
+# (问句, 术语)——助手回答按术语名从定义库精确取，取不到直接报错（不许落回占位；eCPM 是考卷 held-out 词，不用）
+WIN_FILL = [("ROAS 是什么意思？", "ROAS"), ("那 CPI 呢", "CPI"), ("CTR 呢？", "CTR"), ("回本周期是什么", "回本周期"),
+            ("频次呢", "频次"), ("曝光是什么意思", "曝光"), ("ROI呢？", "ROI")]
 WIN_CLARIFY = ["我这里只保留最近几轮的记录，最早那条已经看不到了，方便再说一次吗？",
                "抱歉，最开始那条记录不在我当前能看到的范围里，请再告诉我一次。",
                "我没法确认最早给的那个数了，为了不报错数，麻烦再提供一次。"]
+
+
+def _defs_of(defs: dict, term: str) -> list[str]:
+    """术语定义（教师改写过的 3 句）；没有就报错——历史里的助手回答必须是真内容，不许"好的。"占位。"""
+    if not defs.get(term):
+        raise AssertionError(f"🔴 定义库里没有「{term}」，历史轮不能落回占位（换一个 GLOSSARY 内的词）")
+    return defs[term]
 
 
 def _m(camps: dict, cid: str, key: str):
@@ -186,7 +195,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         elif "风控" in off:
             acts, fa = [{"tool": "risk.check_account", "arguments": {"account_id": acc}}], {"reply": None}
         else:
-            acts, fa = [], {"reply": rng.choice(defs.get("ROAS", ["ROAS 是广告支出回报率，等于广告带来的收入除以广告花费。"]))}
+            acts, fa = [], {"reply": rng.choice(_defs_of(defs, "ROAS"))}
         if fa["reply"] is None:
             fa["reply"] = (f"[DRY 教师待写:{off}]" if DRY else await gen_reply(acc, "政策/风控", off))
         b3 = as_multiturn(b, case_id=f"{b.case_id}_CLAFO", user_message=off, prior=prior,
@@ -203,7 +212,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         sa, sb = _m(camps, a, "spend_7d"), _m(camps, c2, "spend_7d")
         prior = [(f"帮我看下 {a} 和 {c2} 最近的 ROAS", answer_turn(f"{a} 近 7 天 ROAS {ra}，{c2} 是 {rb}；消耗分别是 {sa} 和 {sb}。"))]
         if i % 3 == 2:
-            prior += [("ROAS 是什么意思？", answer_turn(rng.choice(defs.get("ROAS", ["ROAS 是广告支出回报率。"]))))]
+            prior += [("ROAS 是什么意思？", answer_turn(rng.choice(_defs_of(defs, "ROAS"))))]
         ref, kind = L2X_ASK[i % len(L2X_ASK)]
         tgt = {"worse": a if ra < rb else c2, "better": a if ra >= rb else c2, "spend": a if sa >= sb else c2,
                "first": a, "second": c2}[kind]
@@ -220,10 +229,10 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
     for i in range(n):
         b = zb[i % len(zb)]
         cid = b.case.context.get("campaign_id") or "CMP_4000"
-        val = rng.choice(["35000", "0.49", "4.5", "88000"])
+        val = rng.choice(["35000", "42000", "60000", "88000"])     # 预算上限：只用预算量级的数
         fact = (f"{cid} 这个月的预算上限我们定的是 {val}，记一下", answer_turn(f"好的，已记下：{cid} {val}。"))
         for out_of_window in (True, False):
-            fill = [(WIN_FILL[j % 7], answer_turn(rng.choice(defs.get(WIN_FILL[j % 7][:4], ["好的。"]))))
+            fill = [(WIN_FILL[j % 7][0], answer_turn(rng.choice(_defs_of(defs, WIN_FILL[j % 7][1]))))
                     for j in range(7 if out_of_window else 2)]
             prior = [fact] + fill
             ask = rng.choice(WIN_ASK).format(c=cid)

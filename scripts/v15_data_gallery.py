@@ -68,9 +68,11 @@ def render_row(r, tok) -> tuple[str, dict]:
           f"- prompt {pl} tok · 总 {meta['total_tok']} · 监督 {meta['sup_tok']} · 菜单 {tools_n} 工具 · 历史 {meta['history_turns']} 轮 · "
           f"think 非空 {nonempty} / 空 {empty}（空块有梯度：{leaked}）· 纯日期 {meta['date_only']} · 字段清单 {meta['field_list']}",
           f"- system：{len(system)} 字，尾段「…{system[-60:].strip()}」"]
-    for role, txt in hist:
-        md.append(f"- 历史 **{role}**：{txt.strip()[:300]}")
-    md.append("- 本轮 user：")
+    if hist:
+        md.append(f"- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 {len(hist)//2} 轮）：")
+    for k, (role, txt) in enumerate(hist, 1):
+        md.append(f"  - 消息 {k} `{role}`：{txt.strip()[:300]}")
+    md.append("- 本轮 user（最后一条 user 消息）：")
     md.append("```\n" + cur.strip() + "\n```")
     md.append("- response（⟦…⟧ = 被监督的 token）：")
     md.append("```\n" + resp_txt.strip()[:6000] + "\n```")

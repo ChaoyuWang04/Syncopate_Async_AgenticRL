@@ -44,8 +44,11 @@ def prior_answer_text(result: Any) -> str:
 def render_prior_messages(turns: list[dict], tokenizer: Any,
                           budget: int = PRIOR_ANSWER_BUDGET) -> list[dict[str, str]]:
     """把之前几轮渲染成 user/assistant 对（插在 system 之后、本轮 user 之前）。"""
+    # ★ 09-02（Chaoyu 在画廊里抓到的）：窗口语义必须在**这里**裁——线上 prior_turns 只取最近 6 轮，
+    #   训练行若把 8 轮全渲染进去、gold 却说"最早那条看不到了"，就是在教模型撒谎。
+    turns = list(turns or [])[-PRIOR_TURNS_LIMIT:]
     out: list[dict[str, str]] = []
-    for t in turns or []:
+    for t in turns:
         out.append({"role": "user", "content": t.get("user_message") or ""})
         text = prior_answer_text(t.get("result"))
         ids = tokenizer.encode(text, add_special_tokens=False)

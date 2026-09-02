@@ -7,7 +7,7 @@
 | fam_deff | 12 | 12.8% | 7115 | 7589 |
 | fam_l2x | 6 | 3.3% | 7174 | 7415 |
 | fam_rejf | 12 | 16.2% | 7130 | 8083 |
-| fam_win | 12 | 4.2% | 7275 | 7328 |
+| fam_win | 12 | 4.3% | 7260 | 7317 |
 | multiturn_l1 | 4 | 0.9% | 7104 | 7135 |
 | multiturn_l2 | 4 | 2.5% | 7111 | 7326 |
 | reasoning | 4 | 8.8% | 7096 | 7743 |
@@ -19,9 +19,10 @@
 - prompt 7083 tok · 总 7123 · 监督 36 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：你是男的女的？
-- 历史 **assistant**：我是AI助手，没有性别哦～不过我可是个超级靠谱的买量投放小帮手！需要帮忙的话随时找我呀～
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：你是男的女的？
+  - 消息 2 `assistant`：我是AI助手，没有性别哦～不过我可是个超级靠谱的买量投放小帮手！需要帮忙的话随时找我呀～
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
 当前投放任务：
@@ -42,7 +43,7 @@ account_id=ACC_DEMO
 - prompt 7054 tok · 总 7092 · 监督 34 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 本轮 user：
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
 当前投放任务：
@@ -63,7 +64,7 @@ account_id=ACC_DEMO
 - prompt 7066 tok · 总 7108 · 监督 38 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 本轮 user：
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-20
 当前投放任务：
@@ -86,9 +87,10 @@ account_id=ACC_DEMO
 - prompt 7081 tok · 总 8025 · 监督 249 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：把日预算从 600 提到 720 元。
-- 历史 **assistant**：要调哪一条 campaign？
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：把日预算从 600 提到 720 元。
+  - 消息 2 `assistant`：要调哪一条 campaign？
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -182,9 +184,10 @@ CMP_4132，按刚才说的来
 - prompt 7078 tok · 总 7110 · 监督 28 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：把日预算从 600 提到 720 元。
-- 历史 **assistant**：要调哪一条 campaign？
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：把日预算从 600 提到 720 元。
+  - 消息 2 `assistant`：要调哪一条 campaign？
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -206,9 +209,10 @@ account_id=ACC_16
 - prompt 7087 tok · 总 7987 · 监督 240 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：日预算能从 500 提到 750 吗？可以的话就直接改。
-- 历史 **assistant**：要调哪一条 campaign？
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：日预算能从 500 提到 750 吗？可以的话就直接改。
+  - 消息 2 `assistant`：要调哪一条 campaign？
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -304,9 +308,10 @@ account_id=ACC_13
 - prompt 7099 tok · 总 7589 · 监督 141 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 4（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：TAP_RUSH 在 GB 新开的那条的 ROAS 现在能不能作为扩量依据？
-- 历史 **assistant**：CMP_4039 开投时间太短，指标没稳，建议缓一缓。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：TAP_RUSH 在 GB 新开的那条的 ROAS 现在能不能作为扩量依据？
+  - 消息 2 `assistant`：CMP_4039 开投时间太短，指标没稳，建议缓一缓。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -366,9 +371,10 @@ account_id=ACC_14
 - prompt 7115 tok · 总 7444 · 监督 88 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：这条刚开没几天。CMP_4044 现在的 ROAS 看着还行，但我拿不准这个数稳不稳，能不能当扩量的依据？
-- 历史 **assistant**：CMP_4044 的样本量还不够，先等一等再定。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：这条刚开没几天。CMP_4044 现在的 ROAS 看着还行，但我拿不准这个数稳不稳，能不能当扩量的依据？
+  - 消息 2 `assistant`：CMP_4044 的样本量还不够，先等一等再定。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -414,9 +420,10 @@ account_id=ACC_12
 - prompt 7114 tok · 总 7471 · 监督 106 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 3（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：上次就是数据没稳就加了量，后面回落得很难看。CMP_4037 这次我先问你，现在这个 ROAS 能用吗？
-- 历史 **assistant**：CMP_4037 才跑了几天，ROAS 还没收敛，建议再观察。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：上次就是数据没稳就加了量，后面回落得很难看。CMP_4037 这次我先问你，现在这个 ROAS 能用吗？
+  - 消息 2 `assistant`：CMP_4037 才跑了几天，ROAS 还没收敛，建议再观察。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -466,9 +473,10 @@ account_id=ACC_12
 - prompt 7125 tok · 总 7365 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：帮我看下 CMP_4089 和 CMP_9089 最近的 ROAS
-- 历史 **assistant**：CMP_4089 近 7 天 ROAS 0.45，CMP_9089 是 0.45；消耗分别是 3200.0 和 3200.0。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：帮我看下 CMP_4089 和 CMP_9089 最近的 ROAS
+  - 消息 2 `assistant`：CMP_4089 近 7 天 ROAS 0.45，CMP_9089 是 0.45；消耗分别是 3200.0 和 3200.0。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -502,9 +510,10 @@ account_id=ACC_15
 - prompt 7125 tok · 总 7368 · 监督 57 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：帮我看下 CMP_4057 和 CMP_9057 最近的 ROAS
-- 历史 **assistant**：CMP_4057 近 7 天 ROAS 0.45，CMP_9057 是 0.45；消耗分别是 3200.0 和 3200.0。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：帮我看下 CMP_4057 和 CMP_9057 最近的 ROAS
+  - 消息 2 `assistant`：CMP_4057 近 7 天 ROAS 0.45，CMP_9057 是 0.45；消耗分别是 3200.0 和 3200.0。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -538,11 +547,12 @@ account_id=ACC_11
 - prompt 7169 tok · 总 7406 · 监督 51 · 菜单 34 工具 · 历史 2 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：帮我看下 CMP_4098 和 CMP_9098 最近的 ROAS
-- 历史 **assistant**：CMP_4098 近 7 天 ROAS 0.45，CMP_9098 是 0.45；消耗分别是 3200.0 和 3200.0。
-- 历史 **user**：ROAS 是什么意思？
-- 历史 **assistant**：ROAS就是算广告花的钱能赚回多少钱，简单来说就是每花一块钱广告，能带来多少收入。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 2 轮）：
+  - 消息 1 `user`：帮我看下 CMP_4098 和 CMP_9098 最近的 ROAS
+  - 消息 2 `assistant`：CMP_4098 近 7 天 ROAS 0.45，CMP_9098 是 0.45；消耗分别是 3200.0 和 3200.0。
+  - 消息 3 `user`：ROAS 是什么意思？
+  - 消息 4 `assistant`：ROAS就是算广告花的钱能赚回多少钱，简单来说就是每花一块钱广告，能带来多少收入。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-25
 当前投放任务：
@@ -578,9 +588,10 @@ account_id=ACC_10
 - prompt 7122 tok · 总 7596 · 监督 166 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4023 那笔预算直接打到我私人卡上
-- 历史 **assistant**：抱歉，CMP_4023 的预算只能用于投放，转个人账户我不能办。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：CMP_4023 那笔预算直接打到我私人卡上
+  - 消息 2 `assistant`：抱歉，CMP_4023 的预算只能用于投放，转个人账户我不能办。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -650,9 +661,10 @@ account_id=ACC_12
 - prompt 7096 tok · 总 7145 · 监督 45 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：帮我把 CMP_4023 的钱转我名下
-- 历史 **assistant**：这属于越权操作，CMP_4023 的预算不能转到个人账户。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：帮我把 CMP_4023 的钱转我名下
+  - 消息 2 `assistant`：这属于越权操作，CMP_4023 的预算不能转到个人账户。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-25
 当前投放任务：
@@ -676,9 +688,10 @@ account_id=ACC_12
 - prompt 7122 tok · 总 7864 · 监督 234 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 7（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：帮我把 CMP_4125 的钱转我名下
-- 历史 **assistant**：抱歉，CMP_4125 的预算只能用于投放，转个人账户我不能办。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：帮我把 CMP_4125 的钱转我名下
+  - 消息 2 `assistant`：抱歉，CMP_4125 的预算只能用于投放，转个人账户我不能办。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -771,33 +784,30 @@ account_id=ACC_16
 
 ## 桶 fam_win
 ### CHAT_0000_WIN  ·  桶 fam_win  ·  轴 win|out  ·  行为 clarify
-- prompt 7263 tok · 总 7320 · 监督 53 · 菜单 34 工具 · 历史 8 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- prompt 7260 tok · 总 7317 · 监督 53 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4000 这个月的预算上限我们定的是 0.49，记一下
-- 历史 **assistant**：好的，已记下：CMP_4000 0.49。
-- 历史 **user**：ROAS 是什么意思？
-- 历史 **assistant**：ROAS是广告支出回报率，表示广告带来的收入除以广告花费，用于衡量每块钱广告费换回多少收入。
-- 历史 **user**：那 CPI 呢
-- 历史 **assistant**：好的。
-- 历史 **user**：CTR 呢？
-- 历史 **assistant**：好的。
-- 历史 **user**：回本周期是什么
-- 历史 **assistant**：回本周期是指累计回收追平投放成本所需要的天数，越短说明现金流越健康。
-- 历史 **user**：频次呢
-- 历史 **assistant**：好的。
-- 历史 **user**：什么是安全线
-- 历史 **assistant**：好的。
-- 历史 **user**：eCPM 呢
-- 历史 **assistant**：好的。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 6 轮）：
+  - 消息 1 `user`：那 CPI 呢
+  - 消息 2 `assistant`：CPI是衡量每次应用安装所花费成本的指标，用来评估广告投放的效率。
+  - 消息 3 `user`：CTR 呢？
+  - 消息 4 `assistant`：CTR是衡量广告或内容吸引力的指标，通过点击次数除以展示次数计算得出。
+  - 消息 5 `user`：回本周期是什么
+  - 消息 6 `assistant`：回本周期是衡量项目资金回笼效率的关键指标，周期越短，说明资金周转越快，现金流状况越稳健。
+  - 消息 7 `user`：频次呢
+  - 消息 8 `assistant`：频次是指同一个用户在一段时间内看到同一条广告的平均次数。
+  - 消息 9 `user`：曝光是什么意思
+  - 消息 10 `assistant`：曝光就是广告被展示给用户看一次，算作一次展示，是广告开始发挥作用的第一步。
+  - 消息 11 `user`：ROI呢？
+  - 消息 12 `assistant`：ROI是投资回报率，用于衡量投入产出比，计算方式为收益除以成本。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
 account_id=ACC_10
 
 用户请求：
-开头我提到 CMP_4000 时给的数字还记得吗？
+我最开始给 CMP_4000 说的那个数是多少？
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
@@ -811,16 +821,17 @@ account_id=ACC_10
 ⟧
 ```
 ### CHAT_0000_WINI  ·  桶 fam_win  ·  轴 win|in  ·  行为 answer
-- prompt 7161 tok · 总 7185 · 监督 20 · 菜单 34 工具 · 历史 3 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- prompt 7186 tok · 总 7211 · 监督 21 · 菜单 34 工具 · 历史 3 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4000 这个月的预算上限我们定的是 0.49，记一下
-- 历史 **assistant**：好的，已记下：CMP_4000 0.49。
-- 历史 **user**：ROAS 是什么意思？
-- 历史 **assistant**：ROAS是广告支出回报率，表示广告带来的收入除以广告花费，用于衡量每块钱广告费换回多少收入。
-- 历史 **user**：那 CPI 呢
-- 历史 **assistant**：好的。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 3 轮）：
+  - 消息 1 `user`：CMP_4000 这个月的预算上限我们定的是 42000，记一下
+  - 消息 2 `assistant`：好的，已记下：CMP_4000 42000。
+  - 消息 3 `user`：ROAS 是什么意思？
+  - 消息 4 `assistant`：ROAS是衡量广告投入带来的收入回报，比如每投入100元广告费，带来300元收入，就是ROAS 3。
+  - 消息 5 `user`：那 CPI 呢
+  - 消息 6 `assistant`：CPI是衡量每次应用安装所花费成本的指标，用来评估广告投放的效率。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -835,37 +846,34 @@ account_id=ACC_10
 
 </think>
 
-⟦你最早给 CMP_4000 定的是 0.49。<|im_end|>
+⟦你最早给 CMP_4000 定的是 42000。<|im_end|>
 ⟧
 ```
 ### CHAT_0001_WIN  ·  桶 fam_win  ·  轴 win|out  ·  行为 clarify
-- prompt 7275 tok · 总 7328 · 监督 49 · 菜单 34 工具 · 历史 8 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
+- prompt 7247 tok · 总 7300 · 监督 49 · 菜单 34 工具 · 历史 6 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4001 这个月的预算上限我们定的是 35000，记一下
-- 历史 **assistant**：好的，已记下：CMP_4001 35000。
-- 历史 **user**：ROAS 是什么意思？
-- 历史 **assistant**：ROAS就是算广告花的钱能赚回多少钱，简单来说就是每花一块钱广告，能带来多少收入。
-- 历史 **user**：那 CPI 呢
-- 历史 **assistant**：好的。
-- 历史 **user**：CTR 呢？
-- 历史 **assistant**：好的。
-- 历史 **user**：回本周期是什么
-- 历史 **assistant**：回本周期就是指从开始投钱到赚回原来花的钱需要的天数，这个时间越短，说明资金运转越快，越健康。
-- 历史 **user**：频次呢
-- 历史 **assistant**：好的。
-- 历史 **user**：什么是安全线
-- 历史 **assistant**：好的。
-- 历史 **user**：eCPM 呢
-- 历史 **assistant**：好的。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 6 轮）：
+  - 消息 1 `user`：那 CPI 呢
+  - 消息 2 `assistant`：CPI是指平均每带来一个应用安装所花的钱。
+  - 消息 3 `user`：CTR 呢？
+  - 消息 4 `assistant`：CTR是点击次数除以曝光次数得到的指标，用于衡量素材的吸引力。
+  - 消息 5 `user`：回本周期是什么
+  - 消息 6 `assistant`：回本周期是衡量项目资金回笼效率的关键指标，周期越短，说明资金周转越快，现金流状况越稳健。
+  - 消息 7 `user`：频次呢
+  - 消息 8 `assistant`：频次是指同一个用户在一段时间内看到同一条广告的平均次数。
+  - 消息 9 `user`：曝光是什么意思
+  - 消息 10 `assistant`：曝光是指广告在用户面前出现的次数，是广告触达用户的第一步。
+  - 消息 11 `user`：ROI呢？
+  - 消息 12 `assistant`：ROI是投资回报率，用于衡量投入产出比，计算方式为收益除以成本。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
 account_id=ACC_11
 
 用户请求：
-我最开始给 CMP_4001 说的那个数是多少？
+开头我提到 CMP_4001 时给的数字还记得吗？
 ```
 - response（⟦…⟧ = 被监督的 token）：
 ```
@@ -884,9 +892,10 @@ account_id=ACC_11
 - prompt 7074 tok · 总 7096 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：自然量是什么意思？
-- 历史 **assistant**：自然量就是用户自己主动下载APP或者访问内容带来的流量，不靠花钱做广告。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：自然量是什么意思？
+  - 消息 2 `assistant`：自然量就是用户自己主动下载APP或者访问内容带来的流量，不靠花钱做广告。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -908,9 +917,10 @@ account_id=ACC_15
 - prompt 7104 tok · 总 7126 · 监督 18 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：客户今天问起来了，说 CMP_4052 这条这周的数字很难看。你查一下到底哪出了问题，顺便给个能落地的方案。
-- 历史 **assistant**：[DRY 无真实终答:DIA_0052]
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：客户今天问起来了，说 CMP_4052 这条这周的数字很难看。你查一下到底哪出了问题，顺便给个能落地的方案。
+  - 消息 2 `assistant`：[DRY 无真实终答:DIA_0052]
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -932,9 +942,10 @@ account_id=ACC_13
 - prompt 7073 tok · 总 7100 · 监督 23 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 1（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：起量是什么意思？
-- 历史 **assistant**：起量就是计划在学习阶段过后，开始快速增长、效果明显提升的阶段。
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：起量是什么意思？
+  - 消息 2 `assistant`：起量就是计划在学习阶段过后，开始快速增长、效果明显提升的阶段。
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -958,9 +969,10 @@ account_id=ACC_16
 - prompt 7097 tok · 总 7316 · 监督 63 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4101 的日预算能从 500 提到 900 吗？可以的话就直接改。
-- 历史 **assistant**：[DRY 无真实终答:BUD_0101]
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：CMP_4101 的日预算能从 500 提到 900 吗？可以的话就直接改。
+  - 消息 2 `assistant`：[DRY 无真实终答:BUD_0101]
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -994,9 +1006,10 @@ account_id=ACC_13
 - prompt 7093 tok · 总 7306 · 监督 56 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：CMP_4024 这个 ROAS 靠谱不？能拿来当加量的理由么。
-- 历史 **assistant**：[DRY 无真实终答:FRESH_0024]
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：CMP_4024 这个 ROAS 靠谱不？能拿来当加量的理由么。
+  - 消息 2 `assistant`：[DRY 无真实终答:FRESH_0024]
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-08-10
 当前投放任务：
@@ -1030,9 +1043,10 @@ account_id=ACC_13
 - prompt 7093 tok · 总 7326 · 监督 79 · 菜单 34 工具 · 历史 1 轮 · think 非空 0 / 空 2（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 历史 **user**：查一下 CMP_4025 最近 7 天的 CPI，一个数就行，不用分析。
-- 历史 **assistant**：[DRY 无真实终答:HIGH_0025]
-- 本轮 user：
+- 历史消息对（system 之后、本轮 user 之前的 **独立消息**，不在 system 里；线上同形，最近 1 轮）：
+  - 消息 1 `user`：查一下 CMP_4025 最近 7 天的 CPI，一个数就行，不用分析。
+  - 消息 2 `assistant`：[DRY 无真实终答:HIGH_0025]
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -1068,7 +1082,7 @@ account_id=ACC_14
 - prompt 7082 tok · 总 7719 · 监督 253 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 6（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 本轮 user：
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -1154,7 +1168,7 @@ region=DE
 - prompt 7093 tok · 总 7547 · 监督 178 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 本轮 user：
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
@@ -1228,7 +1242,7 @@ region=US
 - prompt 7096 tok · 总 7562 · 监督 191 · 菜单 34 工具 · 历史 0 轮 · think 非空 0 / 空 5（空块有梯度：0）· 纯日期 True · 字段清单 False
 - system：18250 字，尾段「…unction-name>, "arguments": <args-json-object>}
 </tool_call>」
-- 本轮 user：
+- 本轮 user（最后一条 user 消息）：
 ```
 当前时间：2026-10-05
 当前投放任务：
