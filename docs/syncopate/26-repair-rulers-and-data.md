@@ -416,9 +416,27 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
 
 ### W4 · 重建 + 出厂体检（训练机，~1 小时）
 
-门槛：出厂体检全绿（`u_build_v14_5.py:1228` 已进流程）· 份额闸/密度闸/D-L 门禁全过 ·
-**同形断言进出厂体检**（W2⑤ 的测试在建库产物上再跑一遍）· 建库 stdout tee 入 `_audit/`
+门槛：出厂体检全绿（`u_build_v14_5.py` 末尾已进流程）· 份额闸/密度闸/D-L 门禁全过 ·
+**同形断言进出厂体检**（shape_check 在建库产物上跑，已接）· 建库 stdout tee 入 `_audit/`
 （§2.4 新纪律）· §7 欠账读数全部落盘。
+
+**训练机施工清单（09-02 定，按顺序；每步产物与判据写死）**
+```
+0  前置：拉最新 main；SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1；确认 rollout_budget.MAX_PROMPT_LENGTH 已按
+   Chaoyu 定数改（默认建议 9216）且 launch_rl/vllm 启动脚本 max_model_len = 9216+8192 → 18432；
+   `python -c "from syncopate.train.rollout_budget import *"` 判据行 [think-mode] 打出
+1  教师起服务（u_p2_v145_chain.sh 的 4B@8210 / 8B@8211 段）
+2  行为类 think 探针：scripts/v15_w3_behavior_think_probe.py --n 20 ⇒ _audit/v15_w3/behavior_think_probe.json；
+   ≥70% 的行为类才允许 gen_cot_v15 收（低于线的登记 §7 欠账，CoT 行不带其 think）
+3  ⚠️ 旧缓存作废：data/u_route/v15_l2l1_rows.json（折叠文本形状）与 v15_cot_rows.json（旧 think 画像）
+   改名 *.pre_w2.json 留档，不许被命中（缓存命中会绕过全部新改造——㉒ 同族）
+4  建库：SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 python scripts/u_build_v14_5.py 2>&1 | tee _audit/v15_w4/build.log
+   判据：[同形] 不同形 0 · 份额闸六桶在带（首次实测后把 v13/fam 带宽回填本表）· [CoT-v15] 命中率行入库 ·
+        出厂体检 ✅ · scripts/v15_r2_gates.py --prompt-budget data/sft/v15/train.parquet 零截断
+5  压舱不走样：scripts/v15_r2_migrate.py --scope frozen419 ⇒ 四项全等 419/419
+6  新池画像（W3 门槛①）：scripts/v15_w3_budget_table.py 对新 cot 缓存重跑 ⇒ p95 ≤500 字 · 段数 ≤2 · 中文 ≥0.5
+7  影子重建判据（如时间允许）：scripts/run_pipeline_shadow_rebuild.sh 只到 3/6（batches SHA）
+```
 
 ### W5 · 重训 + 五点谱 + 考场 v4（训练机，~2.5–3 小时）
 
