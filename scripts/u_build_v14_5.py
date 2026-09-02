@@ -68,8 +68,11 @@ STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 EXAM_LAST = set()          # 考卷被判轮句（训练构造时逐字规避）
 # ⚠️ 考卷 v3 也要进泄漏闸 —— 新增的 REJ 题（业务内越权）一旦漏进训练集，
 #   考场就从"测能力"退化成"测记忆"（考卷审计第③条的同族）。
+from u_build_v15_multiturn import (DRY, answer_turn, as_multiturn, build_family_rows,  # noqa: E402
+                                   real_reply, shape_check)
+
 for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "context_v3_exam.jsonl",
-            "talk_exam.jsonl"):
+            "context_v4_exam.jsonl", "talk_exam.jsonl"):
     for _x in open(f"data/u_route/{_fn}"):
         EXAM_LAST.add(json.loads(_x)["turns"][-1])
 
@@ -78,6 +81,8 @@ _SEED = [0]
 
 
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
+    if DRY:
+        return "[DRY 教师待写] 这条的数据核对完毕，细节口径我再核一轮。"
     _SEED[0] += 1     # ⚠️ vllm serve 默认 seed=0 ⇒ 同请求采样确定性；逐请求换 seed 才有多样性
     r = await client.post(f"{base}/chat/completions", json={
         "model": "t", "temperature": temp, "top_p": 0.95, "max_tokens": max_tokens,
@@ -204,6 +209,8 @@ ANGLES_L2 = ["可附一句简短观察", "顺带说一句这个数是高是低",
 
 
 async def gen_l2_reply(client, cid, mname, val) -> str:
+    if DRY:
+        return f"{cid} 的{mname}是 {val}。[DRY 教师待写]"
     for k in range(4):
         rep = clean_reply(await teach(
             client, T4B,
@@ -567,6 +574,14 @@ async def build_l2_l1(tokenizer, registry, client):
             return None
 
     defs = DEFS  # 全局（Stage A 产物）
+    if not DRY:
+        # ★ 历史里的上一轮助手内容必须是**真实终答人话**（不同形 #2）：源 case 若不在压舱人话缓存里，
+        #   先让教师写好（同一份 ballast_replies 缓存，与冻结桶共用），不许落到占位符
+        from u_build_v15_multiturn import BALLAST_REPLIES as _BR
+        _need = [b.case_id for b in q_bundles + z_bundles
+                 if b.case_id not in _BR and b.verifier.expected_behavior in ("tool_call", "answer")]
+        if _need:
+            _BR.update(await ballast_replies(client, {b.case_id: b for b in q_bundles + z_bundles}, _need))
     l2_rows, l1_rows, skipped, fallback, reused = [], [], 0, 0, 0
     l1_err: list[str] = []
     # ---- L2 ~200 + 10 val：句式×工具×对象 ----
@@ -578,7 +593,7 @@ async def build_l2_l1(tokenizer, registry, client):
     #   实测 L2 从带内掉到 8.3%（带宽 [10%,17%]）。
     #   ⇒ 抬的是**行数**不是带宽 —— 带宽表达的是「数据追问该拿多少梯度预算」，
     #     这个设计意图与契约无关，不该因为换了承载通道就放宽（守则③）。
-    l2_cap = 290 if IS_V15 else 210
+    l2_cap = DRY if DRY else (290 if IS_V15 else 210)
     for b in q_bundles:
         if len(l2_rows) >= l2_cap:
             break
@@ -589,11 +604,15 @@ async def build_l2_l1(tokenizer, registry, client):
         pat = rng.choice(SUB_TRAIN)
         i += 1
         b2 = copy.deepcopy(b)
-        prev = (b.gold.final_answer or {}).get("summary") or "已给出结论"
+        # ★ 09-02（不同形 #8）：switch/compare 的另一条必须**真实存在于 env**，此前 cid+1 是
+        #   题面与 gold 指向两个不同对象的 bug；env 只有一条 campaign 时退回 same
         cid2 = cid
-        if obj == "switch":
-            m2 = re.match(r"(.*?)(\d+)$", cid)
-            cid2 = f"{m2.group(1)}{int(m2.group(2)) + 1}" if m2 else cid
+        others = [c for c in (b.env.readonly_tables or {}).get("campaigns", {}) if c != cid]
+        if obj in ("switch", "compare"):
+            if others:
+                cid2 = rng.choice(others)
+            else:
+                obj = "same"
         if tool == "campaign.get_metrics":
             ask = pat.replace("{X}", f"{cid2+' 的' if obj=='switch' else '它的'}{mname}") \
                 if "{X}" in pat else pat
@@ -606,9 +625,10 @@ async def build_l2_l1(tokenizer, registry, client):
             ask = alt.replace("{X}", f"这条的{mname}")
             if ask in EXAM_LAST:
                 ask = f"顺手把{mname}也拉一下"
-        b2.case.user_message = (f"[上一轮] 用户：{b.case.user_message}\n"
-                                f"[上一轮] 助手：{str(prev)[:120]}\n\n{ask}")
-        b2.case.case_id = f"{b.case_id}_MT5"
+        # ★ 09-02（不同形 #1#2#3#4#6#7）：历史 = 真消息对（上一轮助手 = 真实终答人话），
+        #   题面 context = 线上同形（账户 + 在投清单），字段清单 MIN_FIELDS，菜单全量
+        b2 = as_multiturn(b, case_id=f"{b.case_id}_MT5", user_message=ask,
+                          prior=[(b.case.user_message, answer_turn(real_reply(b)))])
         if tool == "campaign.get_metrics":
             acts = [{"tool": tool, "arguments": {"campaign_id": cid2}}]
             if obj == "compare" and cid2 != cid:
@@ -673,7 +693,7 @@ async def build_l2_l1(tokenizer, registry, client):
     #   token 少了一整轮 ⇒ 份额从 4.6% 掉到 2.8%，撞穿 [3%,9%] 的下沿。
     #   ⛔ 处理方式是**补行数**，不是放宽带宽：带宽表达的是"L1 该占多少教学份量"，
     #     那个意图没变；变的是"一行值多少 token"。按旧口径标定的**行数**才是失效的那个数。
-    while len(l1_rows) < 250 and li < 1500:
+    while len(l1_rows) < (DRY if DRY else 250) and li < 1500:
         li += 1
         b_src = rng.choice(z_bundles) if li % 2 == 0 else rng.choice(q_bundles)
         kind = "concept_hist" if li % 2 == 0 else "query_hist"
@@ -682,21 +702,16 @@ async def build_l2_l1(tokenizer, registry, client):
         ask = pat.replace("{X}", t2)
         if ask in EXAM_LAST:
             continue                        # 撞被判句直接换对（li 循环量足够）
-        b2 = copy.deepcopy(b_src)
         if kind == "concept_hist":
-            hist = (f"[上一轮] 用户：{a}是什么意思？\n"
-                    f"[上一轮] 助手：{rng.choice(DEFS[a])}\n\n{ask}")
+            prior = [(f"{a}是什么意思？", answer_turn(rng.choice(DEFS[a])))]
         else:
-            prev = (b_src.gold.final_answer or {}).get("summary") or "已给出结论"
-            hist = (f"[上一轮] 用户：{b_src.case.user_message}\n"
-                    f"[上一轮] 助手：{str(prev)[:120]}\n\n{ask}")
-        b2.case.user_message = hist
-        b2.case.case_id = f"L1F_{li:04d}"
-        b2.gold.actions = []
+            if b_src.verifier.expected_behavior not in ("tool_call", "answer"):
+                continue
+            prior = [(b_src.case.user_message, answer_turn(real_reply(b_src)))]
         d = rng.choice(DEFS[t2])
-        b2.gold.final_answer = {"summary": f"{t2} 释义", "reply": d}
-        b2.verifier = copy.deepcopy(b2.verifier)
-        b2.verifier.required_answer_fields = MIN_FIELDS       # 去标签泄漏
+        b2 = as_multiturn(b_src, case_id=f"L1F_{li:04d}", user_message=ask, prior=prior,
+                          gold_actions=[], final_answer={"summary": f"{t2} 释义", "reply": d},
+                          behavior="answer")
         try:
             row = await replay(b2, 92000 + len(l1_rows))
         except Exception as e:
@@ -714,18 +729,35 @@ async def build_l2_l1(tokenizer, registry, client):
     return l2_rows, l1_rows
 
 
+def _chat_prompt(tokenizer, user: str, prior: list[tuple[str, str]]) -> str:
+    """chat 行的 prompt：与 rollout_loop.build_messages / decider._messages **同一组函数**
+    （load_system_prompt 含 v15 尾段 · step_user 纯日期 · 线上同形 context · 历史消息对 · 全量菜单）。
+    ⛔ 09-02 之前走 probe_opd_divergence.render_prompt_text：v14 尾段的 system.txt + ACC_DEMO 假 context
+       + summary 字段清单 + 历史折进题面 —— chat 行与线上四处不同形。"""
+    from syncopate.core.prior_turns import render_prior_messages
+    from syncopate.domains.adcampaign import build_domain
+    from syncopate.prompts import load_system_prompt, render_prompt
+    from syncopate.core.demo_context import demo_context as _demo_context
+    from syncopate.train.rollout_loop import CHAT_TEMPLATE_KWARGS
+    msgs = [{"role": "system", "content": load_system_prompt()}]
+    msgs += render_prior_messages([{"user_message": u, "result": {"text": a}} for u, a in prior], tokenizer)
+    msgs.append({"role": "user", "content": render_prompt("step_user.txt", {
+        "reference_now": "2026-08-20", "context": _demo_context(), "user_message": user,
+        "answer_fields": []})})
+    return tokenizer.apply_chat_template(msgs, tools=build_domain().registry.menu(None),
+                                         add_generation_prompt=True, tokenize=False, **CHAT_TEMPLATE_KWARGS)
+
+
 def build_chat_rows(tokenizer, chat_mat):
-    from probe_opd_divergence import render_prompt_text
     rows = []
     for i, c in enumerate(chat_mat):
         if c["turns"] == 1:
-            user = c["prompt"]
+            user, prior = c["prompt"], []
             reply = c["reply"]
         else:
-            user = (f"[上一轮] 用户：{c['prompt']}\n[上一轮] 助手：{c['reply'][:120]}"
-                    f"\n\n{c['followup']}")
+            user, prior = c["followup"], [(c["prompt"], c["reply"])]
             reply = c["reply2"]
-        prompt = render_prompt_text(tokenizer, user, tools=None)
+        prompt = _chat_prompt(tokenizer, user, prior)
         if IS_V15:
             # v15：闲聊没有机器可核字段 ⇒ 不发 session.report，终答就是一句人话。
             # ★ 但 think 段必须显式写出来（门槛⑤⒜=100%）——闲聊属"简单题"，
@@ -979,7 +1011,10 @@ async def main() -> int:
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
     global DEFS
-    tokenizer = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    _tok_path = "models/Qwen3-4B" if Path("models/Qwen3-4B/tokenizer.json").exists() else "models/Qwen3-0.6B"
+    tokenizer = AutoTokenizer.from_pretrained(_tok_path)   # 同一词表；本机无 4B 时用 0.6B（只影响本机 DRY）
+    if DRY:
+        print(f"[DRY] 结构演练模式：每桶 {DRY} 行、不调教师、不写缓存、不落 parquet（tokenizer={_tok_path}）")
     registry = build_domain().registry
     registry.latency_scale = 0.0
     bank = [json.loads(x) for x in open("data/u_route/chat_bank_v2.jsonl")]
@@ -1003,7 +1038,10 @@ async def main() -> int:
             json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
         cache_l = Path("data/u_route/v15_l2l1_rows.json" if IS_V15
                        else "data/u_route/v145_l2l1_rows.json")
-        if cache_l.exists():
+        if DRY:
+            # ⚠️ 08-31 前的缓存是折叠文本形状，W2 之后**必须重建**；DRY 只演练构建路径
+            l2, l1 = await build_l2_l1(tokenizer, registry, client)
+        elif cache_l.exists():
             _c = json.load(open(cache_l))
             l2, l1 = _c["l2"], _c["l1"]
             print(f"[C] L2/L1 缓存命中（{len(l2)}/{len(l1)}）")
@@ -1011,6 +1049,24 @@ async def main() -> int:
             print("[C] L2/L1 回放构建 …", flush=True)
             l2, l1 = await build_l2_l1(tokenizer, registry, client)
             json.dump({"l2": l2, "l1": l1}, open(cache_l, "w"))
+        # ★ 09-02 W2⑦：六族第一波训练行（DEF-F/REJ-F/CLA-F/L2-x/WIN，各成对）
+        from syncopate.pipeline.build_dataset import build_sft_row as _bsr
+        from syncopate.pipeline.split import load_bundles as _lb
+        _bundles = _lb(Path("data/batches/v13"))
+
+        async def _replay_fam(b, idx):
+            return await _bsr(b, tokenizer=tokenizer, registry=registry, index=idx, split="train", config=None)
+        cache_f = Path("data/u_route/v15_fam_rows.json")
+        if not DRY and cache_f.exists():
+            fam = json.load(open(cache_f))
+            print(f"[F] 家族行缓存命中（{len(fam)}）")
+        else:
+            async def _gen(cid, mname, val):
+                return await gen_l2_reply(client, cid, mname, val)
+            fam = await build_family_rows(tokenizer, registry, _bundles, DEFS, _replay_fam, _gen)
+            if not DRY:
+                json.dump(fam, open(cache_f, "w"))
+        print(f"[F] 家族行 {len(fam)}：{dict(Counter(r['bucket'] for r in fam))}")
         cache_cot = Path("data/u_route/v15_cot_rows.json" if IS_V15
                          else "data/u_route/v145_cot_rows.json")
         if cache_cot.exists():
@@ -1025,8 +1081,9 @@ async def main() -> int:
     # ★ 桶下限闸放在**这里**（用数据的地方），不放在生产者内部。
     #   ⛔ 2026-08-30 实案：闸写在 build_l2_l1 里，结果上一轮把 L1=0 的坏结果**写进了缓存**，
     #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
-    assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
-    assert len(l2) >= (280 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行"
+    if not DRY:
+        assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
+        assert len(l2) >= (280 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行"
 
     # held-out val 切分（每桶尾部拿走）
     _l2_train = 280 if IS_V15 else 200
@@ -1040,7 +1097,16 @@ async def main() -> int:
     chat_rows = build_chat_rows(tokenizer, chat_mat)
     chat_rows, chatv = chat_rows[:80], chat_rows[80:90]
 
-    if IS_V15:
+    if DRY:
+        # 本机没有 data/sft/v13 parquet ⇒ 用切分文件里的 case_id 演练冻结桶回放（前 DRY 条）
+        from u_build_v15_multiturn import BALLAST_REPLIES as _BR
+        _ids = [c for c in json.load(open("data/splits/v13/sft_cases.json"))["case_ids"] if c in _BR][:DRY]
+        _df = pd.DataFrame({"case_id": _ids, "split": ["train"] * len(_ids)})
+        _tmp = Path("_audit/v15_w2/_dry_frozen.parquet"); _tmp.parent.mkdir(parents=True, exist_ok=True)
+        _df.to_parquet(_tmp)
+        t13 = await _replay_frozen(tokenizer, registry, str(_tmp), 0, client=client)
+        v13v = t13.iloc[:0]
+    elif IS_V15:
         # ★ 压舱石 419 行**不能直接沿用 v13 的 parquet**（那是 v14 壳的 token）。
         #   语义冻结的做法是**同一批 case 用 v15 契约重放一遍**——
         #   等价性已由 scripts/v15_r2_migrate.py 全量证过（419/419 四项全等）。
@@ -1054,7 +1120,7 @@ async def main() -> int:
     # ★ CoT 预算截断必须发生在装配之前（第 5 次发射的教训：截断放在份额计算之后
     #   = 截了个寂寞——train 里还是全量、闸读的还是旧份额）
     non_cot_tok = int(t13.supervised_tokens.sum()) + \
-        sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows)
+        sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows + fam)
     budget = int(non_cot_tok * 0.19 / 0.81)
     acc, kept = 0, []
     if IS_V15:
@@ -1117,8 +1183,9 @@ async def main() -> int:
     #     ⇒ 行数下限取实测上界 19。三条里只有行数下限是"拍的"，另外两条各有来源
     #       （token 带宽=梯度预算 · 覆盖率=N3 按需思考）。
     _cot_floor = 19 if IS_V15 else 40
-    assert len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）"
-    new_rows = l2 + l1 + chat_rows + cot
+    if not DRY:
+        assert len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）"
+    new_rows = l2 + l1 + chat_rows + fam + cot
     train = pd.concat([t13, pd.DataFrame(new_rows)], ignore_index=True)
     valrows = l2v + l1v + chatv
     for r in valrows:
@@ -1126,19 +1193,35 @@ async def main() -> int:
     val = pd.concat([v13v, pd.DataFrame(valrows)], ignore_index=True)
 
     # ── 门禁 ──
-    assert len(t13) == 419, "冻结校验失败"
+    assert DRY or len(t13) == 419, "冻结校验失败"
     tok_by = {"v13": int(t13.supervised_tokens.sum()),
               "l2": sum(r["supervised_tokens"] for r in l2),
               "l1": sum(r["supervised_tokens"] for r in l1),
               "chat": sum(r["supervised_tokens"] for r in chat_rows),
+              "fam": sum(r["supervised_tokens"] for r in fam),
               "cot": sum(r["supervised_tokens"] for r in cot)}
     total = sum(tok_by.values())
     share = {k: v / total for k, v in tok_by.items()}
     print("sup-tok 份额:", {k: f"{v:.1%}" for k, v in share.items()})
-    bands = {"v13": (0.52, 0.66), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
-             "chat": (0.01, 0.07), "cot": (0.05, 0.20)}
+    # ★ 09-02：新增 fam 桶后带宽重定（26 §W2⑦「份额闸按监督 token 重新定带宽」）：
+    #   v13 压舱 0.48–0.62（原 0.52–0.66，让出 4pp 给六族）· fam 0.04–0.12；其余不动。
+    #   ⚠️ 数字待 W4 首次实测回填（先按行数估：fam ≈200 行 × ~700 tok ≈ 8–10%）
+    bands = {"v13": (0.48, 0.62), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
+             "chat": (0.01, 0.07), "fam": (0.04, 0.12), "cot": (0.05, 0.30)}
     for k, (lo, hi) in bands.items():
+        if DRY:
+            continue
         assert lo <= share[k] <= hi, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
+    # ★ 同形体检（守则⑮）：建库产物上再跑一遍（W2⑥ 的测试在真产物上复跑）
+    sc = shape_check(tokenizer, l2 + l1 + chat_rows + fam)
+    print(f"[同形] 多轮行 {sc['n']} · 不同形 {len(sc['bad'])} · 缺真实终答 {len(sc['missing_real_reply'])}")
+    for cid, why in sc["bad"][:10]:
+        print(f"   ✗ {cid}: {why}")
+    assert not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形"
+    if DRY:
+        print(f"[DRY] 演练完成：行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"
+              f" · 缺真实终答的历史 {sc['missing_real_reply'][:5]}")
+        return 0
     if IS_V15:
         # ── 闸：人话不许出现在机器通道 + 信令自由文本不许是同一句（`25 §7㉗㉘`）──
         #
@@ -1218,7 +1301,9 @@ async def main() -> int:
     manifest = {"version": "v15" if IS_V15 else "v14.5", "seed": 1455,
                 "sources": {"v13_train": len(t13), "multiturn_l2": len(l2),
                             "multiturn_l1": len(l1), "chat_shell": len(chat_rows),
-                            "cot_hard": len(cot)},
+                            "fam": dict(Counter(r["bucket"] for r in fam)), "cot_hard": len(cot)},
+                "render": {"prior": "message_pairs", "time": "date_only", "menu": "full_34",
+                           "answer_fields": "min_fields_v15", "since": "2026-09-02 W2"},
                 "total": len(train), "val": len(val),
                 "sup_tok_share": {k: round(v, 4) for k, v in share.items()},
                 "axis_counts": dict(axes),

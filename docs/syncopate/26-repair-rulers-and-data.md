@@ -351,6 +351,27 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 | ⑤ #8 回归 | switch 行断言：context 与 gold 指向同一对象 |
 | ⑥ 菜单预算 | 全量 34 菜单下 prompt max ≤ 预算且零截断（重量后回填具体数进本表） |
 
+**🔶 W2 完成（2026-09-02，本机 0 GPU）——只剩上限数字待 Chaoyu 定**
+```
+代码   syncopate/core/prior_turns.py（历史→消息对的唯一渲染，decider 与 rollout_loop 共用）·
+       rollout_loop.build_messages 加 prior + 纯日期 · CaseBundle.prior（内存字段，不落盘）·
+       core/demo_context.py（线上 context 构造抽到 core，训练 chat 行同形）·
+       scripts/u_build_v15_multiturn.py（prod_context / as_multiturn / 六族第一波训练行 / 同形体检）·
+       u_build_v14_5：L2/L1 改真消息对（#1#2#3#4#6#7#8 一起修，switch 只取 env 里真实存在的另一条）、
+       chat 行改走同一组渲染函数（此前走 probe 私渲染：v14 尾段 system + 假 context + summary 字段清单 = 四处不同形）、
+       fam 桶 + 带宽 + manifest.render + 出厂同形体检 · sft_replay 认 gold.clarify_question
+       · 34 条工具描述修剪 + system.txt 并入 4 条纪律（见 ⑤）
+读数   ① SFT/RL 同构：test_rollout_loop 32 passed（含带 prior 的逐 token 同构）✓
+       ② 同形断言：tests/train/test_train_prod_same_shape.py 4 条（负向：折回文本/ISO 时间 ⇒ 红）✓
+       ③ 压舱不走样：v15_r2_migrate 四项全等 → **挪 W4**（本机无 data/sft/v13 parquet；batches v13 已由影子重建落本机、切分 SHA 一致）
+       ④ 全量回归：本机 tests 全绿（除需 GPU/CUDA 扩展的 e31/verl_patches）
+       ⑤ #8 回归：switch/compare 只在 env ≥2 条 campaign 时取真实存在的另一条（169/1670 个 env），否则退 same
+       ⑥ 菜单预算：修剪后仍差 1407 ⇒ ⛔ 等 Chaoyu 定 MAX_PROMPT_LENGTH / max_model_len（建议 9216 / 18432）
+DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）：多轮行 146 · 不同形 0 ·
+       fam 54 行（deff/rejf/claf/l2x/win）· 六个源 case 无压舱人话缓存 ⇒ 正式建库前由 ballast_replies 先写
+待 W4  份额带宽（v13 0.48–0.62 · fam 0.04–0.12 先按行数估）首次实测回填；CoT 带宽上沿 0.30 已改
+```
+
 ### W3 · CoT 重设计（~1 天；分析依据在 §4）
 
 做什么：

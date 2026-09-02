@@ -155,9 +155,12 @@ def _v15_tail(bundle: CaseBundle, behavior: str) -> list[str]:
             "recheck_after_days": int(fa.get("recheck_after_days") or 5)})]
     if behavior == "clarify":
         mf = fa.get("missing_field") or "campaign_id"
+        # ★ 09-02（W2⑦ WIN 族）：gold 给了具体追问句（clarify_question）就用它——
+        #   「最早那条记录已出窗、请再说一次」这种问法不能靠 {mf} 模板凑
         return head + [render_signal(
             "session.clarify",
-            {"question": _pick(_CLARIFY_LINES, bundle.case.case_id).format(mf=mf),
+            {"question": str(fa.get("clarify_question")
+                             or _pick(_CLARIFY_LINES, bundle.case.case_id).format(mf=mf)),
              "missing_fields": [mf]})]
     if behavior == "reject":
         rr = {"unauthorized": "unauthorized", "policy": "policy"}.get(
