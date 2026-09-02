@@ -1,11 +1,62 @@
 # Syncopate · 09 — M9 Runtime 上线态
 
-> 更新于 **2026-08-17**。M9.1–M9.6 施工完成，**M9.7 压测未做**（那是最终的考试）。
+> 更新于 **2026-09-02**（K 线收官；§0.0 是交接入口）。M9.1–M9.6 施工完成（08-17）；M9.7 压测在 B-5 做过一轮，
+> **Celery 化后需重测**（27 §14 挂账 S-05）。
 > ★★ **验收 / 设计符合性 → `11-runtime-acceptance.md`**（2026-08-17 独立审计，40 条判据
 > 逐条核对；**结论：45 条测试全绿，但设计 §3 的 C 档审批一次都没被接上**）——
 > 这一份只写「怎么起、施工时抓到了什么」，**别在这里找验收结论**。
 > 环境怎么起 → `08-machine-and-environment.md`
 > 设计依据 → `../syncopate-project-design-v0.1.md` §36–39
+
+---
+
+## 0.0 · K 线交接（2026-09-02，给训练机上的下一位 serving 负责人）
+
+**一句话现状**：serving 生产化（27 号 K0–K11）在本机（无 GPU、无 sudo）已全部落地并推送；
+**没有一行在训练机上跑过**。你的工作不是继续施工，是**把它在训练机上立起来，然后补本机做不了的五件事**。
+
+**读什么，按这个顺序，共约 40 分钟**：
+
+1. `00-START` §4 ④ 与守则⑫（交接双向核对）——先给本会话/上一位发一条消息核对现场，不许只读文档上手。
+2. `27` §14 收口 + §16 裁定——知道为什么是 Celery+Redis、为什么 Alembic 是唯一真相、为什么恢复走快照。**不要读 §3–§13 的步骤去重做**。
+3. `08` §1.2——搬家配置：落盘位置、环境变量表、恢复数据库三情形。训练机那一列写着"未装"，就是你要做的。
+4. `30`——上线清单（哪些挂账归你）+ 六张值班卡（告警响了翻这个）。
+5. `28` §0 收官快照——28 条未负向认证的坑 + 十条优化候选，这是 Chaoyu 要的"熟悉队列软件"的教材，不挡上线。
+6. `29`——只在你想知道"某个能力现在到底有没有"时查；证据列的 `schema.sql` 行号已过时，看头部说明。
+
+**在训练机上按顺序做**：
+
+```bash
+# ① 起底座（root 路数）：PG 照 08 §1.1；Redis 要新装——deb 解包到 /workspace/tools/redis，REDIS_HOME 指过去
+bash scripts/pg_bootstrap.sh && bash scripts/redis_bootstrap.sh
+# ② 依赖 + 回归：训练机用锁文件；期望 372 passed，skip 只能是"无 node"那几条（没有 PG/Redis 的 skip 不算通过）
+uv sync --frozen --all-extras && python -m pytest tests/runtime -q
+# ③ 灾备演练一次，末行 RTO；新暴露的隐形前提 = 0 才算搬完，>0 就回填 08 §1.2
+bash scripts/dr_drill.sh
+# ④ 先用基座起端点（不需要候选）：验解析接缝 / 标定 visibility_timeout 与 lease / 算连接数账（28 P-07）
+bash logs/runtime/start_serving.sh && python scripts/runtime_smoke.py
+# ⑤ 起生产栈（本节 §0 的命令序列），SYNCOPATE_WORKER_ORG_ID=org_demo 必设
+```
+
+**本机做不了、归你的五件**（都在 27 §14 与 30 §1 挂账，做完就地改状态）：
+
+| # | 事 | 需要 | 判据 |
+|---|---|---|---|
+| 1 | 压测重测（S-05） | 真端点 | goodput/queue lag 新数字替换 11 §5；不达标回 28 §5 取题 |
+| 2 | 前端 build + 三处改名 + 👍👎 入口 | node | `run.completed` 在浏览器时间线里出现；点踩落 `feedback_items` |
+| 3 | 停队列 / 回滚真演练 | 生产栈 | 09 §0 的两条命令各跑一次，记录进 30 §1.9 P2 |
+| 4 | 灾备的权重那半 | HF 仓库 | 从 HF 拉候选 + 起端点计时，RTO 记进 30 §4 |
+| 5 | 生产备份策略（D3） | 灰测放真人前 | `pg_dump -Fc` 周期 + 一次还原演练 |
+
+**四条别踩**：
+
+- ⛔ 状态只能经 `transition_run` 改；事件只能经 `append_event` 写。grep 判据会红，红了是你错不是判据错。
+- ⛔ `response_lost` 的写调用**禁止手动重发**，只能对账（30 卡 03）。这是全系统最贵的一条规矩。
+- ⛔ 改表结构走 Alembic 新脚本 + `schema_snapshot.py --write`，revision 名 ≤32 字符；不许手改库再改快照。
+- ⛔ 渲染/解析那层与训练侧共用（同形红线）；治理表要和工具注册表一致，训练侧加工具你这边导入会炸——那是故意的，去 `tool_governance.py` 登记，别把断言删了。
+
+**26 线交界（verl-22 会话）**：D26 拒绝轮进历史、D9 decider 超时改配置都归他们，你不动；
+你改 `syncopate/runtime/` 之外的任何共用件前先写 MAINLINE-INFRA 并发消息。
 
 ---
 
@@ -16,7 +67,7 @@ M0–M8 造的是**训练用的东西**（数据、沙盒、判据、模型）�
 
 ```
 bash scripts/pg_bootstrap.sh                            # 起库（幂等，一条命令重建）
-python -m pytest tests/runtime/ -q                      # 226 条
+python -m pytest tests/runtime/ -q                      # 372 passed · 10 skipped（09-02）
 # B-5/E33（08-28）生产栈形态：API 多进程 + worker 多进程 + 池 env（单进程默认值未动，
 #   高并发三瓶颈=池 10 条/单进程 GIL/SSE 轮询已修——goodput 64→192 的来源，账在 E33）
 SYNCOPATE_API_DB_POOL=12 \
