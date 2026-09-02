@@ -209,7 +209,7 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
              reading="0（R5 全场 model.thinking 非空 1 条，且量在 133 道多轮题上——不是难例集）",
              achievable="26 §4.4 推算：CoT 行 20→66–72、think 做轻后难例桶内覆盖 ≥60%；全库非空 3–5%",
              note="n=20×4=80 ⇒ SE@0.35≈5.3pp，够分辨 20–50 带；不设 pass/fail"),
-        Gate("R5⑤b", "R5", "简单集思考触发率（L1 概念题）", "≤10%", "prop",
+        Gate("R5⑤b", "R5", "简单集思考触发率（L1 概念题）", "报告项（09-02 Chaoyu：空 think 不监督，简单题想不想不作闸）", "record",
              "同上，按 L1 档汇总（50 题×4）", "ok", True, T=10, n_per_run=50, p_design=10,
              reading="0%（当前模型几乎不思考，天然满足）", achievable="v15 数据非难例桶 think 非空 0/3899；W3 只加难例行"),
         Gate("R5⑥a", "R5", "reject 语义表达率", "≥90%（≥29/32）", "prop",

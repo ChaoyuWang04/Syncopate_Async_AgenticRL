@@ -84,7 +84,12 @@ ENABLE_THINKING = THINK_ON
 #     5760 + 8192 = 13952 ≤ 14336（余量 384）⇒ **服务侧不用改**。
 #   ⚠️ 余量仍然薄（数据侧 5760−5430=330）：R2 之后任何加长 system/工具描述的改动
 #     都必须重量一次 prompt max —— 判据见 scripts/v15_r2_gates.py 的 --prompt-budget。
-MAX_PROMPT_LENGTH = 5760
+# ★ 2026-09-02（Chaoyu 裁定：不爆显存就抬到线上真实形状）：5760 → **9216**。
+#   依据（26 §W2⑤ 实测）：全量 34 工具菜单 = 线上形状（守则⑮ #6），工具描述修剪后最长 prompt 仍 7167，
+#   多轮行再加最近 6 轮历史（每轮 ≤400 tok）⇒ 9216。9216 + 8192 = 17408 ⇒ 服务/RL max_model_len 18432
+#   （logs/runtime/start_vllm.sh · scripts/v15_r5_exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
+#   显存：Qwen3-4B 每 token KV ≈144 KB ⇒ 18432 一条 ≈2.65 GB；R6 起跑前按 25 §R6 V0⒠ 重测并发。
+MAX_PROMPT_LENGTH = 9216
 
 # 一条轨迹里**模型生成 + 工具返回**加起来的 token 预算
 MAX_RESPONSE_LENGTH = 8192 if THINK_ON else 2048

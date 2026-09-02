@@ -352,7 +352,12 @@ def test_sft_sample_is_token_identical_to_rl_rollout(case_id, tokenizer):
 
     rl_output, _ = asyncio.run(_run(bundle, tokenizer, _gold_script(bundle)))
     assert sample.input_ids == rl_output.prompt_ids + rl_output.response_ids
-    assert sample.loss_mask == [0] * len(rl_output.prompt_ids) + rl_output.response_mask
+    # ★ 09-02（Chaoyu 裁定）：SFT 对**空 think 块**不监督；RL 的 response_mask 仍标全部模型 token。
+    #   两者的差**只能**是空块那几段 —— 用生产同一份 _mask_empty_think 算期望值（不另抄一份）。
+    from syncopate.pipeline.sft_replay import _mask_empty_think
+    expect = [0] * len(rl_output.prompt_ids) + list(rl_output.response_mask)
+    _mask_empty_think(tokenizer, sample.input_ids, expect, start=len(rl_output.prompt_ids))
+    assert sample.loss_mask == expect
 
 
 @pytest.mark.parametrize("case_id", sorted(SEED_BUILDERS))
@@ -477,3 +482,28 @@ def test_sft_sample_with_prior_is_token_identical_to_rl_rollout(tokenizer):
     assert "CMP_1 近 7 天消耗 31500。" in prompt_text and "数据还没收敛。" in prompt_text
     assert "[上一轮]" not in prompt_text, "历史不许再折成题面文本"
     assert prompt_text.index("数据还没收敛。") < prompt_text.index(bundle.case.user_message), "历史必须在本轮 user 之前"
+
+
+# ── 09-02（Chaoyu 裁定）：空 think 块**不监督**，非空 think 照常监督 ────────────────────
+def test_empty_think_blocks_are_masked_but_nonempty_think_is_supervised(tokenizer):
+    from syncopate.core.contract import IS_V15
+    if not IS_V15:
+        pytest.skip("v15 契约专有")
+    from syncopate.pipeline.sft_replay import EMPTY_THINK, build_sft_sample
+    bundle = next(iter(SEED_BUILDERS.values()))()
+    n_turns = len(bundle.gold.actions) + 2
+    config = RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
+    # 第 0 步给教师思考，其余轮为空块
+    s = asyncio.run(build_sft_sample(bundle, tokenizer=tokenizer, registry=DOMAIN.registry, config=config,
+                                     thinking={0: "先查指标再判断成熟度。"}))
+    resp = s.input_ids[s.prompt_length:]
+    resp_mask = s.loss_mask[s.prompt_length:]
+    pat = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
+    empties = [i for i in range(len(resp) - len(pat) + 1) if resp[i:i + len(pat)] == pat]
+    assert empties, "样本里应有空 think 块（简单轮）"
+    for i in empties:
+        assert not any(resp_mask[i:i + len(pat)]), "空 think 块不许有梯度"
+    supervised = tokenizer.decode([t for t, m in zip(resp, resp_mask) if m == 1])
+    assert "先查指标再判断成熟度" in supervised, "非空 think 必须仍被监督"
+    assert "<think>\n\n</think>" not in supervised, "空 think 块不该出现在监督段里"
+    assert sum(resp_mask) > 0

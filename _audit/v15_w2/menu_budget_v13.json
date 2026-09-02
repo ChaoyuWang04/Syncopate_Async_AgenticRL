@@ -5,9 +5,9 @@
  "tools_block_tokens": 5468,
  "max_prompt_case_menu": 5031,
  "max_prompt_full_menu": 7167,
- "MAX_PROMPT_LENGTH": 5760,
- "over_budget_full_menu": 1670,
- "headroom_full_menu": -1407,
+ "MAX_PROMPT_LENGTH": 9216,
+ "over_budget_full_menu": 0,
+ "headroom_full_menu": 2049,
  "rows": [
   {
    "case_id": "ATTR_0000",

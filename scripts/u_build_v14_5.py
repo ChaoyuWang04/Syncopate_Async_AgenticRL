@@ -231,8 +231,10 @@ async def gen_l2_reply(client, cid, mname, val) -> str:
 # ═══════════ Stage B · CoT 难例（8B 逐步 think + 承诺闸）═══════════
 
 ASST = "<|im_start|>assistant"
-# W3① think 做轻（26 §W3 门槛①：p95 ≤500 字 · 段数 ≤2）。现状池：p50 691 字 / 6 段（09-02 实测）
-THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 350, 350, 2
+# ⛔ 09-02 Chaoyu 裁定：**不缩短 CoT**——教师思考 p50 691 字/6 段，没有证据说明多出来的是啰嗦而不是必要推演；
+#   "空块占 98%" 的比例问题改由 sft_replay 把空 think 块 mask 掉解决，不靠砍思考长度换行数。
+#   这里保留原采样约束（900 token 上限、≤4096 字、不限段数）；W3① 撤回。
+THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 900, 4096, 10 ** 6
 
 
 async def gen_cot(client, tok, max_rows=100) -> list[dict]:

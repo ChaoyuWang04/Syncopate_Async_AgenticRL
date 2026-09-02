@@ -20,7 +20,7 @@ export CUDA_VISIBLE_DEVICES=0
 exec vllm serve models/Qwen3-4B-sft-v13r2-e1 \
   --served-model-name sft-base \
   --enable-lora --lora-modules candidate=checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25 \
-  --max-lora-rank 32 --max-model-len 14336 --kv-cache-dtype fp8 \
+  --max-lora-rank 32 --max-model-len 18432 --kv-cache-dtype fp8 \
   --max-num-batched-tokens 16384 --scheduling-policy priority \
   --speculative-config '{"method":"ngram","num_speculative_tokens":4,"prompt_lookup_max":4,"prompt_lookup_min":2}' \
   --host 127.0.0.1 --port 8100

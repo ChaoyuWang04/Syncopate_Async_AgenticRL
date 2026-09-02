@@ -41,8 +41,8 @@ def main() -> int:
            "think_tok_p50": q(tk, .5), "tok_per_char": round(tok_per_char, 3),
            "row_sup_tok_p50": sorted(r["sup_tok"] for r in per_row)[len(per_row) // 2],
            "row_think_tok_p50": sorted(r["think_tok"] for r in per_row)[len(per_row) // 2]}
-    # 做轻后：每块 ≤350 字 ⇒ ≤ 350×tok_per_char token；取 p50 = min(现 p50, 350) 估
-    new_block_tok = round(min(q(chars, .5), 350) * tok_per_char)
+    # ⛔ 09-02 Chaoyu 裁定：不缩短 CoT ⇒ 行重按现行画像原样算（THINK_CAP 只用于对照列）
+    new_block_tok = q(tk, .5)
     row_new = [r["sup_tok"] - r["think_tok"] + r["nonempty"] * new_block_tok for r in per_row]
     row_new_p50 = sorted(row_new)[len(row_new) // 2]
     # 预算：v15 manifest 份额反推（cot 18.13% ↔ 19 行 × 现行重）
@@ -62,12 +62,12 @@ def main() -> int:
         "global_nonempty_share_est": round(nonempty_est / (blocks_total_est + fit_rows * now["think_segs_p50"] * 0), 3),
         "hard_tier_trigger_rate_preregistered": [0.20, 0.50],
         "assumptions": ["非 CoT token 按 v15 manifest 份额反推，W4 实测回填",
-                        "做轻后每块 token = min(现 p50 字数, 350) × 现 tok/字",
+                        "CoT 不缩短（Chaoyu 09-02 裁定）：行重按现池原样；空 think 块已 mask，不计监督 token",
                         "全库块数按 949 行版 4049 估，fam 行未计"]}}
     Path("_audit/v15_w3").mkdir(parents=True, exist_ok=True)
     json.dump(out, open("_audit/v15_w3/budget_table.json", "w"), ensure_ascii=False, indent=1)
     print(f"[budget] 现池 {now['rows']} 行：think p50 {now['think_chars_p50']} 字/{now['think_segs_p50']} 段/{now['think_tok_p50']} tok · 行重 p50 {now['row_sup_tok_p50']}")
-    print(f"[budget] 做轻后：块 ≈{new_block_tok} tok · 行重 p50 ≈{row_new_p50} · 30% 带宽预算 ≈{int(budget)} ⇒ 可装 ≈{fit_rows} 行（此前 {cot_rows_prev}）")
+    print(f"[budget] 不缩短：块 p50 {new_block_tok} tok · 行重 p50 {row_new_p50} · 30% 带宽预算 ≈{int(budget)} ⇒ 可装 ≈{fit_rows} 行（此前 {cot_rows_prev}）")
     print(f"[budget] 全库非空块占比估 ≈{out['projection']['global_nonempty_share_est']:.1%} · HARD 档触发率预注册带 20–50%")
     return 0
 

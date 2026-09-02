@@ -315,9 +315,40 @@ async def build_sft_sample(
             f"上限 {config.max_assistant_turns}）——"
             "SFT 样本必须是完整轨迹；轮数上限应取 case.max_steps（见 build_dataset）"
         )
+    # ★ 09-02（Chaoyu 裁定，26 §4.1 改写）：**空 think 块不监督**。
+    #   修法 B 让每个 assistant 轮显式带 think 段是为了**位置对齐**（think-on 模板下模型每轮都会先想），
+    #   但 949 行版 4049 个块里 3959 个空块全在拿梯度教「输出空思考」——R5 全场只有 1 条非空思考，
+    #   根因在此。空块留在序列里（结构在场），loss_mask 置 0（不从空块学任何东西）；
+    #   非空 think（教师选中 gold 动作的那些）照常监督。简单题该不该想，交给模型自己/RL 的 reward。
+    ids = output.prompt_ids + output.response_ids
+    mask = [0] * len(output.prompt_ids) + output.response_mask
+    n_masked = _mask_empty_think(tokenizer, ids, mask, start=len(output.prompt_ids))
     return SFTSample(
         case_id=bundle.case_id,
-        input_ids=output.prompt_ids + output.response_ids,
-        loss_mask=[0] * len(output.prompt_ids) + output.response_mask,
+        input_ids=ids,
+        loss_mask=mask,
         prompt_length=len(output.prompt_ids),
     )
+
+
+_EMPTY_THINK_IDS: dict[int, list[int]] = {}
+
+
+def _mask_empty_think(tokenizer: Any, ids: list[int], mask: list[int], *, start: int) -> int:
+    """把 response 区里每个 EMPTY_THINK 的 token 段 loss_mask 置 0；返回置零的块数。
+    ⚠️ 按 token 序列匹配（不是按字符），与 attach_think 产出的字面量同源；
+       tokenizer 若把 "</think>\n\n" 与后续文本合并分词，会匹配不到 ⇒ 用测试守着（test_rollout_loop）。"""
+    key = id(tokenizer)
+    pat = _EMPTY_THINK_IDS.get(key)
+    if pat is None:
+        pat = _EMPTY_THINK_IDS[key] = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
+    n, L, i = 0, len(pat), start
+    while i <= len(ids) - L:
+        if ids[i:i + L] == pat and any(mask[i:i + L]):
+            for j in range(i, i + L):
+                mask[j] = 0
+            n += 1
+            i += L
+        else:
+            i += 1
+    return n

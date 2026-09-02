@@ -19,7 +19,7 @@ fi
 
 say "① 起端点（GPU0，:8100）"
 CUDA_VISIBLE_DEVICES=0 nohup vllm serve "$MERGED" \
-  --max-model-len 14336 --host 127.0.0.1 --port 8100 --gpu-memory-utilization 0.85 \
+  --max-model-len 18432 --host 127.0.0.1 --port 8100 --gpu-memory-utilization 0.85 \
   > logs/v15_r5/exam_vllm.log 2>&1 &
 V=$!
 until curl -sf http://127.0.0.1:8100/health >/dev/null 2>&1; do

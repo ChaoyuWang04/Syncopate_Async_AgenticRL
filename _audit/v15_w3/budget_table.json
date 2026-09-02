@@ -12,20 +12,20 @@
   "row_think_tok_p50": 2099
  },
  "projection": {
-  "think_block_tok_after": 188,
-  "row_sup_tok_after_p50": 1391,
+  "think_block_tok_after": 371,
+  "row_sup_tok_after_p50": 2306,
   "non_cot_tok_est": 227501,
   "cot_budget_at_30pct": 97500,
-  "cot_rows_fit": 70,
+  "cot_rows_fit": 42,
   "cot_rows_before": 20,
-  "global_nonempty_share_est": 0.092,
+  "global_nonempty_share_est": 0.055,
   "hard_tier_trigger_rate_preregistered": [
    0.2,
    0.5
   ],
   "assumptions": [
    "非 CoT token 按 v15 manifest 份额反推，W4 实测回填",
-   "做轻后每块 token = min(现 p50 字数, 350) × 现 tok/字",
+   "CoT 不缩短（Chaoyu 09-02 裁定）：行重按现池原样；空 think 块已 mask，不计监督 token",
    "全库块数按 949 行版 4049 估，fam 行未计"
   ]
  }
