@@ -1,4 +1,5 @@
-- [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★08-31 停在 R5 复盘：维修施工图 26（先修尺子再修数据后重训，W0–W3 本机）；CoT 排查结论=数据不是 mask
+- [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★09-03：W0–W3 本机收官（九条裁定全落地）；下一步 Modal PRO 6000×2 做 W4/W5；B200 归 infra 探针
+- [模型只装知识不装运行态身份](model-learns-knowledge-not-runtime-identity.md) — ★09-02 裁定⑨：account_id/清单一律 runtime 注入；数据要逐条渲染给人看（画廊抓到 4 条脚本没抓到的）
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么；★含「章节验收怎么做」的五步（M8 立、M9 照做）
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提

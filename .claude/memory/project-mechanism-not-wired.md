@@ -189,3 +189,8 @@ runtime 195 条测试全绿、40 条验收判据核过 —— 但**第一次真�
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
 [[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]] [[observed-needs-an-owner]]
 [[sandbox-is-subset-of-runtime]]
+
+**★第八形态再添一例（2026-09-02）**：v15 信令状态机测试 10 条全绿（假 gate 验 loop 返回 halted），
+但 **halted → 库状态 → 下一轮历史** 从没接上：clarify 收场的 run 停在 running（被 lease 过期重抢重跑），
+reject 归 cancelled 不进 prior_turns ⇒ 模型线上看不到自己上一轮问了/拒了什么。R5 L4 18% 一半是它。
+读法：**状态机的"状态"要一路追到数据库那一列**；考场原始记录里的 status 列四遍都在，没人看。见 26 §2.5。

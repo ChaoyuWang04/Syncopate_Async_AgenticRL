@@ -153,9 +153,9 @@ syncopate/core/tool_registry.py        工具 spec 的**唯一真相来源**（r
 ## 4 · 接着做什么
 
 ```
-① 🔴 U 路 · 统一会话能力训练  **当前队首**（01 §U · 施工图 24）：Chaoyu 08-28 融合裁定
-                            —— M（多轮）+ O（OPD 说人话）+ CoT 三合一进 v14：
-                            数据合一、监督按 token 段分家；P0 尺子先行，逐阶段量化门槛
+① 🔴 v15 维修 W4/W5  **当前队首**（01 §V · 施工图 26）：本机 W0–W3 已收官（09-03），
+                            下一步在 **Modal RTX PRO 6000×2** 重建数据 + 重训 + 考 v4（08 §Modal 试点 → 26 §W4/§W5）；
+                            infra 线并行在 B200 做特性探针（MAINLINE-INFRA 交接七项）
 ② ⬜ 三件等 Chaoyu：cap_hits 生产者 · 灰测阶梯节奏 · §19 P50/P95 判据改判（11 §5）
 ③ ✅ F 路 chatbox 全套 · B-4 端点 · 压测（B-5 后 22/22，goodput 192 · 11 §5）·
    档位改推导；serving 生产默认 = 四卡舰队（logs/runtime/start_serving.sh，09 §0）
