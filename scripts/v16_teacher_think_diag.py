@@ -47,6 +47,8 @@ async def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=4096, help="只为量真实长度；现行链的 900 上限另算")
     ap.add_argument("--steps-per-case", type=int, default=3)
     ap.add_argument("--out", default="_audit/v16")
+    ap.add_argument("--arm", default="base", help="base=原样；zh_prefix=<think> 后加中文引子（量「教师能不能用中文想」，不改任何闸）")
+    ap.add_argument("--zh-prefix", default="好的，我用中文把这一步想清楚。", help="zh_prefix 臂的引子（计入 think 文本）")
     args = ap.parse_args()
 
     import u_build_v14_5 as B
@@ -80,12 +82,14 @@ async def main() -> int:
         async def one(ctx: str, want: str, cid: str, si: int):
             async with sem:
                 B._SEED[0] += 1
+                lead = args.zh_prefix if args.arm == "zh_prefix" else ""
                 r = await client.post(f"{args.teacher}/completions", json={
-                    "model": "t", "prompt": ctx + "<think>\n", "max_tokens": args.max_tokens,
+                    "model": "t", "prompt": ctx + "<think>\n" + lead, "max_tokens": args.max_tokens,
                     "seed": B._SEED[0], "temperature": 0.7, "top_p": 0.95})
                 r.raise_for_status()
                 j = r.json()["choices"][0]
                 g = j["text"]; fin = j.get("finish_reason")
+            g = lead + g          # 引子算进 think（建库若采用此臂，成行的 think 也会含它）
             closed = "</think>" in g
             think, post = (g.split("</think>", 1) if closed else (g, ""))
             think = think.strip()
@@ -149,12 +153,14 @@ async def main() -> int:
     if not verdict: verdict.append("单闸都不显著；看 pass_current_chain_rate 与 mismatch_top")
     agg["verdict_preregistered"] = verdict
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    json.dump({"agg": agg, "samples": samples}, open(out / "teacher_think_diag.json", "w"), ensure_ascii=False, indent=1)
+    agg["arm"] = args.arm
+    suffix = "" if args.arm == "base" else f"_{args.arm}"
+    json.dump({"agg": agg, "samples": samples}, open(out / f"teacher_think_diag{suffix}.json", "w"), ensure_ascii=False, indent=1)
     md = ["# 27B 教师原始思考画像（v16 诊断）", "", "```", json.dumps(agg, ensure_ascii=False, indent=1), "```", ""]
     for s in samples[:8]:
         md += [f"## {s['case_id']} step{s['step']} · want={s['want']} got={s['got']} · closed={s['closed']} · tokens={s['think_tokens']} · cjk={s['cjk']}",
                "", "```", s["think_head"], "…", "--- post ---", s["post_head"], "```", ""]
-    (out / "teacher_think_diag.md").write_text("\n".join(md))
+    (out / f"teacher_think_diag{suffix}.md").write_text("\n".join(md))
     print("[diag] " + json.dumps(agg, ensure_ascii=False))
     print(f"[diag] 判读（预注册）：{verdict}")
     return 0

@@ -660,7 +660,7 @@ def _start_teacher(log: str = "/tmp/vllm_teacher.log", wait_s: int = 1500):
 
 # ─────────────────────────── S3-diag · 27B 教师原始思考画像（先量后动，Chaoyu 09-04 放行） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=2 * 3600, secrets=SECRETS)
-def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096) -> dict:
+def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096, arm: str = "base", with_behavior: bool = True) -> dict:
     """判据（预注册，见 scripts/v16_teacher_think_diag.py 顶部）：这是**测量**不是门槛——产出 closed_within_900_rate /
     cjk_below_0.5_rate / action_match_rate 三个数与预注册判读；同容器再跑一遍行为类探针（现在带丢弃原因计数）。
     ok = 两个脚本退出码 0 且 diag.json 落盘（读数本身不判红绿）。"""
@@ -671,20 +671,23 @@ def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096) -> dic
     if not up:
         _teardown(proc); return _record("teacher_diag", False, {**rec, "log_tail": open("/tmp/vllm_teacher.log", errors="replace").read()[-2000:]})
     try:
-        r = _sh(f"{PY} scripts/v16_teacher_think_diag.py --teacher http://127.0.0.1:8210/v1 --n {n} --samples {samples} --max-tokens {max_tokens} --out {aud} "
-                f"> {aud}/teacher_think_diag.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=3600)
+        sfx = "" if arm == "base" else f"_{arm}"
+        r = _sh(f"{PY} scripts/v16_teacher_think_diag.py --teacher http://127.0.0.1:8210/v1 --n {n} --samples {samples} --max-tokens {max_tokens} --out {aud} --arm {arm} "
+                f"> {aud}/teacher_think_diag{sfx}.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=3600)
         rec["diag_rc"] = int(re.search(r"RC=(\d+)", r["out"]).group(1))
-        rec["diag_tail"] = open(f"{aud}/teacher_think_diag.log", errors="replace").read()[-2500:]
-        try: rec["agg"] = json.load(open(f"{aud}/teacher_think_diag.json"))["agg"]
+        rec["diag_tail"] = open(f"{aud}/teacher_think_diag{sfx}.log", errors="replace").read()[-2500:]
+        try: rec["agg"] = json.load(open(f"{aud}/teacher_think_diag{sfx}.json"))["agg"]
         except Exception as ex: rec["agg_err"] = repr(ex)[:200]
-        b = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
-        rec["behavior_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1))
-        rec["behavior_tail"] = open(f"{aud}/behavior_think_probe.log", errors="replace").read()[-1500:]
-        _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
+        rec["behavior_rc"] = 0
+        b = None if not with_behavior else _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
+        if b is not None:
+            rec["behavior_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1))
+            rec["behavior_tail"] = open(f"{aud}/behavior_think_probe.log", errors="replace").read()[-1500:]
+            _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
     finally:
         _teardown(proc); open(f"{aud}/teacher_diag_vllm.log", "w").write(open("/tmp/vllm_teacher.log", errors="replace").read()[-20000:]); vol.commit()
     ok = rec.get("diag_rc") == 0 and rec.get("behavior_rc") == 0 and "agg" in rec
-    return _record("teacher_diag", ok, rec)
+    return _record("teacher_diag" if arm == "base" else f"teacher_diag_{arm}", ok, rec)
 
 
 # ─────────────────────────── S3 · v16 训练集建库（B200 单卡：Qwen3.8-27B 教师 + 26 §W4 七步） ───────────────────────────
@@ -921,7 +924,7 @@ ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm"
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke"):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke"):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -947,7 +950,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
     if "build_v16" in want: run("build_v16", p_build_v16)
-    if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens)
+    if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens, diag_arm, diag_arm == "base")
     if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps, False, sft_arm, sft_train_file, sft_val_file, sft_epochs)
     if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes, 4, exam_limit)
     if "rl_cfg" in want: run("rl_cfg", p_rl_cfg, rl_extra)
