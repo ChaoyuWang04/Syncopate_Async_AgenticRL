@@ -768,14 +768,15 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
     losses = [float(x) for x in re.findall(r"train/loss[=: ]+([0-9.]+)", log)] or [float(x) for x in re.findall(r"loss=([0-9.]+)", log)]
     gnorms = [float(x) for x in re.findall(r"grad_norm[=: ]+([0-9.eE+-]+)", log)]
     trainable = re.findall(r"可训练 ([0-9.]+)M", log)
-    peak = re.findall(r"peak_memory_gb[=: ]+([0-9.]+)", log) or re.findall(r"峰值显存[^0-9]*([0-9.]+)", log)
+    peak = re.findall(r"peak_memory_gb[=: ]+([0-9.]+)", log) or re.findall(r"显存峰值[^0-9]*([0-9.]+)", log)   # sft.py 打的是「显存峰值 74.1 GB」（mech_dry 实测判据量错对象）
     dw = re.findall(r"\|\|ΔW\|\|/\|\|W\|\| = ([0-9.]+)%", log)
     import math
     k = max(1, len(losses) // 4)
     loss_ok = bool(losses) and all(math.isfinite(x) for x in losses) and (sum(losses[-k:]) / k) < (sum(losses[:k]) / k)
     gn_ok = bool(gnorms) and all(math.isfinite(x) for x in gnorms)
     tr_ok = bool(trainable) and 30 <= float(trainable[0]) <= 45
-    ok = rc == 0 and loss_ok and gn_ok and tr_ok
+    peak_ok = (not peak) or float(peak[-1]) < 180
+    ok = rc == 0 and loss_ok and gn_ok and tr_ok and peak_ok
     rec.update({"rc": rc, "secs": r["secs"], "train_file": train_file, "n_loss_points": len(losses), "loss_first_last": (losses[:3], losses[-3:]), "grad_norm_minmax": (min(gnorms), max(gnorms)) if gnorms else None,
            "trainable_M": trainable[:1], "peak_memory_gb": peak[-1:], "delta_w_pct": dw[-1:], "judge": {"loss": loss_ok, "grad": gn_ok, "trainable": tr_ok},
            "lora_targets_line": [l for l in log.splitlines() if "[lora-targets]" in l][:1], "tail": log[-3000:], "topology": _topology()})

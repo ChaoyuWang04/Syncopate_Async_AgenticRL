@@ -673,6 +673,10 @@ def main(argv: list[str] | None = None) -> int:
                     _save_selection_point(model, ROOT / args.out, sel_steps[global_step],
                                           global_step)
                 elapsed = max(1e-6, time.time() - started)
+                # 09-04：判据行落 stdout（wandb 关掉时冒烟探针也能量到 grad_norm/吞吐；每 5 步一行不刷屏）
+                if rank == 0 and (global_step % 5 == 0 or args.max_steps):
+                    print(f"[step {global_step}] loss={float(loss) * args.grad_accum:.4f} grad_norm={float(grad_norm):.4f} "
+                          f"lr={scheduler.get_last_lr()[0]:.2e} sup_tok/s={sup_tokens / elapsed:.0f}", flush=True)
                 log({"train/loss": float(loss) * args.grad_accum,
                      # grad_norm 是最早能看出训练崩没崩的信号：突然飙高 = 有坏样本或 lr 过大
                      "train/grad_norm": float(grad_norm),
