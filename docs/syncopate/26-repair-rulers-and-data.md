@@ -534,7 +534,14 @@ run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· *
          行为探针同证：clarify/defer/reject 三档丢弃原因几乎全是 cjk_below_0.5（159/155/160），只有 defer 有 5 条没在 900 内写完。
          英文思考本身质量好（分步计划、逐项核对、意识到"一次只能一个工具调用"）；见 /vol/_audit/v16/teacher_think_diag.md。
          mismatch top：get_metrics→policy.get_budget_rule（10）· update_budget→campaign.list（8）· __text__→system.wait（8）——教师倾向多查一步。
-⇒ 待 Chaoyu 裁定（三选一，都不是我能拍的）：① 撤 cjk 闸，收英文思考（学生学"英文想、中文答"）② 让教师用中文想：<think> 后加中文引子
+读数 B 臂 zh_prefix（09-04 02:0x，同 240 样本；<think> 后加引子「好的，我用中文把这一步想清楚。」，不改任何闸）
+         closed_within_900 = 90% · think token p50/p90/max = 153/485/1688 · **cjk p50 = 0.48，cjk<0.5 = 52.9%** · 写完的里首动作==gold = **72.1%**
+         （比英文臂 67.7% 还高）· 现行链通过率 **35.4%**（A 臂 0%）。⚠️ 中文思考里更爱一次发多个 tool_call（post 含 ≥2 个 tool_call：22% vs 7%）
+         ——契约是一轮一个调用，这条会被 first_action 判错但不算"想错"。
+         本机零成本复算：cjk 尺子若改成「中文字 ÷ (中文字+拉丁字母)」（不再被 campaign.get_metrics 这类标识符和数字稀释）：
+         B 臂 p50 0.67、≥0.5 占 72%、全链通过 **52%**；A 臂仍 1%。
+⇒ 待 Chaoyu 裁定（三选一，都不是我能拍的；**我的推荐 = ②+改尺子**：引子让教师用中文想且动作更准，尺子改成不被标识符稀释的口径后
+   半数样本可收，19 行下限按 114 case×~8 步×4 样本算余量充足）：① 撤 cjk 闸，收英文思考（学生学"英文想、中文答"）② 让教师用中文想：<think> 后加中文引子
    （B 臂 zh_prefix 正在量：cjk 与 action_match 是否保持）或系统指令 ③ 换会中文思考的教师。B 臂读数出来后一并呈报。
 ```
 
@@ -552,6 +559,9 @@ S5′ 读数（09-04 01:42）✅ 链路全通：PG/Redis/语料 0 · 播种 7 ca
               （分数无意义：底座未训；fab=42% 是底座本色）。⚠️ 端点起 500 s 要查是 JIT/compile 缓存没命中还是 MoE 装载慢（学习项）。
 S6 rl_cfg ✅（09-04 01:42）：data/rl/v16 660/165 行 · Hydra 合成通过。两个键坑已修：create_rl_sampler 在 0.9 不在 main_ppo（补丁改挂
               trainer.ppo.utils + trainer_base）· save_lora_only 要 + 追加。
+S6 读数（09-04 01:54）✅ **verl 0.9 V1 sync 首次跑通**：B200×2 · 2 步 580 s（含起 Ray/vLLM/权重同步）· `[pool] 动态分池启用` 在 TaskRunnerV1
+              进程出现 · pg_loss −0.062/0.257 · grad_norm 0.47/0.35 · score/mean 0.336/0.391 · 权重同步行 8 · ckpt global_step_2/actor（含
+              lora_train_meta.json，见下条核对）· wandb run syncopate-b200/rl_v16_smoke。唯一 Traceback = wandb atexit BrokenPipe（良性）。
 S6 RL 冒烟    已写（`syncopate/train/launch_rl_v1.py` 薄壳；`--steps rl_cfg`（CPU：造 data/rl/v16 + Hydra --cfg job 键名判据）→ `--steps rl_smoke`）。verl 0.9 事实（09-04 容器 dump /vol/_audit/v16/verl09_dump.json）：入口 main_ppo.TaskRunnerV1 + 配置项
               trainer_mode（sync / colocate_async / separate_async，trainer/ppo/v1/）；create_rl_sampler 搬到 trainer/ppo/utils.py
               （main_ppo 里已没有这个名 ⇒ main_ppo_pool 的 monkeypatch 现在挂空，必须改挂 utils + trainer_base）；
