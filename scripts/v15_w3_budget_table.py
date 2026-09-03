@@ -13,11 +13,13 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 def main() -> int:
     from transformers import AutoTokenizer
-    tok_path = "models/Qwen3-4B" if Path("models/Qwen3-4B/tokenizer.json").exists() else "models/Qwen3-0.6B"
+    tok_path = STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER
     tok = AutoTokenizer.from_pretrained(tok_path)
     rows = json.load(open("data/u_route/v15_cot_rows.json"))
     TH = re.compile(r"<think>(.*?)</think>", re.S)
@@ -46,7 +48,7 @@ def main() -> int:
     row_new = [r["sup_tok"] - r["think_tok"] + r["nonempty"] * new_block_tok for r in per_row]
     row_new_p50 = sorted(row_new)[len(row_new) // 2]
     # 预算：v15 manifest 份额反推（cot 18.13% ↔ 19 行 × 现行重）
-    man = json.load(open("data/sft/v15/manifest.json"))
+    man = json.load(open(f"{DEFAULT_SFT_DIR}/manifest.json"))
     cot_share_prev, cot_rows_prev = man["sup_tok_share"]["cot"], man["sources"]["cot_hard"]
     cot_tok_prev = cot_rows_prev * now["row_sup_tok_p50"]
     non_cot = cot_tok_prev * (1 - cot_share_prev) / cot_share_prev

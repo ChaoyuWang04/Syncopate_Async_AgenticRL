@@ -24,8 +24,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from syncopate.core.contract import IS_V15
-from syncopate.core.parsing import render_final_answer, render_tool_call
+from syncopate.core.parsing import render_final_answer
+from syncopate.core.parsing import render_tool_call as _render_tool_call_v14
 from syncopate.core.parsing_v15 import render_report, render_signal
+from syncopate.core.parsing_v15 import render_tool_call as _render_tool_call_v15
+from syncopate.core.contract import IS_V15
+
+# 线格式随契约：v15（Qwen3.5+ 学生）走格式感知渲染；v14 重放历史保持 JSON 逐字节不变
+render_tool_call = _render_tool_call_v15 if IS_V15 else _render_tool_call_v14
 from syncopate.train.rollout_budget import ENABLE_THINKING
 from syncopate.core.schemas import CaseBundle
 from syncopate.core.tool_registry import ToolRegistry

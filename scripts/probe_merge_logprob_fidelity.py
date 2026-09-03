@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 import torch
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 def load_lora_from_ckpt(actor_dir: Path) -> dict[str, torch.Tensor]:
@@ -73,7 +74,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("actor_dir", type=Path)
     ap.add_argument("--base", default="models/Qwen3-4B-sft-v13-e1")
-    ap.add_argument("--prompts", default="data/rl/v13/val.parquet")
+    ap.add_argument("--prompts", default=f"{DEFAULT_RL_DIR}/val.parquet")
     ap.add_argument("--n", type=int, default=16, help="用多少条 prompt")
     ap.add_argument("--max-new", type=int, default=128)
     args = ap.parse_args()

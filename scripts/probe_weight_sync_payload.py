@@ -35,6 +35,7 @@ import os
 
 import torch
 import torch.distributed as dist
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 
 def summarize(tag: str, params) -> dict:
@@ -65,7 +66,7 @@ def main() -> None:
     from verl.utils.fsdp_utils import collect_lora_params
 
     # 小号 Qwen3（同一个模型家族，同一套模块名）—— 秒级构建，不下载权重
-    cfg = AutoConfig.from_pretrained("models/Qwen3-4B")
+    cfg = AutoConfig.from_pretrained(STUDENT_MODEL)
     cfg.num_hidden_layers, cfg.hidden_size, cfg.intermediate_size = 2, 128, 256
     cfg.num_attention_heads, cfg.num_key_value_heads, cfg.head_dim = 4, 2, 32
     cfg.tie_word_embeddings = True

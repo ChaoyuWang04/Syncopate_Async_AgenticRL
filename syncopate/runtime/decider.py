@@ -26,7 +26,11 @@ from typing import Any
 import httpx
 
 from syncopate.core.contract import IS_V15, TERMINAL_SIGNALS, visible_answer_fields
-from syncopate.core.parsing import parse_step, render_tool_call
+from syncopate.core.parsing import parse_step
+from syncopate.core.parsing import render_tool_call as _render_tool_call_v14
+from syncopate.core.parsing_v15 import render_tool_call as _render_tool_call_v15
+from syncopate.core.contract import IS_V15 as _IS_V15
+render_tool_call = _render_tool_call_v15 if _IS_V15 else _render_tool_call_v14   # 线格式随契约（Qwen3.5+ = XML）
 from syncopate.core.parsing_v15 import parse_step_v15
 
 # 部署侧 CoT 观察开关（Chaoyu 08-29）：与训练契约刻意分叉（F-5 同款先例）。

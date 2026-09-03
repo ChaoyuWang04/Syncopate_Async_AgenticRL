@@ -20,6 +20,7 @@ import numpy as np
 
 sys.path.insert(0, "scripts")
 from u_build_v15_cot import explicit_hard_prompt  # noqa: E402
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 D = 2 ** 12
 
@@ -58,7 +59,7 @@ def cv_acc(X: np.ndarray, y: np.ndarray, folds: int = 5, epochs: int = 20, lr: f
 
 def main() -> int:
     from syncopate.pipeline.split import load_bundles
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     pool = {r["case_id"].replace("_COT15", "") for r in json.load(open("data/u_route/v15_cot_rows.json"))}
     hard_fams = {c.split("_")[0] for c in pool}
     ids = [c for c, b in bundles.items() if b.gold]

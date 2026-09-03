@@ -18,11 +18,12 @@ from syncopate.core.parsing import render_final_answer, render_tool_call
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
 from syncopate.train.rollout_budget import assistant_turn_budget
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.train.rollout_loop import (
     CHAT_TEMPLATE_KWARGS, RolloutConfig, build_messages, observation_message, run_rollout,
 )
 
-MODEL_DIR = Path("models/Qwen3-0.6B")
+MODEL_DIR = Path(TEST_TOKENIZER)
 DOMAIN = build_domain()
 
 pytestmark = pytest.mark.skipif(not MODEL_DIR.exists(), reason="需要 models/Qwen3-0.6B 软链")
@@ -437,10 +438,11 @@ def test_sft_target_behavior_matches_the_spec(tokenizer):
             # 这条测试的价值不变：监督目标教的行为必须等于 spec 期望的那个。
             expected = bundle.verifier.expected_behavior
             if expected in ("defer", "clarify", "reject"):
-                assert f'"name": "session.{expected}"' in text, (
+                # 线格式无关（JSON `"name": "session.x"` 或 Qwen3.5 XML `<function=session.x>` 都含工具名）
+                assert f"session.{expected}" in text, (
                     f"{name} 的 v15 监督目标里没有 session.{expected}：{text[-300:]}")
             else:
-                assert not any(f'"name": "session.{k}"' in text
+                assert not any(f"session.{k}" in text
                                for k in ("defer", "clarify", "reject")), (
                     f"{name} 期望 {expected} 却调了终止信令：{text[-300:]}")
         else:

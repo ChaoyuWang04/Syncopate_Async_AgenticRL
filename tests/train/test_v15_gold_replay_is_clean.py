@@ -27,12 +27,14 @@ from syncopate.domains.adcampaign import build_domain
 from syncopate.pipeline.sft_replay import _ScriptedEngine, gold_script
 from syncopate.pipeline.split import load_bundles
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
-tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
 reg = build_domain().registry
 reg.latency_scale = 0.0
 by = {}
-for b in load_bundles(Path("data/batches/v13")).values():
+for b in load_bundles(Path(DEFAULT_BATCH_DIR)).values():
     if b.gold:
         by.setdefault(b.verifier.expected_behavior, []).append(b)
 bad = []

@@ -326,6 +326,34 @@ RL 跑到步数就停 = **在还有东西可学的时候停下**。
              反过来让线上迁就训练数据 = 把欠债转移到产品上。
 ```
 
+**⑯ 装任何框架/库都要核对「是不是最新稳定版」，不是的必须写明原因。**（Chaoyu 2026-09-03 立）
+这是学习项目：简历上写的技术栈被辅导老师指出"都是一年前的"，根因是长期为 5090 迁就旧版本（vLLM 0.12、torch 2.9、verl 0.8）。
+⇒ 每次配环境：① 先查 PyPI/GitHub 最新稳定版 ② 装的不是最新 ⇒ 在依赖表注释里写"为什么"（谁钉了它）③ 机器判据：
+`modal_app/stack_probe.py --steps versions`（装的版本 vs PyPI 最新，不是最新且不在白名单 = 红）。
+硬件同理：PRO 6000（sm_120）跑不了 FA4/TMEM ⇒ 一切在 B200（sm_100）上配（26 §6 裁定⑫）。
+
+**⑰ 一切网络重活默认在 Modal 容器里做，本机只做编辑与判读。**（Chaoyu 2026-09-03 立）
+本机在大陆，拉 GitHub/HF/PyPI 一定慢：09-03 本机 `uv lock` 拉一个几百 MB 的轮子直接超时，同一件事在 Modal 容器里 2 分钟。
+⇒ **默认走 Modal 的四件事**：① 依赖解锁 `modal run modal_app/lock_on_modal.py`（解完把 uv.lock 拉回本机进 git）
+② 权重 `stack_probe --steps models`（HF → Volume，字节数对账）③ 代码 git clone 进 Volume（`/vol/repo`，每次起跑 reset 到 origin/main）
+④ 大文件/编译产物一律落 Volume（`/vol/models` `/vol/flashinfer_cache` `/vol/vllm_cache` `/vol/_audit`），本机只留 json 读数。
+本机只做三件：改代码 · 提交 · 读 `_audit/` 里的判据。
+
+**和 Modal 打交道的坑（每次撞到就加一行；细节与命令在 `modal_app/README.md §运维坑`，这里只留判据）**
+```
+停 app 必带 --yes     非交互终端 `modal app stop` 静默不执行 ⇒ 停完 `modal app list` 必须看到它消失（09-03 白烧 B200 40 min）
+删 Volume/文件同理    `modal volume delete/rm` 也要 --yes；删前 `modal volume ls` 看一眼内容
+GPU 函数可抢占且不可关 每步幂等、结果落 Volume、长任务 --detach；不要在一个函数里串太多步
+镜像层顺序           三件套（pyproject/uv.lock/uv.toml）在前、代码不进镜像 ⇒ 改代码不重建镜像；改依赖才重建
+AOT 优先于 JIT       FlashInfer/FA 这类库能装预编译就装（flashinfer-jit-cache/cubin、mjun0812 flash-attn 轮子）；
+                     必须 JIT 的把缓存目录指到 Volume，编一次永久用
+子进程 PATH          venv/bin 必须在 PATH，否则 FlashInfer 找不到 ninja、EngineCore 起不来
+起服务收尾           杀全家 + 等显存归零，再起下一个实例；判据 = nvidia-smi memory.used < 2 GB
+拓扑不承诺           同一 :2 保证同机，但机器/区域/云每次可能不同 ⇒ 读数带拓扑指纹，跨次不直接比
+解析结果走文件       子进程 stdout 尾部会混进 stderr 警告 ⇒ 结果写 json 文件再读，别取"最后一行"
+判据随卡变           capability 期望值、显存阈值都是卡的属性，换卡先改判据
+```
+
 ## 6 · 跑任何东西之前
 
 ```bash

@@ -92,7 +92,8 @@ from syncopate.pipeline.split import load_bundles
 from syncopate.pipeline.sft_replay import gold_script, _ScriptedEngine
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 from syncopate.core.verifier_engine import score_trajectory
-tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
 reg = build_domain().registry; reg.latency_scale = 0.0
 bundles = load_bundles(Path("data/batches/v13"))
 out = {{}}

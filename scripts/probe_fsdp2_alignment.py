@@ -15,6 +15,7 @@
 from __future__ import annotations
 import json, math, os, time
 import torch, torch.distributed as dist, torch.multiprocessing as mp
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORLD = 3
@@ -46,7 +47,7 @@ def worker(rank: int, world: int) -> None:
     from transformers import AutoConfig
     from transformers.models.qwen3.modeling_qwen3 import Qwen3DecoderLayer
 
-    cfg = AutoConfig.from_pretrained(os.path.join(_REPO, "models/Qwen3-4B"))
+    cfg = AutoConfig.from_pretrained(os.path.join(_REPO, STUDENT_MODEL))
     torch.manual_seed(0)
     layer = Qwen3DecoderLayer(cfg, layer_idx=0).to(dtype=torch.bfloat16, device=f"cuda:{rank}")
 

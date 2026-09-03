@@ -14,8 +14,9 @@
 import os
 import subprocess
 import sys
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
-MODEL = "models/Qwen3-4B"
+MODEL = STUDENT_MODEL
 SCAFFOLD = "<think>\n\n</think>"
 
 

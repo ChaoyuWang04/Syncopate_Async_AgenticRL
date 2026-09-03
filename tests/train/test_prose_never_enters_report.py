@@ -13,6 +13,7 @@ import pytest
 
 from syncopate.core.contract import IS_V15, PROSE_FIELDS, visible_answer_fields
 from syncopate.core.schemas import AnswerField
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 pytestmark = pytest.mark.skipif(not IS_V15, reason="v15 契约专有")
 
@@ -27,7 +28,7 @@ def _l1_bundle():
 
     from syncopate.pipeline.split import load_bundles
 
-    src = next(b for b in load_bundles(Path("data/batches/v13")).values() if b.gold)
+    src = next(b for b in load_bundles(Path(DEFAULT_BATCH_DIR)).values() if b.gold)
     b = copy.deepcopy(src)
     b.verifier.required_answer_fields = [
         AnswerField(key="summary", description="结论的机器可校验形式"),

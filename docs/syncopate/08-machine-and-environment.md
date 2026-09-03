@@ -711,7 +711,47 @@ Modal 事实         GPU 函数默认可抢占、**不可关闭**（RL 靠 ckpt 
 形状              训练：先 colocate 同步 DDP=2（最干净基线），再训推分离 1+1 异步对照（26 §W4 之后的 R6 选形）
                    serving 实测（27/30 的挂账 T5/D2）：2 卡 ⇒ 2 引擎 + 亲和 router；dev mode 四模型 = 每卡两个 vLLM 进程
                    （4B 各 ~8 GB + KV）；⚠️ 与 E32/E33 的四卡读数**不可比**，按新拓扑重立 SLO 基线（30 §5）
-试点四步          ① 镜像：nvidia/cuda:12.8 devel + uv sync --all-extras + check_flash_attn_backward + check_pipeline_invariants
+★09-03 实测       探针 `modal_app/probe.py`（用法/判据表见 `modal_app/README.md`；读数 `_audit/modal_probe/summary_*.json`）：
+                   镜像（nvidia/cuda:12.8.1-devel + python3.12 + `uv sync --frozen --all-extras --no-install-project`）一次建成 ✅ ·
+                   Volume `syncopate-home` 跨容器读写一致 ✅ · 代码经 git clone 到 /vol/repo、HEAD 与 origin 一致、invariants 违反集合 ⊆ 本机 ✅ ·
+                   单卡 PRO 6000 Server Edition 97887 MiB · 驱动 580.95 · sm_120 · **flash-attn 反向判据退出码 0**（cu13torch2.9 轮子原样可用）✅ ·
+                   Qwen3-4B/0.6B 权重字节数 == HF 声明、bf16 贪心两次逐 token 相同 ✅ · 数据链 0–4 步在 Modal 上全部跑通 ✅
+                   ⚠️ 切分 SHA 与 git 冻结版不同 —— **不是环境差异**：HEAD 代码本机也生成不出旧切分（裁定⑨ 后 4 对 case 题面同形被去重），
+                   待 Chaoyu 裁 DATA_VERSION 升版（26 §6③）。⚠️ 容器里 `lscpu` 型号与 `pci.bus_id` 被隐藏，拓扑指纹只剩 NUMA/区域/云（GCP asia-south1）。
+                   ⚠️ 双卡 NCCL 各变体（`--steps nccl`）尚未跑；08 §5 记着 4×5090 上 NCCL_P2P_DISABLE=1 无效、真解是 NCCL_CUMEM_ENABLE=0，两条都在探针里。
+★09-03 新栈实测     裁定⑪（26 §6）换法三：`modal_app/stack/`（vLLM 0.28.0 · torch 2.13.0+cu130 · verl 0.9.0 · transformers 5.10.4 · FLA 0.5.2 ·
+                   flash-attn 2.8.3 社区轮子 mjun0812 cu130torch2.13）在 PRO 6000 上**六步全绿**（`modal_app/stack_probe.py`，读数 `_audit/stack_probe/`）：
+                   · flash-attn 社区轮子反向六项与 fp32 参考对到 4 位有效数字（社区轮子的闸过了）
+                   · FLA GDN：chunk（训练核）前向相对误差 0.6%、五路梯度相对误差 ≤0.67%、有限非零；fused_recurrent（解码核）前向 0.46%，
+                     **FLA 明说不实现它的反向**；T=4096·H=8 前向+反向 1.91 ms
+                   · vLLM 0.28 起 Qwen3.5-9B（18432 ctx）：选 FLASH_ATTN 后端；GDN prefill 走 Triton/FLA、**decode 走 CUDA 核（不是回退路径）**；
+                     识别 Qwen3_5MTP、draft 与目标共享 embedding/lm_head；**MTP 开 ⇒ 每 token 12.25→6.68 ms（1.83× 更快）**
+                     ⇒ 上面待验风险⒝「27B 开 MTP 反慢 3.6×」的先验在 0.28 + 9B 上**不成立**，那条是 0.2x 时代 27B 的读数，别再引用
+                   · 坑：venv/bin 必须在 PATH（FlashInfer 采样核启动时用子进程 JIT 调 ninja，找不到 ⇒ EngineCore 起不来）；
+                     FLA naive 参考的参数顺序是 (q,k,v,beta,g) 而 chunk 是 (q,k,v,g,beta)，位置传参会把衰减传成 β ⇒ 参考发散成 NaN
+                   · verl 0.9 结构：V1 trainer 在 `verl.trainer.ppo.v1`；`verl.trainer.distillation`（fsdp/megatron 各一套 loss）；
+                     actor 后端 dp/megatron/mindspeed/torchtitan/veomni；engine automodel/fsdp/megatron
+                   ⚠️ Chaoyu 09-03 晚：PRO 6000（sm_120）**物理上没有 TMEM/tcgen05，跑不了 FA4**，学习项目要最新栈 ⇒ 转 **B200（sm_100）**；
+                   PRO 6000 上的这组读数留作对照，不再投入。
+★09-03 晚 B200 实测   裁定⑫：一切在 **B200（sm_100，183359 MiB，驱动 580.95）** 上配。新栈镜像 + FA4 独立 venv（flash-attn-4 4.0.0b29 与 vllm 0.28 的
+                   apache-tvm-ffi 钉冲突 ⇒ /env/.venv-fa4）。`stack_probe.py` 读数（`_audit/stack_probe/summary_2026-09-03_19*.json`）：
+                   · versions ✅（守则⑯机器判据首次抓到 2 条未写原因：flash-attn 2.8.3 vs post1 · cutlass-dsl 4.6.2 被 vllm 钉，已登记）
+                   · 权重：Qwen3.6-35B-A3B 67.0 GiB · Qwen3.8-27B 51.7 GiB · 3.5-4B · 3.5-0.8B 字节数 == HF ✅
+                   · flash-attn 2.8.3 社区轮子在 sm_100 反向六项对 fp32 ✅；FLA chunk 核梯度误差 ≤0.67% ✅（单次计时 0.75–2.93 ms 抖动大，别拿单次当读数）
+                   · **FA4（CuTe DSL，`flash_attn.cute.interface`）**：前向 vs sdpa 误差 0.2% · 反向有限非零 · S=8192 前向 0.212 ms vs FA2 0.85 ms = **4.0×，≈1297 TFLOPS**
+                   · **NVLink**：每卡 18 链路×53.125 GB/s；双卡 all_reduce busbw 66/495/546 GB/s（16MB/256MB/1GB）· all_gather algbw 241/792/871 GB/s
+                     ⇒ 对照 4×5090 PCIe 的 25.6 GB/s（08 §1）= **~34×**；P2P 可用（can_device_access_peer=True），NCCL 默认参数直接通、无挂死
+                   · 坑：容器里 `nvidia-smi topo -m` 报 Failed（拓扑矩阵被隐藏，只有 nvlink -s 可读）；torch mp.spawn 脚本必须有 `__main__` 守卫；
+                     判据里的 capability 期望值随卡变（sm_120→sm_100）。
+                   · **vLLM 0.28 + Qwen3.6-35B-A3B（AOT 镜像：flashinfer-jit-cache/cubin 同版本）**：单卡起服务 268 s（含 torch.compile 缓存命中）；
+                     单流每 token **MTP 关 4.35 ms / 开 3.83 ms（0.88×，MTP 快 12%）**；两卡 **EP=2**（`--data-parallel-size 2 --enable-expert-parallel`）
+                     起服务 186 s、单流 4.99 ms/token（单流比单卡慢是预期：EP 换的是吞吐不是延迟）。核选择（学习项）：
+                     attention=FLASHINFER（decode_backend=trtllm-gen, arch=sm100）· GDN prefill=FlashInfer 核、decode=CUDA 核 ·
+                     MoE=FlashInfer TRTLLM（TrtLlmBf16ExpertsMonolithic；cooperative launch 140/148 SM 给 MoE）· EP 的 all2all=AgRsAll2AllManager
+                     （默认 allgather_reducescatter；DeepEP 后端未装）· all-reduce 候选 NCCL_SYMM_MEM/QUICK_REDUCE/FLASHINFER/CUSTOM/SYMM_MEM/PYNCCL ·
+                     MTP 架构名 Qwen3_5MoeMTP。收尾后显存 4 MiB（杀全家+等归零判据生效）。
+                     · 首启 JIT 路线（无 AOT 包）实测：单卡 15 min 起不来、双卡 gcc 段错误 ⇒ AOT 包是必需品不是优化（守则⑰）。
+试点四步          ① 镜像：nvidia/cuda:12.8 devel + uv sync --all-extras + check_flash_attn_backward + check_pipeline_invariants ✅（上行）
                    ② PRO6000:2 跑 SFT 五点谱 + 冻结 EVAL，与训练机 v15_r3 读数对一遍（可比性判据）
                    ③ 考场链单容器化，跑一遍 v4 考卷（同时做 W1④ 校准）
                    ④ RL 100 步 + 主动杀容器测抢占续跑

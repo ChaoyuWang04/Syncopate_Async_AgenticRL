@@ -27,8 +27,9 @@ from syncopate.authoring.seed_cases import SEED_BUILDERS
 from syncopate.core.parsing import render_tool_call
 from syncopate.domains.adcampaign import build_domain, rules
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
-MODEL_DIR = Path("models/Qwen3-0.6B")
+MODEL_DIR = Path(TEST_TOKENIZER)
 DOMAIN = build_domain()
 
 pytestmark = pytest.mark.skipif(not MODEL_DIR.exists(), reason="需要 models/Qwen3-0.6B")

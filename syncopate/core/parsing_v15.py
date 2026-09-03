@@ -17,6 +17,7 @@ v14 那份要留着重放历史审计（`25 §3.3` 第 1 行），切换靠 `cor
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -25,6 +26,14 @@ from syncopate.core.contract import REPORT_TOOL, SESSION_TOOL_NAMES, TERMINAL_SI
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _TOOL_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+# ★ 2026-09-03 学生换 Qwen3.5/3.6（裁定⑫）：其 chat 模板的**原生**工具调用线格式是 XML 风格
+#   <tool_call>\n<function=NAME>\n<parameter=K>\nV\n</parameter>…\n</function>\n</tool_call>
+#   （模板把 tools 列进 system 并明说"ONLY reply in the following format"）。我们训练/渲染必须与模板同形，
+#   否则 system 里教 XML、训练数据教 JSON，两边打架（守则⑮）。解析器**两种都认**（旧 JSON 数据仍可重放），
+#   渲染由 TOOLCALL_FORMAT 决定：xml（默认，Qwen3.5+）· json（Qwen3 世代，重放历史用）。
+TOOLCALL_FORMAT = os.environ.get("SYNCOPATE_TOOLCALL_FORMAT", "xml")
+_FUNC_RE = re.compile(r"<function=([^>\s]+)>\s*(.*?)\s*</function>", re.DOTALL)
+_PARAM_RE = re.compile(r"<parameter=([^>\s]+)>\n?(.*?)\n?</parameter>", re.DOTALL)
 # v14 壳的指纹。v15 下出现 = 壳残留，必须被抓成错误而不是被宽容地吃掉。
 _SHELL_RE = re.compile(r"```(?:json)?\s*\{.*?\"behavior\"\s*:.*?\}\s*```", re.DOTALL)
 
@@ -77,6 +86,71 @@ def _loads_tolerant(payload: str) -> Any:
     return json.loads(re.sub(r",\s*([}\]])", r"\1", payload))
 
 
+def _param_types(tool_name: str) -> dict[str, str]:
+    """工具参数的 JSON schema 类型表（XML 线格式里标量全是字串，要按 schema 收型）。查不到返回空表=一律留字串。"""
+    try:
+        from syncopate.core.tool_registry import REGISTRY  # 局部导入：避免 contract ↔ registry 循环
+        spec = REGISTRY.get(tool_name)
+        if spec is None and not _param_types.domain_built:   # 工具在 build_domain() 时才注册；解析器可能先于它被用
+            _param_types.domain_built = True
+            from syncopate.domains.adcampaign import build_domain
+            build_domain()
+            spec = REGISTRY.get(tool_name)
+        if spec is None:
+            return {}
+        sch = spec.openai_schema()
+        params = sch.get("function", sch).get("parameters", {}) or {}
+        return {k: (v.get("type") if isinstance(v, dict) else None) for k, v in (params.get("properties") or {}).items()}
+    except Exception:
+        return {}
+_param_types.domain_built = False
+
+
+def _coerce(value: str, typ: str | None) -> Any:
+    """XML 参数值 → 按 schema 类型收型。收不了就原样留字串（不猜，守则④）；object/array 一律 json.loads。"""
+    v = value.strip()
+    if typ == "string":
+        return v
+    if typ in ("object", "array"):
+        try: return json.loads(v)
+        except json.JSONDecodeError: return v
+    if typ == "integer":
+        try: return int(v)
+        except ValueError:
+            try:
+                f = float(v); return int(f) if f.is_integer() else v
+            except ValueError: return v
+    if typ == "number":
+        try: return float(v) if ("." in v or "e" in v.lower()) else int(v)
+        except ValueError: return v
+    if typ == "boolean":
+        if v.lower() in ("true", "1", "yes"): return True
+        if v.lower() in ("false", "0", "no"): return False
+        return v
+    if typ is None:
+        # 无 schema（session.report 的自由字段等）：XML 线格式里数字与"数字形字串"不可区分（模板对标量一律 str）。
+        # 取舍：能按 JSON 标量/容器解出来的就解（2.1→2.1、true→True、null→None、[..]/{..}→容器），其余留字串。
+        # ⚠️ 代价=字串形数字（如名字 "2024"）会被当数字；**有 schema 的 string 参数不受影响**（上面 typ=="string" 直接返回）。
+        try: return json.loads(v)
+        except json.JSONDecodeError: return v
+    return v
+
+
+def _parse_xml_block(block: str) -> dict[str, Any] | None:
+    """解析一个 <tool_call> 内部的 <function=…> 块；不合形返回 None（上层计为畸形）。"""
+    m = _FUNC_RE.search(block)
+    if not m:
+        return None
+    name, body = m.group(1), m.group(2)
+    # 去掉参数后不许剩下别的东西（防"半 JSON 半 XML"混合）
+    residue = _PARAM_RE.sub("", body).strip()
+    if residue:
+        return None
+    types = _param_types(name)
+    args = {k: _coerce(v, types.get(k)) for k, v in _PARAM_RE.findall(body)}
+    return {"name": name, "arguments": args}
+
+
 def parse_tool_calls(text: str) -> tuple[list[dict[str, Any]], int]:
     """抽出全部 <tool_call>，返回 (调用列表, 畸形块数)。
 
@@ -87,6 +161,13 @@ def parse_tool_calls(text: str) -> tuple[list[dict[str, Any]], int]:
     calls: list[dict[str, Any]] = []
     malformed = 0
     for block in _TOOL_CALL_RE.findall(text):
+        if block.lstrip().startswith("<function="):          # Qwen3.5+ XML 线格式
+            xml = _parse_xml_block(block)
+            if xml is None:
+                malformed += 1
+            else:
+                calls.append(xml)
+            continue
         try:
             payload = _loads_tolerant(block)
         except json.JSONDecodeError:
@@ -160,11 +241,24 @@ def derive_behavior(*, terminal: ParsedStepV15, business_tools_used: bool) -> st
     raise ValueError(f"非终止步不能推导行为：kind={terminal.kind}")
 
 
+def render_tool_call(name: str, arguments: dict[str, Any]) -> str:
+    """反向渲染一次工具调用（造 gold / 回灌历史用）。线格式随 TOOLCALL_FORMAT：
+    xml = 与 Qwen3.5+ chat 模板逐字节同形（mapping/sequence 用 json 序列化，标量用 str，与模板的 tojson/string 一致）。"""
+    if TOOLCALL_FORMAT == "json":
+        payload = json.dumps({"name": name, "arguments": arguments}, ensure_ascii=False)
+        return f"<tool_call>\n{payload}\n</tool_call>"
+    parts = [f"<tool_call>\n<function={name}>\n"]
+    for k, v in arguments.items():
+        sv = json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else ("true" if v is True else "false" if v is False else str(v))
+        parts.append(f"<parameter={k}>\n{sv}\n</parameter>\n")
+    parts.append("</function>\n</tool_call>")
+    return "".join(parts)
+
+
 def render_signal(name: str, arguments: dict[str, Any]) -> str:
-    """反向渲染（造 gold 用）。与 v14 的 render_tool_call 同形。"""
+    """反向渲染信令（造 gold 用）。与业务工具同一线格式。"""
     assert name in SESSION_TOOL_NAMES, name
-    payload = json.dumps({"name": name, "arguments": arguments}, ensure_ascii=False)
-    return f"<tool_call>\n{payload}\n</tool_call>"
+    return render_tool_call(name, arguments)
 
 
 def render_report(fields: dict[str, Any]) -> str:

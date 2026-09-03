@@ -48,6 +48,7 @@ from syncopate.pipeline.split import load_bucket
 from syncopate.train.eval_local import HFEngine, load_model
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -96,7 +97,7 @@ def ess_from_log_ratios(log_ratios: list[list[float]], level: str) -> dict[str, 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="离线合成 staleness，量 σ²(k)")
-    parser.add_argument("--model", default="models/Qwen3-4B")
+    parser.add_argument("--model", default=STUDENT_MODEL)
     parser.add_argument("--old", required=True, help="生成轨迹的那个 policy（π_{t−k}）")
     parser.add_argument("--new", default=None, help="重算 logprob 的那个 policy（π_t）；不给就是基座")
     parser.add_argument("--k", type=int, default=0, help="两个 ckpt 相隔多少个更新步，只用于记录")

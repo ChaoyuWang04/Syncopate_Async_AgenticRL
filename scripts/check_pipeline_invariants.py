@@ -30,6 +30,8 @@ import glob
 import json
 import sys
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS: list[tuple[str, str, object]] = []
@@ -83,7 +85,7 @@ def _merge_actually_changed(log):
     根因不是 bug，是 verl 的 LoRA merger **本来就**产出「未改的基座 + 独立 adapter」。
     危险在于 launch_rl 没有加载 adapter 的入口 ⇒ 拿它当下一轮 RL 的起点会静默丢掉整轮。
     """
-    pairs = [("models/Qwen3-4B-sft-v13-e1", "models/Qwen3-4B", "SFT 合并模型")]
+    pairs = [("models/Qwen3-4B-sft-v13-e1", STUDENT_MODEL, "SFT 合并模型")]
     ok = True
     for merged, base, label in pairs:
         md, bd = ROOT / merged, ROOT / base
@@ -655,9 +657,9 @@ def _rank_readers_have_guard(log):
 
 @check("audit", "审计的 case 集合必须与 split 的 eval 桶完全相同")
 def _audit_covers_eval_bucket(log):
-    sp = ROOT / "data/splits/v13/eval_cases.json"
+    sp = ROOT / f"{DEFAULT_SPLIT_DIR}/eval_cases.json"
     if not sp.exists():
-        log("  ⏭ 没有 data/splits/v13")
+        log(f"  ⏭ 没有 {DEFAULT_SPLIT_DIR}")
         return True
     want = set(json.loads(sp.read_text())["case_ids"])
     ok = True
@@ -805,7 +807,7 @@ def _rl_prompts_same_source_and_fit(log):
     ok = True
     tok = None
     registry = build_domain().registry
-    tok_dir = ROOT / "models/Qwen3-4B"
+    tok_dir = ROOT / STUDENT_MODEL
     if tok_dir.exists():
         from transformers import AutoTokenizer
         tok = AutoTokenizer.from_pretrained(str(tok_dir))
@@ -867,7 +869,7 @@ def _sft_samples_end_with_final_answer(log):
     构造侧已加硬断言（sft_replay），这条守数据侧 —— 两头都看着。
     """
     from syncopate.pipeline.split import DATA_VERSION
-    tok_dir = ROOT / "models/Qwen3-4B"
+    tok_dir = ROOT / STUDENT_MODEL
     if not tok_dir.exists():
         log("  ⏭ models/Qwen3-4B 不在本机（要它的 tokenizer 解码）")
         return True

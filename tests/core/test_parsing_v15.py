@@ -261,3 +261,96 @@ def test_roundtrip_with_think_prefix():
     text1 = render_signal("session.defer", {"reason": "x", "recheck_after_days": 1})
     p = parse_step_v15("<think>先想一下</think>" + text1)
     assert render_signal("session.defer", p.signal_args) == text1
+
+
+# ── 通道四：Qwen3.5+ XML 线格式（2026-09-03 裁定⑫，学生换 Qwen3.6-35B-A3B）──────────────
+# 模板原生格式：<tool_call>\n<function=NAME>\n<parameter=K>\nV\n</parameter>\n</function>\n</tool_call>
+# 解析器两种线格式都认；渲染默认 xml（SYNCOPATE_TOOLCALL_FORMAT=json 回到 Qwen3 世代）。
+XML = ('<tool_call>\n<function={n}>\n{params}</function>\n</tool_call>')
+
+
+def _xml(name, **kw):
+    params = "".join(f"<parameter={k}>\n{v}\n</parameter>\n" for k, v in kw.items())
+    return XML.format(n=name, params=params)
+
+
+def test_xml_business_call_parses():
+    p = parse_step_v15(_xml("campaign.get_metrics", campaign_id="CMP_1"))
+    assert p.kind == "tool_calls" and p.tool_calls == [{"name": "campaign.get_metrics", "arguments": {"campaign_id": "CMP_1"}}]
+
+
+def test_xml_signal_parses_and_coerces_by_schema():
+    """信令参数按注册表 schema 收型：recheck_after_days 是 integer ⇒ 3 不是 "3"。"""
+    p = parse_step_v15(_xml("session.defer", reason="太新", recheck_after_days="3"))
+    assert p.kind == "signal" and p.signal == "defer"
+    assert p.signal_args == {"reason": "太新", "recheck_after_days": 3}
+
+
+def test_xml_nested_json_parameter():
+    p = parse_step_v15(_xml("x.y", opts='{"a": 1, "b": [1, 2]}'))
+    assert p.kind == "tool_calls" and p.tool_calls[0]["arguments"] == {"opts": {"a": 1, "b": [1, 2]}}
+
+
+def test_xml_schemaless_param_infers_json_scalars():
+    """无 schema 的参数（session.report 自由字段等）：XML 线格式里数字与数字形字串不可区分（模板一律 str），
+    取舍=能按 JSON 标量解的就解（这是 report 字段 2.1 不变成 "2.1" 的代价，parsing_v15._coerce 注释有账）。"""
+    p = parse_step_v15(_xml("no.such_tool", n="7", f="2.1", b="true", z="null", s="abc"))
+    assert p.tool_calls[0]["arguments"] == {"n": 7, "f": 2.1, "b": True, "z": None, "s": "abc"}
+
+
+def test_xml_typed_string_param_keeps_numeric_looking_string():
+    """有 schema 且 type=string 的参数不受推断影响：campaign_id="2024" 仍是字串。"""
+    p = parse_step_v15(_xml("campaign.get_metrics", campaign_id="2024"))
+    assert p.tool_calls[0]["arguments"] == {"campaign_id": "2024"}
+
+
+def test_xml_missing_function_close_is_malformed():
+    p = parse_step_v15("<tool_call>\n<function=x.y>\n<parameter=a>\n1\n</parameter>\n</tool_call>")
+    assert p.kind == "error" and p.error.startswith("malformed_tool_call")
+
+
+def test_xml_residue_between_parameters_is_malformed():
+    p = parse_step_v15("<tool_call>\n<function=x.y>\n<parameter=a>\n1\n</parameter>\ngarbage\n</function>\n</tool_call>")
+    assert p.kind == "error"
+
+
+def test_xml_and_json_both_accepted_in_one_step():
+    p = parse_step_v15(_xml("x.y", a="1") + "\n" + TC.format(n="x.z", a='{"b": 2}'))
+    assert p.kind == "tool_calls" and [c["name"] for c in p.tool_calls] == ["x.y", "x.z"]
+
+
+def test_render_tool_call_default_is_xml_and_roundtrips(monkeypatch):
+    from syncopate.core import parsing_v15 as m
+    monkeypatch.setattr(m, "TOOLCALL_FORMAT", "xml")
+    text = m.render_tool_call("session.defer", {"reason": "太新", "recheck_after_days": 3})
+    assert text.startswith("<tool_call>\n<function=session.defer>\n<parameter=reason>\n太新\n</parameter>")
+    p = parse_step_v15(text)
+    assert p.signal == "defer" and p.signal_args == {"reason": "太新", "recheck_after_days": 3}
+
+
+def test_render_tool_call_json_mode_roundtrips(monkeypatch):
+    from syncopate.core import parsing_v15 as m
+    monkeypatch.setattr(m, "TOOLCALL_FORMAT", "json")
+    text = m.render_tool_call("x.y", {"a": 1, "b": {"c": True}})
+    assert text.startswith("<tool_call>\n{") and parse_step_v15(text).tool_calls[0]["arguments"] == {"a": 1, "b": {"c": True}}
+
+
+def test_xml_render_matches_qwen35_chat_template_exactly():
+    """★ 守则⑮：我们渲染出的 assistant 文本必须和 Qwen3.5 模板对同一 tool_calls 结构渲染的**逐字节相同**，
+    否则训练目标与模型在 system 里被教的格式不同形。分词器不在时跳过（CI 无权重）。"""
+    from pathlib import Path
+    from syncopate.core import parsing_v15 as m
+    from syncopate.core.model_paths import TEST_TOKENIZER
+    if not Path(TEST_TOKENIZER, "chat_template.jinja").exists():
+        pytest.skip("no Qwen3.5 tokenizer locally")
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(TEST_TOKENIZER)
+    args = {"campaign_id": "CMP_1", "days": 7, "opts": {"a": [1, 2]}}
+    msgs = [{"role": "user", "content": "q"},
+            {"role": "assistant", "content": "", "tool_calls": [{"type": "function", "function": {"name": "campaign.get_metrics", "arguments": args}}]}]
+    rendered = tok.apply_chat_template(msgs, tokenize=False)
+    body = rendered.split("<|im_start|>assistant\n", 1)[1].split("<|im_end|>", 1)[0]
+    # 模板在最后一轮 assistant 前放一个空 think 段；剥掉后应与我们的渲染逐字节相同
+    body = body.split("</think>\n\n", 1)[-1] if "</think>" in body else body
+    ours = m.render_tool_call("campaign.get_metrics", args) if m.TOOLCALL_FORMAT == "xml" else None
+    assert ours is not None and body == ours, f"模板:\n{body!r}\n我们:\n{ours!r}"

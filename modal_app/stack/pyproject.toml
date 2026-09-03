@@ -1,0 +1,57 @@
+# ★ 新栈（Chaoyu 09-03 裁定⑪，26 §6）：与仓库根目录的 pyproject/uv.lock **分家**。
+#   根目录那份是旧栈（vLLM 0.12 / torch 2.9 / verl 0.8），本机 K 线还在用，不动。
+#   这份只给 Modal 镜像用；对齐完成后再决定是否升格为根目录的依赖表。
+#
+# 版本事实（09-03 PyPI 实查，别凭记忆改）：
+#   vllm 0.28.0      钉 torch==2.13.0 / torchvision 0.28.0 / transformers>=5.5.3 / flashinfer-python==0.6.16.post3
+#   verl 0.9.0       vllm>=0.18 · transformers>=5.5.3,<5.11,!=5.6.0 · tensordict>=0.8,<=0.10,!=0.9 · numpy>=2
+#   torch 2.13.0     PyPI 默认就是 cu13（依赖 nvidia-*-cu13）⇒ 基础镜像用 nvidia/cuda:13.0.x-devel
+#   flash-attn       官方轮子最高 cu13torch2.10；用 mjun0812/flash-attention-prebuild-wheels v0.9.47 的
+#                    flash_attn-2.8.3+cu130torch2.13-cp312-linux_x86_64.whl（231 MB，与含 sm_120 的全架构轮子同大小）。
+#                    ★ 社区轮子必须过 scripts/check_flash_attn_backward.py（08 §2.2：前向对 ≠ 反向对），stack_probe gpu 步就是这道闸。
+[project]
+name = "syncopate-stack2"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # 训练/推理主栈
+    "vllm==0.28.0",
+    "verl==0.9.0",
+    "transformers==5.10.4",
+    "flash-linear-attention==0.5.2",
+    "peft>=0.15",
+    # verl 0.9.0 **没声明**但 import 了的依赖（09-03 在镜像里逐模块 import 查出）：
+    "transferqueue",          # verl.trainer.ppo.v1（V1 统一 trainer）`import transfer_queue`
+    "cupy-cuda13x",           # verl.checkpoint_engine.nccl_checkpoint_engine
+    "prefix-grouper==0.0.1.post1",  # verl 0.9 上游已集成 PrefixGrouper（trainer/ppo/prefix_grouper_utils.py），要这个包
+    "liger-kernel",           # verl[gpu] extra
+    "wandb",
+    "accelerate>=1.1",
+    "huggingface-hub>=1.0",
+    "tensordict==0.10.0",
+    "numpy>=2.2",
+    "flash-attn",
+    # FlashInfer AOT 核缓存：与 flashinfer-python 同版本（0.6.16.post3，由 vllm 钉）。不装它 ⇒ sm_100 首启 JIT 编 TRTLLM MoE/GEMM
+    #   核（gcc 十几分钟，双 worker 并发时 gcc 段错误，09-03 B200 实测）。轮子只在 flashinfer.ai 自家索引，不在 PyPI。
+    "flashinfer-jit-cache==0.6.16.post3",
+    "flashinfer-cubin==0.6.16.post3",     # 预下载的 cubin（否则运行时从 NVIDIA artifactory 逐个拉）；同版本，GitHub release 资产
+    # FA4（flash-attn-4）**不进主环境**：b22 起要求 apache-tvm-ffi>=0.1.12，而 vllm 0.28.0 钉 ==0.1.11（FlashInfer ABI）
+    #   ⇒ 镜像里另开 /env/.venv-fa4（torch 2.13 + flash-attn-4[cu13] + FA2 轮子）只给 fa4 探针/核实验用（stack_probe.py）
+    # 项目自身（与根目录 pyproject 一致）
+    "pyyaml>=6.0", "pydantic>=2.0", "pyarrow>=15.0", "pandas>=2.0", "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+runtime = ["asyncpg>=0.29", "fastapi>=0.110", "httpx>=0.27", "uvicorn>=0.30",
+           "alembic>=1.13", "sqlalchemy>=2.0", "psycopg[binary]>=3.1",
+           "celery[redis]>=5.4", "redis>=5.0"]
+dev = ["pytest>=8.0"]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+flashinfer-jit-cache = { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_jit_cache-0.6.16.post3%2Bcu130-cp39-abi3-manylinux_2_28_x86_64.whl" }
+flashinfer-cubin = { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_cubin-0.6.16.post3-py3-none-any.whl" }
+flash-attn = { url = "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn-2.8.3%2Bcu130torch2.13-cp312-cp312-linux_x86_64.whl" }

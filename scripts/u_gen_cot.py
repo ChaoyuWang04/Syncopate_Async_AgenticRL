@@ -19,6 +19,7 @@ import torch
 
 sys.path.insert(0, "."); sys.path.insert(0, "scripts")
 from u_teacher_probe import gold_values  # noqa: E402  复用值抽取
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 ASST = "<|im_start|>assistant"
 EMPTY_THINK = "<think>\n\n</think>\n\n"
@@ -26,8 +27,8 @@ EMPTY_THINK = "<think>\n\n</think>\n\n"
 
 def main() -> int:
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    df = pd.read_parquet("data/sft/v13/train.parquet")
-    dfv = pd.read_parquet("data/sft/v13/val.parquet")
+    df = pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet")
+    dfv = pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")
     allr = pd.concat([df, dfv])
     rows = allr[allr.behavior.isin(("defer", "reject", "answer"))]
     print(f"单步判断案 {len(rows)} 行（defer/reject/answer）")

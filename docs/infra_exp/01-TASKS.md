@@ -8,7 +8,35 @@
 
 ---
 
-## 1 · 队首（**空**——B-5 收官，infra 线再度全线收尾）
+## 1 · 队首 · B200 新栈探索队列（Chaoyu 2026-09-03 立；排序=收益×重要性×优先级；**先量基线再逐条改**）
+
+> 环境事实：2×B200（NVLink 5，871 GB/s）· vLLM 0.28 · verl 0.9（V1 统一 trainer/FSDP2/Megatron-Bridge）· torch 2.13 cu13 ·
+> FA4 · FlashInfer TRT-LLM 核 · 学生 Qwen3.6-35B-A3B（MoE）· 教师 Qwen3.8-27B。读数与旧栈/5090 **一律不混比**。
+> 纪律：每条先在默认配置上量 before（同尺子、多种子/多次取中位数），再单变量改，after 与 before 同表落 E 报告。
+> 判据先注册（主线守则⑬）；不是最新稳定版的组件必须写原因（守则⑯）。
+
+| 优先 | # | 任务（单变量） | 判据 / 读数 | 归谁 | 成本 |
+|---|---|---|---|---|---|
+| **P0 基线与正确性** | B0-1 | **v16 全管线冒烟基线**：FSDP2 单卡 LoRA 训 35B-A3B，bf16，V1 sync colocate；数据→SFT+eval→RL+eval→OPD+eval 全通 | 每段退出码 0 · loss/grad 有限 · DDP 各 rank 权重逐位同 · 位移≈lr×步数 · 权重真推到 rollout（校验和） | 主线 | 1–2 天 |
+| | B0-2 | **训推一致性尺子重立**：rollout logprob vs trainer 重算逐 token 差；`rollout_correction` 开/关；**MoE 路由不一致率**（同 token 两侧选的专家不同的比例） | 差值分布 + 噪声地板；路由不一致率数字（R3 的 before） | infra | 0.5 天 |
+| | B0-3 | wandb 全链上报判据：SFT/RL/OPD 每步 loss、grad_norm、cap、行为读数都在同一 project；Modal secret 注入 | 每段训练结束 wandb run 里指标条数 == 步数；无 offline 回退 | 主线 | 0.5 天 |
+| | B0-4 | Modal 稳定性探针进代码：拓扑指纹、显存归零、缓存落 Volume、抢占后从 ckpt 续跑一次（主动杀容器） | 续跑后 step/loss 接上、无重复样本 | 主线 | 0.5 天 |
+| **P1 训练侧高收益** | B1-1 | **Megatron-Bridge + EP=2 训 35B-A3B** vs FSDP2 基线 | 步速 tok/s、峰值显存、loss 曲线重叠（同种子） | infra | 2 天 |
+| | B1-2 | **MXFP8 训推统一（Miles 07-29 recipe 正版）**：TE MXFP8 fwd/wgrad/dgrad + vLLM FP8 rollout；两侧量化器逐位对拍 | 两侧量化差=0 · reward 曲线与 bf16 重叠（±MDE）· 步速 | infra | 3 天 |
+| | B1-3 | verl 0.9 三模式对照：sync / colocate_async / separate_async（1+1 分离） | 占空比、每步墙钟、陈旧度分布、任务分配对 | infra | 1 天 |
+| | B1-4 | **路由回放 R3**（verl `router_replay_patch`）：训练侧复用 rollout 路由 | 路由不一致率→0 · reward 方差、IS 比率尾部 | infra | 1 天 |
+| | B1-5 | MTP：k=1/2/3/4 接受率按任务分桶（工具调用 vs 人话 vs 思考）；MTP 头作训练辅助损失开/关 | 接受率表 · 单流/并发 TPOT · 任务分 | 主线+infra | 1 天 |
+| | B1-6 | FA4 进训练侧（verl attention backend 切 cute）vs FA2 | 步速、loss 逐位/噪声地板内 | infra | 0.5 天 |
+| **P2 推理/serving** | B2-1 | 单卡 vs DP=2 vs TP=2 vs EP=2 吞吐曲线（allgather_rs 基线）→ **DeepEP** 两后端 → **EPLB** | 每档 goodput/TPOT/TTFT 曲线；EPLB 开关 Δ | infra | 2 天 |
+| | B2-2 | vLLM 原生 DP+LoRA 替代自研前缀亲和路由（E32 翻案）；PD 分离在 NVLink 上重判（MAINLINE ⑦） | 同 trace 下 goodput、cache 命中；PD go/no-go 三测量 | infra | 1.5 天 |
+| | B2-3 | NVFP4 W4A4 / FP8 KV 在 Blackwell 上的 serving 与 rollout 曲线（Miles NVFP4） | 五臂曲线 + 任务分配对 | infra | 1 天 |
+| | B2-4 | 执行层：CUDA graph 覆盖率、GDN decode 小核微间隙 profile（E14 方法重跑）、torch.compile 收益 | nsys 间隙总时长、graph 命中率 | infra | 1 天 |
+| **P3 核/通信** | B3-1 | NVLink 下 all_gather 对齐悬崖是否仍在（E18 重跑）；all-reduce 后端 NCCL_SYMM_MEM/QUICK_REDUCE/CUSTOM 对比 | 各消息大小 busbw 表 | infra | 0.5 天 |
+| | B3-2 | tcgen05/TMEM 块缩放 MMA 峰值（MXFP8/NVFP4）vs sm_120 的 543/627；DeepGEMM 对照 | TFLOPS 表 + 占峰比 | infra | 1 天 |
+| | B3-3 | MoE 训练微优化消融：grouped GEMM · 选择性重计算 · 序列打包 · LoRA 挂专家 vs 只挂注意力 | 每项单变量 Δ 步速/显存/任务分 | infra | 1.5 天 |
+| | B3-4 | **B300 重跑全链收坑**（sm_103a 只编 sm_100a 的核）；每个坑一个上游 issue/PR | 全链绿 + PR 列表 | 双方 | 1 天 |
+
+> ✅ 旧队列（B-5 / B-4 / E31）全部收官，摘要保留在下方备查；上面的表是唯一现役队列。
 
 | # | 任务 | 归谁 | 成本 | 填哪些简历空格 |
 |---|---|---|---|---|

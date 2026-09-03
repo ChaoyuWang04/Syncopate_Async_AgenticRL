@@ -18,13 +18,14 @@ import time
 
 import httpx
 import torch
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
 STUDENT_BASE = "models/Qwen3-4B-sft-v13r2-e1"
 ADAPTER = "checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25"
-TEACHER = "models/Qwen3-4B"
+TEACHER = STUDENT_MODEL
 
 
 def get_samples(n=4) -> list[tuple[str, str]]:

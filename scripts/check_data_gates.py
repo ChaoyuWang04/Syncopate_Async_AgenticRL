@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from syncopate.domains.adcampaign.corpus import tokenize
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 # ---------------------------------------------------------------------------
 # 阈值。★ 改这里之前先想清楚是"数据真的变好了"还是"把门槛挪到数据那儿去了"。
@@ -467,7 +468,7 @@ def check_leakage(batch: Batch, split_dir, verbose: bool) -> tuple[bool, list[st
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="数据多样性门禁（大版本重建前必跑）")
-    ap.add_argument("--batch", type=Path, default=Path("data/batches/v13"))
+    ap.add_argument("--batch", type=Path, default=Path(DEFAULT_BATCH_DIR))
     ap.add_argument("--split-dir", type=Path, default=None,
                     help="给了才跑 L1/L2 泄露门禁（它要三桶名单）")
     ap.add_argument("--verbose", action="store_true", help="打全表，不只打不达标的")

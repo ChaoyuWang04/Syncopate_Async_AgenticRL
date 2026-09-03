@@ -20,6 +20,8 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 async def _score(bundle, script, tok, reg):
@@ -46,10 +48,10 @@ def main() -> int:
     from syncopate.pipeline.sft_replay import gold_script
     from syncopate.pipeline.split import load_bundles
 
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     reg = build_domain().registry
     reg.latency_scale = 0.0
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     by: dict[str, list] = {}
     for b in bundles.values():
         if b.gold:

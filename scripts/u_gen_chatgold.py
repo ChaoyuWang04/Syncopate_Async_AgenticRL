@@ -16,6 +16,7 @@ import random
 import sys
 
 import torch
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, ".")
 
@@ -58,9 +59,9 @@ def main() -> int:
     from transformers import AutoModelForCausalLM, AutoTokenizer
     prompts = build_prompts()
     print(f"闲聊 prompt {len(prompts)} 条")
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     model = AutoModelForCausalLM.from_pretrained(
-        "models/Qwen3-4B", torch_dtype=torch.bfloat16, device_map={"": 0}).eval()
+        STUDENT_MODEL, torch_dtype=torch.bfloat16, device_map={"": 0}).eval()
 
     SYS = ("你是一个手游买量投放团队的 AI 助手，正在和运营同事闲聊。"
            "用简短、自然、友好的中文口吻回答，不超过三句话，不要列条目，不要提工具或系统。")

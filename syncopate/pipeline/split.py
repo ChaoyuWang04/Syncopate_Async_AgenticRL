@@ -469,10 +469,13 @@ def load_bucket(split_dir: Path, name: str) -> list[str]:
 #     ② `assert_same_data_version` —— 「两个东西应当相同」型判据，
 #        非黑即白、不需要阈值（守则①）。只改一个参数就硬失败。
 #
-# ⚠️ 换数据版本（v14）时**只改这一行**。不要在调用方各自写死。
-DATA_VERSION = "v13"
+# ⚠️ 换数据版本时**只改这一行**。不要在调用方各自写死。
+# ★ 2026-09-03 Chaoyu 裁定⑩：全部口径 v16，case 库/切分/训练集从零重生成（B200 + 新栈），v13/v15 冻结读数不再是任何比较的一端。
+DATA_VERSION = "v16"
 DEFAULT_BATCH_DIR = f"data/batches/{DATA_VERSION}"
 DEFAULT_SPLIT_DIR = f"data/splits/{DATA_VERSION}"
+DEFAULT_SFT_DIR = f"data/sft/{DATA_VERSION}"      # SFT 训练集（原 data/sft/v15；契约协议名仍是 v15，数据版本是 v16）
+DEFAULT_RL_DIR = f"data/rl/{DATA_VERSION}"
 
 
 def data_version_of(path: str | Path) -> str | None:

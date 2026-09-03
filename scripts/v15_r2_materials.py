@@ -22,6 +22,7 @@ import re
 from pathlib import Path
 
 from transformers import AutoTokenizer
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 SHELL = re.compile(r"```json\s*(\{.*?\})\s*```", re.S)
 THINK = re.compile(r"<think>(.*?)</think>", re.S)
@@ -29,7 +30,7 @@ ASST = "<|im_start|>assistant"
 
 
 def main() -> int:
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     out: dict[str, dict] = {"l2_replies": {}, "l1_replies": {}, "cot_think": {}}
 
     c = json.load(open("data/u_route/v145_l2l1_rows.json"))

@@ -13,12 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--batch", default="data/batches/v13")
-    ap.add_argument("--model", default="models/Qwen3-4B")
+    ap.add_argument("--batch", default=DEFAULT_BATCH_DIR)
+    ap.add_argument("--model", default=STUDENT_MODEL)
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
     from transformers import AutoTokenizer

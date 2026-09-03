@@ -30,20 +30,22 @@ from syncopate.pipeline.sft_replay import _ScriptedEngine, gold_script
 from syncopate.pipeline.split import load_bundles
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
-tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
 reg = build_domain().registry
 reg.latency_scale = 0.0
-bundles = {k: v for k, v in load_bundles(Path("data/batches/v13")).items() if v.gold}
+bundles = {k: v for k, v in load_bundles(Path(DEFAULT_BATCH_DIR)).items() if v.gold}
 import os as _os
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 _scope = _os.environ.get("MIGRATE_SCOPE")
 if _scope == "frozen419":
     import pandas as _pd
-    keep = set(_pd.read_parquet("data/sft/v13/train.parquet").case_id)
+    keep = set(_pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet").case_id)
     bundles = {k: v for k, v in bundles.items() if k in keep}
 elif _scope == "eval":
     # 冻结 EVAL：v15 **不重建 case**，只是判分走新契约 ⇒ 判据是「这批 case 在 v15 下
     # gold 回放零截断、零工具报错、行为推导与 v14 一致」（`25 §R3` T2）。
-    keep = set(json.load(open("data/splits/v13/eval_cases.json"))["case_ids"])
+    keep = set(json.load(open(f"{DEFAULT_SPLIT_DIR}/eval_cases.json"))["case_ids"])
     bundles = {k: v for k, v in bundles.items() if k in keep}
 out = {}
 for cid, b in bundles.items():

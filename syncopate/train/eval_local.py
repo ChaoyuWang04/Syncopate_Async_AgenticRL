@@ -48,6 +48,7 @@ from syncopate.train.rollout_budget import (
     SAMPLING_TOP_K, SAMPLING_TOP_P,
 )
 from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 # 多轮累积的预算：最长的模板（GEO）max_steps=14，实测每步约 140 token
 #（模型输出 + 工具返回），留一倍余量。
@@ -475,7 +476,7 @@ def _report_recovery(rows: list[dict]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地自回归推理评测")
-    parser.add_argument("--model", default="models/Qwen3-0.6B")
+    parser.add_argument("--model", default=TEST_TOKENIZER)
     parser.add_argument("--adapter", default=None, help="LoRA adapter 目录，不给就是基座")
     # ★ 默认值来自**一份共用常量**（`pipeline/split.py`）——此前这里写死 v2，
     #   而 `data/batches/v2` 在本机根本不存在。⚠️ 这两个参数必须同时动，见下面的断言。

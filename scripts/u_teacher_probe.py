@@ -20,6 +20,7 @@ import sys
 
 import pandas as pd
 import torch
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 sys.path.insert(0, ".")
 
@@ -58,7 +59,7 @@ def main() -> int:
     args = ap.parse_args()
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    df = pd.read_parquet("data/sft/v13/train.parquet")
+    df = pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet")
     # ⚠️ answer 行全是 CHAT（gold=自由句，逐字包含判据不适用）——首版 0/10 的探针病。
     #   改抽 defer/reject：gold=机器标签+短字段（可判），且"该不该做"正是 CoT 主场。
     rows = pd.concat([df[df.behavior == "defer"].head(args.n // 2),

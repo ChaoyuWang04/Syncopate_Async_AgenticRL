@@ -21,6 +21,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import pandas as pd
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 def spans(ids, mask, tok):
@@ -81,13 +83,13 @@ def render_row(r, tok) -> tuple[str, dict]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--parquet", default="data/sft/v15/train.parquet")
+    ap.add_argument("--parquet", default=f"{DEFAULT_SFT_DIR}/train.parquet")
     ap.add_argument("--per-bucket", type=int, default=3)
     ap.add_argument("--out", default=None)
     ap.add_argument("--model", default=None)
     args = ap.parse_args()
     from transformers import AutoTokenizer
-    tok_path = args.model or ("models/Qwen3-4B" if Path("models/Qwen3-4B/tokenizer.json").exists() else "models/Qwen3-0.6B")
+    tok_path = args.model or (STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER)
     tok = AutoTokenizer.from_pretrained(tok_path)
     df = pd.read_parquet(args.parquet)
     if "bucket" not in df.columns:

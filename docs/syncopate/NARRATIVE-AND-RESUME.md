@@ -316,3 +316,14 @@ serving/产品壳                          docs/syncopate/09 · 11 · frontend/
 · serving 成果 SLO 为施工目标值（27 号 K9/K11 验收后回填实测）——终审版已裁定按
   目标呈现，此处仅记口径
 ```
+
+---
+
+## ★ 2026-09-03 重写施工单（Chaoyu：辅导老师指出技术栈"都是一年前的"；已换 2×B200 + vLLM 0.28 / verl 0.9 / torch 2.13 / FA4）
+
+逐行审计在 `_audit/resume/outdated_audit_2026-09-03.md`（文件:行号 | 表述 | 为何过时 | 类别）。处置三档：
+**删**（"4×消费级 GPU 无 NVLink/P2P"这类背景句）· **降格为历史**（verl 0.8 / vLLM 0.12 时代的修复：三静默 bug、LoRA 热更新、
+前缀亲和路由、四引擎拓扑、FSDP1 补丁——必须带上游 PR 编号，否则只剩故事）· **重量/新立**（占空比、步速、goodput、TPOT、
+cache 命中在 B200 重跑；FA4 4.0×、NVLink 34×、EP=2 训/推 MoE、MTP 实测、MXFP8 训推统一正版、verl 0.9 三模式、Megatron-Bridge）。
+**保留**：IS 数学、异步剂量、调度层分账、判据纪律、量化偏置机理、坏轮子判据——方法越换硬件越值钱。
+新读数唯一来源 = `docs/syncopate/08 §Modal` 与 `docs/infra_exp/01-TASKS §1` 各条 E 报告；本文正文按「完成态」原则在 B200 队列做完后就地改写，不预写。

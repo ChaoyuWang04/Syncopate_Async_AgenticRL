@@ -25,6 +25,8 @@ from pathlib import Path
 OUT = Path("_audit/v15_probes")
 # ★ spec 从契约模块取，不留副本（守则⑨：这里根本不该有第二份）
 from syncopate.core.contract import SESSION_TOOL_SPECS as SESSION_TOOLS  # noqa: E402
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 REPORT_TOOL = [{"type": "function", "function": {
     "name": "session.report",
@@ -92,7 +94,7 @@ def p5_session_tool_budget(tok) -> dict:
     from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH
     from syncopate.train.rollout_loop import build_messages
 
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     bases, deltas = [], []
     for _, bd in list(bundles.items())[:120]:
         msgs = build_messages(bd, bd.case.tool_menu)
@@ -160,7 +162,7 @@ def p7_constrained_decoding_wired() -> dict:
 
 def main() -> None:
     from transformers import AutoTokenizer
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     results = {
         "P1_P2_think_placement": p1_p2_think_placement(tok),
         "P3_template_shape": p3_template_shape(tok),

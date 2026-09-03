@@ -32,6 +32,7 @@ import json
 from pathlib import Path
 
 import torch
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -117,7 +118,7 @@ def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_re
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="把 LoRA 合并进基座")
-    parser.add_argument("--base", default="models/Qwen3-4B")
+    parser.add_argument("--base", default=STUDENT_MODEL)
     parser.add_argument("--adapter", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)

@@ -29,6 +29,7 @@ rng = random.Random(1500)
 # ★ spec 从契约模块取，不留副本（守则⑨）。⚠️ R0 双臂数据是用**这份 spec 的当时值**
 # 冻结出来的；日后改 spec 不会回改已冻结的 parquet —— 重建 R0 数据才会生效。
 from syncopate.core.contract import SESSION_TOOL_SPECS as SESSION_TOOLS
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 # ★ 冻结指纹：data/v15_r0/ 是用下面这个 spec 哈希建出来的。改了 spec 而不重建数据 ⇒
 #   评测 prompt 与训练 prompt 不一致，R0 结论作废。判据写在发生点，不靠人记得检查。
@@ -140,7 +141,7 @@ def main() -> int:
     import asyncio
     from transformers import AutoTokenizer
     from syncopate.pipeline.split import load_bundles
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     bundles = load_bundles(Path("data/batches/v13"))
     pools = {b: [] for b in ("defer", "reject", "clarify", "answer")}
     for cid, bd in bundles.items():

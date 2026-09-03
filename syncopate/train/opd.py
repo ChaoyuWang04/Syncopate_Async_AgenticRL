@@ -33,13 +33,14 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
-STUDENT_BASE = "models/Qwen3-4B-sft-v13r2-e1"
+STUDENT_BASE = STUDENT_MODEL   # v16：学生底座（LoRA 另挂）
 ADAPTER = "checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25"
-TEACHER_BASE = "models/Qwen3-4B"
+TEACHER_BASE = TEACHER_MODEL
 
 
 def log(msg: str) -> None:

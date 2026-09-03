@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -37,7 +38,7 @@ sys.path.insert(0, str(ROOT))
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Q5/Q6：SFT↔RL token 同构 + mask 落点")
     ap.add_argument("--data", default=None, help="默认 data/sft/<DATA_VERSION>")
-    ap.add_argument("--model", default="models/Qwen3-4B")
+    ap.add_argument("--model", default=STUDENT_MODEL)
     ap.add_argument("--sample", type=int, default=48,
                     help="确定性等距抽样条数（--all 时忽略）")
     ap.add_argument("--all", action="store_true")

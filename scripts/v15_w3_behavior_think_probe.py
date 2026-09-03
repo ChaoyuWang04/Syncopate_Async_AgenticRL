@@ -20,6 +20,8 @@ from collections import defaultdict
 from pathlib import Path
 
 import httpx
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 sys.path.insert(0, "scripts")
 
@@ -36,9 +38,9 @@ async def main() -> int:
     from syncopate.pipeline.split import load_bundles
     import u_build_v14_5 as B
 
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     reg = build_domain().registry; reg.latency_scale = 0.0
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     by = defaultdict(list)
     for c, b in bundles.items():
         if b.gold and b.verifier.expected_behavior in ("reject", "defer", "clarify"):

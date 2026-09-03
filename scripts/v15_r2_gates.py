@@ -17,6 +17,8 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 REQ = {"session.defer": {"reason", "recheck_after_days"},
        "session.clarify": {"question", "missing_fields"},
@@ -182,11 +184,11 @@ def dry_run(per: int) -> list[str]:
     from syncopate.pipeline.sft_replay import build_sft_sample
     from syncopate.pipeline.split import load_bundles
 
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     reg = build_domain().registry
     reg.latency_scale = 0.0
     by: dict[str, list] = {}
-    for b in load_bundles(Path("data/batches/v13")).values():
+    for b in load_bundles(Path(DEFAULT_BATCH_DIR)).values():
         if b.gold:
             by.setdefault(b.verifier.expected_behavior, []).append(b)
     texts = []
@@ -228,7 +230,7 @@ def main() -> int:
     if args.parquet:
         import pandas as pd
         from transformers import AutoTokenizer
-        tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+        tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
         d = pd.read_parquet(args.parquet)
         texts = [tok.decode([t for t, m in zip(list(r["input_ids"]), list(r["loss_mask"]))
                              if m == 1], skip_special_tokens=False)

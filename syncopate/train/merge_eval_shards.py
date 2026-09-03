@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 
 def main() -> int:
@@ -59,7 +60,7 @@ def main() -> int:
 
     # ★ 用 --from-audit 在全量上重出报告：分片跑和整跑的结论必须一致。
     print(f"\n⇒ 重出报告：python -m syncopate.train.eval_local "
-          f"--from-audit {args.out} --batch data/batches/v13 --split-dir data/splits/v13")
+          f"--from-audit {args.out} --batch {DEFAULT_BATCH_DIR} --split-dir {DEFAULT_SPLIT_DIR}")
     return 0
 
 

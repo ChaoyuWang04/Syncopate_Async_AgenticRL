@@ -21,6 +21,7 @@ import collections
 import json
 import re
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 OUT = Path("_audit/v15_r0")
 SESSION_NAMES = {"session.defer": "defer", "session.clarify": "clarify",
@@ -288,7 +289,7 @@ def generate(arm: str, adapter: str, gpu: int, max_turns: int = 8) -> dict:
              for l in open("data/v15_r0/test_indist.jsonl")] +
             [dict(json.loads(l), kind_set="ood")
              for l in open("data/v15_r0/test_ood.jsonl")])
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     bundles = load_bundles(P("data/batches/v13"))
     reg = build_domain().registry
     reg.latency_scale = 0.0
@@ -426,7 +427,7 @@ def selfcheck_on_gold(arm: str, per: int = 6) -> int:
     from syncopate.pipeline.split import load_bundles
     from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     reg = build_domain().registry
     reg.latency_scale = 0.0
     by: dict[str, list] = {}

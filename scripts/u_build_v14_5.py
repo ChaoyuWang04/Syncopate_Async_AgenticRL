@@ -66,6 +66,8 @@ STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 EXAM_LAST = set()          # 考卷被判轮句（训练构造时逐字规避）
 # ⚠️ 考卷 v3 也要进泄漏闸 —— 新增的 REJ 题（业务内越权）一旦漏进训练集，
 #   考场就从"测能力"退化成"测记忆"（考卷审计第③条的同族）。
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 from u_build_v15_multiturn import (DRY, answer_turn, as_multiturn, build_family_rows,  # noqa: E402
                                    real_reply, shape_check)
 
@@ -244,8 +246,8 @@ async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     pref = Counter(x.split("_")[0] for x in hard_ids)
     hard_pref = {p for p, c in pref.items() if c >= 3}
     print(f"[CoT] 难例模板族：{dict(pref)} → 选族 {sorted(hard_pref)}")
-    df = pd.concat([pd.read_parquet("data/sft/v13/train.parquet"),
-                    pd.read_parquet("data/sft/v13/val.parquet")])
+    df = pd.concat([pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet"),
+                    pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")])
     cases = [r for _, r in df.iterrows()
              if str(r.case_id).split("_")[0] in hard_pref]
     cases.sort(key=lambda r: -int(r.total_length))     # 长轨迹（多步）优先
@@ -382,9 +384,9 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
     pref = Counter(x.split("_")[0] for x in hard_ids)
     hard_pref = {p for p, c in pref.items() if c >= 3}
-    df = pd.concat([pd.read_parquet("data/sft/v13/train.parquet"),
-                    pd.read_parquet("data/sft/v13/val.parquet")])
-    bundles = load_bundles(Path("data/batches/v13"))
+    df = pd.concat([pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet"),
+                    pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")])
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     cands = [str(r.case_id) for _, r in df.iterrows()
              if str(r.case_id).split("_")[0] in hard_pref and str(r.case_id) in bundles]
     cands.sort(key=lambda c: -len(bundles[c].gold.actions))     # 长轨迹优先（多步=思考有用武之地）
@@ -557,7 +559,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
 async def build_l2_l1(tokenizer, registry, client):
     from syncopate.pipeline.build_dataset import build_sft_row
     from syncopate.pipeline.split import load_bundles
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     q_bundles = [b for b in bundles.values()
                  if b.gold and b.gold.actions
                  and b.gold.actions[0]["tool"] == "campaign.get_metrics"
@@ -991,7 +993,7 @@ async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int
     from syncopate.pipeline.build_dataset import build_sft_row
     from syncopate.pipeline.split import load_bundles
     df = pd.read_parquet(parquet_path)
-    bundles = load_bundles(Path("data/batches/v13"))
+    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
     # ★ v15：这批 case 的 gold **没有 reply**（v14 终答是 JSON 壳）⇒ 终答人话要有真实来源。
     #   不给 client 就会落回模板兜底 —— 那正是 ㉖/㉙ 的病根，所以这里**要求**给。
     replies = {}
@@ -1026,7 +1028,7 @@ async def main() -> int:
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
     global DEFS
-    _tok_path = "models/Qwen3-4B" if Path("models/Qwen3-4B/tokenizer.json").exists() else "models/Qwen3-0.6B"
+    _tok_path = STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER
     tokenizer = AutoTokenizer.from_pretrained(_tok_path)   # 同一词表；本机无 4B 时用 0.6B（只影响本机 DRY）
     if DRY:
         print(f"[DRY] 结构演练模式：每桶 {DRY} 行、不调教师、不写缓存、不落 parquet（tokenizer={_tok_path}）")
@@ -1067,7 +1069,7 @@ async def main() -> int:
         # ★ 09-02 W2⑦：六族第一波训练行（DEF-F/REJ-F/CLA-F/L2-x/WIN，各成对）
         from syncopate.pipeline.build_dataset import build_sft_row as _bsr
         from syncopate.pipeline.split import load_bundles as _lb
-        _bundles = _lb(Path("data/batches/v13"))
+        _bundles = _lb(Path(DEFAULT_BATCH_DIR))
 
         async def _replay_fam(b, idx):
             return await _bsr(b, tokenizer=tokenizer, registry=registry, index=idx, split="train", config=None)
@@ -1118,7 +1120,7 @@ async def main() -> int:
     if DRY:
         # 本机没有 data/sft/v13 parquet ⇒ 用切分文件里的 case_id 演练冻结桶回放（前 DRY 条）
         from u_build_v15_multiturn import BALLAST_REPLIES as _BR
-        _ids = [c for c in json.load(open("data/splits/v13/sft_cases.json"))["case_ids"] if c in _BR][:DRY]
+        _ids = [c for c in json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"] if c in _BR][:DRY]
         _df = pd.DataFrame({"case_id": _ids, "split": ["train"] * len(_ids)})
         _tmp = Path("_audit/v15_w2/_dry_frozen.parquet"); _tmp.parent.mkdir(parents=True, exist_ok=True)
         _df.to_parquet(_tmp)
@@ -1128,13 +1130,13 @@ async def main() -> int:
         # ★ 压舱石 419 行**不能直接沿用 v13 的 parquet**（那是 v14 壳的 token）。
         #   语义冻结的做法是**同一批 case 用 v15 契约重放一遍**——
         #   等价性已由 scripts/v15_r2_migrate.py 全量证过（419/419 四项全等）。
-        t13 = await _replay_frozen(tokenizer, registry, "data/sft/v13/train.parquet", 0,
+        t13 = await _replay_frozen(tokenizer, registry, f"{DEFAULT_SFT_DIR}/train.parquet", 0,
                                    client=client)
-        v13v = await _replay_frozen(tokenizer, registry, "data/sft/v13/val.parquet",
+        v13v = await _replay_frozen(tokenizer, registry, f"{DEFAULT_SFT_DIR}/val.parquet",
                                     80000, client=client)
     else:
-        t13 = pd.read_parquet("data/sft/v13/train.parquet")
-        v13v = pd.read_parquet("data/sft/v13/val.parquet")
+        t13 = pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet")
+        v13v = pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")
     # ★ CoT 预算截断必须发生在装配之前（第 5 次发射的教训：截断放在份额计算之后
     #   = 截了个寂寞——train 里还是全量、闸读的还是旧份额）
     non_cot_tok = int(t13.supervised_tokens.sum()) + \
@@ -1315,7 +1317,7 @@ async def main() -> int:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
-    out = Path("data/sft/v15" if IS_V15 else "data/sft/v14_5")
+    out = Path(DEFAULT_SFT_DIR)
     out.mkdir(parents=True, exist_ok=True)
     train.to_parquet(out / "train.parquet")
     val.to_parquet(out / "val.parquet")

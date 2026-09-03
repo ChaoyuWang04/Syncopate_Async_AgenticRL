@@ -41,6 +41,7 @@ from syncopate.pipeline.split import (
     DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, assert_same_data_version, load_bucket,
 )
 from syncopate.train.eval_local import load_model
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.train.rollout_loop import (
     CHAT_TEMPLATE_KWARGS, MAX_PROMPT_LENGTH, build_messages,
 )
@@ -140,7 +141,7 @@ def measure(model, tokenizer, bundles, domain, max_new_tokens: int,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="输出熵监控")
-    parser.add_argument("--model", default="models/Qwen3-4B")
+    parser.add_argument("--model", default=STUDENT_MODEL)
     parser.add_argument("--adapter", default=None, help="不给就是基座")
     # ★ 默认值来自**一份共用常量**（`pipeline/split.py`）——此前这里写死 v3，
     #   而 `data/batches/v3` 在本机根本不存在。⚠️ 这两个参数必须同时动，见下面的断言。

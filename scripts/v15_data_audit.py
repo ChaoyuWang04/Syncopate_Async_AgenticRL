@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pandas as pd
 from transformers import AutoTokenizer
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -113,7 +114,7 @@ GATES = {
 }
 
 
-def audit(path: Path, model: str = "models/Qwen3-4B") -> dict:
+def audit(path: Path, model: str = STUDENT_MODEL) -> dict:
     tok = AutoTokenizer.from_pretrained(model)
     df = pd.read_parquet(path)
     rows = []
@@ -228,7 +229,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("parquet")
     ap.add_argument("--json")
-    ap.add_argument("--model", default="models/Qwen3-4B")
+    ap.add_argument("--model", default=STUDENT_MODEL)
     a = ap.parse_args()
     rep = audit(Path(a.parquet), a.model)
     if a.json:

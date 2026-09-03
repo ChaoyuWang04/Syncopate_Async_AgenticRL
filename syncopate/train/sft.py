@@ -32,6 +32,9 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+
+LORA_TARGETS_DEFAULT = "attn_shared"   # attn_shared | all-linear | 任意 peft target_modules 正则
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -223,16 +226,23 @@ def build_model(model_path: str, lora_rank: int, lora_alpha: int, dtype: torch.d
 
     from peft import LoraConfig, get_peft_model
 
+    # ★ 2026-09-03（S1-7）学生换 MoE（Qwen3.6-35B-A3B：40 层 × 256 专家）：
+    #   all-linear 会给每个专家都挂 LoRA ⇒ r=32 可训参数 ≈ 2554M（专家 2517M），AdamW 状态 ≈ 14 GiB，且 rollout 侧
+    #   vLLM 装载 LoRA 时每层 256 组 A/B 极慢；注意力 + 共享专家 ≈ 37M。
+    #   ⇒ 默认 attn_shared（排除 `.experts.` 下的线性层）；密集模型上它退化为"注意力+MLP 全挂"= 旧 all-linear 行为。
+    #   判据（S4）：trainable_summary 打出的可训参数量 ≈ 预估 ±20%，且 vLLM 能加载该 adapter。
+    target_modules = os.environ.get("SYNCOPATE_LORA_TARGETS", LORA_TARGETS_DEFAULT)
+    if target_modules == "attn_shared":
+        target_modules = r"^(?!.*\.experts\.).*\.(q_proj|k_proj|v_proj|o_proj|in_proj_qkvz|in_proj_ba|in_proj_a|in_proj_b|in_proj_qkv|in_proj_z|out_proj|gate_proj|up_proj|down_proj)$"
     config = LoraConfig(
         r=lora_rank,
         lora_alpha=lora_alpha,
         lora_dropout=0.0,
         bias="none",
         task_type="CAUSAL_LM",
-        # ★ 必须挂全部线性层。只挂 q/v 是老习惯，容量差 2.8 倍
-        #   （Qwen3-4B r=32：仅注意力 23.6M vs 全线性层 66.1M）。
-        target_modules="all-linear",
+        target_modules=target_modules,
     )
+    print(f"[lora-targets] {os.environ.get('SYNCOPATE_LORA_TARGETS', LORA_TARGETS_DEFAULT)}")
     model = get_peft_model(model, config)
     return model, config
 
@@ -318,7 +328,7 @@ def _save_selection_point(model, out_root: Path, frac: float, step: int) -> Path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate 最小 LoRA SFT")
-    parser.add_argument("--model", default="models/Qwen3-0.6B")
+    parser.add_argument("--model", default=TEST_TOKENIZER)
     parser.add_argument("--train-file", default="data/sft/v3/train.parquet")
     parser.add_argument("--val-file", default="data/sft/v3/val.parquet")
     parser.add_argument("--out", default="checkpoints/sft/run")

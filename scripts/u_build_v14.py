@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, ".")
 rng = random.Random(1409)
@@ -261,7 +262,7 @@ def build_cot_rows(tokenizer, start_idx: int) -> list[dict]:
 async def main() -> int:
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
-    tokenizer = AutoTokenizer.from_pretrained("models/Qwen3-4B")
+    tokenizer = AutoTokenizer.from_pretrained(STUDENT_MODEL)
     registry = build_domain().registry
     registry.latency_scale = 0.0
 

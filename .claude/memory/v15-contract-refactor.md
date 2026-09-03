@@ -53,3 +53,8 @@ K 线通报：v15 契约下 runtime 导入触发治理表断言（session.* 未�
 **★09-02 画廊复核（Chaoyu 逐条看）抓到 4 条并修**：闲聊行空块有梯度 · 压舱行列字段清单 · context 塞 campaign 清单（裁定⑥：只带 account_id）· WIN 行窗口没裁（6 轮窗口下沉到 render_prior_messages）+ 历史"好的。"占位。教训：**数据要逐条渲染给人看**，画廊元信息行就是判据。
 **★09-02 裁定⑨ 运行态注入（已落地）**：模型只装知识与策略，不装运行态身份。account_id 不进 prompt/工具 schema/gold，沙盒 registry.execute 与线上 ActionGate 按租户注入并**覆盖模型值**；contract.RUNTIME_INJECTED_PARAMS 一处定义。Chaoyu 原话："这一版就是最终版，改好为止"——不许把问题拖到 v16。
 **★09-03 算力裁定**：训练/评测/重训/serving 实测全部搬 **Modal RTX PRO 6000×2**（sm_120 同指令集零移植，96GB×2，$3.03/卡时）；**B200 只做 infra 特性探针/smoke**（七项已写 MAINLINE-INFRA 交接）；H100 跳过。环境与四步试点在 08 §Modal。已知风险：双 PRO 6000 NCCL P2P 挂死案例（NCCL_P2P_DISABLE=1）；Qwen3.5 GDN 融合核在 sm_120 门控、27B 开 MTP 反慢 3.6× ⇒ 换代前先对拍。学生候选 Qwen3.5-9B（先量）或 Qwen3-8B（零风险），教师 27B。
+**★09-03 接手核对（已经前任 -22 确认）**：本机 Modal 零基础（无 SDK/token/镜像脚本，从零写 `modal/image.py`，可与 infra 会话 -77 共用基础层；账号找 Chaoyu）。
+**教师与学生都没裁定**：教师候选 Qwen3.5-27B/3.8-27B，先在 sm_120 量 GDN/MTP，量不过沿用 8B@8211；W3③ ≥70% 探针对真正采 CoT 的那个教师跑。学生**试点②可比性必须用 Qwen3-4B**（与 v15_r3 同模型），换 8B/9B 是之后另开一臂、要 Chaoyu 拍板。
+对照读数本机够用：`_audit/v15_r5/r3_*.json` 五点谱 + `logs/u_route/run_v15r3c_r1..4_context_v3.jsonl`+judged；v4 L1–L4 按层可比、REJ 分列。Modal 上缺 data/sft/v13 parquet 与 v13 批次（上传或按 run_pipeline_shadow_rebuild 0–4 步重建，切分 SHA 对齐 data/splits/v13；migrate 先 `--scope all`）。
+带宽探针 = `scripts/probe_alignment_cliff.py` + `analyze_allgather_alignment.py`（run_batch3_gpu.sh 有示例）；⚠️ 08 §5 记着 4×5090 上 NCCL_P2P_DISABLE=1 实测无效、真解是 NCCL_CUMEM_ENABLE=0，两条都试。
+文档外八坑：建库产物 grep "[DRY" 必须 0 · 两份旧缓存改名（W4③）· seed_demo_data --check 7 条 · u_exam_run.seed_prior 直接 INSERT 别改走 create_run · 考场链 logs/v15_r5/ 目录名写死自己 mkdir · DATA_VERSION 仍 v13 别改 split.py · 起任何东西前 SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 · Modal 先跑 pytest 对 908 基线。`_audit/v15_w2/*_dry*.parquet` 可删。

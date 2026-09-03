@@ -193,6 +193,24 @@ class _CharTokenizer:
         return ""
 
 
+
+# 增量渲染的桩：只渲一条 tool 消息在 Qwen3 模板下可行，**Qwen3.5+ 模板会 raise "No user query found"**
+# （它从尾部倒着找第一条非 <tool_response> 的 user 消息；单条 tool 消息里没有）。
+# ⇒ 通用做法：渲 [桩 user] 与 [桩 user, 消息]，取后者相对前者的文本后缀再分词。
+# 桩内容任意（固定串保证可复现）；后缀与整段渲染里该消息的形状逐字节相同——由 test_rollout_loop 的
+# 「SFT 整段 == RL 增量」判据守着，两代模板都过才算。
+_ENV_STUB_USER = {"role": "user", "content": "…"}
+
+
+def render_env_message_ids(tokenizer: Any, message: dict[str, Any]) -> list[int]:
+    """把一条环境消息（tool 返回 / 报错反馈）渲成 token，含其后的 assistant 生成提示（think 开关随 CHAT_TEMPLATE_KWARGS）。"""
+    stub_text: str = tokenizer.apply_chat_template(
+        [_ENV_STUB_USER], add_generation_prompt=False, tokenize=False, **CHAT_TEMPLATE_KWARGS)
+    full_text: str = tokenizer.apply_chat_template(
+        [_ENV_STUB_USER, message], add_generation_prompt=True, tokenize=False, **CHAT_TEMPLATE_KWARGS)
+    assert full_text.startswith(stub_text), "模板对同一前缀渲染不稳定：桩文本不是全文前缀"
+    return tokenizer.encode(full_text[len(stub_text):], add_special_tokens=False)
+
 def observation_message(tool_name: str, observation: dict[str, Any]) -> dict[str, str]:
     """工具返回渲染成一条 tool message。Qwen3 的模板认 role="tool"。"""
     import json
@@ -499,9 +517,7 @@ def _append_message(
 
     返回实际追加的 token 数；0 表示已经没有预算了。
     """
-    ids: list[int] = tokenizer.apply_chat_template(
-        [message], add_generation_prompt=True, tokenize=True, **CHAT_TEMPLATE_KWARGS,
-    )
+    ids = render_env_message_ids(tokenizer, message)
     ids = ids[: config.max_observation_tokens]
     budget = config.max_response_length - len(response_ids)
     ids = ids[: max(0, budget)]

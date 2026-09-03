@@ -21,6 +21,7 @@ from syncopate.authoring.seed_cases import SEED_BUILDERS, build_all, gold_plan
 from syncopate.core.runner import run_plan
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 
 def _score_gold(bundle, domain, latency_scale: float):
@@ -224,7 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     dbuild.add_argument("--out", default=None)
     dbuild.add_argument("--val-every", type=int, default=5)
     dbuild.add_argument("--artifact-root", default="data/rollouts")
-    dbuild.add_argument("--model", default="models/Qwen3-0.6B", help="SFT 分词用")
+    dbuild.add_argument("--model", default=TEST_TOKENIZER, help="SFT 分词用")
     dbuild.add_argument("--max-length", type=int, default=8192)
     dbuild.add_argument("--split-dir", default=None,
                         help="三桶目录（如 data/splits/v2），只取 --pool 对应的桶。"

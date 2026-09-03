@@ -74,6 +74,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.train.rollout_budget import (  # noqa: E402
     MAX_PROMPT_LENGTH as BUDGET_PROMPT,
     MAX_RESPONSE_LENGTH as BUDGET_RESPONSE,
@@ -735,7 +736,7 @@ def write_run_purpose(save_path: Path, *, purpose: str, steps: int) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
-    parser.add_argument("--model", default="models/Qwen3-0.6B")
+    parser.add_argument("--model", default=TEST_TOKENIZER)
     # ★ 2026-08-19：默认值跟着 DATA_VERSION 走（单一来源，见 08 §4.0「不该有副本」）。
     #   此前写死 "v3" —— 目录早已不存在，谁忘了传就 FileNotFoundError（第七形态：
     #   默认值静默指向另一件事；今天的 e26 冒烟第 2 次启动就死在这上面）。

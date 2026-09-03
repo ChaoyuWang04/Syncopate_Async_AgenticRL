@@ -21,6 +21,7 @@ import ast
 import json
 import re
 from pathlib import Path
+from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 TOOLS_DIR = Path("syncopate/domains/adcampaign/tools")
 
@@ -100,7 +101,7 @@ def main() -> int:
     args = ap.parse_args()
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
-    tok = AutoTokenizer.from_pretrained("models/Qwen3-0.6B")
+    tok = AutoTokenizer.from_pretrained(TEST_TOKENIZER)
     reg = build_domain().registry
     old = {t["function"]["name"]: t for t in reg.menu(None)}
     sys_txt = Path("syncopate/prompts/system.txt").read_text(encoding="utf-8")

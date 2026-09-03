@@ -438,6 +438,67 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
 7  影子重建判据（如时间允许）：scripts/run_pipeline_shadow_rebuild.sh 只到 3/6（batches SHA）
 ```
 
+### W4′ · v16 对齐 S1（09-03 起，B200 + 新栈；裁定⑩⑪⑫⑬之后 W4/W5 的前置）
+
+> 目标：让「数据→SFT+eval→RL+eval→OPD+eval」全链在 **verl 0.9 / vLLM 0.28 / torch 2.13 / B200 / Qwen3.6-35B-A3B** 上跑通并**数值健康**。
+> S0 对齐地图（09-03，Modal CPU）：968 测试 639 过 / 10 败 / 318 跳，10 败无一为"新栈弄坏代码"。判据先注册，跑前不改阈值。
+> ⚠️ 口径决定（09-03 我定，Chaoyu 未逐字批）：**数据版本全改 v16**（case 库/切分/SFT/RL 目录、DATA_VERSION）；
+> `SYNCOPATE_CONTRACT=v15` 这个**契约协议名**不改——它命名的是"行为进 function-calling 强通道"的消息契约，契约本身没变，
+> 改名会碰 contract.py/tests 数百处且不产生任何新信息。若 Chaoyu 要求连协议名一起 v16，单独做一次机械重命名。
+
+| 步 | 做什么 | 判据（跑前注册） |
+|---|---|---|
+| S1-1 数据口径 | `split.DATA_VERSION="v16"`；新 spec `configs/buckets/v16.yaml`（= v13 配额，**不 freeze-from**，从零一次生成）；所有 `data/batches/v13`/`data/splits/v13`/`data/sft/v13`/`data/sft/v15` 字面量改为从 `split.DEFAULT_*` 或一个 `paths.py` 派生 | `grep -rn "data/(batches\|splits\|sft\|rl)/v1[35]" syncopate scripts tests` = 0（shadow_rebuild 脚本除外，标 legacy）；`test_data_version_contract` 绿 |
+| S1-2 分词器/学生 | 测试与脚本里 `models/Qwen3-0.6B`/`Qwen3-4B` 改为**单一常量**（默认 `models/Qwen3.5-0.8B` 测试 / 学生 `Qwen3.6-35B-A3B`），Modal 上 `/vol/repo/models → /vol/models` 软链 | 全库 grep 老路径 = 0；Qwen3.5 模板下 `test_rollout_loop`（think-on 同构、tools 渲染）全绿 |
+| S1-3 模板契约 | Qwen3.5 chat template vs Qwen3 逐项核：think 标签、tool_call 格式、`enable_thinking`、多模态节；`rollout_budget` 重量 prompt 上限（新 tokenizer 248k 词表） | 同一批消息两模板渲染 diff 入档；全量 34 菜单最长 prompt ≤ 上限，零截断 |
+| S1-4 补丁分诊 | 20 处 verl 0.8 补丁按目标模块在 0.9 里**是否存在 + 上游是否已修**逐条标 删/改/留（机器判据：import 目标模块） | 表入 26；`test_verl_patches` 在新栈全绿或对应测试同步删 |
+| S1-5 PrefixGrouper | 决定去留：verl 0.9 是否有等价（关键词扫描）；留则 `prefix-grouper` 进新栈锁并过 PG 位等价测试 | 二选一落文档；不留则 E26 判为历史 |
+| S1-6 镜像装项目 | `uv sync` 改为装项目（vLLM 插件入口点），或运行时 `uv pip install --no-deps -e /vol/repo` | `test_u4_entry_point_registered` 绿；`vllm.general_plugins` 里有 syncopate 入口 |
+| S1-7 LoRA on MoE | sft.py `target_modules="all-linear"` 对 35B-A3B 会挂到全部专家 ⇒ 参数量/显存先算；默认改为注意力+共享专家，专家层作开关 | 可训练参数量、峰值显存表；LoRA 结构能被 vLLM 加载 |
+| S1-8 考场底座 | 镜像加 PostgreSQL + Redis（08 §1.2 的 Modal 版），`pg_bootstrap/redis_bootstrap` 单容器 | runtime 318 个跳过的测试中 PG/Redis 类转为跑且绿 |
+| S1 出口 | 仓库测试在新栈全绿（PG/Redis 到位后无"依赖缺失型"跳过）；`check_pipeline_invariants` 退出码 ≠1 | 一条命令：`stack_probe --steps pytest` ✅ |
+
+**S1 进度（09-03 深夜；本机子集 221 passed，Modal 全量与 v16 对照跑中）**
+```
+S1-1 ✅ DATA_VERSION="v16"·configs/buckets/v16.yaml（v13 配额、不 freeze）·活跃代码路径字面量→split.DEFAULT_*；
+       判据 tests/pipeline/test_no_stale_version_literals.py（legacy 白名单显式）绿
+       本机独立生成 v16：1670 条·拒 8·切分 eval 342 / sft 503 / rl 825；SHA（_audit/v16/local_gen_2026-09-03.log）
+         eval b15e314a… · sft 831bfe1b… · rl 05a9c8c6… ← Modal 生成必须逐一相同（p_rebuild_v16）
+S1-2 ✅ core/model_paths.py（TEST_TOKENIZER=Qwen3.5-0.8B · STUDENT=Qwen3.6-35B-A3B · TEACHER=Qwen3.8-27B）替换 30 文件默认值
+S1-3 ✅ Qwen3.5 模板核对：① 工具调用线格式 = XML `<function=…><parameter=…>`（不是 Qwen3 的 JSON）⇒ parsing_v15 两种都认、
+       render_tool_call/render_signal 默认 XML（SYNCOPATE_TOOLCALL_FORMAT=json 回旧），schema 收型（integer/number/boolean/
+       object/array；无 schema 字段按 JSON 标量推断——数字形字串会被当数字，有 schema 的 string 不受影响）；
+       ② enable_thinking 语义同 Qwen3（True 开 `<think>\n`，否则空 think）；③ 历史 assistant 的 think 只保留最后一次
+       user 之后的轮次（与我们 #7 同形）；④ 单条 tool 消息渲染会 raise "No user query found" ⇒ 增量渲染改桩后缀法
+       （rollout_loop.render_env_message_ids）；判据 = SFT 整段 == RL 增量逐 token（test_rollout_loop 全绿）+
+       我们渲染的 tool_call 与模板对同一结构渲染逐字节相同（test_xml_render_matches_qwen35_chat_template_exactly）
+S1-4 ✅ 分诊表见下；新依赖 transferqueue/cupy-cuda13x/prefix-grouper/liger-kernel 进 stack 锁
+S1-5 ✅ PrefixGrouper 走上游 `actor.use_prefix_grouper`；自研接线待删（随 RL 冒烟）
+S1-6 ✅ _sync_repo `uv pip install --no-deps -e /vol/repo` + models 软链
+S1-7 ✅ Qwen3.6-35B-A3B（40 层·256 专家·top-8·共享专家 512·10 全注意力+30 线性注意力）：LoRA r=32 all-linear ≈ **2554M**（专家 2517M，AdamW 状态 ≈14 GiB）
+       vs 注意力+共享专家 ≈ **37M** ⇒ sft.py 默认 SYNCOPATE_LORA_TARGETS=attn_shared（排除 .experts.），all-linear 留作开关；模块名与参数量在 S4 真模型上核
+S1-8 ⬜ PG/Redis 进镜像
+```
+
+**S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**
+
+| 补丁（verl_patches.py） | 目标模块在 0.9 | 上游现状 | 处置 |
+|---|---|---|---|
+| `_patch_fsdp_degenerate_mesh`（E21 退化网格） | torch FSDP1 路径仍在 | FSDP1 维护模式；verl 0.9 默认 FSDP2 | **删**（我们走 FSDP2；E21 降格为历史） |
+| `_patch_fsdp_shard_alignment`（E18 16B 对齐） | `torch.distributed.fsdp._flat_param` 在 | NVLink 双卡 all_gather 871 GB/s，悬崖未见 | **停用**，B3-1 重跑 E18 判是否复活 |
+| `_patch_fsdp_cpu_copy_for_ddp` | `verl.utils.fsdp_utils` 在 | FSDP2 CPU 快照路径不同 | **删**（FSDP2） |
+| `_fix_pg_repeat_interleave` + PG 接线（E26） | `prefix_grouper` 包需另装 | **上游已集成**：`trainer/ppo/prefix_grouper_utils.py` + `actor.use_prefix_grouper` | **删自研接线，改用上游开关**；PG 位等价测试改对上游 |
+| `_patch_ddp_sync_probe` / `_patch_grad_probe`（DDP 各 rank 同步判据） | `workers.engine.fsdp.transformer_impl` 在（内部可能变） | 无 | **留**（守则②：假设写成断言），按 0.9 内部重挂 |
+| `_patch_opt_step_counter` / `_patch_postprocess_concat`（E14 乒乓） | 同上 | 需重量 | **停用**，B2-4 重 profile 后再决定 |
+| `_patch_torch_prof`（profiler 挂点） | `workers.engine_workers` 在 | verl 0.9 有 profiler 配置组 | **改**：优先用上游 `profiler` 配置 |
+| `_patch_device_probe`（Ray 单卡可见 NCCL 坑） | `single_controller.base.worker` 在 | 触发条件（无 P2P）消失 | **删** |
+| `_patch_sync_step_timing` / NCCL ckpt engine 补丁（E22 权重同步） | `checkpoint_engine.*` 在（`nccl_checkpoint_engine` 需 cupy） | 0.9 有 checkpoint engine + `save_lora_only` | **删 E22 补丁**，改用上游；E29 LoRA-only ckpt = 上游 `save_lora_only=True` |
+| `_patch_pool_sampler`（我们的动态池采样器） | `trainer.main_ppo` 在 | 我们自己的东西 | **留**，对 V1 trainer 重挂（`trainer_mode` 三选一） |
+| E31 统一 FP8 vLLM 插件（entry point） | 入口点需装项目 | B1-2 Miles 正版路线 | **停用**，B1-2 替代 |
+
+结论：20 处里 **删 6 · 停用 4 · 改 1 · 留 3（含 PG 改上游）**；新增依赖 `transferqueue`（V1 trainer）`cupy-cuda13x` `prefix-grouper` `liger-kernel`（verl 未声明）。
+上游已有的三件（PrefixGrouper · LoRA-only ckpt · rollout_correction）= E26/E29/E23 在简历里降格为"已被上游吸收"的历史工作。
+
 ### W5 · 重训 + 五点谱 + 考卷 v4（训练机，~2.5–3 小时）
 
 门槛 = **W0 修订并经 Chaoyu 批准后的 R5 门槛表**（此时表内已无三缺口门槛）。
@@ -628,6 +689,25 @@ prompt 集 v2 = 419 骨架 + chat_bank_v2 + S2 held-out 句式 + 多轮占比 14
 ⑧ 09-02 画廊抓到的三条（Chaoyu 逐条看数据）：闲聊行空块有梯度 · 压舱行仍列字段清单 · WIN 行 8 轮全进
    prompt 而 gold 说"看不到"（=教撒谎）⇒ 6 轮窗口下沉到共用渲染函数 render_prior_messages；
    历史里的助手回答必须是真内容（定义库按术语名取，取不到报错，不许"好的。"占位）
+```
+
+```
+⑩ 09-03 v16 全部重来  Chaoyu 原话「肯定是用新的，请忘记一切和旧的相关的事情，全部口径都是 v16，全部重新生成全部重来」。
+                      起因：HEAD 代码（裁定⑨之后）生成的 case 库与 git 冻结的 v13 切分差 3 条（4 对只差 account_id 的题面
+                      同形被 prompt_fingerprint 去重；本机三次基线复现，与 Modal 环境无关）。⇒ case 库 / 切分 / 训练集 / 考场
+                      全部以 v16 为口径在 Modal 上从零生成；v13/v15 的冻结切分与读数不再作为任何比较的一端。
+⑪ 09-03 换法三·全新栈   Chaoyu 原话「按换法三做，彻底全新换成新栈；首要目的是用新栈学新东西，训练出来的模型 0 价值、学到东西 100 价值」。
+                      学生 Qwen3.5-9B · 思考教师 Qwen3.5-27B · 语言教师 Qwen3.5-4B · 测试分词 Qwen3.5-0.8B（全家换）；
+                      栈 = vLLM 0.28.0 / torch 2.13.0（cu13）/ verl 0.9.0（V1 统一 trainer、FSDP2、on-policy 蒸馏）/ transformers 5.10.x /
+                      flash-linear-attention 0.5.2 / flash-attn 2.8.3.post1 **源码编 sm_120**（官方轮子只到 torch2.10）。
+                      新栈依赖表独立放 `modal_app/stack/`（旧 uv.lock 留给本机 K 线，不动）；Modal Volume 上旧模型/旧数据已清。
+                      探针 = `modal_app/stack_probe.py`；补丁/契约重新对齐是后续小事，判据先行。
+⑫ 09-03 晚 B200+最新模型  PRO 6000 也不用了（sm_120 无 TMEM/tcgen05，FA4 物理上跑不了）；一切在 **B200（sm_100）** 上配，B300 待全链通后重跑收坑。
+                      模型只要最新：学生候选 **Qwen3.6-35B-A3B**（最新小 MoE，EP/GDN/MTP 全在场）或 Qwen3.8-27B 密集；思考教师 **Qwen3.8-27B**；
+                      万亿旗舰不做（Chaoyu：过头了）。框架版本守则⑯（00 §5）：不是最新稳定版必须写原因，机器判据 = stack_probe versions 步。
+⑬ 09-03 晚 教师换大   Chaoyu：「人话教师也用更大的模型，只要显存放得下」⇒ 思考教师与人话教师**同一个** Qwen3.8-27B（52 GB 单卡）；
+                      Qwen3.5-4B 退役。OPD 逐 token 蒸馏前必须核对教师/学生 **tokenizer 完全一致**（vocab 哈希判据），不一致只能走文本级。
+                      候选更大教师 Qwen3.5-122B-A10B（233 GB，两卡 EP=2）留给建库期空卡时试。
 ```
 
 **唯一还开着的批准**：W0 产物（修订版 R5 门槛表）做完后一次呈报（09-02 已口头批：按推荐执行）。
