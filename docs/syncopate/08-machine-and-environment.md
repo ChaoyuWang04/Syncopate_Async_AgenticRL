@@ -699,7 +699,7 @@ RAY_object_store_memory    --object-store-gb 控制
 - **最可信的不是 commit message，是 `outputs/<日期>/<时刻>/.hydra/overrides.yaml`**
   —— 那是那次实际跑的全部配置。查"上次到底怎么跑通的"就看它。
 
-## §Modal · 算力搬家（Chaoyu 09-03 裁定：训练/评测/serving 实测全在 Modal RTX PRO 6000×2）
+## §Modal · 算力搬家实测记录（★ 叙事/学到的/进度/怎么起在 `31-modal-and-new-stack.md`，本节只留读数）
 
 ```
 为什么是 PRO 6000   与 4×5090 同芯片 GB202 / sm_120：flash-attn 特制轮子、TRITON 注意力后端、E30 的 MXFP8 GEMM、

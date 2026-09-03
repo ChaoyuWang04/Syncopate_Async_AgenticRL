@@ -1,4 +1,4 @@
-# modal_app · 把家搬到 Modal（RTX PRO 6000×2）
+# modal_app · 把家搬到 Modal（现为 B200；全貌见 `docs/syncopate/31-modal-and-new-stack.md`）
 
 > ★ 09-03 裁定⑪（26 §6）：**全新栈**。`stack/` = 新依赖表（vLLM 0.28 / torch 2.13 cu13 / verl 0.9 / transformers 5.10 / FLA 0.5.2），
 > `stack_probe.py` = 新栈探针（镜像 → verl 结构 → Qwen3.5 全家权重 → 单卡 flash-attn 反向 + FLA/GDN 对拍 → vLLM MTP 关/开）。
