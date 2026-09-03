@@ -498,7 +498,12 @@ run15  压舱 687 ✅ · L2 290 / L1 250 / 家族 180 ✅ · **CoT 段崩**：ge
        ⇒ 改取当前切分 sft 桶；同时发现 **教师动作解析与行为探针都按 JSON 找 `"name":`**——Qwen3.5 教师吐 XML ⇒ 命中率会是 0、
        探针 0/0（run15 实测三类全 0/0）⇒ 一律走 parsing_v15.parse_tool_calls（两种线格式都认）
        · 压舱桶来源改为**当前切分 sft_cases**（val 每 6 取 1），不再依赖旧 parquet（裁定⑩）· DRY 不调教师用 "[DRY" 占位（正式产物红线）
-run16  上述修完重发（压舱缓存已在 Volume ⇒ 跳过 7 min 生成）
+run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· **CoT 蒸馏真跑起来了**：难例池 114（BUD/DIA/FAIL/RAG/SCALE），
+       27B 教师逐步采样，日志里 ≥14 条「收 X（1/10 步有思考）」；但收尾 **`预算 44885 内选中 0 行 · 聚合非空 think 0/0`** ⇒ CoT 桶下限闸
+       （≥19 行）红。⇒ 下一任第一件事：查「收」到「行」之间哪一步把 think 行丢了（u_build_v14_5.py gen_cot_v15 收尾 + main 里
+       sur()/预算可行上界搜索 ≈ L1160–1200），怀疑点：① 27B 的 think 长度/段数/中文占比闸（THINK_MAX_*）② attach_think 对 XML 步的匹配
+       ③ sur(r)≤0 全被判 neg。教师日志末尾有一次 EngineCore shutdown（16:47Z），先确认是收尾 teardown 还是中途死。
+       读数：build.log = /vol/_audit/v16/build.log（本机副本 /tmp/v16/build.log 已失效，重新 `modal volume get`）
 ```
 
 **S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**

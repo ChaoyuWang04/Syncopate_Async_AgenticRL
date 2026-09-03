@@ -8,7 +8,7 @@
 
 ## 0 · 一句话现场（09-04 00:30）
 
-**家已经搬到 Modal 的 B200 上，新栈九步探针全绿，仓库全量测试在容器里绿；v16 题库两地生成逐字节相同；v16 训练集第四次建库（run16）跑中，前三次各撞掉一个被旧缓存/JSON 格式盖住的老假设。** 训练、评测、RL、OPD 一步都还没在新栈上跑。
+**家已经搬到 Modal 的 B200 上，新栈九步探针全绿，仓库全量测试在容器里绿；v16 题库两地生成逐字节相同；v16 训练集建库跑了四次（run13–16），前五段全通，卡在最后一段 CoT 蒸馏的「收到行」之间（教师采样成功、成行为 0）。** 训练、评测、RL、OPD 一步都还没在新栈上跑。
 
 ---
 
@@ -61,7 +61,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | pytest | 仓库全量（PG/Redis 容器内起） | ✅ 退出码 0（951 passed / 23 skipped） |
 | rebuild_v16 | Modal 生成 vs 本机生成切分 SHA | ✅ 三份逐一相同 |
 | wandb | key 注入 + 写 3 读 3 | ✅ |
-| build_v16 | 26 §W4 七步 | 🔶 run16 跑中（前三次归因见 §4） |
+| build_v16 | 26 §W4 七步 | 🔴 run16：前五段 ✅，CoT 成行 0（归因待查，见 §4 与 26 §W4′） |
 | sft_smoke / exam_v4 | 已写好未跑 | ⬜ |
 
 ---
@@ -102,7 +102,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 1670 条/6681 文件，Modal 3.5 min |
-| S3 v16 训练集建库 | 🔶 run16 跑中 |
+| S3 v16 训练集建库 | 🔴 run16 卡 CoT 成行 0（前五段 ✅） |
 | S4 SFT 冒烟（p_sft_smoke，--max-steps） | ⬜ 已写好 |
 | S5 考场 v4 单容器（p_exam_v4） | ⬜ 已写好 |
 | S6 RL 冒烟（verl 0.9 V1 sync colocate）· S7 OPD | ⬜ 未写 |
@@ -111,7 +111,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 run13  hydrate 即死：secret 按环境变量条件定义，本机/容器求值不同
 run14  L2/L1 断言 FRESH_0125 无人话终答：源题没按收场类型过滤（defer 无人话终答），旧缓存作废后显形
 run15  CoT 段崩：候选从上一版 parquet 选（v16 没有上一版）；同时发现教师动作解析/行为探针按 JSON 找 "name":（XML 下永远 0）
-run16  三处修完重发；压舱人话 687 条已缓存在 /vol/_audit/v16/cache
+run16  前五段全过；CoT 蒸馏采样成功（≥14 条「收」）但成行 0 ⇒ 下限闸红；下一任从这里接（26 §W4′ S3 表）
 ```
 
 ---
