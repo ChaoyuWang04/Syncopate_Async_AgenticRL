@@ -1,4 +1,4 @@
-- [Modal+B200 新栈现场](modal-migration-state.md) — ★09-04 收口：家在 B200×2 全新栈九步绿；v16/Qwen3.6-35B-A3B/教师 27B；S3 建库卡在 CoT 成行 0（前五段 ✅）；入口 docs/syncopate/31
+- [Modal+B200 新栈现场](modal-migration-state.md) — ★09-04 03:10：新栈全管线机制冒烟全通（SFT/考场/RL verl0.9/OPD）；S3 建库等一个裁定（27B 英文思考撞中文闸，推荐中文引子+改尺子）；入口 docs/syncopate/31
 - [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★09-03：W0–W3 本机收官（九条裁定全落地）；下一步 Modal PRO 6000×2 做 W4/W5；B200 归 infra 探针
 - [模型只装知识不装运行态身份](model-learns-knowledge-not-runtime-identity.md) — ★09-02 裁定⑨：account_id/清单一律 runtime 注入；数据要逐条渲染给人看（画廊抓到 4 条脚本没抓到的）
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过

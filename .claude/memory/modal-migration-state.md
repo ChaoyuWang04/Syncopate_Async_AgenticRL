@@ -1,20 +1,21 @@
 ---
 name: modal-migration-state
-description: ★09-04 深夜：家在 Modal B200×2 新栈；裁定⑭ v16 不混任何旧物料；S3 成行 0 已归因（算术+27B 命中 1%+8B 旧料暗道）；teacher_diag / sft mech_dry / exam plumb 三臂并行在跑；S6/S7 已写未跑；唯一入口 docs/syncopate/31
+description: ★09-04 03:10 收口：新栈全管线机制冒烟全通（SFT/考场/RL verl0.9 V1/OPD）；S3 建库卡在一个待裁定（27B 教师英文思考撞中文闸，推荐=中文引子+改尺子）；裁定⑭ v16 不混旧物料已落地；唯一入口 docs/syncopate/31
 metadata:
   type: project
 ---
 
-**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**（为什么/现场/学到的/进度/怎么起）；施工与判据 `26 §W4′`（含「S3 run16 成行 0 的归因」「S3-diag」「并行冒烟」三节）；探针 `modal_app/stack_probe.py`。
+**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**；施工与判据 `26 §W4′`（「S3 run16 成行 0 的归因」「S3-diag」「并行冒烟」+ S4′–S7 读数）；探针 `modal_app/stack_probe.py`（步：teacher_diag · sft_smoke · exam_v4 · rl_cfg · rl_smoke · opd_smoke）。
 
-**裁定链（Chaoyu 09-03/04）**：⑩ 全部口径 v16 从零重来 · ⑪ 全新栈、目的是学新东西 · ⑫ 一切在 B200 · ⑬ 教师只要装得下就用大的（Qwen3.8-27B 兼两角色）·
-**⑭（09-04）v16 不许混进任何旧版本产物**：4B/8B 物料（reply/think/定义/闲聊）全由 27B 重生成，v13 triage 不再读，缓存名全带版本 v16_*，Volume 上 run14–16 的 v15_* 缓存搬 pre_v16_run16/ 留档。
+**裁定链（Chaoyu 09-03/04）**：⑩ v16 从零重来 · ⑪ 全新栈学新东西 · ⑫ 一切在 B200 · ⑬ 教师用大的（Qwen3.8-27B 兼两角色）· **⑭ v16 不许混进任何旧版本产物**（4B/8B 物料全由 27B 重生成、v13 triage 不读、缓存名 v16_*、旧缓存搬 pre_v16_run16/）。
 
-**S3 成行 0 的真相（09-04，前任 -7b 确认）**：选择步 Σsurplus≥0 在"每行 1/10 步有思考"下必然无解 ⇒ 0 行是算术不是丢行；上游 27B 采样 892 步只中 12（1%）；那 64 行的"1 步思考"几乎全是 v15_materials.json 里 8B 旧思考的静默复用。过滤链（900 token 内要 </think> · cjk≥0.5 · 首动作==gold）每个丢弃原因静默 ⇒ 已加计数；`teacher_diag` 步量 27B 原始思考画像，判读预注册（closed_within_900 <50% ⇒ 上限是主拦截；cjk_below_0.5 >50% ⇒ 语言闸）。**诊断结果出来前不改任何阈值。**
+**★ 唯一待 Chaoyu 裁定（S3 建库的闸）**：27B 教师**全程英文思考**（cjk p50=0.0，中文闸拦下 100%；900 上限 93% 够用；英文思考里 68% 选中 gold 动作，质量好）。B 臂「<think> 后加中文引子」：cjk p50 0.48、动作命中 72%、现行链通过 35%；尺子改成「中文字÷(中文字+拉丁字母)」（不被工具名稀释）后通过 52%。三选一：① 撤中文闸收英文思考 ② 中文引子（+改尺子，**我推荐**）③ 换教师。定了之后：改阈值=重新注册 → `--steps build_v16` → 画廊逐条看。
 
-**进度（09-04 深夜）**：环境九步 ✅ · S0/S1/S2 ✅ · S3 归因定、诊断在跑 · S4 机制冒烟 mech_dry（DRY 占位数据，非候选）在跑 · S5 链路冒烟 plumb（底座、40 题）在跑 · S6 `launch_rl_v1`（verl 0.9 V1 薄壳；动态分池补丁改挂 `trainer.ppo.utils`+`v1/trainer_base`）已写，`rl_cfg`（CPU 键名判据）先跑 · S7 opd.py v16 化已写（学生/教师 vocab 逐项相同已核，chat_template 不同）。读数落 `/vol/_audit/v16/{teacher_think_diag.*, sft_mech_dry/, exam_plumb/, rl/, opd/}`，本机 `modal volume get`。
+**新栈全管线冒烟读数（09-04，全在 26 §W4′）**：S4′ SFT 机制（DRY 占位数据）✅ 可训 42.3M · ΔW 0.63% · 峰值 74 GB · 30 步 346 s · S5′ 考场链路 ✅（端点起 500 s 待查）· S6 **RL verl 0.9 V1 sync 首次跑通** ✅ B200×2 · 2 步 580 s（step2 37 s）· 动态分池在 TaskRunnerV1 进程生效 · LoRA-only ckpt 233 MB/rank · S7 OPD 机制 ✅（vocab 相同、真蒸馏步 KL 有限、adapter 落盘）但底座几乎全跳步 ⇒ 语义冒烟等真 SFT adapter。**真数据版 S4→S5→S6→S7 全部等 S3 建库过。**
 
-**坑（新增两条）**：本机 HTTPS `git push` 静默挂死（15 min 无进展，凭据无关）⇒ 一律 `git push git@github.com:ChaoyuWang04/Syncopate_Async_AgenticRL.git main`；`pkill -f "git push"` 会连自己的 shell 一起杀。其余见 31 §3 与 00 §5 ⑰。
+**verl 0.9 要点**：`trainer.use_v1` + `trainer.v1.trainer_mode`（sync/colocate_async/separate_async）；`create_rl_sampler` 在 `trainer/ppo/utils.py`，V1 trainer_base 导入时绑名 ⇒ 补丁要挂定义处+消费者（已改）；`save_lora_only` 要 `+` 追加；入口 `launch_rl_v1.py`（旧 launch_rl.py 留给旧栈）。
 
-**Why：** Chaoyu 09-04 原话「不允许任何之前版本的产物混进我们这一版……一切都是 v16」；并要求能并行的冒烟多起机器、最终整条管线跑通。
-**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；判据红了先怀疑解析器/路径/判据量错对象（本轮 stale 判据就是量错对象）再怀疑模型；每步先注册判据再跑。
+**坑（本轮新增）**：本机 HTTPS `git push` 静默挂死 ⇒ 一律 SSH 推；`pkill -f "git push"` 会杀自己的 shell；并行臂同分钟收尾会盖掉本机 summary（已改带秒+步名）；判据红了先问「量的是不是那件事」——本轮四次红全是判据量错对象（stale 缓存名 / grad_norm 只上 wandb / 峰值字样 / KL 正则）。
+
+**Why：** Chaoyu 09-04「一切都是 v16」+「能并行的多起机器，最终整条管线跑通」。
+**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；读数在 `/vol/_audit/v16/` 用 `modal volume get` 拉；每步先注册判据再跑。
