@@ -62,6 +62,8 @@ Volume    syncopate-home → /vol
 - `modal volume delete` 同理要 `--yes`。
 - 本机拉 GitHub 大轮子 `uv lock` 会超时 ⇒ 用 `modal_app/lock_on_modal.py` 在容器里解锁并拉回 uv.lock。
 - FlashInfer 默认 JIT：sm_100 首启编 TRTLLM MoE/GEMM 核十几分钟、并发编译 gcc 段错误 ⇒ 装同版本 `flashinfer-jit-cache` + `flashinfer-cubin`（GitHub release 资产，不在 PyPI），并把 `FLASHINFER_WORKSPACE_BASE` / `VLLM_CACHE_ROOT` 指到 Volume。
+- ⛔ Modal 对象（Secret/Volume/Image）不许按环境变量条件定义，本机与容器求值不同 ⇒ hydrate 失败；可选的 secret 先建占位再无条件引用。
+- `modal volume cp` 要求目标父目录已存在，否则 "No such file or directory"；容器内 `shutil.move` 更省事。
 - vLLM 收尾必须杀全家（APIServer/EngineCore/Worker）并等显存归零，否则下一个实例启动报 free memory 不足。
 
 ## Modal 事实（官方文档 09-03 查证）

@@ -364,6 +364,12 @@ AOT 优先于 JIT       FlashInfer/FA 这类库能装预编译就装（flashinfe
 拓扑不承诺           同一 :2 保证同机，但机器/区域/云每次可能不同 ⇒ 读数带拓扑指纹，跨次不直接比
 解析结果走文件       子进程 stdout 尾部会混进 stderr 警告 ⇒ 结果写 json 文件再读，别取"最后一行"
 判据随卡变           capability 期望值、显存阈值都是卡的属性，换卡先改判据
+⛔ 对象不许条件定义   `modal.Secret/Volume/Image` 不许放在按环境变量分支的语句里：本机与容器求值不同 ⇒
+                     "Function has 3 dependencies but container got 2"，函数在 hydrate 阶段直接死（09-03 run13）。
+                     要"可选"就先建占位 secret（`modal secret create wandb WANDB_DISABLED=true`），代码里无条件引用
+Volume 路径分层       /vol/repo.git（bare 镜像，flock）· /tmp/repo（每容器 checkout）· /vol/data/{batches,sft,rl}（gitignored 数据）·
+                     data/splits 在 git 里不软链 · /vol/models · /vol/_audit/<exp>；`modal volume cp` 对不存在的父目录会失败，用容器内 shutil
+新栈 API 变化         transformers 5：`apply_chat_template(tokenize=True)` 返回 BatchEncoding ⇒ 只走 `rollout_loop.chat_template_ids`
 ```
 
 ## 6 · 跑任何东西之前
