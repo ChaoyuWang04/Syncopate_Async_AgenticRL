@@ -97,7 +97,7 @@ def build_overrides(a: argparse.Namespace) -> list[str]:
         f"+ray_kwargs.ray_init.runtime_env.env_vars.VLLM_LOGGING_LEVEL={a.vllm_log_level}",
     ]
     if a.save_lora_only:
-        ov.append("actor_rollout_ref.actor.checkpoint.save_lora_only=True")
+        ov.append("+actor_rollout_ref.actor.checkpoint.save_lora_only=True")   # 0.9：字段在 CheckpointConfig 数据类里、不在 yaml 默认 ⇒ 要 + 追加（rl_cfg 实测）
     return ov + list(a.extra)
 
 
