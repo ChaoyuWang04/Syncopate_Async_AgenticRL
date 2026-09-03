@@ -954,7 +954,8 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "opd_smoke" in want: run("opd_smoke", p_opd_smoke, opd_steps, opd_adapter, opd_arm)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y-%m-%d_%H%M")
+    # 09-04：并行多臂时两个 run 同一分钟收尾会互相覆盖（exam_plumb 被 rl_cfg 盖掉过）⇒ 文件名带秒 + 步名
+    stamp = time.strftime("%Y-%m-%d_%H%M%S") + "_" + "-".join(want)[:40]
     (out_dir / f"summary_{stamp}.json").write_text(json.dumps(results, ensure_ascii=False, indent=1))
     print("\n══════ 新栈探针 · 汇总 ══════")
     for k, v in results.items():
