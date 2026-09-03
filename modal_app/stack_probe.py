@@ -731,12 +731,63 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False) -> dict:
     vol.commit()
     return _record("sft_smoke", ok, rec)
 
+
+# ─────────────────────────── S5 · 考场 v4 单容器（B200 单卡：vLLM 学生端点 + PG/Redis + API + worker + 四遍 + 判卷） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=98304, timeout=4 * 3600, secrets=SECRETS)
+def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes: int = 1, concurrency: int = 4) -> dict:
+    """26 §W5 起链五步的容器版：0 seed_demo --check（7 条 campaign）1 无陈旧 worker 2 起端点(:8100)+API(:8000)+worker
+    3 u_exam_run 四遍（每遍落 jsonl，可重入）4 u_exam_judge_v4 5 v15_gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
+    model 默认学生底座；adapter 给 LoRA 目录则 vLLM --enable-lora（served 名仍为 model）。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16/exam_{arm}"; os.makedirs(aud, exist_ok=True)
+    model = model or STUDENT
+    sv = _start_services(); rec: dict = {"services": {k: v.get("rc") for k, v in sv.items()}}
+    if sv["pg"]["rc"] != 0: return _record("exam_v4", False, rec)
+    env = {**RUN_ENV, **SERVICE_ENV, "SYNCOPATE_DECIDER_URL": "http://127.0.0.1:8100", "SYNCOPATE_DECIDER_TOKENIZER": model,
+           "SYNCOPATE_DECIDER_MODEL": model, "SYNCOPATE_API_DB_POOL": "12"}
+    r0 = _sh(f"{PY} scripts/seed_demo_data.py --check", cwd=REPO, env=env, timeout=600); rec["seed_check"] = {"rc": r0["rc"], "tail": r0["out"][-300:]}
+    lora = f" --enable-lora --max-lora-rank 64 --lora-modules {os.path.basename(model)}={adapter}" if adapter else ""
+    vcmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name {model} --max-model-len 18432 "
+            f"--gpu-memory-utilization 0.85 --port 8100 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}'{lora}")
+    vlog = "/tmp/vllm_exam.log"
+    vproc = subprocess.Popen(f"exec {vcmd} > {vlog} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    up = False; t0 = time.time()
+    while time.time() - t0 < 1500 and vproc.poll() is None:
+        if _sh("curl -sf http://127.0.0.1:8100/health")["rc"] == 0: up = True; break
+        time.sleep(5)
+    rec["endpoint_up"] = up; rec["endpoint_secs"] = round(time.time() - t0, 1)
+    if not up:
+        open(f"{aud}/vllm.log", "w").write(open(vlog, errors="replace").read()[-20000:]); _teardown(vproc); vol.commit()
+        return _record("exam_v4", False, rec)
+    api = subprocess.Popen(f"exec {PY} -m uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 --workers 2 > {aud}/api.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env})
+    wrk = subprocess.Popen(f"exec {PY} -m syncopate.runtime.worker --org-id org_demo --worker-id v16-exam --daily-cost-cap-micros 10000000000 > {aud}/worker.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env})
+    time.sleep(20)
+    try:
+        runs = []
+        for i in range(1, passes + 1):
+            r = _sh(f"{PY} scripts/u_exam_run.py --exam data/u_route/context_v4_exam.jsonl --arm {arm}_r{i} --concurrency {concurrency} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
+            rc = int(re.search(r"RC=(\d+)", r["out"]).group(1)); runs.append({"pass": i, "rc": rc, "secs": r["secs"]})
+            _sh(f"cp logs/u_route/run_{arm}_r{i}_*.jsonl {aud}/ 2>/dev/null; true", cwd=REPO)
+        rec["runs"] = runs
+        jl = " ".join(f"logs/u_route/run_{arm}_r{i}_context_v4.jsonl" for i in range(1, passes + 1))
+        j = _sh(f"{PY} scripts/u_exam_judge_v4.py --context {jl} > {aud}/judge.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=1800)
+        rec["judge_rc"] = int(re.search(r"RC=(\d+)", j["out"]).group(1)); rec["judge_tail"] = open(f"{aud}/judge.log", errors="replace").read()[-2500:]
+        _sh(f"cp logs/u_route/judged_*{arm}* {aud}/ 2>/dev/null; true", cwd=REPO)
+        t = _sh(f"{PY} scripts/v15_gate_triage.py > {aud}/triage.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=600)
+        rec["triage_rc"] = int(re.search(r"RC=(\d+)", t["out"]).group(1)); rec["triage_tail"] = open(f"{aud}/triage.log", errors="replace").read()[-1500:]
+    finally:
+        for pr in (wrk, api):
+            pr.terminate()
+        _teardown(vproc); open(f"{aud}/vllm.log", "w").write(open(vlog, errors="replace").read()[-20000:]); vol.commit()
+    ok = up and all(x["rc"] == 0 for x in rec.get("runs", [])) and rec.get("judge_rc") == 0
+    return _record("exam_v4", ok, rec)
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -763,6 +814,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
     if "build_v16" in want: run("build_v16", p_build_v16)
     if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps)
+    if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")
