@@ -65,7 +65,8 @@ async def main() -> int:
                 want = f"session.{beh}"
                 for k in range(1, len(segs)):
                     step = segs[k]
-                    if f'"name": "{want}"' not in step:
+                    # 线格式无关：JSON `"name": "session.x"` 或 Qwen3.5 XML `<function=session.x>`
+                    if f'"name": "{want}"' not in step and f"<function={want}>" not in step:
                         continue
                     ctx = B.ASST.join(segs[:k]) + B.ASST + "\n"
                     tried += 1
@@ -77,11 +78,9 @@ async def main() -> int:
                         think, post = g.split("</think>", 1); think = think.strip()
                         n_seg = len([p for p in re.split(r"\n\s*\n|\n", think) if p.strip()])
                         cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
-                        m = re.search(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", post, re.S)
-                        name = None
-                        if m:
-                            try: name = json.loads(m.group(1)).get("name")
-                            except json.JSONDecodeError: pass
+                        from syncopate.core.parsing_v15 import parse_tool_calls
+                        calls, _ = parse_tool_calls(post) if "<tool_call>" in post else ([], 0)
+                        name = calls[0]["name"] if calls else None
                         if think and len(think) <= B.THINK_MAX_CHARS and n_seg <= B.THINK_MAX_SEGS and cjk >= 0.5 and name == want:
                             ok = think; break
                     if ok:

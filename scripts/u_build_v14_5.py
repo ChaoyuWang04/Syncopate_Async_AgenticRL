@@ -386,11 +386,10 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
     pref = Counter(x.split("_")[0] for x in hard_ids)
     hard_pref = {p for p, c in pref.items() if c >= 3}
-    df = pd.concat([pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet"),
-                    pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")])
+    # ★ 09-04 裁定⑩：候选池 = 当前切分的 sft 桶（不再读上一版 parquet——v16 之前根本没有 parquet）
+    sft_ids = json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"]
     bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
-    cands = [str(r.case_id) for _, r in df.iterrows()
-             if str(r.case_id).split("_")[0] in hard_pref and str(r.case_id) in bundles]
+    cands = [c for c in sft_ids if c.split("_")[0] in hard_pref and c in bundles]
     cands.sort(key=lambda c: -len(bundles[c].gold.actions))     # 长轨迹优先（多步=思考有用武之地）
     percnt, capped = Counter(), []
     for c in cands:
@@ -412,12 +411,11 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         return r.json()["choices"][0]["text"]
 
     def first_action(text: str):
-        m = re.search(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.S)
-        if m:
-            try:
-                return json.loads(m.group(1)).get("name")
-            except json.JSONDecodeError:
-                return None
+        # 线格式无关（Qwen3.5 教师吐的是 XML `<function=…>`，旧缓存是 JSON）：走 parsing_v15 的解析器
+        from syncopate.core.parsing_v15 import parse_tool_calls
+        if "<tool_call>" in text:
+            calls, malformed = parse_tool_calls(text)
+            return calls[0]["name"] if calls else None
         return "__text__"           # v15 的纯文本终答也是一种"动作"
 
     async def step_sample(ctx: str, want: str, n=8):
