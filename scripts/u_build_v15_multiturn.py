@@ -26,7 +26,7 @@ from syncopate.core.schemas import AnswerField, CaseBundle
 DRY = int(os.environ.get("U_BUILD_DRY", "0") or 0)
 rng = random.Random(1515)
 
-_BALLAST = Path("data/u_route/v15_ballast_replies.json")
+_BALLAST = Path("data/u_route/v16_ballast_replies.json")   # 裁定⑭：与 u_build_v14_5._BALLAST_CACHE 同名
 BALLAST_REPLIES: dict[str, str] = json.load(open(_BALLAST)) if _BALLAST.exists() else {}
 
 MIN_FIELDS = [

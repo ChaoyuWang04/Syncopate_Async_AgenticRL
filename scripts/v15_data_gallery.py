@@ -2,7 +2,7 @@
 """v15 · 训练数据画廊：把最终喂进训练的每种数据**逐条解码成可读文本**（Chaoyu 09-02：要亲眼看终态）。
 
     SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_data_gallery.py --parquet data/sft/v15/train.parquet [--per-bucket 3]
-    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_data_gallery.py --parquet _audit/v15_w2/dry_rows.parquet   # 本机 DRY 演练产物
+    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_data_gallery.py --parquet _audit/v16/dry_rows.parquet   # 本机 DRY 演练产物
 
 存储形态：parquet 每行 = 一条训练样本，列 input_ids（整段对话的 token）· loss_mask（哪些 token 算 loss）·
 prompt_length · total_length · supervised_tokens · bucket · sub_axis · behavior · case_id …

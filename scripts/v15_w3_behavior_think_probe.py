@@ -54,9 +54,12 @@ async def main() -> int:
                 "model": "t", "prompt": ctx + "<think>\n", "max_tokens": B.THINK_MAX_TOKENS,
                 "seed": B._SEED[0], "temperature": 0.7, "top_p": 0.95})
             r.raise_for_status(); return r.json()["choices"][0]["text"]
+        drop_all = {}
         for beh, lst in by.items():
             rng.shuffle(lst)
             hit = tried = 0; kept = []
+            from collections import Counter as _C
+            drop = _C(); drop_all[beh] = drop
             for b in lst[: args.n]:
                 base = await build_sft_row(b, tokenizer=tok, registry=reg, index=0, split="train", config=None)
                 full = tok.decode(list(base["input_ids"])[:base["total_length"]])
@@ -73,22 +76,31 @@ async def main() -> int:
                     gens = await asyncio.gather(*[one_think(ctx) for _ in range(args.samples)], return_exceptions=True)
                     ok = None
                     for g in gens:
-                        if isinstance(g, Exception) or "</think>" not in g:
-                            continue
+                        # 09-04 先量后动：每个丢弃原因计数（与 u_build_v14_5.step_sample 同一条链；阈值不动）
+                        if isinstance(g, Exception):
+                            drop["exception"] += 1; continue
+                        if "</think>" not in g:
+                            drop["no_close_think(900tok内没写完)"] += 1; continue
                         think, post = g.split("</think>", 1); think = think.strip()
                         n_seg = len([p for p in re.split(r"\n\s*\n|\n", think) if p.strip()])
                         cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
                         from syncopate.core.parsing_v15 import parse_tool_calls
                         calls, _ = parse_tool_calls(post) if "<tool_call>" in post else ([], 0)
                         name = calls[0]["name"] if calls else None
-                        if think and len(think) <= B.THINK_MAX_CHARS and n_seg <= B.THINK_MAX_SEGS and cjk >= 0.5 and name == want:
-                            ok = think; break
+                        if not think: drop["empty_think"] += 1; continue
+                        if len(think) > B.THINK_MAX_CHARS: drop["too_long_chars"] += 1; continue
+                        if n_seg > B.THINK_MAX_SEGS: drop["too_many_segs"] += 1; continue
+                        if cjk < 0.5: drop["cjk_below_0.5"] += 1; continue
+                        if name != want: drop["action_mismatch"] += 1; drop[f"mismatch:{want}->{name}"] += 1; continue
+                        drop["hit"] += 1
+                        ok = think; break
                     if ok:
                         hit += 1; kept.append({"case_id": b.case_id, "think": ok})
                     break
             rate = hit / max(1, tried)
-            res[beh] = {"tried": tried, "hit": hit, "rate": round(rate, 3), "pass": rate >= 0.70, "examples": kept[:3]}
+            res[beh] = {"tried": tried, "hit": hit, "rate": round(rate, 3), "pass": rate >= 0.70, "examples": kept[:3], "drop": dict(drop)}
             print(f"[behavior-think] {beh:8s} {hit}/{tried} = {rate:.0%}  {'✅ 入库' if rate >= 0.7 else '🔴 不带 think，登记欠账'}")
+            print(f"[behavior-diag] {beh:8s} 丢弃原因 {dict(drop)}")
     Path("_audit/v15_w3").mkdir(parents=True, exist_ok=True)
     json.dump(res, open("_audit/v15_w3/behavior_think_probe.json", "w"), ensure_ascii=False, indent=1)
     return 0

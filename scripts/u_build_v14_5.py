@@ -49,9 +49,14 @@ from syncopate.core.contract import IS_V15  # noqa: E402
 # v14.5 的教师物料里**与契约无关**的部分（reply / think 文本）可直接复用，
 # 省掉几小时教师生成。⚠️ 但不复用 summary：v15 已废除该字段，且它正是
 # 08-29 真人实测发现③「summary 被『X 释义』模板污染」的病灶。
-_MAT = Path("data/u_route/v15_materials.json")
-MATERIALS = json.load(open(_MAT)) if (IS_V15 and _MAT.exists()) else {
-    "l2_replies": {}, "l1_replies": {}, "cot_think": {}}
+# ⛔ 09-04 Chaoyu 裁定⑭（26 §6）：**v16 不许混进任何旧版本产物**——教师换 27B 后，v14.5/v15 时代的 4B/8B 物料
+#   （reply / think / 定义 / 闲聊素材）一律不复用，全部由 27B 重生成。run16 的 64 行 CoT 候选里 ~60 条"1 步思考"
+#   就是从 v15_materials.json 的 cot_think 静默复用来的（前任 09-04 核对确认），不是 27B 的贡献。
+#   物料表保留空结构（消费者代码不改形状），文件本身不再读。
+MATERIALS = {"l2_replies": {}, "l1_replies": {}, "cot_think": {}}
+# 难例模板族：来自 v13 考场 triage（_audit/triage/cand_v13r2_e1 的卡死/死格 ≥3 条的族）。裁定⑭ 后不再读那份 v13 产物，
+# 只保留推导出的族名常量；⚠️ 欠账：v16 第一遍考场跑完后按 v16 读数重定（26 §7）。
+HARD_FAMILIES = ("BUD", "DIA", "FAIL", "RAG", "SCALE")
 
 OOV = json.load(open("data/u_route/oov_holdout_terms.json"))["terms"]
 PATTERNS = json.load(open("data/u_route/ellipsis_patterns.json"))["templates"]
@@ -84,7 +89,8 @@ _SEED = [0]
 
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
     if DRY:
-        return "[DRY 教师待写] 这条的数据核对完毕，细节口径我再核一轮。"
+        _SEED[0] += 1     # 占位带序号：DRY 下去重/尾部配额闸也能过（裁定⑭后 DRY 不再有任何缓存可命中）
+        return f"[DRY 教师待写 #{_SEED[0]}] 这条的数据核对完毕，细节口径我再核一轮。"
     _SEED[0] += 1     # ⚠️ vllm serve 默认 seed=0 ⇒ 同请求采样确定性；逐请求换 seed 才有多样性
     r = await client.post(f"{base}/chat/completions", json={
         "model": "t", "temperature": temp, "top_p": 0.95, "max_tokens": max_tokens,
@@ -129,6 +135,8 @@ def value_forms(v):
 async def gen_defs(client) -> dict[str, list[str]]:
     """61 词 × 3 版定义（修「指指」：教师产完整句，禁模板拼接）。"""
     out = {}
+    if DRY:   # 裁定⑭后没有定义缓存可命中；DRY 不调教师 ⇒ 直接造带 "[DRY" 的占位（正式产物 grep "[DRY" = 0 的红线照旧）
+        return {term: [f"{term}[DRY 定义待写 1]：{hint[:30]}", f"{term}[DRY 定义待写 2]：{hint[:30]}"] for term, hint in GLOSSARY.items()}
     for term, hint in GLOSSARY.items():
         versions = []
         angles = [
@@ -159,6 +167,9 @@ async def gen_defs(client) -> dict[str, list[str]]:
 async def gen_chat(client, bank) -> list[dict]:
     """chat 契约壳素材：80 条（其中 ~16 条带第二轮 continuation 追问）。"""
     out = []
+    if DRY:   # 同上：DRY 不调教师，占位素材只演练结构
+        return [{"prompt": item["prompt"], "reply": f"[DRY 闲聊待写 #{i}] 这条的数据核对完毕，细节口径我再核一轮。",
+                 "summary": "DRY 占位", "style": STYLES[i % 3], "source": item["source"], "turns": 1} for i, item in enumerate(bank[:90])]
     for i, item in enumerate(bank[:96]):
         if len(out) >= 80 + 10:            # 10 条留给 val held-out
             break
@@ -241,13 +252,9 @@ THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 900, 4096, 10 ** 6
 
 async def gen_cot(client, tok, max_rows=100) -> list[dict]:
     from u_teacher_probe import gold_values
-    hard_ids = set(json.load(open("_audit/triage/cand_v13r2_e1/卡死.json")))
-    hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
-    # ⚠️ triage id 是冻结评测集的 case（与训练集刻意隔离，交集恒空）⇒ 映射到模板族：
-    #    在训练集中选同族 case，优先长轨迹（多步 = 思考有用武之地）
-    pref = Counter(x.split("_")[0] for x in hard_ids)
-    hard_pref = {p for p, c in pref.items() if c >= 3}
-    print(f"[CoT] 难例模板族：{dict(pref)} → 选族 {sorted(hard_pref)}")
+    # 难例族 = HARD_FAMILIES 常量（裁定⑭：不读 v13 triage 产物）；在训练集中选同族 case，优先长轨迹
+    hard_pref = set(HARD_FAMILIES)
+    print(f"[CoT] 难例模板族：{sorted(hard_pref)}")
     df = pd.concat([pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet"),
                     pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")])
     cases = [r for _, r in df.iterrows()
@@ -382,10 +389,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     from syncopate.pipeline.build_dataset import build_sft_row
     from syncopate.pipeline.split import load_bundles
 
-    hard_ids = set(json.load(open("_audit/triage/cand_v13r2_e1/卡死.json")))
-    hard_ids |= set(json.load(open("_audit/triage/cand_v13r2_e1/死格.json")))
-    pref = Counter(x.split("_")[0] for x in hard_ids)
-    hard_pref = {p for p, c in pref.items() if c >= 3}
+    hard_pref = set(HARD_FAMILIES)          # 裁定⑭：族名常量，不读 v13 triage 产物
     # ★ 09-04 裁定⑩：候选池 = 当前切分的 sft 桶（不再读上一版 parquet——v16 之前根本没有 parquet）
     sft_ids = json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"]
     bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
@@ -418,27 +422,46 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
             return calls[0]["name"] if calls else None
         return "__text__"           # v15 的纯文本终答也是一种"动作"
 
+    # ★ 09-04 先量后动（守则⑤）：run16 采样 892 步只命中 12（1%），过滤链每个丢弃原因都是静默 continue，
+    #   日志里分不出是 900 token 没写完 / 英文思考 / 动作不符。⇒ 每个原因计数 + 思考长度分布，末尾打一行；
+    #   **不改任何阈值**（THINK_MAX_* 与 900 上限原样）。
+    drop = Counter()
+    think_lens: list[int] = []
+
     async def step_sample(ctx: str, want: str, n=8):
         gens = await asyncio.gather(*[one_think(ctx) for _ in range(n)],
                                     return_exceptions=True)
         for g in gens:
-            if isinstance(g, Exception) or "</think>" not in g:
-                continue
+            if isinstance(g, Exception):
+                drop["exception"] += 1; continue
+            if "</think>" not in g:
+                drop["no_close_think(900tok内没写完)"] += 1; think_lens.append(len(g)); continue
             think, post = g.split("</think>", 1)
             think = think.strip()
+            think_lens.append(len(think))
             cjk = len(re.findall(r"[一-鿿]", think)) / max(1, len(think))
             n_seg = len([p for p in re.split(r"\n\s*\n|\n", think) if p.strip()])
             # ★ W3① 画像闸：≤THINK_MAX_CHARS 字、≤THINK_MAX_SEGS 段、中文 ≥0.5；命中判据「首动作名相等」不放宽
-            if not think or len(think) > THINK_MAX_CHARS or n_seg > THINK_MAX_SEGS or cjk < 0.5:
-                continue
-            if first_action(post) == want:
+            if not think:
+                drop["empty_think"] += 1; continue
+            if len(think) > THINK_MAX_CHARS:
+                drop["too_long_chars"] += 1; continue
+            if n_seg > THINK_MAX_SEGS:
+                drop["too_many_segs"] += 1; continue
+            if cjk < 0.5:
+                drop["cjk_below_0.5"] += 1; continue
+            got_action = first_action(post)
+            if got_action == want:
+                drop["hit"] += 1
                 return think
+            drop["action_mismatch"] += 1
+            drop[f"mismatch:{want}->{got_action}"] += 1
         return None
 
     out, tried, hit, trimmed = [], 0, 0, 0
     sem = asyncio.Semaphore(3)
 
-    inc = Path("data/u_route/v15_cot_partial.jsonl")
+    inc = Path("data/u_route/v16_cot_partial.jsonl")
     done = {}
     if inc.exists():
         for line in inc.open():
@@ -490,9 +513,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         want_n = max(1, int(round(n_steps * target)))
         if len(eligible) < want_n:
             return None
-        # 复用 v14.5 已有的终答步思考（物料键是 1-based 的 segs 下标）
-        reuse = MATERIALS["cot_think"].get(f"{cid}_COT5", {})
-        thinking = {int(k) - 1: v for k, v in reuse.items() if 0 <= int(k) - 1 < n_steps}
+        # 裁定⑭：不复用任何旧物料的思考（run16 的"1/10 步有思考"几乎全是这里混进来的 8B 旧料）
+        thinking: dict[int, str] = {}
         # ★ 整行的步**一次性并发**采样：每一步的上下文只是前缀，事先就全知道，
         #   步与步之间没有依赖。顺序跑的话一行要几分钟（实测），并发后是一轮的事。
         todo = [si for si in eligible if si not in thinking]
@@ -551,6 +573,13 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     print(f"[CoT-v15] 预算裁剪 {trimmed} 段 think（撑破 8192 response 预算的长轨迹）")
     print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
           f"（命中率 {hit/max(1,tried):.0%}）")
+    # 丢弃原因分布（先量后动：这一行是 09-04 诊断的读数位置）
+    _main = {k: v for k, v in drop.items() if not k.startswith("mismatch:")}
+    _mm = sorted(((k, v) for k, v in drop.items() if k.startswith("mismatch:")), key=lambda kv: -kv[1])[:8]
+    _tl = sorted(think_lens)
+    _q = (lambda q: _tl[min(len(_tl) - 1, int(q * len(_tl)))]) if _tl else (lambda q: 0)
+    print(f"[CoT-diag] 采样 {sum(_main.values())} 条 ⇒ {dict(_main)} · 动作不符 top: {_mm}")
+    print(f"[CoT-diag] think 字数 p50/p90/max = {_q(0.5)}/{_q(0.9)}/{_tl[-1] if _tl else 0}（含未写完的按已吐字数计）")
     return out
 
 
@@ -663,15 +692,8 @@ async def build_l2_l1(tokenizer, registry, client):
             if val is None:
                 skipped += 1
                 continue
-            rep = MATERIALS["l2_replies"].get(f"{b.case_id}_MT5")
-            if rep is None:                       # 物料没有 ⇒ 现调教师（4B）
-                rep = await gen_l2_reply(client, cid2, mname, val)
-            elif not _tail_ok(rep):
-                # 复用的句子撞了尾部配额 ⇒ 重新生成（缓存不是豁免）
-                rep = await gen_l2_reply(client, cid2, mname, val)
-            else:
-                reused += 1
-                _tail_note(rep)        # ★ 复用的也占配额（gen_l2_reply 内部已自记）
+            # 裁定⑭：人话一律现调 27B 教师，不复用 v14.5 物料（MATERIALS 已空）
+            rep = await gen_l2_reply(client, cid2, mname, val)
             if rep.endswith("随时说。"):
                 fallback += 1
             b2.gold.final_answer = {"summary": f"{cid2} {mkey}={val}", "reply": rep}
@@ -879,7 +901,7 @@ def density_gate(rows, tokenizer, name):
 #
 # 三道过滤缺一不可：① 长度/病句 ② 句式去重（抹掉数字后不许撞） ③ **禁编数**
 #   —— ③ 是最容易漏的：教师顺手编一个没出现过的数字，就等于在教模型幻觉。
-_BALLAST_CACHE = Path("data/u_route/v15_ballast_replies.json")
+_BALLAST_CACHE = Path("data/u_route/v16_ballast_replies.json")   # 裁定⑭：缓存名带数据版本，旧名读不到
 ANGLES_BALLAST = [
     "先说结论再补一句依据", "从用户关心的那个点切入", "口语一点，像同事口头汇报",
     "先点出关键数字再说结论", "简短直接，一句话说完", "带一句下一步建议",
@@ -1047,8 +1069,9 @@ async def main() -> int:
     registry.latency_scale = 0.0
     bank = [json.loads(x) for x in open("data/u_route/chat_bank_v2.jsonl")]
 
-    cache_d = Path("data/u_route/v145_defs.json")
-    cache_c = Path("data/u_route/v145_chat_mat.json")
+    # 裁定⑭：v16 的定义/闲聊素材由 27B 教师重生成，缓存名带版本；v14.5 分支保留旧名（legacy）
+    cache_d = Path("data/u_route/v16_defs.json" if IS_V15 else "data/u_route/v145_defs.json")
+    cache_c = Path("data/u_route/v16_chat_mat.json" if IS_V15 else "data/u_route/v145_chat_mat.json")
     async with httpx.AsyncClient(timeout=180) as client:
         if cache_d.exists():
             DEFS = json.load(open(cache_d))
@@ -1064,7 +1087,7 @@ async def main() -> int:
             print("[A3] chat 素材 …", flush=True)
             chat_mat = await gen_chat(client, bank)
             json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
-        cache_l = Path("data/u_route/v15_l2l1_rows.json" if IS_V15
+        cache_l = Path("data/u_route/v16_l2l1_rows.json" if IS_V15
                        else "data/u_route/v145_l2l1_rows.json")
         if DRY:
             # ⚠️ 08-31 前的缓存是折叠文本形状，W2 之后**必须重建**；DRY 只演练构建路径
@@ -1084,7 +1107,7 @@ async def main() -> int:
 
         async def _replay_fam(b, idx):
             return await _bsr(b, tokenizer=tokenizer, registry=registry, index=idx, split="train", config=None)
-        cache_f = Path("data/u_route/v15_fam_rows.json")
+        cache_f = Path("data/u_route/v16_fam_rows.json")
         if not DRY and cache_f.exists():
             fam = json.load(open(cache_f))
             print(f"[F] 家族行缓存命中（{len(fam)}）")
@@ -1095,7 +1118,7 @@ async def main() -> int:
             if not DRY:
                 json.dump(fam, open(cache_f, "w"))
         print(f"[F] 家族行 {len(fam)}：{dict(Counter(r['bucket'] for r in fam))}")
-        cache_cot = Path("data/u_route/v15_cot_rows.json" if IS_V15
+        cache_cot = Path("data/u_route/v16_cot_rows.json" if IS_V15
                          else "data/u_route/v145_cot_rows.json")
         if DRY:
             cot = []      # 旧缓存是 W2 之前的形状（裁剪菜单/ISO 时间/空块有梯度），DRY 不许混进画廊；W4 重采样
@@ -1104,7 +1127,7 @@ async def main() -> int:
             cot = json.load(open(cache_cot))
             print(f"[B] CoT 缓存命中（{len(cot)} 行）")
         else:
-            print("[B] CoT 难例（8B）…", flush=True)
+            print("[B] CoT 难例（27B 教师逐步拒绝采样）…", flush=True)
             cot = await (gen_cot_v15(client, tokenizer, registry, max_rows=60) if IS_V15
                          else gen_cot(client, tokenizer, max_rows=60))
             json.dump(cot, open(cache_cot, "w"))
@@ -1248,7 +1271,7 @@ async def main() -> int:
     assert not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形"
     if DRY:
         _dry = pd.DataFrame(list(t13.to_dict("records")) + l2 + l1 + chat_rows + fam + cot)
-        _dp = Path("_audit/v15_w2/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
+        _dp = Path("_audit/v16/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
         _dry.to_parquet(_dp)
         print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）")
         print(f"[DRY] 演练完成：行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"

@@ -60,7 +60,7 @@ def cv_acc(X: np.ndarray, y: np.ndarray, folds: int = 5, epochs: int = 20, lr: f
 def main() -> int:
     from syncopate.pipeline.split import load_bundles
     bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
-    pool = {r["case_id"].replace("_COT15", "") for r in json.load(open("data/u_route/v15_cot_rows.json"))}
+    pool = {r["case_id"].replace("_COT15", "") for r in json.load(open("data/u_route/v16_cot_rows.json"))}
     hard_fams = {c.split("_")[0] for c in pool}
     ids = [c for c, b in bundles.items() if b.gold]
     msg = {c: bundles[c].case.user_message for c in ids}

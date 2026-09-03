@@ -3,7 +3,7 @@
 
     SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_w3_budget_table.py
 
-从现役 CoT 池（data/u_route/v15_cot_rows.json，114 行）实测：think 长度/段数/token 画像、行重；
+从现役 CoT 池（data/u_route/v16_cot_rows.json）实测：think 长度/段数/token 画像、行重；
 按 W3① 约束（≤350 字 · ≤2 段）推算做轻后的行重；按裁定④带宽 30% 推算可装行数与
 全库非空块占比；预注册 HARD 档触发率预测带 20–50%。读数落盘 _audit/v15_w3/budget_table.json。
 ⚠️ 非 CoT 桶总 token 本机没有 parquet ⇒ 用 v15 manifest 的份额反推（cot 18.13% ↔ 19 行）；W4 实测回填。
@@ -21,7 +21,7 @@ def main() -> int:
     from transformers import AutoTokenizer
     tok_path = STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER
     tok = AutoTokenizer.from_pretrained(tok_path)
-    rows = json.load(open("data/u_route/v15_cot_rows.json"))
+    rows = json.load(open("data/u_route/v16_cot_rows.json"))   # 裁定⑭：v16 缓存名
     TH = re.compile(r"<think>(.*?)</think>", re.S)
     chars, segs, tk = [], [], []
     per_row = []

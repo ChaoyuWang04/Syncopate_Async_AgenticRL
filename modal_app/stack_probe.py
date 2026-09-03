@@ -643,6 +643,50 @@ def p_rebuild_v16(expected_sha: str = "") -> dict:
     return _record("rebuild_v16", ok, {"sha_modal": sha, "sha_expected": exp, "same": same, "batch_files": nfiles, "log": log})
 
 
+TEACHER_ENV = {**RUN_ENV, "SYNCOPATE_TEACHER_LANG_URL": "http://127.0.0.1:8210/v1", "SYNCOPATE_TEACHER_THINK_URL": "http://127.0.0.1:8210/v1"}
+
+
+def _start_teacher(log: str = "/tmp/vllm_teacher.log", wait_s: int = 1500):
+    """Qwen3.8-27B 教师 @8210（两角色同端点）。返回 (proc, up, secs)。build_v16 与 teacher_diag 共用。"""
+    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len 18432 "
+           f"--gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' --max-num-seqs 64")
+    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    up = False; t0 = time.time()
+    while time.time() - t0 < wait_s and proc.poll() is None:
+        if _sh("curl -sf http://127.0.0.1:8210/health")["rc"] == 0: up = True; break
+        time.sleep(5)
+    return proc, up, round(time.time() - t0, 1)
+
+
+# ─────────────────────────── S3-diag · 27B 教师原始思考画像（先量后动，Chaoyu 09-04 放行） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=2 * 3600, secrets=SECRETS)
+def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096) -> dict:
+    """判据（预注册，见 scripts/v16_teacher_think_diag.py 顶部）：这是**测量**不是门槛——产出 closed_within_900_rate /
+    cjk_below_0.5_rate / action_match_rate 三个数与预注册判读；同容器再跑一遍行为类探针（现在带丢弃原因计数）。
+    ok = 两个脚本退出码 0 且 diag.json 落盘（读数本身不判红绿）。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16"; os.makedirs(aud, exist_ok=True)
+    proc, up, secs = _start_teacher()
+    rec: dict = {"teacher_up": up, "teacher_startup_secs": secs}
+    if not up:
+        _teardown(proc); return _record("teacher_diag", False, {**rec, "log_tail": open("/tmp/vllm_teacher.log", errors="replace").read()[-2000:]})
+    try:
+        r = _sh(f"{PY} scripts/v16_teacher_think_diag.py --teacher http://127.0.0.1:8210/v1 --n {n} --samples {samples} --max-tokens {max_tokens} --out {aud} "
+                f"> {aud}/teacher_think_diag.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=3600)
+        rec["diag_rc"] = int(re.search(r"RC=(\d+)", r["out"]).group(1))
+        rec["diag_tail"] = open(f"{aud}/teacher_think_diag.log", errors="replace").read()[-2500:]
+        try: rec["agg"] = json.load(open(f"{aud}/teacher_think_diag.json"))["agg"]
+        except Exception as ex: rec["agg_err"] = repr(ex)[:200]
+        b = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
+        rec["behavior_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1))
+        rec["behavior_tail"] = open(f"{aud}/behavior_think_probe.log", errors="replace").read()[-1500:]
+        _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
+    finally:
+        _teardown(proc); open(f"{aud}/teacher_diag_vllm.log", "w").write(open("/tmp/vllm_teacher.log", errors="replace").read()[-20000:]); vol.commit()
+    ok = rec.get("diag_rc") == 0 and rec.get("behavior_rc") == 0 and "agg" in rec
+    return _record("teacher_diag", ok, rec)
+
+
 # ─────────────────────────── S3 · v16 训练集建库（B200 单卡：Qwen3.8-27B 教师 + 26 §W4 七步） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=3 * 3600, secrets=SECRETS)
 def p_build_v16(skip_probe: bool = False) -> dict:
@@ -652,29 +696,25 @@ def p_build_v16(skip_probe: bool = False) -> dict:
     ⑥ 新池画像（budget_table）⑦ 画廊 markdown 落盘（给 Chaoyu 逐条看）。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16"; os.makedirs(aud, exist_ok=True)
-    env = {**RUN_ENV, "SYNCOPATE_TEACHER_LANG_URL": "http://127.0.0.1:8210/v1", "SYNCOPATE_TEACHER_THINK_URL": "http://127.0.0.1:8210/v1"}
-    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len 18432 "
-           f"--gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' --max-num-seqs 64")
+    env = TEACHER_ENV
     log = "/tmp/vllm_teacher.log"
-    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
-    up = False; t0 = time.time()
-    while time.time() - t0 < 1500 and proc.poll() is None:
-        if _sh("curl -sf http://127.0.0.1:8210/health")["rc"] == 0: up = True; break
-        time.sleep(5)
-    rec: dict = {"teacher_up": up, "teacher_startup_secs": round(time.time() - t0, 1)}
+    proc, up, secs = _start_teacher(log)
+    rec: dict = {"teacher_up": up, "teacher_startup_secs": secs}
     if not up:
         open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()); _teardown(proc); vol.commit()
         return _record("build_v16", False, {**rec, "log_tail": open(log, errors="replace").read()[-2000:]})
     try:
-        # 教师缓存（ballast/l2l1/cot 三份 json 由建库脚本写在 data/u_route/，容器本地）⇒ 建库前从 Volume 取回、建库后存回，断点不从零
-        cache_dir = f"{aud}/cache"; os.makedirs(cache_dir, exist_ok=True)
-        _sh(f"cp -n {cache_dir}/*.json data/u_route/ 2>/dev/null; true", cwd=REPO)
+        # 教师缓存（v16_ballast/l2l1/fam/cot/defs/chat_mat 由建库脚本写在 data/u_route/，容器本地）⇒ 建库前从 Volume 取回、建库后存回，断点不从零
+        # 裁定⑭（09-04）：run14–16 的 v15_* 缓存含 4B/8B 旧物料（l2 复用 reply、cot 复用 think、defs/chat 是 4B 产物）⇒ 搬进 pre_v16_run16/ 留档，不再取回
+        cache_dir = f"{aud}/cache"; os.makedirs(f"{cache_dir}/pre_v16_run16", exist_ok=True)
+        _sh(f"mv {cache_dir}/v15_*.json {cache_dir}/pre_v16_run16/ 2>/dev/null; true")
+        _sh(f"cp -n {cache_dir}/v16_*.json data/u_route/ 2>/dev/null; true", cwd=REPO)
         if not skip_probe:
             r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
             _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
-        # 旧缓存不许命中（改名后的 *.pre_v16.json 不会被读；这里再守一道）
-        stale = _sh("ls data/u_route/v15_cot_rows.json data/u_route/v15_l2l1_rows.json data/u_route/v15_ballast_replies.json 2>/dev/null | wc -l", cwd=REPO)["out"].strip()
+        # 旧物料不许命中（裁定⑭）：判据 = 建库脚本源码里不再出现任何旧缓存/物料文件名（前任 09-04 核对：原判据数的是取回的新缓存，第二次起必红）
+        stale = _sh("grep -cE 'v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)\\.json|v145_(defs|chat_mat)\\.json\"|cand_v13r2_e1/' scripts/u_build_v14_5.py || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
         b = _sh(f"{PY} scripts/u_build_v14_5.py > {aud}/build.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env=env, timeout=2 * 3600)
         blog = open(f"{aud}/build.log", errors="replace").read()
@@ -691,7 +731,7 @@ def p_build_v16(skip_probe: bool = False) -> dict:
             rec["budget_table"] = bt["out"][-1200:]
             rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
     finally:
-        _sh(f"cp data/u_route/v15_ballast_replies.json data/u_route/v15_l2l1_rows.json data/u_route/v15_cot_rows.json {aud}/cache/ 2>/dev/null; true", cwd=REPO)
+        _sh(f"cp data/u_route/v16_*.json {aud}/cache/ 2>/dev/null; true", cwd=REPO)
         _teardown(proc); open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()[-20000:]); vol.commit()
     ok = (rec.get("build_rc") == 0 and rec.get("stale_caches_present", 1) == 0
           and any("不同形 0" in l or "不同形: 0" in l for l in rec.get("judge_lines", []))
@@ -701,15 +741,26 @@ def p_build_v16(skip_probe: bool = False) -> dict:
 
 # ─────────────────────────── S4 · SFT 冒烟（B200 单卡：Qwen3.6-35B-A3B + LoRA attn_shared，N 步） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=131072, timeout=3 * 3600, secrets=SECRETS)
-def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False) -> dict:
+def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_smoke", train_file: str = "", val_file: str = "", epochs: int = 1) -> dict:
     """判据（26 W4′ S4）：loss 有限且末窗均值 < 首窗均值 · grad_norm 全有限 · 可训参数量 ≈ 37M±20% · 存档能被 peft 加载且 ΔW>0 ·
-    峰值显存 < 180 GB · 吞吐 tok/s 记录（学习项）。"""
+    峰值显存 < 180 GB · 吞吐 tok/s 记录（学习项）。
+    arm="mech_dry"（09-04 并行机制冒烟）：容器里先 U_BUILD_DRY=6 演练出 _audit/v16/dry_rows.parquet（"[DRY" 占位、不调教师），
+    只验 LoRA 模块名/参数量/显存/吞吐/存档这些**与数据内容无关**的机制；产物目录带 arm 名，**不是候选**。"""
     _sync_repo()
-    aud = f"{VOL}/_audit/v16"; os.makedirs(aud, exist_ok=True)
-    out = f"{VOL}/checkpoints/sft/v16_smoke"; _sh(f"rm -rf {out}")
+    aud = f"{VOL}/_audit/v16/sft_{arm}"; os.makedirs(aud, exist_ok=True)
+    out = f"{VOL}/checkpoints/sft/{arm}"; _sh(f"rm -rf {out}")
+    rec: dict = {"arm": arm}
+    if arm == "mech_dry" and not train_file:
+        d = _sh(f"U_BUILD_DRY=6 {PY} scripts/u_build_v14_5.py > {aud}/dry_build.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1800)
+        rec["dry_build_rc"] = int(re.search(r"RC=(\d+)", d["out"]).group(1)); rec["dry_build_tail"] = open(f"{aud}/dry_build.log", errors="replace").read()[-1500:]
+        if rec["dry_build_rc"] != 0 or not os.path.exists(f"{REPO}/_audit/v16/dry_rows.parquet"):
+            vol.commit(); return _record("sft_smoke", False, rec)
+        _sh(f"cp _audit/v16/dry_rows.parquet {aud}/", cwd=REPO)
+        train_file = val_file = "_audit/v16/dry_rows.parquet"
+    train_file = train_file or "data/sft/v16/train.parquet"; val_file = val_file or "data/sft/v16/val.parquet"
     wandb_flag = "" if use_wandb else "--no-wandb"
-    cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file data/sft/v16/train.parquet --val-file data/sft/v16/val.parquet "
-           f"--out {out} --epochs 1 --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_v16_smoke "
+    cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file {train_file} --val-file {val_file} "
+           f"--out {out} --epochs {epochs} --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_{arm} "
            f"> {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?")
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 300)
     log = open(f"{aud}/sft_smoke.log", errors="replace").read()
@@ -725,28 +776,32 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False) -> dict:
     gn_ok = bool(gnorms) and all(math.isfinite(x) for x in gnorms)
     tr_ok = bool(trainable) and 30 <= float(trainable[0]) <= 45
     ok = rc == 0 and loss_ok and gn_ok and tr_ok
-    rec = {"rc": rc, "secs": r["secs"], "n_loss_points": len(losses), "loss_first_last": (losses[:3], losses[-3:]), "grad_norm_minmax": (min(gnorms), max(gnorms)) if gnorms else None,
+    rec.update({"rc": rc, "secs": r["secs"], "train_file": train_file, "n_loss_points": len(losses), "loss_first_last": (losses[:3], losses[-3:]), "grad_norm_minmax": (min(gnorms), max(gnorms)) if gnorms else None,
            "trainable_M": trainable[:1], "peak_memory_gb": peak[-1:], "delta_w_pct": dw[-1:], "judge": {"loss": loss_ok, "grad": gn_ok, "trainable": tr_ok},
-           "lora_targets_line": [l for l in log.splitlines() if "[lora-targets]" in l][:1], "tail": log[-3000:], "topology": _topology()}
+           "lora_targets_line": [l for l in log.splitlines() if "[lora-targets]" in l][:1], "tail": log[-3000:], "topology": _topology()})
     vol.commit()
-    return _record("sft_smoke", ok, rec)
+    return _record(f"sft_smoke_{arm}" if arm != "v16_smoke" else "sft_smoke", ok, rec)
 
 
 # ─────────────────────────── S5 · 考场 v4 单容器（B200 单卡：vLLM 学生端点 + PG/Redis + API + worker + 四遍 + 判卷） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=98304, timeout=4 * 3600, secrets=SECRETS)
-def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes: int = 1, concurrency: int = 4) -> dict:
+def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes: int = 1, concurrency: int = 4, limit: int = 0) -> dict:
     """26 §W5 起链五步的容器版：0 seed_demo --check（7 条 campaign）1 无陈旧 worker 2 起端点(:8100)+API(:8000)+worker
     3 u_exam_run 四遍（每遍落 jsonl，可重入）4 u_exam_judge_v4 5 v15_gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
     model 默认学生底座；adapter 给 LoRA 目录则 vLLM --enable-lora（served 名仍为 model）。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/exam_{arm}"; os.makedirs(aud, exist_ok=True)
     model = model or STUDENT
-    sv = _start_services(); rec: dict = {"services": {k: v.get("rc") for k, v in sv.items()}}
+    # 前任 09-04 核对：① 容器里 PG 是新的，--check 只查不播 ⇒ 先播种再 --check；② vLLM 挂 adapter 时 LoRA 的 served 名必须
+    #   与 SYNCOPATE_DECIDER_MODEL 一致（decider 按 /v1/models 核名，原写法 basename(model) 与完整路径对不上）⇒ 统一叫 v16_adapter
+    served = "v16_adapter" if adapter else model
+    sv = _start_services(); rec: dict = {"services": {k: v.get("rc") for k, v in sv.items()}, "arm": arm, "model": model, "adapter": adapter, "served": served}
     if sv["pg"]["rc"] != 0: return _record("exam_v4", False, rec)
     env = {**RUN_ENV, **SERVICE_ENV, "SYNCOPATE_DECIDER_URL": "http://127.0.0.1:8100", "SYNCOPATE_DECIDER_TOKENIZER": model,
-           "SYNCOPATE_DECIDER_MODEL": model, "SYNCOPATE_API_DB_POOL": "12"}
+           "SYNCOPATE_DECIDER_MODEL": served, "SYNCOPATE_API_DB_POOL": "12"}
+    rs = _sh(f"{PY} scripts/seed_demo_data.py", cwd=REPO, env=env, timeout=600); rec["seed"] = {"rc": rs["rc"], "tail": rs["out"][-300:]}
     r0 = _sh(f"{PY} scripts/seed_demo_data.py --check", cwd=REPO, env=env, timeout=600); rec["seed_check"] = {"rc": r0["rc"], "tail": r0["out"][-300:]}
-    lora = f" --enable-lora --max-lora-rank 64 --lora-modules {os.path.basename(model)}={adapter}" if adapter else ""
+    lora = f" --enable-lora --max-lora-rank 64 --lora-modules {served}={adapter}" if adapter else ""
     vcmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name {model} --max-model-len 18432 "
             f"--gpu-memory-utilization 0.85 --port 8100 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}'{lora}")
     vlog = "/tmp/vllm_exam.log"
@@ -765,7 +820,8 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
     try:
         runs = []
         for i in range(1, passes + 1):
-            r = _sh(f"{PY} scripts/u_exam_run.py --exam data/u_route/context_v4_exam.jsonl --arm {arm}_r{i} --concurrency {concurrency} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
+            lim = f" --limit {limit}" if limit else ""
+            r = _sh(f"{PY} scripts/u_exam_run.py --exam context_v4 --arm {arm}_r{i} --concurrency {concurrency}{lim} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
             rc = int(re.search(r"RC=(\d+)", r["out"]).group(1)); runs.append({"pass": i, "rc": rc, "secs": r["secs"]})
             _sh(f"cp logs/u_route/run_{arm}_r{i}_*.jsonl {aud}/ 2>/dev/null; true", cwd=REPO)
         rec["runs"] = runs
@@ -779,15 +835,15 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
         for pr in (wrk, api):
             pr.terminate()
         _teardown(vproc); open(f"{aud}/vllm.log", "w").write(open(vlog, errors="replace").read()[-20000:]); vol.commit()
-    ok = up and all(x["rc"] == 0 for x in rec.get("runs", [])) and rec.get("judge_rc") == 0
-    return _record("exam_v4", ok, rec)
+    ok = up and rec["seed_check"]["rc"] == 0 and all(x["rc"] == 0 for x in rec.get("runs", [])) and rec.get("judge_rc") == 0
+    return _record(f"exam_v4_{arm}" if arm != "v16_smoke" else "exam_v4", ok, rec)
 
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -813,8 +869,9 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
     if "build_v16" in want: run("build_v16", p_build_v16)
-    if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps)
-    if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes)
+    if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens)
+    if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps, False, sft_arm, sft_train_file, sft_val_file, sft_epochs)
+    if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes, 4, exam_limit)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")
