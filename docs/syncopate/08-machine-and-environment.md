@@ -698,3 +698,26 @@ RAY_object_store_memory    --object-store-gb 控制
 - **`pkill -f <模式>` 会自匹配**（执行 pkill 的 shell 自己也含该模式）—— 犯过三次。
 - **最可信的不是 commit message，是 `outputs/<日期>/<时刻>/.hydra/overrides.yaml`**
   —— 那是那次实际跑的全部配置。查"上次到底怎么跑通的"就看它。
+
+## §Modal · 算力搬家（Chaoyu 09-03 裁定：训练/评测/serving 实测全在 Modal RTX PRO 6000×2）
+
+```
+为什么是 PRO 6000   与 4×5090 同芯片 GB202 / sm_120：flash-attn 特制轮子、TRITON 注意力后端、E30 的 MXFP8 GEMM、
+                   四条 DDP 补丁**全部原样能跑**；96 GB×2 = 192 GB ⇒ 装得下 9B 学生 + 27B 教师 + 18k 上下文 rollout；
+                   ~$3.03/卡时，比 H100 便宜 1/4。B200 只做 infra 探针（MAINLINE-INFRA 已交接）。
+Modal 事实         GPU 函数默认可抢占、**不可关闭**（RL 靠 ckpt 续跑；考场每遍落盘、可重入）· 单次调用 ≤24h（--detach）·
+                   Volumes 持久（1 TiB 免费）· 主机驱动 580.95 / CUDA 13.0，12.x 镜像兼容 · 基础镜像无 nvcc，用 nvidia/cuda devel
+                   · 容器互联为 experimental ⇒ 考场链（PG+Redis+API+worker+vLLM）**单容器全套**起
+形状              训练：先 colocate 同步 DDP=2（最干净基线），再训推分离 1+1 异步对照（26 §W4 之后的 R6 选形）
+                   serving 实测（27/30 的挂账 T5/D2）：2 卡 ⇒ 2 引擎 + 亲和 router；dev mode 四模型 = 每卡两个 vLLM 进程
+                   （4B 各 ~8 GB + KV）；⚠️ 与 E32/E33 的四卡读数**不可比**，按新拓扑重立 SLO 基线（30 §5）
+试点四步          ① 镜像：nvidia/cuda:12.8 devel + uv sync --all-extras + check_flash_attn_backward + check_pipeline_invariants
+                   ② PRO6000:2 跑 SFT 五点谱 + 冻结 EVAL，与训练机 v15_r3 读数对一遍（可比性判据）
+                   ③ 考场链单容器化，跑一遍 v4 考卷（同时做 W1④ 校准）
+                   ④ RL 100 步 + 主动杀容器测抢占续跑
+待验风险          ⒜ 双 PRO 6000 有 NCCL P2P 在首个集合通信挂死的公开案例（NVIDIA 论坛 09-2026），解法 NCCL_P2P_DISABLE=1
+                   ⇒ 与 4×5090 一样按"无 P2P"起 DDP，不影响正确性，只影响速度；上机第一件事跑 E21 那套对齐带宽探针
+                   ⒝ Qwen3.5/3.8 的 Gated DeltaNet 层：vLLM 的融合 GDN 解码核曾按 capability 100 门控、sm_120 静默退回 Triton/FLA
+                   参考路径（main 已修为 ≥80）；**27B 开 MTP 时因 v/k 头比 48:16≠8 融合核不可用、MTP 净慢 3.6×**（HF 讨论区实测）
+                   ⇒ 学生换 Qwen3.5-9B 前先在 PRO 6000 上量：FLA 前向/反向对拍 + 开/关 MTP 的 TPOT，判据跑前注册
+```
