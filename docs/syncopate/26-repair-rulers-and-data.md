@@ -477,7 +477,12 @@ S1-5 ✅ PrefixGrouper 走上游 `actor.use_prefix_grouper`；自研接线待删
 S1-6 ✅ _sync_repo `uv pip install --no-deps -e /vol/repo` + models 软链
 S1-7 ✅ Qwen3.6-35B-A3B（40 层·256 专家·top-8·共享专家 512·10 全注意力+30 线性注意力）：LoRA r=32 all-linear ≈ **2554M**（专家 2517M，AdamW 状态 ≈14 GiB）
        vs 注意力+共享专家 ≈ **37M** ⇒ sft.py 默认 SYNCOPATE_LORA_TARGETS=attn_shared（排除 .experts.），all-linear 留作开关；模块名与参数量在 S4 真模型上核
-S1-8 ⬜ PG/Redis 进镜像
+S1-8 🔶 PG 16 + Redis 进镜像，pytest 步起服务并灌语料（run11 验证中）
+**S2 ✅ v16 确定性判据（09-03 深夜）**：Modal（p_rebuild_v16，GCP 容器）与本机（samwang-X870I）各自从 configs/buckets/v16.yaml 独立生成，
+       三份切分 SHA-256 **逐一相同**（eval b15e314a… · sft 831bfe1b… · rl 05a9c8c6…），6681 个 case 文件；Modal 全程 3.5 min
+       （generate 90 s · menus 72 s · split 36 s）。⇒ v16 case 库 = 与机器无关的纯函数产物，可随时重生成，不再需要"冻结文件"。
+新栈坑（09-03，已修+判据）：transformers 5 的 `apply_chat_template(tokenize=True)` 返回 BatchEncoding（4.x 是 list）⇒ `ids + list`
+       TypeError、`len()` 量成键数=2 ⇒ 一律走 `rollout_loop.chat_template_ids`（tests/train/test_chat_template_ids.py）
 ```
 
 **S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**

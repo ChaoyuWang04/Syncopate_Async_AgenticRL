@@ -123,7 +123,8 @@ def _record(step: str, ok: bool, details: dict) -> dict:
 REPO_MIRROR = f"{VOL}/repo.git"      # 共享的 bare 镜像（Volume 上，只有 fetch 写它，带锁）
 REPO = "/tmp/repo"                    # ★ 每个容器自己的 checkout（容器本地盘）：守则⑰「同一路径一个写者」——
                                       #   09-03 两条并发 run 同时对 /vol/repo 做 git reset，一条撞 index.lock 直接没跑成
-DATA_DIRS = ("batches", "splits", "sft", "rl")   # 这些数据目录指回 Volume（跨 run 共享、按版本分目录）
+DATA_DIRS = ("batches", "sft", "rl")   # gitignored 的数据目录整体指回 Volume（跨 run 共享、按版本分目录）；
+                                        # data/splits 在 git 里（v16 切分 4 个 json 已入库，确定性判据过后即"源码"），不软链
 
 
 def _sync_repo() -> str:
