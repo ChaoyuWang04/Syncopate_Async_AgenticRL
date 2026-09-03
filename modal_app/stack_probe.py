@@ -60,11 +60,10 @@ STACK = LOCAL_ROOT / "modal_app" / "stack"
 
 app = modal.App(APP_NAME)
 vol = modal.Volume.from_name(VOL_NAME, create_if_missing=True)
-# wandb：secret `wandb` **始终存在**（09-03 先建了占位 WANDB_DISABLED=true；Chaoyu 用
-#   `modal secret create wandb WANDB_API_KEY=<key> --force` 覆盖成真 key）。
+# wandb：secret `wandb-secret` 由 Chaoyu 在控制台建（09-03）；p_wandb 是接线判据（key 在容器里 + 在线写 3 点读回 3 点）。
 # ⛔ 不许按环境变量条件定义 Modal 对象：本机与容器里求值不同 ⇒ "Function has 3 dependencies but container got 2"
 #   （09-03 run13 就是这么在 hydrate 阶段直接死的）。
-SECRETS = [modal.Secret.from_name("wandb")]
+SECRETS = [modal.Secret.from_name("wandb-secret")]   # Chaoyu 09-03 22:28 建的（Modal 控制台 wandb 模板，键 WANDB_API_KEY）
 
 _ENV = {
     "PATH": "/env/.venv/bin:/root/.local/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin",   # venv/bin 必须在：flashinfer JIT 子进程找 ninja
