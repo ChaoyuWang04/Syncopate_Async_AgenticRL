@@ -40,7 +40,7 @@ REPO_URL = "https://github.com/ChaoyuWang04/Syncopate_Async_AgenticRL.git"
 REPO_BRANCH = "main"
 VOL_NAME = "syncopate-home"
 VOL = "/vol"
-REPO = f"{VOL}/repo"
+REPO = "/tmp/repo"                    # ★ 每个容器自己的 checkout（守则⑰ 一个写者）；bare 镜像在 /vol/repo.git
 MODELS = f"{VOL}/models"
 AUDIT = f"{VOL}/_audit/stack_probe"
 GPU_ONE = "B200"          # Chaoyu 09-03 晚裁定⑫：一切在 B200（sm_100）上配；B300 待 B200 全链通后重跑
@@ -123,8 +123,8 @@ def _record(step: str, ok: bool, details: dict) -> dict:
 
 
 REPO_MIRROR = f"{VOL}/repo.git"      # 共享的 bare 镜像（Volume 上，只有 fetch 写它，带锁）
-REPO = "/tmp/repo"                    # ★ 每个容器自己的 checkout（容器本地盘）：守则⑰「同一路径一个写者」——
-                                      #   09-03 两条并发 run 同时对 /vol/repo 做 git reset，一条撞 index.lock 直接没跑成
+# ⚠️ REPO 常量必须在文件顶部定义：RUN_ENV 在定义时就把 PYTHONPATH 固化了，09-04 曾因在这里重赋值导致容器里
+#   cwd=/tmp/repo 而 PYTHONPATH=/vol/repo ⇒ 跑的是旧代码（探针回溯里的 BatchEncoding 错就是这么来的）
 DATA_DIRS = ("batches", "sft", "rl")   # gitignored 的数据目录整体指回 Volume（跨 run 共享、按版本分目录）；
                                         # data/splits 在 git 里（v16 切分 4 个 json 已入库，确定性判据过后即"源码"），不软链
 
@@ -149,7 +149,8 @@ def _sync_repo() -> str:
         _sh(f"rm -rf {REPO}/data/{d} && ln -sfn {VOL}/data/{d} {REPO}/data/{d}")
     _sh(f"rm -rf {REPO}/models && ln -sfn {MODELS} {REPO}/models")
     # 项目以可编辑方式装进 venv（vLLM 插件入口点需要"装过"；--no-deps 不动锁）
-    _sh(f"uv pip install --python {PY} --no-deps -e {REPO} >/dev/null 2>&1", timeout=300)
+    r = _sh(f"uv pip install --python {PY} --no-deps -e {REPO}", timeout=300)
+    if r["rc"] != 0: raise RuntimeError("editable install 失败：" + r["out"][-600:])
     return _sh("git rev-parse HEAD", cwd=REPO)["out"].strip()
 
 
@@ -665,9 +666,13 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()); _teardown(proc); vol.commit()
         return _record("build_v16", False, {**rec, "log_tail": open(log, errors="replace").read()[-2000:]})
     try:
+        # 教师缓存（ballast/l2l1/cot 三份 json 由建库脚本写在 data/u_route/，容器本地）⇒ 建库前从 Volume 取回、建库后存回，断点不从零
+        cache_dir = f"{aud}/cache"; os.makedirs(cache_dir, exist_ok=True)
+        _sh(f"cp -n {cache_dir}/*.json data/u_route/ 2>/dev/null; true", cwd=REPO)
         if not skip_probe:
             r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
+            _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
         # 旧缓存不许命中（改名后的 *.pre_v16.json 不会被读；这里再守一道）
         stale = _sh("ls data/u_route/v15_cot_rows.json data/u_route/v15_l2l1_rows.json data/u_route/v15_ballast_replies.json 2>/dev/null | wc -l", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
@@ -686,6 +691,7 @@ def p_build_v16(skip_probe: bool = False) -> dict:
             rec["budget_table"] = bt["out"][-1200:]
             rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
     finally:
+        _sh(f"cp data/u_route/v15_ballast_replies.json data/u_route/v15_l2l1_rows.json data/u_route/v15_cot_rows.json {aud}/cache/ 2>/dev/null; true", cwd=REPO)
         _teardown(proc); open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()[-20000:]); vol.commit()
     ok = (rec.get("build_rc") == 0 and rec.get("stale_caches_present", 1) == 0
           and any("不同形 0" in l or "不同形: 0" in l for l in rec.get("judge_lines", []))

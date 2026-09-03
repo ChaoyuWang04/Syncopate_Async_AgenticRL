@@ -562,11 +562,18 @@ async def build_l2_l1(tokenizer, registry, client):
     from syncopate.pipeline.build_dataset import build_sft_row
     from syncopate.pipeline.split import load_bundles
     bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
+    # ★ 09-04（v16 首次全量重建暴露）：L2/L1 的历史轮是「上一轮助手的真实终答人话」，所以源 case 只能是
+    #   终答型（tool_call / answer）——defer/clarify/reject 收场的 case 没有"人话终答"，历史该是信令自己的话，
+    #   那是④族（DEF-F/REJ-F/CLA-F）的事，不进这里。此前 v13 时代靠累积的压舱缓存碰巧盖住，v16 重编号+缓存作废后
+    #   FRESH_0125（defer）撞到 real_reply 断言。与下面 `_need` 的过滤保持同一条件。
+    _TERMINAL_OK = ("tool_call", "answer")
     q_bundles = [b for b in bundles.values()
                  if b.gold and b.gold.actions
                  and b.gold.actions[0]["tool"] == "campaign.get_metrics"
-                 and b.case.context.get("campaign_id")]
-    z_bundles = [b for b in bundles.values() if b.gold and not b.gold.actions]
+                 and b.case.context.get("campaign_id")
+                 and b.verifier.expected_behavior in _TERMINAL_OK]
+    z_bundles = [b for b in bundles.values() if b.gold and not b.gold.actions
+                 and b.verifier.expected_behavior in _TERMINAL_OK]
     rng.shuffle(q_bundles)
     rng.shuffle(z_bundles)
     METRICS = [("消耗", "spend_7d"), ("安装量", "installs_7d"), ("ROAS", "roas_d7"),
@@ -999,7 +1006,10 @@ async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int
     # ★ v15：这批 case 的 gold **没有 reply**（v14 终答是 JSON 壳）⇒ 终答人话要有真实来源。
     #   不给 client 就会落回模板兜底 —— 那正是 ㉖/㉙ 的病根，所以这里**要求**给。
     replies = {}
-    if IS_V15:
+    if IS_V15 and DRY:
+        # DRY 不调教师：占位人话（画廊/产物里 "[DRY" 是正式建库的红线判据，不会漏进真产物）
+        replies = {str(c): f"[DRY 压舱人话:{c}]" for c in df.case_id}
+    elif IS_V15:
         # ⚠️ 调用点可能在 `async with httpx.AsyncClient(...)` 块**之外**（实测崩过一次：
         #   "Cannot send a request, as the client has been closed"）⇒ 客户端关了就自己开一个。
         #   ⛔ 但**绝不许**因为拿不到客户端就落回模板兜底 —— 那正是 ㉖/㉙ 的病根。
@@ -1023,15 +1033,16 @@ async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int
                                   split=str(df.iloc[i]["split"]), config=None)
         rows.append(row)
     print(f"[冻结桶] {parquet_path} → v15 重放 {len(rows)} 行")
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["case_id", "split", "supervised_tokens", "total_length"])
 
 
 async def main() -> int:
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
     global DEFS
-    _tok_path = STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER
-    tokenizer = AutoTokenizer.from_pretrained(_tok_path)   # 同一词表；本机无 4B 时用 0.6B（只影响本机 DRY）
+    # 学生权重在（Modal）用学生自己的分词器；本机 DRY 无权重 ⇒ 同词表的 Qwen3.5-0.8B（model_paths.TEST_TOKENIZER）
+    _tok_path = STUDENT_MODEL if Path(STUDENT_MODEL, "tokenizer.json").exists() else TEST_TOKENIZER
+    tokenizer = AutoTokenizer.from_pretrained(_tok_path)
     if DRY:
         print(f"[DRY] 结构演练模式：每桶 {DRY} 行、不调教师、不写缓存、不落 parquet（tokenizer={_tok_path}）")
     registry = build_domain().registry
@@ -1119,23 +1130,20 @@ async def main() -> int:
     chat_rows = build_chat_rows(tokenizer, chat_mat)
     chat_rows, chatv = chat_rows[:80], chat_rows[80:90]
 
+    # ★ 09-04 裁定⑩（v16 全部重来）：压舱桶不再来自任何旧 parquet——直接取 **当前切分的 sft_cases**，
+    #   val 留出 = 每 6 条取 1（与 `syncopate data build --val-every 6` 同口径），按当前契约重放成行。
+    #   （v13 时代"沿用旧 parquet 的 419 行再迁移"那条路随裁定⑩作废。）
+    _sft_ids = json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"]
+    _val_ids = _sft_ids[5::6]
+    _train_ids = [c for c in _sft_ids if c not in set(_val_ids)]
     if DRY:
-        # 本机没有 data/sft/v13 parquet ⇒ 用切分文件里的 case_id 演练冻结桶回放（前 DRY 条）
-        from u_build_v15_multiturn import BALLAST_REPLIES as _BR
-        _ids = [c for c in json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"] if c in _BR][:DRY]
-        _df = pd.DataFrame({"case_id": _ids, "split": ["train"] * len(_ids)})
-        _tmp = Path("_audit/v15_w2/_dry_frozen.parquet"); _tmp.parent.mkdir(parents=True, exist_ok=True)
-        _df.to_parquet(_tmp)
-        t13 = await _replay_frozen(tokenizer, registry, str(_tmp), 0, client=client)
-        v13v = t13.iloc[:0]
-    elif IS_V15:
-        # ★ 压舱石 419 行**不能直接沿用 v13 的 parquet**（那是 v14 壳的 token）。
-        #   语义冻结的做法是**同一批 case 用 v15 契约重放一遍**——
-        #   等价性已由 scripts/v15_r2_migrate.py 全量证过（419/419 四项全等）。
-        t13 = await _replay_frozen(tokenizer, registry, f"{DEFAULT_SFT_DIR}/train.parquet", 0,
-                                   client=client)
-        v13v = await _replay_frozen(tokenizer, registry, f"{DEFAULT_SFT_DIR}/val.parquet",
-                                    80000, client=client)
+        _train_ids, _val_ids = _train_ids[:DRY], _val_ids[:max(1, DRY // 3)]
+    _fz = Path("_audit/v16"); _fz.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"case_id": _train_ids, "split": ["train"] * len(_train_ids)}).to_parquet(_fz / "_frozen_train.parquet")
+    pd.DataFrame({"case_id": _val_ids, "split": ["val"] * len(_val_ids)}).to_parquet(_fz / "_frozen_val.parquet")
+    if IS_V15:
+        t13 = await _replay_frozen(tokenizer, registry, str(_fz / "_frozen_train.parquet"), 0, client=client)
+        v13v = await _replay_frozen(tokenizer, registry, str(_fz / "_frozen_val.parquet"), 80000, client=client)
     else:
         t13 = pd.read_parquet(f"{DEFAULT_SFT_DIR}/train.parquet")
         v13v = pd.read_parquet(f"{DEFAULT_SFT_DIR}/val.parquet")
