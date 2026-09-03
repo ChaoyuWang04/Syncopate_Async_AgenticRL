@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import torch
 from torch import nn
 
@@ -134,6 +136,17 @@ def test_full_finetune_model_still_saves_everything() -> None:
     assert "base.weight" in state and "base.bias" in state
 
 
+def _verl_major_minor():
+    import importlib.metadata as md
+    try:
+        return tuple(int(x) for x in md.version("verl").split(".")[:2])
+    except Exception:
+        return (0, 0)
+
+
+@pytest.mark.skipif(_verl_major_minor() >= (0, 9),
+                    reason="26 §W4′ S1-4：nvtx 包装补丁在 verl 0.9 上改走上游 profiler 配置组；本测试用的假 torch 太薄（新 verl "
+                           "import 链会 `from torch import Tensor`），随补丁一起在 S6 RL 冒烟时退役")
 def test_nvtx_wrapper_keeps_timing_semantics(monkeypatch):
     """NVTX 包装**不许**改变计时语义：耗时照记、异常照抛、range 成对。
 
