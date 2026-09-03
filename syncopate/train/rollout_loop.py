@@ -211,6 +211,21 @@ def render_env_message_ids(tokenizer: Any, message: dict[str, Any]) -> list[int]
     assert full_text.startswith(stub_text), "模板对同一前缀渲染不稳定：桩文本不是全文前缀"
     return tokenizer.encode(full_text[len(stub_text):], add_special_tokens=False)
 
+
+def chat_template_ids(tokenizer: Any, messages: list[dict[str, Any]], **kw: Any) -> list[int]:
+    """`apply_chat_template(tokenize=True)` 的返回类型随 transformers 版本变：4.x 是 list[int]，5.x 是 BatchEncoding（dict 形）。
+    直接 `ids + list` / `len(ids)` 在 5.x 上会静默量错对象（len(BatchEncoding)=键数=2）——09-03 在新栈上 39 个测试一起红。
+    ⇒ 所有要 token 序列的地方一律走这里。"""
+    out = tokenizer.apply_chat_template(messages, tokenize=True, **kw)
+    if isinstance(out, list):
+        return out
+    ids = out["input_ids"] if "input_ids" in out else out
+    if hasattr(ids, "tolist"):
+        ids = ids.tolist()
+    if ids and isinstance(ids[0], list):   # batched 形状 [[...]]
+        ids = ids[0]
+    return list(ids)
+
 def observation_message(tool_name: str, observation: dict[str, Any]) -> dict[str, str]:
     """工具返回渲染成一条 tool message。Qwen3 的模板认 role="tool"。"""
     import json
@@ -251,8 +266,8 @@ async def run_rollout(
     trajectory = Trajectory(case_id=bundle.case_id, rollout_id=rollout_id, namespace_id=namespace_id)
 
     messages = build_messages(bundle, tool_names, tokenizer=tokenizer)
-    prompt_ids: list[int] = tokenizer.apply_chat_template(
-        messages, tools=tools, add_generation_prompt=True, tokenize=True, **CHAT_TEMPLATE_KWARGS,
+    prompt_ids: list[int] = chat_template_ids(
+        tokenizer, messages, tools=tools, add_generation_prompt=True, **CHAT_TEMPLATE_KWARGS,
     )
     prompt_truncated = len(prompt_ids) - config.max_prompt_length
     if prompt_truncated > 0:

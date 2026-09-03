@@ -120,15 +120,33 @@ def _record(step: str, ok: bool, details: dict) -> dict:
     return rec
 
 
+REPO_MIRROR = f"{VOL}/repo.git"      # 共享的 bare 镜像（Volume 上，只有 fetch 写它，带锁）
+REPO = "/tmp/repo"                    # ★ 每个容器自己的 checkout（容器本地盘）：守则⑰「同一路径一个写者」——
+                                      #   09-03 两条并发 run 同时对 /vol/repo 做 git reset，一条撞 index.lock 直接没跑成
+DATA_DIRS = ("batches", "splits", "sft", "rl")   # 这些数据目录指回 Volume（跨 run 共享、按版本分目录）
+
+
 def _sync_repo() -> str:
-    if not os.path.isdir(f"{REPO}/.git"):
-        r = _sh(f"git clone --branch {REPO_BRANCH} {REPO_URL} {REPO}", timeout=600)
-        if r["rc"] != 0: raise RuntimeError("git clone 失败：" + r["out"])
-    r = _sh(f"git fetch origin {REPO_BRANCH} && git reset --hard origin/{REPO_BRANCH} && git clean -fd -e data -e _audit -e logs", cwd=REPO, timeout=600)
-    if r["rc"] != 0: raise RuntimeError("git 同步失败：" + r["out"])
-    # 项目以可编辑方式装进 venv（vLLM 插件入口点 `vllm.general_plugins` 需要"装过"；--no-deps 不动锁）；模型目录软链到 Volume
-    _sh(f"uv pip install --python {PY} --no-deps -e {REPO} >/dev/null 2>&1; ln -sfn {MODELS} {REPO}/models", timeout=300)
+    """更新 Volume 上的 bare 镜像（flock + 重试），再在本容器 /tmp 里 clone 出工作树；models/data 指回 Volume。返回 HEAD sha。"""
+    if not os.path.isdir(REPO_MIRROR):
+        r = _sh(f"flock -w 600 {VOL}/.repo.lock git clone --bare --branch {REPO_BRANCH} {REPO_URL} {REPO_MIRROR}", timeout=900)
+        if r["rc"] != 0 and not os.path.isdir(REPO_MIRROR): raise RuntimeError("bare clone 失败：" + r["out"])
+    r = _sh(f"flock -w 600 {VOL}/.repo.lock git --git-dir {REPO_MIRROR} fetch -q origin +{REPO_BRANCH}:{REPO_BRANCH}", timeout=900)
+    if r["rc"] != 0: raise RuntimeError("git fetch 失败：" + r["out"])
     vol.commit()
+    if not os.path.isdir(f"{REPO}/.git"):
+        r = _sh(f"git clone -q --shared --branch {REPO_BRANCH} {REPO_MIRROR} {REPO}", timeout=600)
+        if r["rc"] != 0: raise RuntimeError("worktree clone 失败：" + r["out"])
+    else:
+        _sh(f"git fetch -q origin {REPO_BRANCH} && git reset -q --hard origin/{REPO_BRANCH}", cwd=REPO, timeout=300)
+    # 模型/数据指回 Volume（只读共享；数据按版本分目录，写者是各自的建库步）
+    os.makedirs(f"{VOL}/data", exist_ok=True)
+    for d in DATA_DIRS:
+        os.makedirs(f"{VOL}/data/{d}", exist_ok=True)
+        _sh(f"rm -rf {REPO}/data/{d} && ln -sfn {VOL}/data/{d} {REPO}/data/{d}")
+    _sh(f"rm -rf {REPO}/models && ln -sfn {MODELS} {REPO}/models")
+    # 项目以可编辑方式装进 venv（vLLM 插件入口点需要"装过"；--no-deps 不动锁）
+    _sh(f"uv pip install --python {PY} --no-deps -e {REPO} >/dev/null 2>&1", timeout=300)
     return _sh("git rev-parse HEAD", cwd=REPO)["out"].strip()
 
 

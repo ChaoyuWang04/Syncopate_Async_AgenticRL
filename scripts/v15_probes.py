@@ -27,6 +27,7 @@ OUT = Path("_audit/v15_probes")
 from syncopate.core.contract import SESSION_TOOL_SPECS as SESSION_TOOLS  # noqa: E402
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
+from syncopate.train.rollout_loop import chat_template_ids
 
 REPORT_TOOL = [{"type": "function", "function": {
     "name": "session.report",
@@ -99,15 +100,12 @@ def p5_session_tool_budget(tok) -> dict:
     for _, bd in list(bundles.items())[:120]:
         msgs = build_messages(bd, bd.case.tool_menu)
         tools = REGISTRY.menu(bd.case.tool_menu)
-        f = lambda t: len(tok.apply_chat_template(  # noqa: E731
-            msgs, tools=t, add_generation_prompt=True, tokenize=True, enable_thinking=False))
+        f = lambda t: len(chat_template_ids(tok, msgs, tools=t, add_generation_prompt=True, enable_thinking=False))
         bases.append(f(tools))
         deltas.append(f(tools + SESSION_TOOLS + REPORT_TOOL) - bases[-1])
     after = [b + d for b, d in zip(bases, deltas)]
-    full = len(tok.apply_chat_template(
-        [{"role": "system", "content": "S"}, {"role": "user", "content": "U"}],
-        tools=REGISTRY.menu(None) + SESSION_TOOLS + REPORT_TOOL,
-        add_generation_prompt=True, tokenize=True, enable_thinking=False))
+    full = len(chat_template_ids(tok, [{"role": "system", "content": "S"}, {"role": "user", "content": "U"}],
+        tools=REGISTRY.menu(None) + SESSION_TOOLS + REPORT_TOOL, add_generation_prompt=True, enable_thinking=False))
     return {
         "n_cases": len(bases),
         "prompt_before_median": statistics.median(bases),

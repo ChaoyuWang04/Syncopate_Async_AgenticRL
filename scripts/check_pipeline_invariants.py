@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
+from syncopate.train.rollout_loop import chat_template_ids
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS: list[tuple[str, str, object]] = []
@@ -834,8 +835,7 @@ def _rl_prompts_same_source_and_fit(log):
             if tok is not None:
                 # ★ 与 rollout_loop.run_rollout 同一条渲染路径（messages + tools）
                 tools = registry.menu(bundle.case.tool_menu)
-                n = len(tok.apply_chat_template(prompt, tools=tools,
-                                                add_generation_prompt=True, tokenize=True,
+                n = len(chat_template_ids(tok, prompt, tools=tools, add_generation_prompt=True,
                                                 **CHAT_TEMPLATE_KWARGS))
                 max_len = max(max_len, n)
                 if n > MAX_PROMPT_LENGTH:

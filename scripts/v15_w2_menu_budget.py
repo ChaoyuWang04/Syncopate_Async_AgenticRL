@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
+from syncopate.train.rollout_loop import chat_template_ids
 
 
 def main() -> int:
@@ -38,18 +39,15 @@ def main() -> int:
     rows = []
     for b in bundles:
         msgs = build_messages(b, b.case.tool_menu)
-        n_case = len(tok.apply_chat_template(msgs, tools=reg.menu(b.case.tool_menu),
-                                             add_generation_prompt=True, tokenize=True,
+        n_case = len(chat_template_ids(tok, msgs, tools=reg.menu(b.case.tool_menu), add_generation_prompt=True,
                                              **CHAT_TEMPLATE_KWARGS))
-        n_full = len(tok.apply_chat_template(msgs, tools=full_tools,
-                                             add_generation_prompt=True, tokenize=True,
+        n_full = len(chat_template_ids(tok, msgs, tools=full_tools, add_generation_prompt=True,
                                              **CHAT_TEMPLATE_KWARGS))
         rows.append({"case_id": b.case_id, "menu_n": len(b.case.tool_menu or full_tools),
                      "tok_case_menu": n_case, "tok_full_menu": n_full})
     mx_c = max(r["tok_case_menu"] for r in rows); mx_f = max(r["tok_full_menu"] for r in rows)
     over = sum(r["tok_full_menu"] > MAX_PROMPT_LENGTH for r in rows)
-    tools_only = len(tok.apply_chat_template([{"role": "system", "content": ""}, {"role": "user", "content": ""}],
-                                             tools=full_tools, add_generation_prompt=True, tokenize=True,
+    tools_only = len(chat_template_ids(tok, [{"role": "system", "content": ""}, {"role": "user", "content": ""}], tools=full_tools, add_generation_prompt=True,
                                              **CHAT_TEMPLATE_KWARGS))
     out = {"batch": args.batch, "n_cases": len(rows), "full_menu_tools": len(full_tools),
            "tools_block_tokens": tools_only, "max_prompt_case_menu": mx_c, "max_prompt_full_menu": mx_f,
