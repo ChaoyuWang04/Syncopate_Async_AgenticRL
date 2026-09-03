@@ -554,7 +554,7 @@ S4′ 机制冒烟  --steps sft_smoke --sft-arm mech_dry --max-steps 30
 S5′ 链路冒烟  --steps exam_v4 --exam-arm plumb --exam-limit 40（学生底座、无 adapter）
               判据 = seed→check 7 条 · 端点起 · API/worker 起 · u_exam_run rc 0 · judge_v4 rc 0 · triage 出表；分数不看（底座没训）。
 S4′ 读数（09-04 01:46）✅ 机制全过：可训 42.3M（带内）· loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 显存峰值 74.1 GB · 30 步 346 s ·
-              adapter 落盘（sel 点 81 MB）。探针首判红是 grad_norm 只上 wandb 没打 stdout + 峰值正则量错字样（已修：sft.py 每 5 步打判据行）。
+              adapter 落盘（sel 点 81 MB）。探针首判红是 grad_norm 只上 wandb 没打 stdout + 峰值正则量错字样（已修：sft.py 每 5 步打判据行；**01:56 复跑三判全绿**，grad_norm 0.57–10.2）。
 S5′ 读数（09-04 01:42）✅ 链路全通：PG/Redis/语料 0 · 播种 7 campaign · 35B 端点起 500 s · 40 题 137 s · judge/triage rc 0
               （分数无意义：底座未训；fab=42% 是底座本色）。⚠️ 端点起 500 s 要查是 JIT/compile 缓存没命中还是 MoE 装载慢（学习项）。
 S6 rl_cfg ✅（09-04 01:42）：data/rl/v16 660/165 行 · Hydra 合成通过。两个键坑已修：create_rl_sampler 在 0.9 不在 main_ppo（补丁改挂
