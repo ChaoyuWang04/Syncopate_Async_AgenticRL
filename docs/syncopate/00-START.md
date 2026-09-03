@@ -372,6 +372,10 @@ AOT 优先于 JIT       FlashInfer/FA 这类库能装预编译就装（flashinfe
 Volume 路径分层       /vol/repo.git（bare 镜像，flock）· /tmp/repo（每容器 checkout）· /vol/data/{batches,sft,rl}（gitignored 数据）·
                      data/splits 在 git 里不软链 · /vol/models · /vol/_audit/<exp>；`modal volume cp` 对不存在的父目录会失败，用容器内 shutil
 新栈 API 变化         transformers 5：`apply_chat_template(tokenize=True)` 返回 BatchEncoding ⇒ 只走 `rollout_loop.chat_template_ids`
+推代码走 SSH          本机 HTTPS `git push` 会静默挂死（09-04 实测 15 min 无进展、与凭据无关）⇒
+                     `git push git@github.com:ChaoyuWang04/Syncopate_Async_AgenticRL.git main`；容器照旧从 GitHub HTTPS 拉
+⛔ pkill 别按命令行匹配 `pkill -f "git push"` 会把**自己这条 shell**一起杀（命令行里含同一串）⇒ 用 pgrep 看 pid 再 kill
+判据先量对对象        探针 build_v16 的 stale 判据数的是"取回的新缓存"，第二次起必红（09-04 前任核对）⇒ 判据红了先问"量的是不是那件事"
 ```
 
 ## 6 · 跑任何东西之前

@@ -539,11 +539,11 @@ S4′ 机制冒烟  --steps sft_smoke --sft-arm mech_dry --max-steps 30
               峰值显存 <180 GB · tok/s 记录。产物 /vol/checkpoints/sft/mech_dry **不是候选**。
 S5′ 链路冒烟  --steps exam_v4 --exam-arm plumb --exam-limit 40（学生底座、无 adapter）
               判据 = seed→check 7 条 · 端点起 · API/worker 起 · u_exam_run rc 0 · judge_v4 rc 0 · triage 出表；分数不看（底座没训）。
-S6 RL 冒烟    待写。verl 0.9 事实（09-04 容器 dump /vol/_audit/v16/verl09_dump.json）：入口 main_ppo.TaskRunnerV1 + 配置项
+S6 RL 冒烟    已写（`syncopate/train/launch_rl_v1.py` 薄壳；`--steps rl_cfg`（CPU：造 data/rl/v16 + Hydra --cfg job 键名判据）→ `--steps rl_smoke`）。verl 0.9 事实（09-04 容器 dump /vol/_audit/v16/verl09_dump.json）：入口 main_ppo.TaskRunnerV1 + 配置项
               trainer_mode（sync / colocate_async / separate_async，trainer/ppo/v1/）；create_rl_sampler 搬到 trainer/ppo/utils.py
               （main_ppo 里已没有这个名 ⇒ main_ppo_pool 的 monkeypatch 现在挂空，必须改挂 utils + trainer_base）；
               save_lora_only 在 checkpoint_manager；use_prefix_grouper 在 actor 配置；rollout_correction 在 algorithm。
-S7 OPD        前置已核：学生 Qwen3.6-35B-A3B 与教师 Qwen3.8-27B **vocab 逐项相同**（248077，diff 0，encode 相同），chat_template 不同
+S7 OPD        已写（opd.py：--adapter 可空=底座新建 LoRA · --max-steps · vocab 断言 · 默认 prompts=v16_p1_prompts.jsonl；`--steps opd_smoke`）。前置已核：学生 Qwen3.6-35B-A3B 与教师 Qwen3.8-27B **vocab 逐项相同**（248077，diff 0，encode 相同），chat_template 不同
               ⇒ 逐 token 蒸馏可行，但教师侧必须用学生模板渲染的同一串 token id 喂（不走教师自己的模板）。opd.py 的 ADAPTER 仍指
               v13 产物 cand_v13r2_e1 ⇒ 改前置 SFT adapter 参数化。
 ```
