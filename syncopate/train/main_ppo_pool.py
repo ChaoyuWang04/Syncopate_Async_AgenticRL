@@ -210,12 +210,20 @@ def install_sampler_patch() -> None:
 
     ⚠️ **幂等**：装第二次会把补丁版当成 original 套娃，权重更新就乱了。
     """
-    from verl.trainer import main_ppo
+    # ★ verl 0.9（09-04 rl_cfg 实测 AttributeError）：`create_rl_sampler` 定义搬到 `verl.trainer.ppo.utils`，
+    #   V1 trainer（trainer/ppo/v1/trainer_base.py:68）导入时把名字绑进自己的命名空间，`main_ppo` 里已没有这个名
+    #   ⇒ 定义处 + 每个已导入的消费者都改；判据仍是 `[pool] 动态分池启用` 那行（在 TaskRunnerV1 进程里打）。
+    import importlib
+    import sys as _sys
+    try:
+        from verl.trainer.ppo import utils as _def_mod          # 0.9：定义处
+    except ImportError:                                          # 0.8：定义在 main_ppo
+        from verl.trainer import main_ppo as _def_mod
 
-    if getattr(main_ppo.create_rl_sampler, "_syncopate_pool", False):
+    if getattr(_def_mod.create_rl_sampler, "_syncopate_pool", False):
         return                                  # 已经装过
 
-    original = main_ppo.create_rl_sampler
+    original = _def_mod.create_rl_sampler
 
     def patched(data_config, dataset):
         if os.environ.get("SYNCOPATE_POOL", "1") != "1":
@@ -232,7 +240,18 @@ def install_sampler_patch() -> None:
         )
 
     patched._syncopate_pool = True              # 幂等标记
-    main_ppo.create_rl_sampler = patched
+    _def_mod.create_rl_sampler = patched
+    for _m in ("verl.trainer.ppo.v1.trainer_base", "verl.trainer.ppo.ray_trainer", "verl.trainer.main_ppo",
+               "verl.trainer.main_ppo_v0", "verl.experimental.one_step_off_policy.main_ppo"):
+        mod = _sys.modules.get(_m)
+        if mod is None:
+            try:
+                mod = importlib.import_module(_m)
+            except Exception:
+                continue
+        if getattr(mod, "create_rl_sampler", None) is original:
+            mod.create_rl_sampler = patched
+    print("[pool] sampler 补丁已装（定义处 + 已导入消费者）", flush=True)
     # ⚠️ colocate 下 TaskRunner 是同模块内直接调用（`train_sampler = create_rl_sampler(...)`），
     # 所以改模块属性就够了。
     #

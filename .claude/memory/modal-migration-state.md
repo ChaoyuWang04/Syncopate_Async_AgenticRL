@@ -1,17 +1,20 @@
 ---
 name: modal-migration-state
-description: ★09-04 收口：家在 Modal B200×2 + 全新栈（vLLM 0.28/verl 0.9/torch 2.13/FA4），九步探针全绿；v16 口径、Qwen3.6-35B-A3B 学生/Qwen3.8-27B 教师；S3 建库卡 CoT 成行 0；唯一入口 docs/syncopate/31
+description: ★09-04 深夜：家在 Modal B200×2 新栈；裁定⑭ v16 不混任何旧物料；S3 成行 0 已归因（算术+27B 命中 1%+8B 旧料暗道）；teacher_diag / sft mech_dry / exam plumb 三臂并行在跑；S6/S7 已写未跑；唯一入口 docs/syncopate/31
 metadata:
   type: project
 ---
 
-**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**（为什么/现场/学到的/进度/怎么起）；施工与判据 `26 §W4′`；读数 `08 §Modal` + `_audit/stack_probe/`；探针 `modal_app/stack_probe.py`。
+**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**（为什么/现场/学到的/进度/怎么起）；施工与判据 `26 §W4′`（含「S3 run16 成行 0 的归因」「S3-diag」「并行冒烟」三节）；探针 `modal_app/stack_probe.py`。
 
-**裁定链（Chaoyu 09-03/04）**：⑩ 全部口径 v16 从零重来（HEAD 生成不出冻结 v13 切分）· ⑪ 全新栈、目的是学新东西（模型 0 价值）· ⑫ PRO 6000 也不用（无 TMEM 跑不了 FA4），一切在 B200；B300 全链通后重跑收坑；万亿旗舰不做 · ⑬ 教师只要装得下就用大的 ⇒ Qwen3.8-27B 兼两角色。守则⑯（版本必须最新否则写原因，机器判据 versions 步）、⑰（一切网络重活进容器；坑表；并发 A/B）。
+**裁定链（Chaoyu 09-03/04）**：⑩ 全部口径 v16 从零重来 · ⑪ 全新栈、目的是学新东西 · ⑫ 一切在 B200 · ⑬ 教师只要装得下就用大的（Qwen3.8-27B 兼两角色）·
+**⑭（09-04）v16 不许混进任何旧版本产物**：4B/8B 物料（reply/think/定义/闲聊）全由 27B 重生成，v13 triage 不再读，缓存名全带版本 v16_*，Volume 上 run14–16 的 v15_* 缓存搬 pre_v16_run16/ 留档。
 
-**进度（09-04 00:30）**：环境九步 ✅（FA4 4.0×/1297 TFLOPS · NVLink 871 GB/s=34× · MTP 快 12% · EP=2 起得来）· S0/S1 ✅（Modal 全量 951 passed）· S2 ✅（v16 两地 SHA 同）· **S3 建库 run16：前五段 ✅，CoT 蒸馏采样成功但成行 0 ⇒ 下限闸红（下一任第一件事，线索在 26 §W4′ S3 表）**· S4 sft_smoke / S5 exam_v4 已写未跑 · S6 RL / S7 OPD 未写。
+**S3 成行 0 的真相（09-04，前任 -7b 确认）**：选择步 Σsurplus≥0 在"每行 1/10 步有思考"下必然无解 ⇒ 0 行是算术不是丢行；上游 27B 采样 892 步只中 12（1%）；那 64 行的"1 步思考"几乎全是 v15_materials.json 里 8B 旧思考的静默复用。过滤链（900 token 内要 </think> · cjk≥0.5 · 首动作==gold）每个丢弃原因静默 ⇒ 已加计数；`teacher_diag` 步量 27B 原始思考画像，判读预注册（closed_within_900 <50% ⇒ 上限是主拦截；cjk_below_0.5 >50% ⇒ 语言闸）。**诊断结果出来前不改任何阈值。**
 
-**最贵的坑（细节在 31 §3 与 00 §5 ⑰）**：`modal app stop` 要 `--yes`；Modal 对象不许按环境变量条件定义；一个写者（bare 镜像+每容器 checkout）；FlashInfer 必装 AOT 包；transformers 5 的 apply_chat_template 返回 BatchEncoding；**Qwen3.5 工具调用是 XML 线格式**——凡 grep `"name":` 的地方都是雷；FLA naive 参数顺序反；secret 名是 `wandb-secret`。
+**进度（09-04 深夜）**：环境九步 ✅ · S0/S1/S2 ✅ · S3 归因定、诊断在跑 · S4 机制冒烟 mech_dry（DRY 占位数据，非候选）在跑 · S5 链路冒烟 plumb（底座、40 题）在跑 · S6 `launch_rl_v1`（verl 0.9 V1 薄壳；动态分池补丁改挂 `trainer.ppo.utils`+`v1/trainer_base`）已写，`rl_cfg`（CPU 键名判据）先跑 · S7 opd.py v16 化已写（学生/教师 vocab 逐项相同已核，chat_template 不同）。读数落 `/vol/_audit/v16/{teacher_think_diag.*, sft_mech_dry/, exam_plumb/, rl/, opd/}`，本机 `modal volume get`。
 
-**Why：** 09-03 一天从"搬到 PRO 6000"变成"换栈换卡换模型换数据版本"，是简历被指"一年前的技术栈"触发的；所有旧栈读数（5090/PCIe/vLLM 0.12）不再与新栈混比。
-**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list` 看有没有在跑的；改代码后 `git push` 才会到容器；每步先注册判据再跑；红了先怀疑解析器/路径再怀疑模型。
+**坑（新增两条）**：本机 HTTPS `git push` 静默挂死（15 min 无进展，凭据无关）⇒ 一律 `git push git@github.com:ChaoyuWang04/Syncopate_Async_AgenticRL.git main`；`pkill -f "git push"` 会连自己的 shell 一起杀。其余见 31 §3 与 00 §5 ⑰。
+
+**Why：** Chaoyu 09-04 原话「不允许任何之前版本的产物混进我们这一版……一切都是 v16」；并要求能并行的冒烟多起机器、最终整条管线跑通。
+**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；判据红了先怀疑解析器/路径/判据量错对象（本轮 stale 判据就是量错对象）再怀疑模型；每步先注册判据再跑。
