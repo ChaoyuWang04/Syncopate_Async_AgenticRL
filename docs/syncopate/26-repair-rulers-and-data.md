@@ -529,6 +529,13 @@ run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· *
 预注册判读 closed_within_900_rate < 50% ⇒ 900 上限是主拦截 · cjk_below_0.5_rate > 50% ⇒ 语言闸 ·
          都不成立且 action_match_rate(写完的) < 30% ⇒ 教师/gold 不一致（问题在题不在闸）
 纪律     诊断结果出来之前不改任何阈值；改阈值 = 新一轮注册（守则⑬）
+读数 A 臂（09-04 01:47，240 样本，0 错误）  closed_within_900 = 92.9% · think token p50/p90/max = 77/326/894 · **cjk p50 = 0.0，cjk<0.5 = 100%** ·
+         写完的里首动作==gold = 67.7% · 现行链通过率 = 0%。预注册判读命中第二条：**语言闸是主拦截——27B 教师全程英文思考**。
+         行为探针同证：clarify/defer/reject 三档丢弃原因几乎全是 cjk_below_0.5（159/155/160），只有 defer 有 5 条没在 900 内写完。
+         英文思考本身质量好（分步计划、逐项核对、意识到"一次只能一个工具调用"）；见 /vol/_audit/v16/teacher_think_diag.md。
+         mismatch top：get_metrics→policy.get_budget_rule（10）· update_budget→campaign.list（8）· __text__→system.wait（8）——教师倾向多查一步。
+⇒ 待 Chaoyu 裁定（三选一，都不是我能拍的）：① 撤 cjk 闸，收英文思考（学生学"英文想、中文答"）② 让教师用中文想：<think> 后加中文引子
+   （B 臂 zh_prefix 正在量：cjk 与 action_match 是否保持）或系统指令 ③ 换会中文思考的教师。B 臂读数出来后一并呈报。
 ```
 
 **并行冒烟（09-04 Chaoyu：能并行的多起机器；各臂各目录，一个写者）**
