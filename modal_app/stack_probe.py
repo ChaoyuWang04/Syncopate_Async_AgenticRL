@@ -838,12 +838,89 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
     ok = up and rec["seed_check"]["rc"] == 0 and all(x["rc"] == 0 for x in rec.get("runs", [])) and rec.get("judge_rc") == 0
     return _record(f"exam_v4_{arm}" if arm != "v16_smoke" else "exam_v4", ok, rec)
 
+# ─────────────────────────── S6 · RL（verl 0.9 V1）：键名判据（CPU）+ 冒烟（B200×2） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, cpu=8, memory=32768, timeout=1800, secrets=SECRETS)
+def p_rl_cfg(extra: str = "") -> dict:
+    """S6 前置（CPU，零 GPU 费）：① `syncopate data build --pool rl` 造 data/rl/v16（判据：train/val 行数 = 切分 rl 桶 ⁄ val_every）
+    ② `launch_rl_v1 --cfg-only`：Hydra 只合成配置不起 Ray ⇒ 任何键名在 0.9 里不存在会在这里红，不烧 GPU。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16/rl"; os.makedirs(aud, exist_ok=True)
+    rec: dict = {}
+    if not os.path.exists(f"{REPO}/data/rl/v16/train.parquet"):
+        b = _sh(f"{PY} -m syncopate data build --pool rl --batch data/batches/v16 --split-dir data/splits/v16 --out data/rl/v16 --val-every 5 > {aud}/build_rl.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1200)
+        rec["build_rl_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1)); rec["build_rl_tail"] = open(f"{aud}/build_rl.log", errors="replace").read()[-800:]
+    try: rec["rl_manifest"] = json.load(open(f"{REPO}/data/rl/v16/manifest.json"))
+    except Exception as ex: rec["rl_manifest_err"] = repr(ex)[:200]
+    r = _sh(f"{PY} -m syncopate.train.launch_rl_v1 --cfg-only --logger console {extra} > {aud}/cfg_only.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=900)
+    rec["cfg_rc"] = int(re.search(r"RC=(\d+)", r["out"]).group(1))
+    log = open(f"{aud}/cfg_only.log", errors="replace").read()
+    rec["cfg_tail"] = log[-3000:]
+    rec["cfg_has_v1"] = ("trainer_mode: sync" in log) and ("syncopate_adcampaign" in log)
+    vol.commit()
+    ok = rec["cfg_rc"] == 0 and rec["cfg_has_v1"] and "rl_manifest" in rec
+    return _record("rl_cfg", ok, rec)
+
+
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=32, memory=262144, timeout=3 * 3600, secrets=SECRETS)
+def p_rl_smoke(steps: int = 2, gpus: int = 2, extra: str = "", arm: str = "v16_smoke") -> dict:
+    """S6 冒烟（判据在 launch_rl_v1 顶部注册）：每步退出码 0 · `[pool] 动态分池启用` 在 worker 侧 · loss/grad 有限 · reward 非全 0 ·
+    权重同步行 · LoRA-only ckpt 落盘。产物 /vol/checkpoints/grpo/<arm>（一个写者）；日志 /vol/_audit/v16/rl/<arm>.log。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16/rl"; os.makedirs(aud, exist_ok=True)
+    save = f"{VOL}/checkpoints/grpo/{arm}"; _sh(f"rm -rf {save}")
+    if not os.path.exists(f"{REPO}/data/rl/v16/train.parquet"):
+        _sh(f"{PY} -m syncopate data build --pool rl --batch data/batches/v16 --split-dir data/splits/v16 --out data/rl/v16 --val-every 5 > {aud}/build_rl.log 2>&1", cwd=REPO, env=RUN_ENV, timeout=1200)
+    cmd = (f"{PY} -m syncopate.train.launch_rl_v1 --steps {steps} --gpus {gpus} --experiment rl_{arm} --save-path {save} --logger console,wandb {extra} "
+           f"> {aud}/{arm}.log 2>&1; echo RL_RC=$?")
+    r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 600)
+    log = open(f"{aud}/{arm}.log", errors="replace").read()
+    rc = int(re.search(r"RL_RC=(\d+)", r["out"]).group(1)) if re.search(r"RL_RC=(\d+)", r["out"]) else -1
+    import math
+    losses = [float(x) for x in re.findall(r"actor/pg_loss[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
+    gn = [float(x) for x in re.findall(r"actor/grad_norm[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
+    rew = [float(x) for x in re.findall(r"critic/score/mean[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
+    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "steps": steps, "pool_line": "[pool] 动态分池启用" in log, "n_loss": len(losses), "losses": losses[:6],
+           "grad_norms": gn[:6], "score_mean": rew[:6], "weight_sync_lines": len(re.findall(r"update_weights|checkpoint_engine|weights synced", log, flags=re.I)),
+           "ckpt_dirs": _sh(f"find {save} -maxdepth 3 -type d | head -20")["out"], "lora_files": _sh(f"find {save} -name 'adapter_model*' -o -name 'lora*' | head")["out"],
+           "traceback": ("Traceback" in log), "tail": log[-4000:], "topology": _topology()}
+    # 收尾杀全家（Ray/vLLM）等显存归零
+    _sh("ray stop --force >/dev/null 2>&1; pkill -9 -f 'vllm' ; pkill -9 -f EngineCore ; pkill -9 -f ray:: ; sleep 5; true")
+    vol.commit()
+    ok = rc == 0 and rec["pool_line"] and bool(losses) and all(math.isfinite(x) for x in losses) and all(math.isfinite(x) for x in gn) and (not rew or any(x != 0 for x in rew))
+    return _record(f"rl_smoke_{arm}", ok, rec)
+
+
+# ─────────────────────────── S7 · OPD 冒烟（B200×2：学生@0 · 教师+锚@1；逐 token 反 KL） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=16, memory=196608, timeout=2 * 3600, secrets=SECRETS)
+def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", batch: int = 4) -> dict:
+    """S7 冒烟：opd.py（v16 版：--adapter 可空=底座新建 LoRA；教师 27B；vocab 断言）跑 --max-steps N。
+    判据：rc 0 · `[opd-vocab] ✓` · `[opd-mask]` 非零 · 每步 KL 有限 · 零掩码对照断言过（--probe-every 命中一次）· adapter 落盘。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16/opd"; os.makedirs(aud, exist_ok=True)
+    out = f"{VOL}/checkpoints/opd/{arm}"; _sh(f"rm -rf {out}")
+    ad = f" --adapter {adapter}" if adapter else ""
+    cmd = (f"CUDA_VISIBLE_DEVICES=0,1 OPD_AUX_GPUS=1 {PY} -m torch.distributed.run --nproc_per_node=1 --master_port 29517 -m syncopate.train.opd "
+           f"--prompts data/u_route/v16_p1_prompts.jsonl --out {out} --epochs 1 --batch {batch} --max-new 160 --save-every 5 --probe-every 3 --max-steps {max_steps}{ad} "
+           f"> {aud}/{arm}.log 2>&1; echo OPD_RC=$?")
+    r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=2 * 3600 - 300)
+    log = open(f"{aud}/{arm}.log", errors="replace").read()
+    rc = int(re.search(r"OPD_RC=(\d+)", r["out"]).group(1)) if re.search(r"OPD_RC=(\d+)", r["out"]) else -1
+    import math
+    kls = [float(x) for x in re.findall(r"kl[_a-z]*[=:]\s*([-0-9.eE+]+)", log)][:20]
+    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "vocab_ok": "[opd-vocab]" in log, "mask_lines": len(re.findall(r"\[opd-mask\]", log)),
+           "probe_lines": len(re.findall(r"零掩码|zero-mask|\[opd-probe\]", log)), "kls": kls, "trainable": re.findall(r"可训练 ([0-9.]+)M", log)[:1],
+           "adapter_files": _sh(f"find {out} -name 'adapter_model*' | head")["out"], "traceback": "Traceback" in log, "tail": log[-4000:], "topology": _topology()}
+    vol.commit()
+    ok = rc == 0 and rec["vocab_ok"] and all(math.isfinite(x) for x in kls) and bool(rec["adapter_files"].strip())
+    return _record(f"opd_smoke_{arm}", ok, rec)
+
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke"):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -872,6 +949,9 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens)
     if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps, False, sft_arm, sft_train_file, sft_val_file, sft_epochs)
     if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes, 4, exam_limit)
+    if "rl_cfg" in want: run("rl_cfg", p_rl_cfg, rl_extra)
+    if "rl_smoke" in want: run("rl_smoke", p_rl_smoke, rl_steps, rl_gpus, rl_extra, rl_arm)
+    if "opd_smoke" in want: run("opd_smoke", p_opd_smoke, opd_steps, opd_adapter, opd_arm)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")

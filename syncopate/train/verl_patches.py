@@ -339,7 +339,9 @@ def setup_worker() -> None:
     #    真因一直是**作用域**：补丁只打在 driver。
     #    ⇒ 教训：判据行只许写观测，不许写断言（00-START §6 变种②）。
     if os.environ.get("SYNCOPATE_POOL", "1") == "1":
-        _defer_until_imported("verl.trainer.main_ppo", _patch_pool_sampler)
+        # verl 0.9：V1 trainer 在 TaskRunnerV1（Ray actor）里 import trainer_base ⇒ 钩在定义处 utils 与 trainer_base 两个模块上
+        for _m in ("verl.trainer.main_ppo", "verl.trainer.ppo.utils", "verl.trainer.ppo.v1.trainer_base"):
+            _defer_until_imported(_m, _patch_pool_sampler)
     if os.environ.get("SYNCOPATE_NVTX") == "1":
         # 源模块 + 三个已知的消费方都要挂：谁先被 import 都能兜住（见 _patch_nvtx_timers 注释①）
         for _m in ("verl.utils.profiler.performance",

@@ -39,7 +39,7 @@ sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
 STUDENT_BASE = STUDENT_MODEL   # v16：学生底座（LoRA 另挂）
-ADAPTER = "checkpoints/grpo/cand_v13r2_e1/adapter_global_step_25"
+# 裁定⑭（09-04）：不再写死 v13 产物 cand_v13r2_e1；adapter 由 --adapter 传（v16 的 SFT/RL 产物），冒烟可不传 = 底座 + 新建 LoRA
 TEACHER_BASE = TEACHER_MODEL
 
 
@@ -104,7 +104,7 @@ def kl_step(student, aux, tok, prompt: str, reply: str, aux_dev: str,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--prompts", default="data/u_route/p1_prompts.jsonl")
+    ap.add_argument("--prompts", default="data/u_route/v16_p1_prompts.jsonl")   # 裁定⑭：v16 产物（scripts/u_make_p1_prompts.py）
     ap.add_argument("--out", default="checkpoints/opd/p1_r1")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch", type=int, default=8, help="每 rank 每步样本数")
@@ -113,6 +113,9 @@ def main() -> int:
     ap.add_argument("--save-every", type=int, default=30)
     ap.add_argument("--probe-every", type=int, default=20, help="零掩码对照断言间隔")
     ap.add_argument("--no-wandb", action="store_true")
+    ap.add_argument("--adapter", default="", help="学生起点 LoRA（v16 SFT/RL 产物）；空 = 底座上新建 r=32 LoRA（冒烟）")
+    ap.add_argument("--lora-targets", default=None, help="新建 LoRA 的 target_modules 正则；默认同 sft.py 的 attn_shared")
+    ap.add_argument("--max-steps", type=int, default=0, help="冒烟：跑满 N 步就停（0=不限）")
     args = ap.parse_args()
 
     dist.init_process_group("nccl")
@@ -141,17 +144,32 @@ def main() -> int:
         tok.pad_token = tok.eos_token
     log("加载学生…")
     student = AutoModelForCausalLM.from_pretrained(
-        STUDENT_BASE, torch_dtype=torch.bfloat16, device_map={"": rank})
-    student = PeftModel.from_pretrained(student, ADAPTER, is_trainable=True)
+        STUDENT_BASE, dtype=torch.bfloat16, device_map={"": rank})
+    if args.adapter:
+        student = PeftModel.from_pretrained(student, args.adapter, is_trainable=True)
+    else:
+        from peft import LoraConfig, get_peft_model
+        from syncopate.train.sft import LORA_TARGETS_DEFAULT
+        tm = args.lora_targets or os.environ.get("SYNCOPATE_LORA_TARGETS", LORA_TARGETS_DEFAULT)
+        if tm == "attn_shared":
+            tm = r"^(?!.*\.experts\.).*\.(q_proj|k_proj|v_proj|o_proj|in_proj_qkvz|in_proj_ba|in_proj_a|in_proj_b|in_proj_qkv|in_proj_z|out_proj|gate_proj|up_proj|down_proj)$"
+        student = get_peft_model(student, LoraConfig(r=32, lora_alpha=64, lora_dropout=0.0, target_modules=tm, task_type="CAUSAL_LM"))
+        log(f"⚠️ 无 --adapter ⇒ 底座上新建 LoRA（冒烟档；target={tm[:60]}…）")
+    _tr = sum(p.numel() for p in student.parameters() if p.requires_grad)
+    log(f"可训练 {_tr/1e6:.1f}M")
     log("加载教师（底座）与锚（候选冻结）…")
     teacher = AutoModelForCausalLM.from_pretrained(
-        TEACHER_BASE, torch_dtype=torch.bfloat16,
+        TEACHER_BASE, dtype=torch.bfloat16,
         device_map={"": aux_dev}).eval()
+    # ★ 裁定⑬前置（09-04 核实）：学生/教师 vocab 逐项相同（248077，diff 0）才允许逐 token KL；不同只能走文本级
+    _ttok = AutoTokenizer.from_pretrained(TEACHER_BASE)
+    assert _ttok.get_vocab() == tok.get_vocab(), "🔴 学生/教师 vocab 不同 ⇒ 逐 token 蒸馏非法（裁定⑬）"
+    log("[opd-vocab] 学生/教师 vocab 逐项相同 ✓（教师侧用学生模板渲染的同一串 token id）")
     anchor_base = AutoModelForCausalLM.from_pretrained(
-        STUDENT_BASE, torch_dtype=torch.bfloat16,
+        STUDENT_BASE, dtype=torch.bfloat16,
         device_map={"": aux_dev})
-    anchor = PeftModel.from_pretrained(anchor_base, ADAPTER,
-                                       is_trainable=False).eval()
+    anchor = (PeftModel.from_pretrained(anchor_base, args.adapter, is_trainable=False).eval()
+              if args.adapter else anchor_base.eval())
 
     rows = [json.loads(x) for x in open(args.prompts)]
     # ★ 等长分片（08-29 审计修复）：原 rows[rank::world] 在特定条数下各 rank 批次数
@@ -170,7 +188,10 @@ def main() -> int:
 
     step = 0
     saved: list[Path] = []
+    _stop = False
     for ep in range(args.epochs):
+        if _stop:
+            break
         import random
         random.Random(100 + ep).shuffle(rows)
         for i in range(0, len(rows), args.batch):
@@ -235,6 +256,9 @@ def main() -> int:
             torch.nn.utils.clip_grad_norm_(trainables, 1.0)
             opt.step()
             step += 1
+            if args.max_steps and step >= args.max_steps:
+                log(f"[max-steps] 到 {args.max_steps} 步，停止（冒烟）")
+                _stop = True
             dt = time.time() - t0
             if rank == 0:
                 m_chat = kl_chat / max(tok_chat, 1)

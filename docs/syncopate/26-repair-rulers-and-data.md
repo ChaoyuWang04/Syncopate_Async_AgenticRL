@@ -506,6 +506,48 @@ run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· *
        读数：build.log = /vol/_audit/v16/build.log（本机副本 /tmp/v16/build.log 已失效，重新 `modal volume get`）
 ```
 
+**S3 run16 成行 0 的归因（09-04 接手核对，前任 -7b 已确认）**
+```
+① 不是「收到→成行」之间丢了，是选择步的算术必然为 0：64 行候选几乎全是「1/10 步有思考」，sur(r)=think−0.6×blocks 全为负 ⇒
+   pos=[]，可行上界搜索里 su+sur(r)≥0 永远不成立 ⇒ sel=[]（L1155–1190）。怀疑点③成立且是确定性的。
+② 上游真病：27B 教师采样 892 步只命中 12（1%）。那 ~64 个「1 步思考」绝大多数来自 v15_materials.json 的 cot_think
+   （60 条 v14.5 时代 8B 终答步旧思考，按 case_id 静默复用；v16/v13 的 case_id 指同一题）⇒「教师收了 14 条」基本是旧 8B 料。
+③ 行为探针 run15 的 0/0 是 tried=0（JSON 找 "name" 没匹配到步）；run16 的 0/20 是 tried 有了、hit 0 —— 两个 0 不是一个 0，
+   说明过滤链（900 token 内要有 </think> · cjk≥0.5 · 首动作==gold）才是现在的瓶颈；每个丢弃原因都是静默 continue，日志分不出。
+   THINK_MAX_TOKENS=900 是 09-02 按 8B 定的（W3① 撤回时保留），27B 很可能超。
+④ 教师 EngineCore 16:47:04 的 shutdown 是 finally 里 _teardown 的收尾，与 assert 差 3 秒吻合，不是中途死。
+文档外四坑（前任补，已落地）：cot_think 复用暗道（裁定⑭关）· 探针 stale 判据量错对象（数的是取回的新缓存，第二次起必红；改为
+   grep 源码旧名）· S5 容器 PG 是新的要先播种（seed 不带 --check）· S5 adapter 的 served 名与 SYNCOPATE_DECIDER_MODEL 要一致（统一 v16_adapter）。
+```
+
+**S3-diag · 27B 教师原始思考画像（09-04 Chaoyu 放行；判据预注册，跑完不改）**
+```
+做什么   modal run --detach modal_app/stack_probe.py --steps teacher_diag        # B200 单卡，~15 min
+         scripts/v16_teacher_think_diag.py：难例池 20 case × ≤3 步 × 4 样本，max_tokens 4096 只为量真实长度；
+         对每条同时算「按现行 900 上限会不会写完 / cjk / 首动作==gold」；同容器再跑行为探针（现带丢弃计数）
+产物     /vol/_audit/v16/teacher_think_diag.{json,md}（md 原样 8 条给 Chaoyu 看）· behavior_think_probe.json（含 drop）
+预注册判读 closed_within_900_rate < 50% ⇒ 900 上限是主拦截 · cjk_below_0.5_rate > 50% ⇒ 语言闸 ·
+         都不成立且 action_match_rate(写完的) < 30% ⇒ 教师/gold 不一致（问题在题不在闸）
+纪律     诊断结果出来之前不改任何阈值；改阈值 = 新一轮注册（守则⑬）
+```
+
+**并行冒烟（09-04 Chaoyu：能并行的多起机器；各臂各目录，一个写者）**
+```
+S4′ 机制冒烟  --steps sft_smoke --sft-arm mech_dry --max-steps 30
+              容器里 U_BUILD_DRY=6 演练出 _audit/v16/dry_rows.parquet（"[DRY" 占位、不调教师），只验与数据内容无关的机制：
+              判据 = 可训参数 37M±20%（抓 LoRA 正则里按 Qwen3-Next 猜的模块名）· loss/grad 有限 · 存档可被 peft 加载 ΔW>0 ·
+              峰值显存 <180 GB · tok/s 记录。产物 /vol/checkpoints/sft/mech_dry **不是候选**。
+S5′ 链路冒烟  --steps exam_v4 --exam-arm plumb --exam-limit 40（学生底座、无 adapter）
+              判据 = seed→check 7 条 · 端点起 · API/worker 起 · u_exam_run rc 0 · judge_v4 rc 0 · triage 出表；分数不看（底座没训）。
+S6 RL 冒烟    待写。verl 0.9 事实（09-04 容器 dump /vol/_audit/v16/verl09_dump.json）：入口 main_ppo.TaskRunnerV1 + 配置项
+              trainer_mode（sync / colocate_async / separate_async，trainer/ppo/v1/）；create_rl_sampler 搬到 trainer/ppo/utils.py
+              （main_ppo 里已没有这个名 ⇒ main_ppo_pool 的 monkeypatch 现在挂空，必须改挂 utils + trainer_base）；
+              save_lora_only 在 checkpoint_manager；use_prefix_grouper 在 actor 配置；rollout_correction 在 algorithm。
+S7 OPD        前置已核：学生 Qwen3.6-35B-A3B 与教师 Qwen3.8-27B **vocab 逐项相同**（248077，diff 0，encode 相同），chat_template 不同
+              ⇒ 逐 token 蒸馏可行，但教师侧必须用学生模板渲染的同一串 token id 喂（不走教师自己的模板）。opd.py 的 ADAPTER 仍指
+              v13 产物 cand_v13r2_e1 ⇒ 改前置 SFT adapter 参数化。
+```
+
 **S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**
 
 | 补丁（verl_patches.py） | 目标模块在 0.9 | 上游现状 | 处置 |
@@ -734,6 +776,15 @@ prompt 集 v2 = 419 骨架 + chat_bank_v2 + S2 held-out 句式 + 多轮占比 14
 ⑬ 09-03 晚 教师换大   Chaoyu：「人话教师也用更大的模型，只要显存放得下」⇒ 思考教师与人话教师**同一个** Qwen3.8-27B（52 GB 单卡）；
                       Qwen3.5-4B 退役。OPD 逐 token 蒸馏前必须核对教师/学生 **tokenizer 完全一致**（vocab 哈希判据），不一致只能走文本级。
                       候选更大教师 Qwen3.5-122B-A10B（233 GB，两卡 EP=2）留给建库期空卡时试。
+```
+
+```
+⑭ 09-04 v16 不混任何旧物料  Chaoyu 原话「不允许任何之前版本的产物混进我们这一版……新的数据、新的硬件、新的一切，完全脱离于之前的
+                      版本的训练主线，一切都是 v16」。⇒ 教师换 27B 后，v14.5/v15 时代 4B/8B 的物料（v15_materials.json 的
+                      reply/think、v145_defs 61 词、v145_chat_mat 90 条）**一律不复用，全部由 27B 重生成**；v13 考场 triage 文件
+                      不再读（难例族收成常量 HARD_FAMILIES，v16 首遍考场后重定）。缓存文件名全带版本（v16_*），旧名物理上读不到；
+                      run14–16 写在 Volume 的 v15_* 缓存搬进 cache/pre_v16_run16/ 留档。判据：建库脚本源码 grep 旧文件名 = 0（探针 stale 步）。
+                      同日放行的诊断（先量后动）：CoT/行为探针过滤链每类丢弃计数 + 27B 原始思考画像（§W4′ S3-diag）。
 ```
 
 **唯一还开着的批准**：W0 产物（修订版 R5 门槛表）做完后一次呈报（09-02 已口头批：按推荐执行）。

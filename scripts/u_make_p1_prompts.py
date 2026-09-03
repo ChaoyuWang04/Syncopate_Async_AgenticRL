@@ -120,7 +120,9 @@ def main() -> None:
     if dup:
         print(f"⚠️ 剔除与考场逐字重叠 {len(dup)} 条（显式丢弃，不静默）")
         rows = [r for r in rows if r not in dup]
-    p = Path("data/u_route/p1_prompts.jsonl")
+    import sys as _sys
+    # 裁定⑭（09-04）：产物带数据版本名；demo 状态 09-02 加了 CMP_7，旧 p1_prompts.jsonl 不再被 v16 读
+    p = Path(_sys.argv[1] if len(_sys.argv) > 1 else "data/u_route/v16_p1_prompts.jsonl")
     with open(p, "w") as f:
         for i, r in enumerate(rows):
             f.write(json.dumps({"id": f"p1_{i:04d}", **r}, ensure_ascii=False) + "\n")
