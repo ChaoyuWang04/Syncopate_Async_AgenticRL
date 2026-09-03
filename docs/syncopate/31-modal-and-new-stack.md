@@ -102,16 +102,20 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 1670 条/6681 文件，Modal 3.5 min |
-| S3 v16 训练集建库 | 🔴 run16 卡 CoT 成行 0（前五段 ✅） |
-| S4 SFT 冒烟（p_sft_smoke，--max-steps） | ⬜ 已写好 |
-| S5 考场 v4 单容器（p_exam_v4） | ⬜ 已写好 |
-| S6 RL 冒烟（verl 0.9 V1 sync colocate）· S7 OPD | ⬜ 未写 |
+| S3 v16 训练集建库 | 🔴 run16 卡 CoT 成行 0（前五段 ✅）；**09-04 归因已定**（26 §W4′：选择步算术必然为 0 ← 27B 命中率 1% ← 过滤链；"收到的思考"多是 8B 旧料）；裁定⑭ 后旧物料全关、缓存改 v16_*；S3-diag（teacher_diag）在跑 |
+| S4 SFT 冒烟（p_sft_smoke） | 🟡 机制冒烟 mech_dry（DRY 占位数据，只验 LoRA 模块名/显存/吞吐/存档）在跑；真数据版等 S3 |
+| S5 考场 v4 单容器（p_exam_v4） | 🟡 链路冒烟 plumb（学生底座、40 题）在跑；前任补的播种/adapter 名两坑已修 |
+| S6 RL 冒烟（verl 0.9 V1） | ⬜ 已写（`launch_rl_v1` 薄壳 + rl_cfg/rl_smoke 步；动态分池补丁改挂 0.9 定义处）；rl_cfg（CPU 键名判据）先跑 |
+| S7 OPD 冒烟 | ⬜ 已写（opd.py v16 化：--adapter/--max-steps/vocab 断言；学生/教师 vocab 已核相同）|
 
 ```
 run13  hydrate 即死：secret 按环境变量条件定义，本机/容器求值不同
 run14  L2/L1 断言 FRESH_0125 无人话终答：源题没按收场类型过滤（defer 无人话终答），旧缓存作废后显形
 run15  CoT 段崩：候选从上一版 parquet 选（v16 没有上一版）；同时发现教师动作解析/行为探针按 JSON 找 "name":（XML 下永远 0）
-run16  前五段全过；CoT 蒸馏采样成功（≥14 条「收」）但成行 0 ⇒ 下限闸红；下一任从这里接（26 §W4′ S3 表）
+run16  前五段全过；CoT 蒸馏采样成功（≥14 条「收」）但成行 0 ⇒ 下限闸红
+09-04  归因（26 §W4′「S3 run16 成行 0 的归因」）：① 选择步 Σsurplus≥0 在"每行 1/10 步有思考"下无解 ⇒ 0 行是算术不是丢行
+       ② 27B 采样 892 步只中 12（1%）；那些"1 步思考"几乎全是 v15_materials 里 8B 旧料的静默复用 ③ 过滤链每个丢弃原因静默
+       ⇒ 裁定⑭（v16 不混任何旧物料）+ 丢弃计数 + teacher_diag 画像（预注册判读）
 ```
 
 ---
@@ -125,6 +129,9 @@ run16  前五段全过；CoT 蒸馏采样成功（≥14 条「收」）但成行
 考场       modal run --detach modal_app/stack_probe.py --steps exam_v4 --exam-adapter /vol/checkpoints/sft/… --exam-passes 1
 容器里跑脚本 modal run modal_app/stack_probe.py --steps exec --exec-file x.py
 停         modal app list → modal app stop <id> --yes → 再 list 核对
+诊断       modal run --detach modal_app/stack_probe.py --steps teacher_diag                     # 27B 原始思考画像（S3-diag）
+并行冒烟   --steps sft_smoke --sft-arm mech_dry · --steps exam_v4 --exam-arm plumb --exam-limit 40 · --steps rl_cfg（CPU）→ rl_smoke · --steps opd_smoke
+推代码     本机 HTTPS push 会静默挂死（09-04 实测 15 min 无进展）⇒ `git push git@github.com:ChaoyuWang04/Syncopate_Async_AgenticRL.git main`（SSH 已配）
 ```
 
 成本：B200 $6.25/卡时；今天全部实验（含反复）估计 <$40。
