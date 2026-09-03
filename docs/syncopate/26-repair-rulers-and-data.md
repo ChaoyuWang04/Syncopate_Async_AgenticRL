@@ -487,6 +487,16 @@ S1-8 ✅ PG 16 + Redis 进镜像，pytest 步起服务并灌语料
        TypeError、`len()` 量成键数=2 ⇒ 一律走 `rollout_loop.chat_template_ids`（tests/train/test_chat_template_ids.py）
 ```
 
+**S3 建库进度（09-04 凌晨，B200 单卡 `stack_probe --steps build_v16`）**
+```
+run14  教师 Qwen3.8-27B 121 s 起服务 ✅ · 行为类 think 探针跑了但用的是旧代码（PYTHONPATH 指到已废弃的 /vol/repo，探针常量顺序 bug，已修）
+       · 压舱人话 687 条全部由 27B 生成（~7 min）✅ · **L2/L1 构造断言 FRESH_0125 无真实终答人话** ⇒ 根因：源 case 只过滤了首动作
+       是 get_metrics，没过滤收场类型；defer 收场的 case 没有人话终答（历史该是信令自己的话＝④族的事）。v13 时代被累积缓存盖住，
+       v16 重编号 + 缓存作废后首次显形。修：源 case 限终答型（tool_call/answer），与 `_need` 同条件。
+       · 教师缓存写在容器本地被丢 ⇒ 探针改为建库前后与 /vol/_audit/v16/cache 往返（断点不从零）
+run15  上述修完重发（教师重起 2 min + 压舱缓存命中 ⇒ 直接进 L2/L1）
+```
+
 **S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**
 
 | 补丁（verl_patches.py） | 目标模块在 0.9 | 上游现状 | 处置 |
