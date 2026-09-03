@@ -477,7 +477,8 @@ S1-5 ✅ PrefixGrouper 走上游 `actor.use_prefix_grouper`；自研接线待删
 S1-6 ✅ _sync_repo `uv pip install --no-deps -e /vol/repo` + models 软链
 S1-7 ✅ Qwen3.6-35B-A3B（40 层·256 专家·top-8·共享专家 512·10 全注意力+30 线性注意力）：LoRA r=32 all-linear ≈ **2554M**（专家 2517M，AdamW 状态 ≈14 GiB）
        vs 注意力+共享专家 ≈ **37M** ⇒ sft.py 默认 SYNCOPATE_LORA_TARGETS=attn_shared（排除 .experts.），all-linear 留作开关；模块名与参数量在 S4 真模型上核
-S1-8 🔶 PG 16 + Redis 进镜像，pytest 步起服务并灌语料（run11 验证中）
+S1-8 ✅ PG 16 + Redis 进镜像，pytest 步起服务并灌语料
+**S1 出口 ✅（09-03 23:39，Modal run12）**：新代码 + PG/Redis + v16 数据，`stack_probe --steps pytest` 退出码 0（上一轮 951 passed / 23 skipped，跳过从 318 降到 23）
 **S2 ✅ v16 确定性判据（09-03 深夜）**：Modal（p_rebuild_v16，GCP 容器）与本机（samwang-X870I）各自从 configs/buckets/v16.yaml 独立生成，
        三份切分 SHA-256 **逐一相同**（eval b15e314a… · sft 831bfe1b… · rl 05a9c8c6…），6681 个 case 文件；Modal 全程 3.5 min
        （generate 90 s · menus 72 s · split 36 s）。⇒ v16 case 库 = 与机器无关的纯函数产物，可随时重生成，不再需要"冻结文件"。

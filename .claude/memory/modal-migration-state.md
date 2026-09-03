@@ -48,3 +48,7 @@ B200 探索队列 18 条已进 `docs/infra_exp/01-TASKS.md §1`（P0 基线 → 
 **★09-03 深夜 S1 对齐大半落地并已提交推送**：v16 口径一处（split.DATA_VERSION）· 模型路径一处（core/model_paths.py）· **Qwen3.5 工具调用是 XML 线格式**（`<function=…><parameter=…>`，不是 JSON）——解析两认、渲染默认 XML、schema 收型；
 **Qwen3.5 模板渲单条 tool 消息会 raise "No user query found"** ⇒ 增量渲染用桩后缀法（rollout_loop.render_env_message_ids）。本机 v16 独立生成 SHA 记在 _audit/v16/。
 坑：脚本批量插 import 会落进多行 `import (` 括号里 ⇒ 插完必 py_compile 全扫。
+**守则⑰ 补（09-03）**：Modal 红利 = A/B 各臂并发独立容器；纪律 = 各臂各目录、⛔ 同路径一个写者（/vol/repo 的 git reset 会互相打）、每臂带拓扑指纹、本机统一汇总。
+**★S2 ✅（09-03 深夜）v16 case 库 Modal/本机独立生成 SHA 逐一相同（1670 条/6681 文件，Modal 3.5 min）⇒ 数据是纯函数产物。**
+新栈坑：transformers 5 `apply_chat_template(tokenize=True)` 返回 BatchEncoding ⇒ 统一走 `rollout_loop.chat_template_ids`；Modal 并发 run 撞 /vol/repo 的 git index.lock ⇒ 改为共享 bare 镜像 + 每容器 /tmp/repo checkout。
+**★S1 出口 ✅（09-03 23:39）**：Modal 上新代码全量测试退出码 0（PG/Redis 容器内起、v16 数据在 /vol/data）。下一步 S3 = B200 起 Qwen3.8-27B 教师 + 26 §W4 七步建 v16 训练集 + 画廊给 Chaoyu。
