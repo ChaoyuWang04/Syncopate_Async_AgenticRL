@@ -60,9 +60,11 @@ STACK = LOCAL_ROOT / "modal_app" / "stack"
 
 app = modal.App(APP_NAME)
 vol = modal.Volume.from_name(VOL_NAME, create_if_missing=True)
-# wandb：Chaoyu 本机执行一次 `modal secret create wandb WANDB_API_KEY=<key>`；之后训练类函数都带这个 secret。
-# 还没建 secret 时用 STACK_NO_WANDB=1 跳过（否则 app 起动就报 secret 不存在）。
-SECRETS = [] if os.environ.get("STACK_NO_WANDB") == "1" else [modal.Secret.from_name("wandb")]
+# wandb：secret `wandb` **始终存在**（09-03 先建了占位 WANDB_DISABLED=true；Chaoyu 用
+#   `modal secret create wandb WANDB_API_KEY=<key> --force` 覆盖成真 key）。
+# ⛔ 不许按环境变量条件定义 Modal 对象：本机与容器里求值不同 ⇒ "Function has 3 dependencies but container got 2"
+#   （09-03 run13 就是这么在 hydrate 阶段直接死的）。
+SECRETS = [modal.Secret.from_name("wandb")]
 
 _ENV = {
     "PATH": "/env/.venv/bin:/root/.local/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin",   # venv/bin 必须在：flashinfer JIT 子进程找 ninja
@@ -665,7 +667,7 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         return _record("build_v16", False, {**rec, "log_tail": open(log, errors="replace").read()[-2000:]})
     try:
         if not skip_probe:
-            r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
+            r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
         # 旧缓存不许命中（改名后的 *.pre_v16.json 不会被读；这里再守一道）
         stale = _sh("ls data/u_route/v15_cot_rows.json data/u_route/v15_l2l1_rows.json data/u_route/v15_ballast_replies.json 2>/dev/null | wc -l", cwd=REPO)["out"].strip()
@@ -691,12 +693,45 @@ def p_build_v16(skip_probe: bool = False) -> dict:
           and rec.get("prompt_budget", {}).get("rc") == 0 and rec.get("gallery", {}).get("dry_hits", 1) == 0)
     return _record("build_v16", ok, rec)
 
+
+# ─────────────────────────── S4 · SFT 冒烟（B200 单卡：Qwen3.6-35B-A3B + LoRA attn_shared，N 步） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=131072, timeout=3 * 3600, secrets=SECRETS)
+def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False) -> dict:
+    """判据（26 W4′ S4）：loss 有限且末窗均值 < 首窗均值 · grad_norm 全有限 · 可训参数量 ≈ 37M±20% · 存档能被 peft 加载且 ΔW>0 ·
+    峰值显存 < 180 GB · 吞吐 tok/s 记录（学习项）。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16"; os.makedirs(aud, exist_ok=True)
+    out = f"{VOL}/checkpoints/sft/v16_smoke"; _sh(f"rm -rf {out}")
+    wandb_flag = "" if use_wandb else "--no-wandb"
+    cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file data/sft/v16/train.parquet --val-file data/sft/v16/val.parquet "
+           f"--out {out} --epochs 1 --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_v16_smoke "
+           f"> {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?")
+    r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 300)
+    log = open(f"{aud}/sft_smoke.log", errors="replace").read()
+    rc = int(re.search(r"SFT_RC=(\d+)", r["out"]).group(1)) if re.search(r"SFT_RC=(\d+)", r["out"]) else -1
+    losses = [float(x) for x in re.findall(r"train/loss[=: ]+([0-9.]+)", log)] or [float(x) for x in re.findall(r"loss=([0-9.]+)", log)]
+    gnorms = [float(x) for x in re.findall(r"grad_norm[=: ]+([0-9.eE+-]+)", log)]
+    trainable = re.findall(r"可训练 ([0-9.]+)M", log)
+    peak = re.findall(r"peak_memory_gb[=: ]+([0-9.]+)", log) or re.findall(r"峰值显存[^0-9]*([0-9.]+)", log)
+    dw = re.findall(r"\|\|ΔW\|\|/\|\|W\|\| = ([0-9.]+)%", log)
+    import math
+    k = max(1, len(losses) // 4)
+    loss_ok = bool(losses) and all(math.isfinite(x) for x in losses) and (sum(losses[-k:]) / k) < (sum(losses[:k]) / k)
+    gn_ok = bool(gnorms) and all(math.isfinite(x) for x in gnorms)
+    tr_ok = bool(trainable) and 30 <= float(trainable[0]) <= 45
+    ok = rc == 0 and loss_ok and gn_ok and tr_ok
+    rec = {"rc": rc, "secs": r["secs"], "n_loss_points": len(losses), "loss_first_last": (losses[:3], losses[-3:]), "grad_norm_minmax": (min(gnorms), max(gnorms)) if gnorms else None,
+           "trainable_M": trainable[:1], "peak_memory_gb": peak[-1:], "delta_w_pct": dw[-1:], "judge": {"loss": loss_ok, "grad": gn_ok, "trainable": tr_ok},
+           "lora_targets_line": [l for l in log.splitlines() if "[lora-targets]" in l][:1], "tail": log[-3000:], "topology": _topology()}
+    vol.commit()
+    return _record("sft_smoke", ok, rec)
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = ""):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -722,6 +757,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
     if "build_v16" in want: run("build_v16", p_build_v16)
+    if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")

@@ -366,6 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
     parser.add_argument("--wandb-run", default=None)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--max-steps", type=int, default=0,
+                        help="冒烟用：跑满 N 个优化器步就停（0=不限）。停下后仍做本 epoch 的 eval/位移/存档，判据齐全")
     parser.add_argument("--resume-adapter", default=None,
                         help="从已存的 epoch adapter 续训（例 checkpoints/sft/v14_r2/epoch2）。"
                              "lr 调度按 --resume-epochs 快进到断点位置（总步数语义与连续训练一致）；"
@@ -627,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
     skipped = 0                 # ★ 没有监督 token 被跳过的 micro-step 数
     sup_tokens = 0              # ★ 真正参与 loss 的 token 数（不是序列 token 数）
     started = time.time()
+    hit_max_steps = False
     for epoch in range(1 + start_epoch, args.epochs + 1):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)   # 不设的话每个 epoch 洗牌顺序相同
@@ -663,6 +666,9 @@ def main(argv: list[str] | None = None) -> int:
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
+                if args.max_steps and global_step - steps_per_epoch * start_epoch >= args.max_steps:
+                    print(f"[max-steps] 到 {args.max_steps} 步，停止本 epoch 的训练循环（冒烟）")
+                    hit_max_steps = True
                 if global_step in sel_steps and rank == 0:
                     _save_selection_point(model, ROOT / args.out, sel_steps[global_step],
                                           global_step)
@@ -685,6 +691,8 @@ def main(argv: list[str] | None = None) -> int:
                 if prof_left <= 0:     # 抓够就收工，不给后面的步数留开销
                     prof.stop()
                     prof = None
+            if hit_max_steps:
+                break
         if world > 1:
             # epoch 均值跨 rank 汇总——否则打印的只是 rank0 那 1/world 份数据的 loss
             agg = torch.tensor([running, float(seen)], device=device)
@@ -725,6 +733,8 @@ def main(argv: list[str] | None = None) -> int:
               f"（正常 LoRA 0.5%–5%；M7 那次只有 0.0093% ⇒ 白训）")
         log({"health/delta_w_ratio": ratio,
              "health/epoch_seconds": time.time() - epoch_started}, step=global_step)
+        if hit_max_steps:
+            break
         if device.type == "cuda":
             peak = torch.cuda.max_memory_allocated() / 1e9
             print(f"          显存峰值 {peak:.1f} GB")
