@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
@@ -639,6 +640,57 @@ def p_rebuild_v16(expected_sha: str = "") -> dict:
     ok = bool(exp) and all(same.values())
     return _record("rebuild_v16", ok, {"sha_modal": sha, "sha_expected": exp, "same": same, "batch_files": nfiles, "log": log})
 
+
+# ─────────────────────────── S3 · v16 训练集建库（B200 单卡：Qwen3.8-27B 教师 + 26 §W4 七步） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=3 * 3600, secrets=SECRETS)
+def p_build_v16(skip_probe: bool = False) -> dict:
+    """W4 七步（v16/B200 版）：① 教师起服务（Qwen3.8-27B @8210，两角色同端点）② 行为类 think 探针（≥70% 才收）
+    ③ 旧缓存已在 git 里改名作废（*.pre_v16.json，不许命中）④ 建库 tee 入 /vol/_audit/v16/build.log
+    ⑤ 判据：[同形] 不同形 0 · [CoT-v15] 命中率行在 · 出厂体检 ✅ · prompt 预算零截断 · 产物 grep "[DRY" = 0
+    ⑥ 新池画像（budget_table）⑦ 画廊 markdown 落盘（给 Chaoyu 逐条看）。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16"; os.makedirs(aud, exist_ok=True)
+    env = {**RUN_ENV, "SYNCOPATE_TEACHER_LANG_URL": "http://127.0.0.1:8210/v1", "SYNCOPATE_TEACHER_THINK_URL": "http://127.0.0.1:8210/v1"}
+    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len 18432 "
+           f"--gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' --max-num-seqs 64")
+    log = "/tmp/vllm_teacher.log"
+    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    up = False; t0 = time.time()
+    while time.time() - t0 < 1500 and proc.poll() is None:
+        if _sh("curl -sf http://127.0.0.1:8210/health")["rc"] == 0: up = True; break
+        time.sleep(5)
+    rec: dict = {"teacher_up": up, "teacher_startup_secs": round(time.time() - t0, 1)}
+    if not up:
+        open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()); _teardown(proc); vol.commit()
+        return _record("build_v16", False, {**rec, "log_tail": open(log, errors="replace").read()[-2000:]})
+    try:
+        if not skip_probe:
+            r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
+            rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
+        # 旧缓存不许命中（改名后的 *.pre_v16.json 不会被读；这里再守一道）
+        stale = _sh("ls data/u_route/v15_cot_rows.json data/u_route/v15_l2l1_rows.json data/u_route/v15_ballast_replies.json 2>/dev/null | wc -l", cwd=REPO)["out"].strip()
+        rec["stale_caches_present"] = int(stale or 0)
+        b = _sh(f"{PY} scripts/u_build_v14_5.py > {aud}/build.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env=env, timeout=2 * 3600)
+        blog = open(f"{aud}/build.log", errors="replace").read()
+        rec["build_rc"] = int(re.search(r"BUILD_RC=(\d+)", b["out"]).group(1)) if re.search(r"BUILD_RC=(\d+)", b["out"]) else -1
+        rec["build_secs"] = b["secs"]
+        rec["judge_lines"] = [l[-200:] for l in blog.splitlines() if any(k in l for k in ("[同形]", "[CoT-v15]", "出厂体检", "份额", "密度", "✅", "🔴"))][-40:]
+        rec["build_tail"] = blog[-2500:]
+        if rec["build_rc"] == 0:
+            g = _sh(f"{PY} scripts/v15_r2_gates.py --prompt-budget data/sft/v16/train.parquet 2>&1 | tail -8", cwd=REPO, env=env, timeout=1200)
+            rec["prompt_budget"] = {"rc": g["rc"], "tail": g["out"][-800:]}
+            gal = _sh(f"{PY} scripts/v15_data_gallery.py --parquet data/sft/v16/train.parquet > {aud}/gallery.md 2>{aud}/gallery.err; echo RC=$?", cwd=REPO, env=env, timeout=1200)
+            rec["gallery"] = {"tail": gal["out"][-200:], "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
+            bt = _sh(f"{PY} scripts/v15_w3_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
+            rec["budget_table"] = bt["out"][-1200:]
+            rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
+    finally:
+        _teardown(proc); open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()[-20000:]); vol.commit()
+    ok = (rec.get("build_rc") == 0 and rec.get("stale_caches_present", 1) == 0
+          and any("不同形 0" in l or "不同形: 0" in l for l in rec.get("judge_lines", []))
+          and rec.get("prompt_budget", {}).get("rc") == 0 and rec.get("gallery", {}).get("dry_hits", 1) == 0)
+    return _record("build_v16", ok, rec)
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
@@ -669,6 +721,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "wandb" in want: run("wandb", p_wandb)
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
+    if "build_v16" in want: run("build_v16", p_build_v16)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")

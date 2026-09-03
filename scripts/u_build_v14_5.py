@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 import random
 import re
 import sys
@@ -27,8 +28,9 @@ sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
 rng = random.Random(1455)
-T4B = "http://127.0.0.1:8210/v1"
-T8B = "http://127.0.0.1:8211/v1"
+# ★ 裁定⑬（09-03）：人话教师与思考教师同一个 Qwen3.8-27B 端点；B200/Modal 上由 stack_probe.p_build_v16 起在 :8210，两条 URL 同指
+T4B = os.environ.get("SYNCOPATE_TEACHER_LANG_URL", "http://127.0.0.1:8210/v1")    # 人话（enable_thinking=False）
+T8B = os.environ.get("SYNCOPATE_TEACHER_THINK_URL", "http://127.0.0.1:8211/v1")   # 思考（/completions 续写 <think>）
 SICK = re.compile(r"指指|的的|是是|了了")
 PERSONA_LEAK = re.compile(r"我(每天)?(喝|吃|睡觉|跑步|锻炼|健身)|我的身体")
 # ⛔ 2026-08-30：这里原本是**字典**列表，而 `required_answer_fields` 全项目都按对象属性读
