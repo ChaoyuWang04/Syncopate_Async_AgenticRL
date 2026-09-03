@@ -76,7 +76,8 @@ _ENV = {
 # 镜像：依赖表三件套 + uv sync（flash-attn 轮子在锁文件里，随 sync 装）
 image = (
     modal.Image.from_registry(BASE_IMAGE, add_python="3.12")
-    .apt_install("git", "curl", "build-essential", "ca-certificates")
+    # postgresql-16 / redis-server：考场链与 runtime 测试的底座（08 §1.2 Modal 版：系统包 + 仓库 bootstrap 脚本按 env 指路径）
+    .apt_install("git", "curl", "build-essential", "ca-certificates", "postgresql-16", "postgresql-client-16", "redis-server")
     .run_commands("curl -LsSf https://astral.sh/uv/install.sh | sh")
     .env(_ENV)
     .add_local_file(STACK / "pyproject.toml", "/env/pyproject.toml", copy=True)
@@ -522,15 +523,31 @@ def p_vllm_ep() -> dict:
     return _record("vllm_ep", ok, {**rec, "topology": _topology()})
 
 
+
+SERVICE_ENV = {"PG_HOME": "/usr/lib/postgresql/16", "PG_SHARE": "/usr/share/postgresql/16", "PG_LIB": "/usr/lib/x86_64-linux-gnu",
+               "PGDATA": "/tmp/pgdata/16", "LOGFILE": "/tmp/pgdata/pg.log", "REDIS_HOME": "/usr", "REDIS_DIR": "/tmp/redis",
+               "PYTHON": PY,   # pg_bootstrap 用它跑 alembic（默认指 $REPO/.venv，Modal 上 venv 在 /env）
+               "SYNCOPATE_PG_DSN": "postgresql://syncopate:syncopate@127.0.0.1:5432/syncopate",
+               "SYNCOPATE_REDIS_URL": "redis://:syncopate-dev@127.0.0.1:6379/0"}
+
+
+def _start_services() -> dict:
+    """容器内起 PG + Redis（都是派生产物，容器重启即丢；schema 由仓库 alembic 重建）并灌语料。判据 = 两个 bootstrap 退出码 0。"""
+    pg = _sh("bash scripts/pg_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=600)
+    rd = _sh("bash scripts/redis_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=300)
+    corpus = _sh(f"{PY} scripts/ingest_corpus.py", cwd=REPO, env=SERVICE_ENV, timeout=600) if pg["rc"] == 0 else {"rc": -1, "out": "skipped"}
+    return {"pg": {"rc": pg["rc"], "tail": pg["out"][-600:]}, "redis": {"rc": rd["rc"], "tail": rd["out"][-400:]}, "corpus": {"rc": corpus["rc"], "tail": corpus["out"][-300:]}}
+
 # ─────────────────────────── 仓库测试在新栈上跑（对齐地图） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, cpu=16, memory=32768, timeout=3600)
-def p_pytest(args: str = "tests -q -rfE -p no:cacheprovider") -> dict:
+def p_pytest(args: str = "tests -q -rfE -p no:cacheprovider", with_services: bool = True) -> dict:
     """我们自己的代码在 verl 0.9 / transformers 5.10 / vllm 0.28 下还能不能 import 与通过测试。
     本机旧栈基线 908 passed（09-02）。无 PG/Redis 的 runtime 测试会 skip/红，先只看**收集错误与失败清单**=对齐工作量地图。"""
     _sync_repo()
     r0 = _sh(f"{PY} scripts/ingest_external.py", cwd=REPO, timeout=600)      # 派生数据（27 个测试要）
+    services = _start_services() if with_services else {}
     # ⚠️ 管道接 tail 会吞掉 pytest 的退出码（09-03 第一版就此误判 ✅）⇒ 输出落文件、退出码单独取
-    r = _sh(f"{PY} -m pytest {args} > /tmp/pytest_out.txt 2>&1; echo PYTEST_RC=$?", cwd=REPO, timeout=3300)
+    r = _sh(f"{PY} -m pytest {args} > /tmp/pytest_out.txt 2>&1; echo PYTEST_RC=$?", cwd=REPO, env=SERVICE_ENV, timeout=3300)
     import re
     full = open("/tmp/pytest_out.txt", errors="replace").read()
     rc_m = re.search(r"PYTEST_RC=(\d+)", r["out"]); prc = int(rc_m.group(1)) if rc_m else -1
@@ -539,7 +556,7 @@ def p_pytest(args: str = "tests -q -rfE -p no:cacheprovider") -> dict:
     errors = [l for l in full.splitlines() if l.startswith("ERROR ") or l.startswith("FAILED ")]
     os.makedirs(AUDIT, exist_ok=True); open(f"{AUDIT}/pytest_full.txt", "w").write(full)
     ok = prc == 0
-    rec = _record("pytest", ok, {"pytest_rc": prc, "summary": summ[-1] if summ else "", "errors_failed": errors[:80], "ingest_rc": r0["rc"], "tail": tail[-6000:]})
+    rec = _record("pytest", ok, {"pytest_rc": prc, "summary": summ[-1] if summ else "", "errors_failed": errors[:80], "ingest_rc": r0["rc"], "services": services, "tail": tail[-6000:]})
     return rec
 
 
