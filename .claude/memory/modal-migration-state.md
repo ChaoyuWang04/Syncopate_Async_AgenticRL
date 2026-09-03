@@ -52,3 +52,5 @@ B200 探索队列 18 条已进 `docs/infra_exp/01-TASKS.md §1`（P0 基线 → 
 **★S2 ✅（09-03 深夜）v16 case 库 Modal/本机独立生成 SHA 逐一相同（1670 条/6681 文件，Modal 3.5 min）⇒ 数据是纯函数产物。**
 新栈坑：transformers 5 `apply_chat_template(tokenize=True)` 返回 BatchEncoding ⇒ 统一走 `rollout_loop.chat_template_ids`；Modal 并发 run 撞 /vol/repo 的 git index.lock ⇒ 改为共享 bare 镜像 + 每容器 /tmp/repo checkout。
 **★S1 出口 ✅（09-03 23:39）**：Modal 上新代码全量测试退出码 0（PG/Redis 容器内起、v16 数据在 /vol/data）。下一步 S3 = B200 起 Qwen3.8-27B 教师 + 26 §W4 七步建 v16 训练集 + 画廊给 Chaoyu。
+**wandb ✅（09-03）**：secret 名是 Chaoyu 建的 `wandb-secret`（不是 `wandb`，我建的占位 `wandb` 待删）；判据 `--steps wandb` 过。Modal 对象不许按环境变量条件定义（hydrate 死）。S3 建库 run14 在跑（B200 单卡 27B 教师）。
+**S3 建库三连撞（09-04 凌晨，都是 v16 重来 + Qwen3.5 XML 线格式暴露的）**：① L2/L1 源 case 未按收场类型过滤 ② 压舱桶/CoT 候选依赖旧 parquet ③ 教师动作解析与行为探针按 JSON 找 `"name":`（XML 下命中率 0）。教训：**换线格式后凡是 grep/regex 找 `"name":` 的地方都是雷**，全库 grep 一遍。run16 在跑。

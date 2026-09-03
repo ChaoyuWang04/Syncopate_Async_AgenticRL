@@ -31,7 +31,7 @@ from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MO
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # ── 通道切分 ────────────────────────────────────────────────────────────────
-_TOOLCALL = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
+_TOOLCALL = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.S)   # 线格式无关：JSON 或 Qwen3.5 XML 都截出来，解析交给 parsing_v15
 _THINK = re.compile(r"<think>(.*?)</think>", re.S)
 _ASSIST = re.compile(r"<\|im_start\|>assistant\n(.*?)<\|im_end\|>", re.S)
 _USER = re.compile(r"<\|im_start\|>user\n(.*?)<\|im_end\|>", re.S)
@@ -60,12 +60,9 @@ def split_row(text: str) -> dict:
             if th.strip():
                 out["think"].append(th.strip())
         body = _THINK.sub("", seg).strip()
-        calls = _TOOLCALL.findall(body)
-        for c in calls:
-            try:
-                out["calls"].append(json.loads(c))
-            except Exception:
-                pass
+        from syncopate.core.parsing_v15 import parse_tool_calls
+        calls, _malformed = parse_tool_calls(body)      # [{"name", "arguments"}]，JSON/XML 两种线格式都认
+        out["calls"].extend(calls)
         rest = _TOOLCALL.sub("", body).strip()
         if rest:
             out["prose"].append(rest)

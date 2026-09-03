@@ -50,7 +50,9 @@ ROOT = Path(__file__).resolve().parents[2]
 print = functools.partial(builtins.print, flush=True)  # noqa: A001
 
 # 决策位的锚：生成文本里这些片段之后的那个值，就是「这一步走哪条路」
-DECISION_ANCHORS = ('"behavior": "', '"behavior":"', '"name": "', '"name":"')
+# 决策位锚点：v14 壳 `"behavior": "` · JSON 线格式 `"name": "` · Qwen3.5 XML 线格式 `<function=`（09-04 加：学生换 Qwen3.6 后
+#   tool_call 里没有 `"name":` 了，不加这条 = 决策位熵一律测不到、静默为空——「判据为空先怀疑解析器」）
+DECISION_ANCHORS = ('"behavior": "', '"behavior":"', '"name": "', '"name":"', '<function=')
 
 
 def token_entropy(logits: torch.Tensor) -> float:
