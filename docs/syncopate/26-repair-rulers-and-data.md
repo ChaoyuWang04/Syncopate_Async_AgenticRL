@@ -566,6 +566,10 @@ S6 RL 冒烟    已写（`syncopate/train/launch_rl_v1.py` 薄壳；`--steps rl_
               trainer_mode（sync / colocate_async / separate_async，trainer/ppo/v1/）；create_rl_sampler 搬到 trainer/ppo/utils.py
               （main_ppo 里已没有这个名 ⇒ main_ppo_pool 的 monkeypatch 现在挂空，必须改挂 utils + trainer_base）；
               save_lora_only 在 checkpoint_manager；use_prefix_grouper 在 actor 配置；rollout_correction 在 algorithm。
+S7 读数（09-04 02:58）🟡 **机制通、语义等 SFT**：B200×2（学生@0、教师+锚@1）· vocab 断言 ✓ · 可训 42.3M · 一个真蒸馏步 kl_chat/tok 0.279、
+              掩码 13 token · adapter-only 落盘 3 份。但底座无 adapter 时 92 步里只有 1 步可蒸（其余"全 task 工具回复"跳步），第 92 步撞
+              分段器病闸停机（底座回复不成契约形状，不是分段器坏）。两处已修：--max-steps 没 break 内层循环 + 跳步不计数 ⇒ 跑满 1 小时；
+              探针 KL 正则量错格式。⇒ S7 真正的冒烟要用 S4 真数据 SFT 的 adapter（--opd-adapter）。
 S7 OPD        已写（opd.py：--adapter 可空=底座新建 LoRA · --max-steps · vocab 断言 · 默认 prompts=v16_p1_prompts.jsonl；`--steps opd_smoke`）。前置已核：学生 Qwen3.6-35B-A3B 与教师 Qwen3.8-27B **vocab 逐项相同**（248077，diff 0，encode 相同），chat_template 不同
               ⇒ 逐 token 蒸馏可行，但教师侧必须用学生模板渲染的同一串 token id 喂（不走教师自己的模板）。opd.py 的 ADAPTER 仍指
               v13 产物 cand_v13r2_e1 ⇒ 改前置 SFT adapter 参数化。

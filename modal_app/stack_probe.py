@@ -910,11 +910,12 @@ def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", b
     log = open(f"{aud}/{arm}.log", errors="replace").read()
     rc = int(re.search(r"OPD_RC=(\d+)", r["out"]).group(1)) if re.search(r"OPD_RC=(\d+)", r["out"]) else -1
     import math
-    kls = [float(x) for x in re.findall(r"kl[_a-z]*[=:]\s*([-0-9.eE+]+)", log)][:20]
+    kls = [float(x) for x in re.findall(r"kl_(?:chat|task)/tok=([-0-9.eE+]+)", log)][:20]   # opd.py 的 step 行格式（首跑正则量错对象）
     rec = {"arm": arm, "rc": rc, "secs": r["secs"], "vocab_ok": "[opd-vocab]" in log, "mask_lines": len(re.findall(r"\[opd-mask\]", log)),
            "probe_lines": len(re.findall(r"零掩码|zero-mask|\[opd-probe\]", log)), "kls": kls, "trainable": re.findall(r"可训练 ([0-9.]+)M", log)[:1],
            "adapter_files": _sh(f"find {out} -name 'adapter_model*' | head")["out"], "traceback": "Traceback" in log, "tail": log[-4000:], "topology": _topology()}
     vol.commit()
+    rec["skipped_steps"] = len(re.findall(r"集体跳步", log)); rec["real_steps"] = len(re.findall(r"\] step \d+ ep\d+ kl_chat", log))
     ok = rc == 0 and rec["vocab_ok"] and all(math.isfinite(x) for x in kls) and bool(rec["adapter_files"].strip())
     return _record(f"opd_smoke_{arm}", ok, rec)
 

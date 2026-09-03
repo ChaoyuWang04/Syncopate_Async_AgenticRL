@@ -106,7 +106,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |
 | S6 RL 冒烟（verl 0.9 V1） | ✅ 09-04 01:54 **首次跑通**：B200×2 · 2 步 580 s · 动态分池在 TaskRunnerV1 进程生效 · loss/grad 有限 · reward 0.34/0.39 · 权重同步 · LoRA-only ckpt（233 MB/rank）· wandb syncopate-b200/rl_v16_smoke |
-| S7 OPD 冒烟 | ⬜ 已写（opd.py v16 化：--adapter/--max-steps/vocab 断言；学生/教师 vocab 已核相同）|
+| S7 OPD 冒烟 | 🟡 机制通（vocab ✓ · 42.3M · 真蒸馏步 KL 有限 · adapter 落盘）；底座无 adapter 几乎全跳步 ⇒ 语义冒烟等 S4 真 SFT adapter |
 
 ```
 run13  hydrate 即死：secret 按环境变量条件定义，本机/容器求值不同

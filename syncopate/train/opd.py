@@ -195,6 +195,8 @@ def main() -> int:
         import random
         random.Random(100 + ep).shuffle(rows)
         for i in range(0, len(rows), args.batch):
+            if _stop:
+                break
             batch = rows[i: i + args.batch]
             t0 = time.time()
             # ① on-policy 采样（逐轮：多轮 prompt 先生成前轮回复垫底）
@@ -240,10 +242,15 @@ def main() -> int:
             gm = torch.tensor([float(total_masked)], device=f"cuda:{rank}")
             dist.all_reduce(gm)
             if gm.item() == 0:
+                _skipped_total = globals().setdefault("_OPD_SKIPPED", [0]); _skipped_total[0] += 1
                 if rank == 0:
                     log(f"[opd-mask] step {step} 全局无可蒸 token（全 task 工具回复），集体跳步")
                     if wb:
                         wb.log({"opd/skipped_steps": 1}, step=step)
+                # 冒烟：跳步也计入 --max-steps（09-04 实测：底座无 adapter 时 92 步里只有 1 步可蒸，不计跳步就跑满 1 小时）
+                if args.max_steps and step + _skipped_total[0] >= args.max_steps:
+                    log(f"[max-steps] 到 {args.max_steps} 步（含跳步 {_skipped_total[0]}），停止（冒烟）")
+                    _stop = True
                 opt.zero_grad(set_to_none=True)
                 step += 1
                 dist.barrier()
