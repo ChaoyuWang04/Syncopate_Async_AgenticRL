@@ -173,7 +173,7 @@ async def gen_chat(client, bank) -> list[dict]:
     """chat 契约壳素材：80 条（其中 ~16 条带第二轮 continuation 追问）。"""
     out = []
     if DRY:   # 同上：DRY 不调教师，占位素材只演练结构
-        return [{"prompt": item["prompt"], "reply": f"[DRY 闲聊待写 #{i}] 这条的数据核对完毕，细节口径我再核一轮。",
+        return [{"prompt": item["prompt"], "reply": f"[DRY 闲聊待写 #{i}] 这条的数据核对完毕，细节口径我再核一轮，编号 {i:03d}。",   # 尾部带序号：密度闸量结构
                  "summary": "DRY 占位", "style": STYLES[i % 3], "source": item["source"], "turns": 1} for i, item in enumerate(bank[:90])]
     for i, item in enumerate(bank[:96]):
         if len(out) >= 80 + 10:            # 10 条留给 val held-out
