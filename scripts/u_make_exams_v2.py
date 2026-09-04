@@ -90,7 +90,7 @@ with open(OUT / "context_exam_v2.jsonl", "w") as f:
     for r in rows:
         f.write(json.dumps(r, ensure_ascii=False) + "\n")
 json.dump({"terms": OOV_TERMS, "locked": "2026-08-29",
-           "rule": "这些词永不进任何训练词表/训练数据（L-族门禁；u_build_v14_5 建库断言）"},
+           "rule": "这些词永不进任何训练词表/训练数据（L-族门禁；v16_build_sft 建库断言）"},
           open(OUT / "oov_holdout_terms.json", "w"), ensure_ascii=False, indent=1)
 print(f"context_exam_v2.jsonl  {len(rows)} 题（L1 50=iv24+oov26 · L2 25 · L3/L4 {len(L34)}）")
 print(f"oov_holdout_terms.json  26 词锁死")

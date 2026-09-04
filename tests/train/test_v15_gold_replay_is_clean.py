@@ -30,7 +30,8 @@ from syncopate.train.rollout_loop import RolloutConfig, run_rollout
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
-tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
+from syncopate.core.model_paths import build_tokenizer_path
+tok = AutoTokenizer.from_pretrained(build_tokenizer_path())   # 09-05：本机没有学生权重 ⇒ 同词表 TEST_TOKENIZER
 reg = build_domain().registry
 reg.latency_scale = 0.0
 by = {}

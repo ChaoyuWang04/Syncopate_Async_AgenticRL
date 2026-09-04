@@ -36,7 +36,6 @@ import torch.distributed as dist
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 sys.path.insert(0, ".")
-sys.path.insert(0, "scripts")
 
 STUDENT_BASE = STUDENT_MODEL   # v16：学生底座（LoRA 另挂）
 # 裁定⑭（09-04）：不再写死 v13 产物 cand_v13r2_e1；adapter 由 --adapter 传（v16 的 SFT/RL 产物），冒烟可不传 = 底座 + 新建 LoRA
@@ -50,7 +49,7 @@ def log(msg: str) -> None:
 def build_prompt(tok, turns: list[str], replies: list[str]) -> str:
     """契约渲染（复用 O-1 的 render_prompt_text）；多轮时把已完成轮以摘要形式垫底
     （与 F-5 壳层同思路：历史进 prompt）。"""
-    from probe_opd_divergence import render_prompt_text
+    from syncopate.train.opd_render import render_prompt_text
     if len(turns) == 1:
         return render_prompt_text(tok, turns[0], tools=None)
     hist = "\n".join(f"[上一轮] 用户：{t}\n[上一轮] 助手：{r[:200]}"
@@ -78,7 +77,7 @@ def gen_batch(student, tok, prompts: list[str], max_new: int, temp: float,
 def kl_step(student, aux, tok, prompt: str, reply: str, aux_dev: str,
             zero_mask: bool = False) -> tuple[float, int]:
     """单样本：掩码反向 KL + 立即 backward。返回 (sum_kl, masked_tokens)。"""
-    from probe_opd_divergence import segment_text
+    from syncopate.train.opd_render import segment_text
     ids_p = tok(prompt, return_tensors="pt").input_ids
     r_ids, r_labs = segment_text(tok, reply)
     if not r_ids:

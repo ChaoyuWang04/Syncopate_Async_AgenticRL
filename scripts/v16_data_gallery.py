@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """v15 · 训练数据画廊：把最终喂进训练的每种数据**逐条解码成可读文本**（Chaoyu 09-02：要亲眼看终态）。
 
-    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_data_gallery.py --parquet data/sft/v15/train.parquet [--per-bucket 3]
-    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_data_gallery.py --parquet _audit/v16/dry_rows.parquet   # 本机 DRY 演练产物
+    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v16_data_gallery.py --parquet data/sft/v15/train.parquet [--per-bucket 3]
+    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v16_data_gallery.py --parquet _audit/v16/dry_rows.parquet   # 本机 DRY 演练产物
 
 存储形态：parquet 每行 = 一条训练样本，列 input_ids（整段对话的 token）· loss_mask（哪些 token 算 loss）·
 prompt_length · total_length · supervised_tokens · bucket · sub_axis · behavior · case_id …
@@ -89,11 +89,12 @@ def main() -> int:
     ap.add_argument("--model", default=None)
     args = ap.parse_args()
     from transformers import AutoTokenizer
-    tok_path = args.model or (STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER)
+    from syncopate.core.model_paths import build_tokenizer_path
+    tok_path = args.model or build_tokenizer_path()
     tok = AutoTokenizer.from_pretrained(tok_path)
     df = pd.read_parquet(args.parquet)
     if "bucket" not in df.columns:
-        df["bucket"] = "v13_ballast"
+        df["bucket"] = "ballast"
     df["bucket"] = df["bucket"].fillna("v13_ballast")
     out = Path(args.out or f"_audit/gallery_{Path(args.parquet).stem}.md")
     out.parent.mkdir(parents=True, exist_ok=True)

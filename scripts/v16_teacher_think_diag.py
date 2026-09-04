@@ -51,8 +51,8 @@ async def main() -> int:
     ap.add_argument("--zh-prefix", default="好的，我用中文把这一步想清楚。", help="zh_prefix 臂的引子（计入 think 文本）")
     args = ap.parse_args()
 
-    import u_build_v14_5 as B
-    from u_build_v15_cot import explicit_hard_prompt
+    import v16_build_sft as B
+    from v16_cot_prompt import explicit_hard_prompt
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
     from syncopate.pipeline.build_dataset import build_sft_row

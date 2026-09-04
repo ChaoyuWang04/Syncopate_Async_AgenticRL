@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import json
+
+from syncopate.pipeline.split import DATA_VERSION
 from pathlib import Path
 
 import importlib.util
@@ -44,7 +46,8 @@ select = _load("select_sft_ckpt",
 def _write(tmp: Path, name: str, label: str, extra: dict) -> None:
     (tmp / "_audit").mkdir(parents=True, exist_ok=True)
     (tmp / "_audit" / name).write_text(
-        json.dumps({"label": label, **extra}, ensure_ascii=False), encoding="utf-8")
+        # 09-05：没写 data_version 的审计一律不认（此前会被接受 ⇒ 旧版本审计可被选点）；夹具默认带当前版本
+        json.dumps({"label": label, "data_version": DATA_VERSION, **extra}, ensure_ascii=False), encoding="utf-8")
 
 
 @pytest.fixture()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v15 · W3③ —— CoT 可达性预算表：**先算后训**（`26 §4.4`、门槛③预注册；W4/W5 实测回填）。
 
-    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v15_w3_budget_table.py
+    SYNCOPATE_CONTRACT=v15 .venv/bin/python scripts/v16_budget_table.py
 
 从现役 CoT 池（data/u_route/v16_cot_rows.json）实测：think 长度/段数/token 画像、行重；
 按 W3① 约束（≤350 字 · ≤2 段）推算做轻后的行重；按裁定④带宽 30% 推算可装行数与
@@ -19,7 +19,8 @@ from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAU
 
 def main() -> int:
     from transformers import AutoTokenizer
-    tok_path = STUDENT_MODEL if Path("models/Qwen3-4B/tokenizer.json").exists() else TEST_TOKENIZER
+    from syncopate.core.model_paths import build_tokenizer_path
+    tok_path = build_tokenizer_path()
     tok = AutoTokenizer.from_pretrained(tok_path)
     rows = json.load(open("data/u_route/v16_cot_rows.json"))   # 裁定⑭：v16 缓存名
     TH = re.compile(r"<think>(.*?)</think>", re.S)
@@ -55,7 +56,7 @@ def main() -> int:
     band_hi = 0.30
     budget = non_cot * band_hi / (1 - band_hi)
     fit_rows = int(budget // row_new_p50)
-    blocks_total_est = 4049 + 0    # 949 行版全库 think 块数（_audit/v15_r2/gates.json）；fam 行另加
+    blocks_total_est = 4049 + 0    # ⚠️ 欠账（09-05 登记）：v15 949 行版全库 think 块数（_audit/v15_r2/gates.json）；v16 首次 strict 建库后按 manifest 重填
     nonempty_est = fit_rows * (sum(r["nonempty"] for r in per_row) / len(per_row))
     out = {"now": now, "projection": {
         "think_block_tok_after": new_block_tok, "row_sup_tok_after_p50": row_new_p50,

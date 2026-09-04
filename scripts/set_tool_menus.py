@@ -62,9 +62,11 @@ sys.path.insert(0, str(ROOT))
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="按模板裁剪 case 的工具菜单")
-    parser.add_argument("--batch", default="data/batches/v8")
-    parser.add_argument("--sft-audit", default="_audit/v8_sft_epoch1.json",
-                        help="SFT 模型的评测结果，用它的 tool_seqs 取「模型实际会调的工具」")
+    from syncopate.pipeline.split import DEFAULT_BATCH_DIR
+    parser.add_argument("--batch", default=str(DEFAULT_BATCH_DIR))
+    parser.add_argument("--sft-audit", default=None,
+                        help="（可选）某个 SFT 模型的评测结果，用它的 tool_seqs 并入「模型实际会调的工具」。"
+                             "09-05 Chaoyu 裁定：v16 默认不用——此前默认并入 v8 时代模型的审计（旧物料）；v15 契约 prompt 一律全量菜单，此表只供 verifier/routing")
     parser.add_argument("--core-min", type=int, default=4,
                         help="出现在 ≥N 个模板并集里的工具进 CORE，每个模板都并上它（保底难度）")
     parser.add_argument("--dry-run", action="store_true")
@@ -105,11 +107,14 @@ def main(argv: list[str] | None = None) -> int:
         by_template[cid.split("_")[0]] |= {a["tool"] for a in b.gold.actions if a.get("tool")}
 
     # ---- 并集 2：SFT 模型实测调用过的 ----
-    audit = json.loads((ROOT / args.sft_audit).read_text(encoding="utf-8"))
-    for row in audit["rows"]:
-        tmpl = row["case_id"].split("_")[0]
-        for seq in row.get("tool_seqs", []):
-            by_template[tmpl] |= set(seq) if isinstance(seq, list) else {seq}
+    if args.sft_audit:
+        audit = json.loads((ROOT / args.sft_audit).read_text(encoding="utf-8"))
+        for row in audit["rows"]:
+            tmpl = row["case_id"].split("_")[0]
+            for seq in row.get("tool_seqs", []):
+                by_template[tmpl] |= set(seq) if isinstance(seq, list) else {seq}
+    else:
+        print("[menus] 不并入任何 SFT 审计（gold 并集 ∪ cap 动作工具 ∪ CORE）")
 
     # ---- ★★ 补上「cap 监视的动作工具」：护栏要训得出来，诱惑必须在菜单里 ----
     #

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v14.5 · exam_v2 机判（`24 §4-P2` 考卷 v2 判据执行件）。
 
-    .venv/bin/python scripts/u_exam_judge_v2.py --context logs/u_route/run_<arm>_ctxv2.jsonl
+    .venv/bin/python scripts/v16_exam_judge_core.py --context logs/u_route/run_<arm>_ctxv2.jsonl
 
 对 v1 judge 的修复：
   L1 v2  零工具判据（任何 tool/proposal 即挂——修 v1 黑名单漏 mmp./memory./policy. 前缀）

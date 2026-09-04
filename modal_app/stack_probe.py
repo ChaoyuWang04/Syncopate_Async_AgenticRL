@@ -630,7 +630,7 @@ def p_rebuild_v16(expected_sha: str = "") -> dict:
     steps = [
         ("0 external", f"{PY} scripts/make_test_external_data.py && {PY} scripts/ingest_external.py"),
         ("1 generate", f"{PY} -m syncopate cases generate --spec configs/buckets/v16.yaml --out {out}/batches/v16"),
-        ("2 menus", f"{PY} scripts/set_tool_menus.py --batch {out}/batches/v16 --sft-audit _audit/v8_sft_epoch1.json"),
+        ("2 menus", f"{PY} scripts/set_tool_menus.py --batch {out}/batches/v16"),   # 09-05：不再并入 v8 时代模型的评测审计（与 runbook menus 段同一命令）
         ("3 split", f"{PY} -m syncopate data split --batch {out}/batches/v16 --out {out}/splits/v16"),
     ]
     log = {}
@@ -692,7 +692,7 @@ def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096, arm: s
         try: rec["agg"] = json.load(open(f"{aud}/teacher_think_diag{sfx}.json"))["agg"]
         except Exception as ex: rec["agg_err"] = repr(ex)[:200]
         rec["behavior_rc"] = 0
-        b = None if not with_behavior else _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
+        b = None if not with_behavior else _sh(f"{PY} scripts/v16_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
         if b is not None:
             rec["behavior_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1))
             rec["behavior_tail"] = open(f"{aud}/behavior_think_probe.log", errors="replace").read()[-1500:]
@@ -726,17 +726,20 @@ def p_build_v16(skip_probe: bool = False, gates: str = "strict") -> dict:
         _sh(f"mv {cache_dir}/v15_*.json {cache_dir}/pre_v16_run16/ 2>/dev/null; true")
         _sh(f"cp -n {cache_dir}/v16_*.json data/u_route/ 2>/dev/null; true", cwd=REPO)
         if not skip_probe:
-            r = _sh(f"{PY} scripts/v15_w3_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
+            r = _sh(f"{PY} scripts/v16_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
             _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
         # 旧物料不许命中（裁定⑭）：判据 = 建库脚本源码里不再出现任何旧缓存/物料文件名（前任 09-04 核对：原判据数的是取回的新缓存，第二次起必红）
         # 只数代码行（注释里提到旧名不算——run17 实测 3 条注释把判据判红）
-        stale = _sh("grep -vE '^\\s*#' scripts/u_build_v14_5.py | grep -cE 'open\\(.*(v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|v145_(defs|chat_mat))\\.json|cand_v13r2_e1/' || true", cwd=REPO)["out"].strip()
+        # 09-05：判据改为"v16 建库两个脚本的代码行里不许出现任何旧版本物料名/旧脚本名"（此前的 open( 前缀正则匹不到 ternary 里的 v145_*，判据空绿）
+        stale = _sh("cat scripts/v16_build_sft.py scripts/v16_multiturn.py | grep -vE '^\\s*#' | grep -cE 'v145_|v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|cand_v13r2|u_build_v14|pre_v16' || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
         # ★ 09-04 固定管线：探针不再自己拼命令，只调 runbook 的 stage（本机 == 云上）；教师由本函数起（进程管理），runbook 检测到已在线会跳过
         # gates=report：闸观察模式（所有闸都算不中断、产物落 _audit/v16/report、末尾汇总）——一次看全貌，不再红一道停一道
         b = _sh(f"bash scripts/v16_pipeline.sh sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY, "U_BUILD_GATES": gates}, timeout=2 * 3600)
         _sh(f"cp _audit/v16/build.log {aud}/build.log 2>/dev/null; cp _audit/v16/gallery.md {aud}/gallery.md 2>/dev/null; true", cwd=REPO)
+        # 09-05（前任补坑）：strict 的 staging / report 模式的产物在容器本地 ⇒ 一并拷进 Volume（先清旧的，cp -r 进已存在目录会套一层）
+        _sh(f"rm -rf {aud}/staging {aud}/report; for d in staging report; do [ -d _audit/v16/$d ] && cp -r _audit/v16/$d {aud}/; done; true", cwd=REPO)
         blog = open(f"{aud}/build.log", errors="replace").read() if os.path.exists(f"{aud}/build.log") else open(f"{aud}/sft_data_stage.log", errors="replace").read()
         rec["build_rc"] = int(re.search(r"BUILD_RC=(\d+)", b["out"]).group(1)) if re.search(r"BUILD_RC=(\d+)", b["out"]) else -1
         rec["build_secs"] = b["secs"]
@@ -748,7 +751,7 @@ def p_build_v16(skip_probe: bool = False, gates: str = "strict") -> dict:
             rec["prompt_budget"] = {"rc": 0 if "零截断" in slog or "over=0" in slog or "✅" in slog else 1, "tail": slog[-800:]}
             rec["isolation"] = {"rc": 0 if "越桶 0" in slog and "🔴" not in slog.split("[隔离]")[-1][:200] else 1, "tail": slog[-600:]}
             rec["gallery"] = {"tail": "", "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
-            bt = _sh(f"{PY} scripts/v15_w3_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
+            bt = _sh(f"{PY} scripts/v16_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
             rec["budget_table"] = bt["out"][-1200:]
             rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
     finally:
@@ -773,7 +776,7 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
     out = f"{VOL}/checkpoints/sft/{arm}"; _sh(f"rm -rf {out}")
     rec: dict = {"arm": arm}
     if arm == "mech_dry" and not train_file:
-        d = _sh(f"U_BUILD_DRY=6 {PY} scripts/u_build_v14_5.py > {aud}/dry_build.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1800)
+        d = _sh(f"U_BUILD_DRY=6 {PY} scripts/v16_build_sft.py > {aud}/dry_build.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1800)
         rec["dry_build_rc"] = int(re.search(r"RC=(\d+)", d["out"]).group(1)); rec["dry_build_tail"] = open(f"{aud}/dry_build.log", errors="replace").read()[-1500:]
         if rec["dry_build_rc"] != 0 or not os.path.exists(f"{REPO}/_audit/v16/dry_rows.parquet"):
             vol.commit(); return _record("sft_smoke", False, rec)
@@ -813,7 +816,7 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=98304, timeout=4 * 3600, secrets=SECRETS)
 def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes: int = 1, concurrency: int = 4, limit: int = 0) -> dict:
     """26 §W5 起链五步的容器版：0 seed_demo --check（7 条 campaign）1 无陈旧 worker 2 起端点(:8100)+API(:8000)+worker
-    3 u_exam_run 四遍（每遍落 jsonl，可重入）4 u_exam_judge_v4 5 v15_gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
+    3 v16_exam_run 四遍（每遍落 jsonl，可重入）4 v16_exam_judge 5 v16_gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
     model 默认学生底座；adapter 给 LoRA 目录则 vLLM --enable-lora（served 名仍为 model）。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/exam_{arm}"; os.makedirs(aud, exist_ok=True)
@@ -848,16 +851,17 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
         runs = []
         for i in range(1, passes + 1):
             lim = f" --limit {limit}" if limit else ""
-            r = _sh(f"{PY} scripts/u_exam_run.py --exam context_v4 --arm {arm}_r{i} --concurrency {concurrency}{lim} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
+            r = _sh(f"{PY} scripts/v16_exam_run.py --exam context_v4 --arm {arm}_r{i} --concurrency {concurrency}{lim} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
             rc = int(re.search(r"RC=(\d+)", r["out"]).group(1)); runs.append({"pass": i, "rc": rc, "secs": r["secs"]})
             _sh(f"cp logs/u_route/run_{arm}_r{i}_*.jsonl {aud}/ 2>/dev/null; true", cwd=REPO)
         rec["runs"] = runs
         jl = " ".join(f"logs/u_route/run_{arm}_r{i}_context_v4.jsonl" for i in range(1, passes + 1))
-        j = _sh(f"{PY} scripts/u_exam_judge_v4.py --context {jl} > {aud}/judge.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=1800)
+        j = _sh(f"{PY} scripts/v16_exam_judge.py --context {jl} > {aud}/judge.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=1800)
         rec["judge_rc"] = int(re.search(r"RC=(\d+)", j["out"]).group(1)); rec["judge_tail"] = open(f"{aud}/judge.log", errors="replace").read()[-2500:]
         _sh(f"cp logs/u_route/judged_*{arm}* {aud}/ 2>/dev/null; true", cwd=REPO)
-        t = _sh(f"{PY} scripts/v15_gate_triage.py > {aud}/triage.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=600)
+        t = _sh(f"{PY} scripts/v16_gate_triage.py --judged 'logs/u_route/judged_{arm}_r*_context_v4.jsonl' --out _audit/v16/gate_triage_{arm}.json > {aud}/triage.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=600)
         rec["triage_rc"] = int(re.search(r"RC=(\d+)", t["out"]).group(1)); rec["triage_tail"] = open(f"{aud}/triage.log", errors="replace").read()[-1500:]
+        _sh(f"cp _audit/v16/gate_triage_{arm}.json {aud}/ 2>/dev/null; true", cwd=REPO)
     finally:
         for pr in (wrk, api):
             pr.terminate()

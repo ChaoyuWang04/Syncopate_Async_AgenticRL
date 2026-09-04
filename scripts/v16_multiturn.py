@@ -1,13 +1,13 @@
 """v15 · W2 多轮训练行的**同形**构造件（`26 §W2②③④⑦`，守则⑮）。
 
-被 u_build_v14_5.py 导入。三件事，都只有一条实现：
+被 v16_build_sft.py 导入。三件事，都只有一条实现：
   ① prod_context(bundle)   题面 context 渲染成线上 decider._demo_context 同形：account_id + 在投 campaign 清单
                            （不再直接给目标 campaign_id —— 不同形 #4）
   ② as_multiturn(...)      把一条 case 变成多轮训练行：bundle.prior = 真消息对（不同形 #1#2#7）·
                            required_answer_fields = MIN_FIELDS（#3，v15 下整节消失，同线上）· tool_menu=None（#6 全量）
   ③ build_family_rows(...) 六族第一波训练行：DEF-F / REJ-F / CLA-F / L2-x / WIN（各成对对照）
 
-⚠️ 上一轮助手内容必须是**真实终答人话**（v15_ballast_replies 缓存 / DEFS 定义 / 教师），
+⚠️ 上一轮助手内容必须是**真实终答人话**（压舱人话缓存 / DEFS 定义 / 教师），
    不许再用「已给出结论」占位（不同形 #2）。找不到真实来源 ⇒ DRY 模式下打标记计数，正式建库直接报错。
 """
 from __future__ import annotations
@@ -22,11 +22,12 @@ from typing import Any
 
 from syncopate.core.contract import IS_V15
 from syncopate.core.schemas import AnswerField, CaseBundle
+from syncopate.pipeline.split import DATA_VERSION as DV
 
 DRY = int(os.environ.get("U_BUILD_DRY", "0") or 0)
 rng = random.Random(1515)
 
-_BALLAST = Path("data/u_route/v16_ballast_replies.json")   # 裁定⑭：与 u_build_v14_5._BALLAST_CACHE 同名
+_BALLAST = Path(f"data/u_route/{DV}_ballast_replies.json")   # 裁定⑭：与 v16_build_sft._BALLAST_CACHE 同名（名字从 DATA_VERSION 派生）
 BALLAST_REPLIES: dict[str, str] = json.load(open(_BALLAST)) if _BALLAST.exists() else {}
 
 MIN_FIELDS = [
@@ -51,6 +52,47 @@ def signal_turn(sig: str, args: dict) -> dict:
 
 
 _missing: list[str] = []
+_SEQ = [0]
+
+
+def _dry_reply(tag: str) -> str:
+    """DRY 占位（带序号：去重/尾部配额闸量的是结构，不能被同一句占位判死）。"[DRY" 前缀是正式产物的红线（画廊 grep）。"""
+    _SEQ[0] += 1
+    return f"[DRY 教师待写 #{_SEQ[0]}] {tag}"
+
+
+def obs_json(tokenizer, row: dict) -> dict | None:
+    """回放行里**最后一个** <tool_response> 的 JSON（派生行的历史轮里可能还有信令的 tool_response，要取本轮那个）。"""
+    txt = tokenizer.decode(list(row["input_ids"])[:row["total_length"]])
+    hits = re.findall(r"<tool_response>\s*(.*?)\s*</tool_response>", txt, re.S)
+    if not hits:
+        return None
+    try:
+        d = json.loads(hits[-1])
+    except json.JSONDecodeError:
+        return None
+    if isinstance(d, dict) and isinstance(d.get("data"), dict):
+        d = d["data"]
+    return d if isinstance(d, dict) else None
+
+
+_OBS_CN = {"policy_id": "政策编号", "account_tier": "账户等级", "monthly_cap": "月度预算上限", "spend_mtd": "本月已花",
+           "max_increase_pct": "单次涨幅上限（百分比）", "approval_required_above_pct": "涨幅超过多少要先审批（百分比）",
+           "risk_check_required": "改预算前须过风控", "monthly_cap_enforced": "受月度总额约束",
+           "risk_flag": "风控标记", "status": "账户状态", "budget_increase_allowed": "当前允许提额", "reason": "风控原因"}
+_OBS_SKIP = {"account_id"}
+
+
+def facts_from_obs(tool: str, obs: dict) -> str:
+    """工具观测 → 给教师看的事实清单（数字只能来自这里）。"""
+    parts = []
+    for k, v in obs.items():
+        if k in _OBS_SKIP or v in (None, "", [], {}):
+            continue
+        if isinstance(v, bool):
+            v = "是" if v else "否"
+        parts.append(f"{_OBS_CN.get(k, k)}={v}")
+    return f"查了 {tool}，结果：" + "；".join(parts)
 
 
 def real_reply(bundle: CaseBundle) -> str:
@@ -87,9 +129,11 @@ def as_multiturn(b: CaseBundle, *, case_id: str, user_message: str, prior: list[
     if final_answer is not None:
         b2.gold.final_answer = final_answer
     elif (b2.verifier.expected_behavior in ("tool_call", "answer")) and not (b2.gold.final_answer or {}).get("reply"):
-        # 09-04 run24 体检：六族终答退化成机器字段句 —— 底题人话与压舱行同源（教师人话缓存），不许落回字段句
-        b2.gold.final_answer = dict(b2.gold.final_answer or {})
-        b2.gold.final_answer["reply"] = real_reply(b)
+        # ★ 09-04 run27 出厂体检：派生行终答曾在这里默默借底题的压舱句 ⇒ 同一句出现在三条对话末尾（"7 个答案各服务 ≥3 题面"）。
+        #   硬机制：派生行必须自带自己的终答（build_family_rows.own_final 让教师按底题事实另写），这里只在 DRY 给占位，正式一律报错。
+        if not DRY:
+            raise AssertionError(f"🔴 {case_id} 派生行没有自己的终答人话（不许借底题压舱句；26 §W4′ run27）")
+        b2.gold.final_answer = {**(b2.gold.final_answer or {}), "reply": _dry_reply(f"as_multiturn:{case_id}")}
     b2.prior = [{"user_message": u, "result": r} for u, r in prior]
     assert "[上一轮]" not in b2.case.user_message
     return b2
@@ -124,16 +168,14 @@ CLA_Q_POOL = ["要调哪一条 campaign？", "你说的在投那条是哪一条�
 L2X_ASK = [("差的那条", "worse"), ("好的那条", "better"), ("烧钱多的那条", "spend"), ("第一个", "first"), ("第二个", "second")]
 L2X_METRIC = [("消耗", "spend_7d"), ("安装量", "installs_7d"), ("CPI", "cpi"), ("点击率", "ctr")]
 # 09-04 run21：考卷 v4 的被判句与 L2X_ASK×L2X_METRIC 的模板逐字同形（「差的那条的CPI是多少？」）⇒ 训练问法必须绕开考卷被判句。
-#   与 u_build_v14_5.EXAM_LAST 同一口径（所有考卷文件的末轮句），这里独立加载避免循环 import。
-import glob as _glob
+#   与 v16_build_sft.EXAM_LAST 同一口径（所有考卷文件的末轮句），这里独立加载避免循环 import。
 import json as _json
+# 考卷被判句来源的**唯一清单**（09-05：此前这里 glob *exam*.jsonl，把 v2/v3 旧考卷与软链一起扫进来，和主脚本的显式清单不是同一口径）
+EXAM_FILES = ("context_exam.jsonl", "context_exam_v2.jsonl", "context_v3_exam.jsonl", "context_v4_exam.jsonl", "talk_exam.jsonl")
 EXAM_LAST_MT: set[str] = set()
-for _f in _glob.glob("data/u_route/*exam*.jsonl"):
-    for _x in open(_f):
-        try:
-            EXAM_LAST_MT.add(_json.loads(_x)["turns"][-1])
-        except Exception:
-            pass
+for _f in EXAM_FILES:
+    for _x in open(f"data/u_route/{_f}"):
+        EXAM_LAST_MT.add(_json.loads(_x)["turns"][-1])
 L2X_ASK_VARIANTS = ["{ref}的{m}是多少？", "那{ref}的{m}呢？", "{ref}的{m}现在是多少？", "帮我看下{ref}的{m}", "{ref}那条{m}是多少"]
 
 
@@ -146,17 +188,28 @@ def l2x_ask(ref: str, mname: str) -> str:
     raise RuntimeError(f"L2X 问法全部与考卷被判句撞车：{ref}/{mname}")
 
 
-WIN_REPLY = ["你最早给 {c} 定的是 {v}。", "最开始你说的 {c} 那个数是 {v}。", "记录里 {c} 最早的那个值是 {v}。",
-             "{c} 你一开始给的是 {v}。", "翻到了，{c} 最早定的数是 {v}。", "开头那次你给 {c} 定的数是 {v}。",
-             "查到了：{c} 最早那次定的是 {v}。", "你第一次给 {c} 报的数是 {v}。", "{c} 最初的那个数是 {v}，我这边有记录。",
-             "回头看记录，{c} 一开始定的是 {v}。", "最早那次，{c} 你说的是 {v}。", "{c} 开头你给的数是 {v}，没记错的话。"]   # 09-04：12 变体
-WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着"]
+# WIN 家族素材（09-05 run27 体检 fam_win 句式 25% ⇒ 三层加多样性：事实句/确认句/数值池/问法/承认句都扩池并按序轮转；
+#   答数的终答不再从模板抽，交教师按 (campaign, 数值) 现写，见 build_family_rows）
+WIN_FACT = ["{c} 这个月的预算上限我们定的是 {v}，记一下", "先记个数：{c} 本月预算上限 {v}", "{c} 的月预算上限按 {v} 来，你记住",
+            "备注一下，{c} 这个月最多花 {v}", "{c} 月度上限定 {v}，后面按这个卡", "给 {c} 定个上限：这个月 {v}",
+            "记住了啊，{c} 本月预算封顶 {v}", "{c} 这月预算上限就 {v}，别超", "这个月 {c} 的盘子是 {v}，先记着", "{c} 本月预算上限我这边定 {v}"]
+WIN_ACK = ["好的，已记下：{c} {v}。", "收到，{c} 本月上限 {v}，记住了。", "明白，{c} 这个月按 {v} 封顶。", "记下了，{c} 月预算上限 {v}。",
+           "好，{c} 这月最多 {v}，我记着。", "已备注：{c} 本月预算上限 {v}。", "行，{c} 这个月上限 {v}，后面我按这个看。"]
+WIN_VALUES = ["35000", "42000", "60000", "88000", "50000", "120000", "27000", "75000", "96000", "30000", "150000", "64000"]   # 只用预算量级的数
+WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着",
+           "{c} 一开始那个预算上限，我说的是多少来着？", "你还记得我刚开始给 {c} 定的上限吗？", "咱们最早给 {c} 定的封顶数是多少？",
+           "{c} 那个月度上限我最初报的数是？", "翻一下记录，{c} 最开始我说的上限是多少", "我一上来给 {c} 报的那个数，你还有印象吗"]
 # (问句, 术语)——助手回答按术语名从定义库精确取，取不到直接报错（不许落回占位；eCPM 是考卷 held-out 词，不用）
 WIN_FILL = [("ROAS 是什么意思？", "ROAS"), ("那 CPI 呢", "CPI"), ("CTR 呢？", "CTR"), ("回本周期是什么", "回本周期"),
             ("频次呢", "频次"), ("曝光是什么意思", "曝光"), ("ROI呢？", "ROI")]
 WIN_CLARIFY = ["我这里只保留最近几轮的记录，最早那条已经看不到了，方便再说一次吗？",
                "抱歉，最开始那条记录不在我当前能看到的范围里，请再告诉我一次。",
-               "我没法确认最早给的那个数了，为了不报错数，麻烦再提供一次。"]
+               "我没法确认最早给的那个数了，为了不报错数，麻烦再提供一次。",
+               "最早给 {c} 定上限那句已经超出我能看到的对话范围了，请再报一次数。",
+               "我手头只有最近几轮的内容，{c} 最初那个上限我没法确认，麻烦再说一遍。",
+               "那条记录我这边已经看不到了，为了不给错数，请把 {c} 的上限再告诉我一次。",
+               "不好意思，最开始那个数已经不在我能看到的几轮里了，你再说一下 {c} 的上限？",
+               "我不能凭印象报数，{c} 最早的上限请再提供一次。"]
 
 
 def _defs_of(defs: dict, term: str) -> list[str]:
@@ -180,10 +233,24 @@ def _m(camps: dict, cid: str, key: str):
 
 
 async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle], defs: dict,
-                            replay, gen_reply) -> list[dict]:
-    """replay(bundle, idx) → 行；gen_reply(cid, mname, val) → 教师写的读数人话（DRY 时可为占位）。"""
+                            replay, gen_reply, *, gen_fact=None, gen_variant=None, gen_win=None) -> list[dict]:
+    """replay(bundle, idx) → 行；gen_reply(cid, mname, val) → 教师写的读数人话；
+    gen_fact(ask, facts) → 按工具观测写的回答（CLAF 跑题）；gen_variant(bundle, base) → 按底题事实另写一句（派生行终答）；
+    gen_win(cid, val) → 答出记录里那个数。DRY 时三者都不调，用带序号占位。"""
     rows: list[dict] = []
     idx = [96000]
+    if not DRY:
+        assert gen_fact and gen_variant and gen_win, "🔴 正式建库必须提供 gen_fact / gen_variant / gen_win（派生行终答不许借压舱句）"
+
+    async def own_final(b: CaseBundle) -> dict | None:
+        """派生行自己的终答：底题是 tool_call/answer 型 ⇒ 教师按底题事实**另写一句**（同事实、不同角度，不复用压舱句）；
+        信令型底题（defer/reject/clarify）的终答由信令表达 ⇒ None。"""
+        if b.verifier.expected_behavior not in ("tool_call", "answer"):
+            return None
+        fa = dict(b.gold.final_answer or {})
+        base = BALLAST_REPLIES.get(b.case_id) or fa.get("reply") or ""
+        fa["reply"] = _dry_reply(f"own:{b.case_id}") if DRY else await gen_variant(b, base)
+        return fa
 
     async def emit(b2, bucket, axis, pair):
         idx[0] += 1
@@ -221,7 +288,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
                 iter((b.env.readonly_tables or {}).get("campaigns", {})), "这条 campaign")
             prior = [(b.case.user_message, signal_turn("defer", {
                 "reason": rng.choice(DEFER_REASONS).format(c=cid, m=_metric_of(b)), "recheck_after_days": 5}))]
-            b2 = as_multiturn(b, case_id=f"{b.case_id}_DEFF", user_message=rng.choice(DEFF_ASK), prior=prior)
+            b2 = as_multiturn(b, case_id=f"{b.case_id}_DEFF", user_message=rng.choice(DEFF_ASK), prior=prior,
+                              final_answer=await own_final(b))
             await emit(b2, "fam_deff", f"deff|{'still' if still else 'recheck'}", f"DEFF_{i}")
 
     # REJ-F：上一轮拒了越权 → 合法请求（q 案 gold）vs 换说法仍越权（REJ 案 gold）
@@ -229,7 +297,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         cid = campaign_of(bq)
         prior = [(rng.choice(REJ_PRIOR).format(c=cid), signal_turn("reject", {
             "reason_code": "unauthorized", "explanation": rng.choice(REJ_EXPL).format(c=cid)}))]
-        b2 = as_multiturn(bq, case_id=f"{bq.case_id}_REJF", user_message=rng.choice(LEGAL_PREFIX) + bq.case.user_message, prior=prior)
+        b2 = as_multiturn(bq, case_id=f"{bq.case_id}_REJF", user_message=rng.choice(LEGAL_PREFIX) + bq.case.user_message, prior=prior,
+                          final_answer=await own_final(bq))
         await emit(b2, "fam_rejf", "rejf|legal", f"REJF_{i}")
     rej_n = [b for b in rej_n if (b.gold.final_answer or {}).get("reject_reason") == "unauthorized"]   # 追问是"还是要转到我名下"=越权，标签必须一致
     if len(rej_n) < n:
@@ -242,7 +311,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         cid2 = cid2.group(0) if cid2 else cid
         prior2 = [(rng.choice(REJ_PRIOR).format(c=cid2), signal_turn("reject", {
             "reason_code": "unauthorized", "explanation": rng.choice(REJ_EXPL).format(c=cid2)}))]
-        b3 = as_multiturn(br, case_id=f"{br.case_id}_REJF", user_message=rng.choice(STILL_UNAUTH).format(c=cid2), prior=prior2)
+        b3 = as_multiturn(br, case_id=f"{br.case_id}_REJF", user_message=rng.choice(STILL_UNAUTH).format(c=cid2), prior=prior2,
+                          final_answer=await own_final(br))
         await emit(b3, "fam_rejf", "rejf|still", f"REJF_{i}")
 
     # CLA-F：上一轮追问 campaign → 补全后接着办（BUD 案 gold）vs 答非所问（零写：policy 查询 gold）
@@ -250,19 +320,27 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         cid = campaign_of(b)
         vague = re.sub(r"\s*CMP_\d+\s*的?", "", b.case.user_message).replace("把 的", "把").strip() or "帮我把日预算调一下"
         prior = [(vague, signal_turn("clarify", {"question": rng.choice(CLA_Q_POOL), "missing_fields": ["campaign_id"]}))]
-        b2 = as_multiturn(b, case_id=f"{b.case_id}_CLAF", user_message=rng.choice(CLAF_FILL).format(c=cid), prior=prior)
+        b2 = as_multiturn(b, case_id=f"{b.case_id}_CLAF", user_message=rng.choice(CLAF_FILL).format(c=cid), prior=prior,
+                          final_answer=await own_final(b))
         await emit(b2, "fam_claf", "claf|filled", f"CLAF_{i}")
         acc = b.case.context.get("account_id", "ACC_DEMO")
-        off = rng.choice(CLAF_OFF)
-        if "政策" in off:
-            acts, fa = [{"tool": "policy.get_budget_rule", "arguments": {"account_id": acc}}], {"reply": None}
-        elif "风控" in off:
-            acts, fa = [{"tool": "risk.check_account", "arguments": {"account_id": acc}}], {"reply": None}
+        off = CLAF_OFF[i % len(CLAF_OFF)]
+        if "政策" in off or "风控" in off:
+            # ★ 09-04 run27 体检（真 bug）：此分支原来把用户问句当"读数"塞给指标人话生成器 ⇒ "ACC 的政策/风控是 先别动…" 病句。
+            #   改：先带占位终答回放一次拿工具观测（与训练行同源，L2 的 probe 同一手法），再让教师按"用户问 X、查到 Y"写，数字只能来自观测。
+            tool = "policy.get_budget_rule" if "政策" in off else "risk.check_account"
+            acts = [{"tool": tool, "arguments": {"account_id": acc}}]
+            if DRY:
+                fa = {"reply": _dry_reply(f"CLAFO:{off}")}
+            else:
+                probe_b = as_multiturn(b, case_id=f"{b.case_id}_CLAFO", user_message=off, prior=prior, gold_actions=acts,
+                                       final_answer={"reply": "PLACEHOLDER"}, behavior="tool_call")
+                obs = obs_json(tokenizer, await replay(probe_b, 95000 + i))
+                assert obs, f"🔴 {b.case_id} CLAFO 回放没有拿到 {tool} 的观测"
+                fa = {"reply": await gen_fact(off, facts_from_obs(tool, obs))}
         else:
             _term = "CPI" if "CPI" in off else ("ROI" if "ROI" in off else "ROAS")   # 09-04：按问句映射术语（原来一律答 ROAS）
             acts, fa = [], {"reply": rng.choice(_defs_of(defs, _term))}
-        if fa["reply"] is None:
-            fa["reply"] = (f"[DRY 教师待写:{off}]" if DRY else await gen_reply(acc, "政策/风控", off))
         b3 = as_multiturn(b, case_id=f"{b.case_id}_CLAFO", user_message=off, prior=prior,
                           gold_actions=acts, final_answer=fa, behavior="tool_call" if acts else "answer")
         await emit(b3, "fam_claf", "claf|offtopic", f"CLAF_{i}")
@@ -289,27 +367,29 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
                           final_answer={"summary": f"{tgt} {mkey}={val}", "reply": rep}, behavior="tool_call")
         await emit(b2, "fam_l2x", f"l2x|{kind}|{'far' if i % 3 == 2 else 'near'}", f"L2X_{i}")
 
-    # WIN：事实轮在 6 轮窗外 → gold=承认并追问（clarify，零编数）；对照=窗内 → 答出那个数
+    # WIN：事实轮在 6 轮窗外 → gold=承认并追问（clarify，零编数）；对照=窗内 → 答出那个数（教师现写）
     zb = [b for b in bundles.values() if b.gold and not b.gold.actions] or q
     for i in range(n):
         b = zb[i % len(zb)]
-        cid = b.case.context.get("campaign_id") or "CMP_4000"
-        val = rng.choice(["35000", "42000", "60000", "88000"])     # 预算上限：只用预算量级的数
-        fact = (f"{cid} 这个月的预算上限我们定的是 {val}，记一下", answer_turn(f"好的，已记下：{cid} {val}。"))
+        _camps = list((b.env.readonly_tables or {}).get("campaigns", {}))
+        cid = campaign_of(b) or (_camps[0] if _camps else None)
+        assert cid, f"🔴 {b.case_id} 没有任何真实 campaign 可用于 WIN（不许兜底假编号）"   # 09-05：原来落 "CMP_4000" 假编号
+        val = WIN_VALUES[i % len(WIN_VALUES)]
+        fact = (WIN_FACT[i % len(WIN_FACT)].format(c=cid, v=val), answer_turn(WIN_ACK[i % len(WIN_ACK)].format(c=cid, v=val)))
         for out_of_window in (True, False):
             fill = [(WIN_FILL[j % 7][0], answer_turn(rng.choice(_defs_of(defs, WIN_FILL[j % 7][1]))))
                     for j in range(7 if out_of_window else 2)]
             prior = [fact] + fill
-            ask = rng.choice(WIN_ASK).format(c=cid)
+            ask = WIN_ASK[(2 * i + (0 if out_of_window else 1)) % len(WIN_ASK)].format(c=cid)
             if out_of_window:
                 b2 = as_multiturn(b, case_id=f"{b.case_id}_WIN", user_message=ask, prior=prior,
                                   gold_actions=[], final_answer={"missing_field": "value",
-                                                                 "clarify_question": rng.choice(WIN_CLARIFY)},
+                                                                 "clarify_question": WIN_CLARIFY[i % len(WIN_CLARIFY)].format(c=cid)},
                                   behavior="clarify")
             else:
+                rep_ = _dry_reply(f"WIN:{cid}") if DRY else await gen_win(cid, val)
                 b2 = as_multiturn(b, case_id=f"{b.case_id}_WINI", user_message=ask, prior=prior,
-                                  gold_actions=[], final_answer={"reply": rng.choice(WIN_REPLY).format(c=cid, v=val)},
-                                  behavior="answer")
+                                  gold_actions=[], final_answer={"reply": rep_}, behavior="answer")
             await emit(b2, "fam_win", f"win|{'out' if out_of_window else 'in'}", f"WIN_{i}")
     return rows
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """v15 · exam_v4 机判（`26 §W1` 科目表的判据执行件）。
 
-    .venv/bin/python scripts/u_exam_judge_v4.py --context logs/u_route/run_<arm>_context_v4.jsonl
+    .venv/bin/python scripts/v16_exam_judge.py --context logs/u_route/run_<arm>_context_v4.jsonl
 
 判据规则**复用**已有的（不另写一套）：
-  L1–L4/REJ           → u_exam_judge_v2.judge_item（v3 判据原样，读数跨版本可比）
+  L1–L4/REJ           → v16_exam_judge_core.judge_item（v3 判据原样，读数跨版本可比）
   defer/clarify/reject 的"人话也算" → contract.prose_expresses（判分与考场同一份规则）
   N1 纯净终答          → contract.n1_hits（唯一真相源）
-新判类（每个都在 scripts/v15_w1_exam_certify.py 做过负向认证——判据必须能对自己失败）：
+新判类（每个都在 scripts/v16_exam_certify.py 做过负向认证——判据必须能对自己失败）：
   defer_expected_v4 / defer_not_expected_v4 / clarify_expected_v4 / clarify_not_expected_v4 /
   hard_diagnosis_v4 / defer_followup_v4 / reject_followup_legal_v4 / clarify_filled_v4 /
   clarify_offtopic_v4 / window_boundary_v4 / meta_recall_v4 / correction_v4 / withdraw_v4
@@ -25,7 +25,7 @@ import sys
 from collections import Counter, defaultdict
 
 sys.path.insert(0, "scripts")
-from u_exam_judge_v2 import _flat, _tool_args, behavior_readouts, judge_item as v2_judge, value_forms  # noqa: E402
+from v16_exam_judge_core import _flat, _tool_args, behavior_readouts, judge_item as v2_judge, value_forms  # noqa: E402
 from syncopate.core.contract import n1_hits, prose_expresses  # noqa: E402
 
 WRITE = ("update_budget", "create", "upload", "pause", "resume", "submit", "adjust", "delete",
@@ -207,11 +207,18 @@ def readouts_v4(rows, spec):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--context", required=True)
+    ap.add_argument("--context", nargs="+", required=True, help="一遍或多遍的 run_*.jsonl（09-05：此前是单值，四遍传进来 argparse 直接报错）")
     args = ap.parse_args()
     spec = {json.loads(x)["id"]: json.loads(x) for x in open("data/u_route/context_v4_exam.jsonl")}
     print("[judge] 考卷 = data/u_route/context_v4_exam.jsonl")
-    rows = [json.loads(x) for x in open(args.context)]
+    rc = 0
+    for f in args.context:
+        rc |= judge_file(f, spec)
+    return rc
+
+
+def judge_file(context: str, spec: dict) -> int:
+    rows = [json.loads(x) for x in open(context)]
     by = defaultdict(lambda: [0, 0]); fails = []
     for r in rows:
         s = spec[r["id"]]
@@ -222,7 +229,7 @@ def main() -> int:
         by[key][0] += ok; by[key][1] += 1
         if not ok:
             fails.append((r["id"], why))
-    print(f"== {args.context}")
+    print(f"== {context}")
     for lv in sorted(by):
         a, n = by[lv]
         print(f"  {lv:12s}: {a}/{n} = {a/n:.0%}")
@@ -238,8 +245,8 @@ def main() -> int:
           f"（R5⑤：HARD 只记录，预注册带 20–50%；L1 ≤10% 是闸）")
     for fid, why in fails:          # 不截断
         print(f"   ✗ {fid}: {why}")
-    out = args.context.replace("run_", "judged_")
-    json.dump({"file": args.context,
+    out = context.replace("run_", "judged_")
+    json.dump({"file": context,
                "levels": {lv: {"pass": a, "n": n} for lv, (a, n) in by.items()},
                "readouts": ro, "by_level": r4, "fails": fails}, open(out, "w"), ensure_ascii=False)
     return 0

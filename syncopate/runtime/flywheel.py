@@ -127,7 +127,7 @@ def trace_digest(trace: dict[str, Any]) -> str:
 async def build_case_from_run(db: Any, *, org_id: str, run_id: str) -> dict[str, Any]:
     """原始 trace 逐字节不被加工过程修改（前后哈希一致）；产物是**深拷贝**后脱敏的**考卷 v4 题形**
     （verl-22 09-02 定）：id/level=FB/turns/prior/judge/note/meta。`note`（expected）只能人签。
-    prior 形状 = agent_runs 行（user/status/error/result），`u_exam_run.seed_prior` 直接吃。"""
+    prior 形状 = agent_runs 行（user/status/error/result），`v16_exam_run.seed_prior` 直接吃。"""
     from syncopate.runtime.db import trace as _trace
     raw = await _trace(db, org_id=org_id, run_id=run_id)
     if raw is None:
@@ -153,7 +153,7 @@ async def build_case_from_run(db: Any, *, org_id: str, run_id: str) -> dict[str,
         "turns": [run.get("user_message") or ""],
         "prior": [{"user": p["user"], "status": p["status"], "error": p.get("error"),
                    "result": _scrub(copy.deepcopy(p.get("result") or {}))} for p in prior_rows],
-        "judge": {"type": None},                          # 由人从 u_exam_judge_v4 现有判类里选；空 = 报告项
+        "judge": {"type": None},                          # 由人从 v16_exam_judge 现有判类里选；空 = 报告项
         "note": (ann or {}).get("expected_json") or (ann or {}).get("notes"),   # ⛔ 只能人签
         "meta": {
             "source_run_id": run_id, "org": org_id, "status": run.get("status"),

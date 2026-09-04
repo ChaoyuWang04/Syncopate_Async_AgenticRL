@@ -44,7 +44,7 @@ def main() -> int:
     OUT.rename(SHADOW)
     env = dict(os.environ, SYNCOPATE_CONTRACT="v15")
     print("\n影子重建中（复用同一份冻结物料）…", flush=True)
-    p = subprocess.run([sys.executable, "scripts/u_build_v14_5.py"],
+    p = subprocess.run([sys.executable, "scripts/v16_build_sft.py"],
                        capture_output=True, text=True, env=env)
     if not (OUT / "train.parquet").exists():
         print(f"🔴 影子重建失败:\n{p.stdout[-3000:]}\n{p.stderr[-2000:]}")

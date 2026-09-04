@@ -10,7 +10,7 @@
   ⇒ 这里按「模型实际会读到/被监督到的每一段文本」逐通道量，不挑通道。
 
 用法：
-    python scripts/v15_data_audit.py data/sft/v15/train.parquet [--json out.json]
+    python scripts/v16_data_audit.py data/sft/v15/train.parquet [--json out.json]
 
 判据（超了就红，退出码 1）见 GATES。⚠️ 阈值都写了**为什么是这个数**；
 改阈值要先问"新口径在旧产物里存不存在"（守则：换契约会让旧单位标定的数字同时失效）。
@@ -128,8 +128,9 @@ GATES = {
 }
 
 
-def audit(path: Path, model: str = STUDENT_MODEL) -> dict:
-    tok = AutoTokenizer.from_pretrained(model)
+def audit(path: Path, model: str | None = None) -> dict:
+    from syncopate.core.model_paths import build_tokenizer_path
+    tok = AutoTokenizer.from_pretrained(model or build_tokenizer_path())   # 09-05：与建库同一份分词器选择（此前无 TEST_TOKENIZER 回退）
     df = pd.read_parquet(path)
     rows = []
     for _, r in df.iterrows():
@@ -244,7 +245,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("parquet")
     ap.add_argument("--json")
-    ap.add_argument("--model", default=STUDENT_MODEL)
+    ap.add_argument("--model", default=None, help="默认 model_paths.build_tokenizer_path()")
     a = ap.parse_args()
     rep = audit(Path(a.parquet), a.model)
     if a.json:

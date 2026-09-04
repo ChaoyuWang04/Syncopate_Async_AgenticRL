@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v15 · W3③ —— 行为/信令类思考探针（`26 §W3` 门槛④ ≥70% 才入库）。训练机跑（需 8B 教师 @:8211）。
 
-    SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 .venv/bin/python scripts/v15_w3_behavior_think_probe.py [--n 20]
+    SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 .venv/bin/python scripts/v16_behavior_think_probe.py [--n 20]
 
 P0-5 用裸 8B 探 reject 类思考只有 2/5：教师没见过我们的信令契约。这里把**契约上下文**（v15 system prompt
 + 全量 34 工具 schema + gold 前缀）喂给教师，从 <think>\\n 续写，命中判据与 gen_cot_v15 相同（教师自己也选中
@@ -35,12 +35,13 @@ async def main() -> int:
     from transformers import AutoTokenizer
     from syncopate.domains.adcampaign import build_domain
     from syncopate.pipeline.build_dataset import build_sft_row
-    from syncopate.pipeline.split import load_bundles
-    import u_build_v14_5 as B
+    from syncopate.pipeline.split import DEFAULT_SPLIT_DIR, load_split_bundles
+    from syncopate.core.model_paths import build_tokenizer_path
+    import v16_build_sft as B
 
-    tok = AutoTokenizer.from_pretrained(STUDENT_MODEL)
+    tok = AutoTokenizer.from_pretrained(build_tokenizer_path())
     reg = build_domain().registry; reg.latency_scale = 0.0
-    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
+    bundles = load_split_bundles(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")   # 09-05：只探 SFT 桶（此前全库含冻结 EVAL/RL）
     by = defaultdict(list)
     for c, b in bundles.items():
         if b.gold and b.verifier.expected_behavior in ("reject", "defer", "clarify"):
@@ -76,7 +77,7 @@ async def main() -> int:
                     gens = await asyncio.gather(*[one_think(ctx) for _ in range(args.samples)], return_exceptions=True)
                     ok = None
                     for g in gens:
-                        # 09-04 先量后动：每个丢弃原因计数（与 u_build_v14_5.step_sample 同一条链；阈值不动）
+                        # 09-04 先量后动：每个丢弃原因计数（与 v16_build_sft.step_sample 同一条链；阈值不动）
                         if isinstance(g, Exception):
                             drop["exception"] += 1; continue
                         if "</think>" not in g:

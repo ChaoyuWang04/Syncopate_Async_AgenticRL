@@ -63,7 +63,7 @@ def test_generator_assertions_can_fail():
 
 def test_judge_v4_negative_certification():
     env = {**os.environ, "SYNCOPATE_CONTRACT": "v15"}
-    p = subprocess.run([sys.executable, str(ROOT / "scripts/v15_w1_exam_certify.py")],
+    p = subprocess.run([sys.executable, str(ROOT / "scripts/v16_exam_certify.py")],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "负向认证通过" in p.stdout

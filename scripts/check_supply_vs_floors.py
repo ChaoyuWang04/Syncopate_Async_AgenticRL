@@ -2,7 +2,7 @@
 不调教师、不造行：只数当前 SFT 桶里每类底题的供给，逐条对照建库脚本里注册的数量下限；供给 < 下限 ⇒ 红。
     python scripts/check_supply_vs_floors.py
 被谁调：runbook `gates` 之后（sft-data 之前）· check_pipeline_invariants data 组。
-⚠️ 下限数字从 u_build_v14_5 / u_build_v15_multiturn 的常量读，不在这里抄第二份。"""
+⚠️ 下限数字从 v16_build_sft / v16_multiturn 的常量读，不在这里抄第二份。"""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, load_
 
 
 def main() -> int:
-    import u_build_v15_multiturn as MT
+    import v16_multiturn as MT
     S = load_split_bundles(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")
     ok = ("tool_call", "answer")
     q = [c for c, b in S.items() if b.gold and b.gold.actions and b.gold.actions[0]["tool"] == "campaign.get_metrics"
@@ -24,20 +24,16 @@ def main() -> int:
     fresh_ok = [c for c, b in S.items() if c.split("_")[0] in ("FRESH", "RELN", "FRCP") and b.verifier.expected_behavior == "tool_call"]
     rej_un = [c for c, b in S.items() if c.startswith("REJ") and (b.gold.final_answer or {}).get("reject_reason") == "unauthorized"]
     bud = [c for c, b in S.items() if c.split("_")[0] in ("BUD", "BCUT") and MT.campaign_of(b)]
-    hard = [c for c in S if c.split("_")[0] in ("BUD", "DIA", "FAIL", "RAG", "SCALE")]
+    hard = [c for c in S if c.split("_")[0] in __import__("v16_build_sft").HARD_FAMILIES]
     chat_bank = sum(1 for _ in open("data/u_route/chat_bank_v2.jsonl"))
-    # 下限：与 u_build_v14_5 里的断言同源（读源码常量，防两份）
-    src = Path("scripts/u_build_v14_5.py").read_text(encoding="utf-8")
-    import re
-    l2_floor = int(re.search(r"assert len\(l2\) >= \((\d+) if IS_V15", src).group(1))
-    l1_floor = int(re.search(r"assert len\(l1\) >= (\d+)", src).group(1))
-    cot_floor = int(re.search(r"_cot_floor = (\d+) if IS_V15", src).group(1))
+    # 下限：与 v16_build_sft 的 gate() **import 同一份常量**（09-05：此前抠源码正则，assert 收成 gate() 后静默崩）
+    import v16_build_sft as UB
     l1_reuse = True   # L1 造法：z 底题循环复用作历史（Chaoyu 09-04 待裁：现状允许）
     rows = [
-        ("L2 多轮（一题一行）", len(q), l2_floor),
-        ("L1 定义行底题（复用作历史）", len(z) * (18 if l1_reuse else 1), l1_floor),
-        ("CoT 难例池（候选行数上界）", len(hard), cot_floor),
-        ("闲聊素材库", chat_bank, 80),
+        ("L2 多轮（一题一行）", len(q), UB.L2_FLOOR),
+        ("L1 定义行底题（复用作历史）", len(z) * (18 if l1_reuse else 1), UB.L1_FLOOR),
+        ("CoT 难例池（候选行数上界）", len(hard), UB.COT_FLOOR),
+        ("闲聊素材库", chat_bank, UB.CHAT_BANK_FLOOR),
         ("六族 DEFF-still 底题", len(fresh_defer), 1), ("六族 DEFF-recheck 底题", len(fresh_ok), 1),
         ("六族 REJF-still 越权底题", len(rej_un), 1), ("六族 CLAF 底题", len(bud), 1),
     ]

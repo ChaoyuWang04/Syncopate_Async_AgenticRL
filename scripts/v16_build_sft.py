@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-"""v14.5 · S4 数据集构建（24 §4-P2 最终设计的执行件；取代 u_build_v14.py）。
+"""v16 · SFT 训练集建库（runbook `scripts/v16_pipeline.sh sft-data` 的执行件）。
 
-    .venv/bin/python scripts/u_build_v14_5.py   # → data/sft/v14_5/{train,val}.parquet
+    bash scripts/v16_pipeline.sh sft-data        # → 教师物料 → 六桶 → 全部闸 → 出厂体检 → 隔离复核 → 画廊；产物 data/sft/<DATA_VERSION>/
+    U_BUILD_DRY=6 python scripts/v16_build_sft.py   # 本机结构演练（不调教师、"[DRY" 占位、产物落 _audit/<DV>/dry/）
+    U_BUILD_GATES=report …                          # 闸观察模式：所有闸都算不中断，末尾汇总红绿表
 
-总原则：程序造事实 · 教师穿语言 · 判据把关。
-教师走 vLLM（4B 语言层 @:8210 · 8B CoT @:8211），由 u_p2_v145_chain.sh 负责起停。
-桶与门槛：24 §4-P2（份额±3pp · 密度闸 · OOV 断言 · 泄漏断言 · 冻结校验 · sub_axis 全量）。
+总原则：程序造事实 · 教师穿语言 · 判据把关。教师 = model_paths.TEACHER_MODEL（人话与思考同一端点 :8210，由 runbook teacher 段起）。
+桶：压舱（当前切分 SFT 桶）· L2 多轮读数 · L1 定义 · 闲聊 · 六族派生行（v16_multiturn）· CoT 蒸馏；闸表与来历见 26 §W4′。
 L2 读数用两次回放法：先占位回放取真实观测值 → 教师带真值写 reply → 二次回放定稿。
+09-05：由 v14.5/v15 时代的建库脚本改名而来；v16 路径不再 import 任何旧版脚本、不读任何旧版物料（本机测试 test_runbook_references_no_old_version_scripts 守着）。
 """
 
 from __future__ import annotations
@@ -40,8 +42,8 @@ PERSONA_LEAK = re.compile(r"我(每天)?(喝|吃|睡觉|跑步|锻炼|健身)|�
 #   ⇒ 修法：用真正的 AnswerField；同时把 L1 循环的裸 except 改成记录首个异常（见下）。
 from syncopate.core.schemas import AnswerField  # noqa: E402
 
-# MIN_FIELDS 唯一定义在 u_build_v15_multiturn（09-02 收口副本；两处各写一份会漂）
-from u_build_v15_multiturn import MIN_FIELDS  # noqa: E402
+# MIN_FIELDS 唯一定义在 v16_multiturn（09-02 收口副本；两处各写一份会漂）
+from v16_multiturn import MIN_FIELDS  # noqa: E402
 # ★ v15 契约分支（Chaoyu 08-29 立项，25 号）：**同一份脚本、两个契约**，不复制第二份。
 #   副本会漂——R0 已经为「spec 三份副本」付过一次学费（25 §7⑥）。
 from syncopate.core.contract import IS_V15  # noqa: E402
@@ -66,7 +68,73 @@ SUB_TRAIN = [t["template"] for t in PATTERNS
              and not re.search(r"\{X\}[中年里在]", t["template"])]
 CONT_TRAIN = [t["template"] for t in PATTERNS
               if t["split"] == "train" and t["kind"] == "continuation"][:8]
-from u_build_v14 import GLOSSARY  # noqa: E402  61 词（定义要点作教师素材，不再直拼 gold）
+# 术语要点（教师改写定义的素材，不直拼 gold）。09-05：从 u_build_v14 搬进来，v16 路径不再 import 任何旧版脚本
+GLOSSARY = {
+    "ROI": "投资回报率，衡量投入产出比的指标，计算方式是收益除以成本",
+    "CPI": "单次安装成本，指平均每带来一个应用安装所花的钱",
+    "CPM": "千次曝光成本，指广告每展示一千次所花的费用",
+    "CPC": "单次点击成本，指用户每点击一次广告所花的费用",
+    "CVR": "转化率，指从点击到完成目标行为（如安装、付费）的比例",
+    "转化": "指用户完成了我们期望的目标行为，比如安装、注册或付费",
+    "留存": "指用户在安装后的第 N 天仍然活跃的比例，是衡量质量的核心指标",
+    "LTV": "用户生命周期价值，指一个用户在整个生命周期内预计带来的总收入",
+    "ARPU": "每用户平均收入，用总收入除以活跃用户数得到",
+    "出价": "指在竞价系统里为一次展示或转化愿意支付的价格",
+    "定向": "指投放时圈定目标人群的条件，比如地区、年龄、兴趣",
+    "素材": "指广告展示给用户的创意内容，包括图片、视频和文案",
+    "归因": "指判断一次转化应该算在哪个渠道或广告头上的规则",
+    "自然量": "指不靠付费广告、用户自发下载带来的量",
+    "冷启动": "指新计划刚投放时系统还没学到足够数据的探索阶段",
+    "学习期": "指投放系统为新计划积累转化数据、模型逐步稳定的阶段",
+    "放量": "指在效果达标后逐步提高预算扩大投放规模的操作",
+    "付费率": "指活跃用户中产生付费行为的比例",
+    "次留": "即次日留存率，指安装次日仍活跃的用户比例",
+    "买量": "指通过付费广告渠道获取新用户的投放行为",
+    # ---- v14.2 扩表（08-29）：r2 考场证明模型背词条不泛化规则（词表内 5/5 过、
+    #      词表外 20 挂 10）⇒ 把领域标准词汇补全。作者预裁定维持：术语可与考场重叠
+    #      （能力是「概念⇒答」不是背题），原句仍逐字去重。
+    "ROAS": "广告支出回报率，用广告带来的收入除以广告花费，衡量每块钱广告费换回多少收入",
+    "CPA": "单次转化成本，指平均每带来一个目标转化行为所花的钱",
+    "CTR": "点击率，用点击次数除以曝光次数得到，衡量素材吸引力",
+    "曝光": "指广告被展示给用户看到一次，是计费和转化漏斗的最上层",
+    "点击": "指用户看到广告后主动点了它，是从曝光走向转化的中间行为",
+    "频次": "指同一个用户在一段时间内看到同一条广告的平均次数",
+    "触达": "指广告实际覆盖到的去重用户数，触达乘频次约等于总曝光",
+    "竞价": "指多条广告为同一次展示机会实时出价、价高者得的分配机制",
+    "底价": "指平台为一次展示设定的最低成交价，出价低于它就没有参与资格",
+    "扣费": "指广告实际被收钱的动作，按计费方式（如点击或千次曝光）结算",
+    "创意": "指一条具体的广告内容组合，即素材加文案加着陆页面的整体",
+    "流失": "指老用户不再活跃或卸载离开产品，与留存相对",
+    "拉新": "指以获取新用户为目标的投放或运营动作",
+    "促活": "指让已安装但不活跃的用户重新活跃起来的运营或投放动作",
+    "召回": "指把已经流失的老用户重新拉回产品的投放或运营动作",
+    "再营销": "指对接触过产品的人群（如点过广告、装过应用）再次定向投放",
+    "投放": "指把广告实际推到渠道上消耗起来的整个执行过程，含预算、出价、定向与素材",
+    "大盘": "指整个市场或渠道的总体量与价格水平，用来对照自家表现",
+    "竞对": "指和我们抢同一批用户的竞争对手产品或它们的投放动作",
+    "毛利": "指收入减去直接成本后剩下的利润，不含摊到头上的间接费用",
+    "回收": "指投放花出去的钱通过用户付费逐步赚回来的过程",
+    "回本周期": "指累计回收追平投放成本所需要的天数，越短现金流越健康",
+    "衰退": "指计划或素材效果持续走低、量价齐跌的阶段",
+    "起量": "指计划通过学习期后消耗与转化明显放大的阶段",
+    "AB测试": "指把流量分成对照组和实验组各跑一个版本，用数据对比谁更好",
+    "增量测试": "指留出不投放的对照人群，测广告带来的真实增量效果",
+    "预算平滑": "指系统把每日预算均匀分配到全天，避免早上就花光",
+    "预算前置": "指把预算刻意往时段或周期的前面倾斜，抢先消耗抢先起效",
+    "深度转化": "指比安装更靠后的高价值行为，如付费、留存或通关关键关卡",
+    "深度事件": "指转化漏斗后段的高价值行为事件，常用作出价优化目标",
+    "浅层事件": "指漏斗前段量大但价值低的行为，如展示、点击、打开",
+    "无效流量": "指作弊、重复或机器产生的虚假点击与安装，会被平台过滤",
+    "防作弊": "指识别并过滤虚假流量的机制，保护预算不被刷量吃掉",
+    "智能出价": "指把出价交给平台模型按转化概率自动调整的出价方式",
+    "目标成本": "指投放时设定的期望单次转化成本，系统围绕它自动调价",
+    "频控": "指限制单个用户看到同一广告次数的规则，防骚扰也防浪费",
+    "受众包": "指按条件圈好的一组目标用户集合，可直接用于定向",
+    "相似人群": "指以现有优质用户为模板扩展出的高相似度潜在用户群",
+    "素材疲劳": "指同一素材跑久了用户看腻、点击率与转化持续下滑的现象",
+    "一方数据": "指我们自己产品直接收集的用户数据，区别于平台或第三方数据",
+    "排期": "指广告按约定时间段和位置投放的计划安排",
+}
 
 STYLES = ["亲切口语", "简洁专业", "轻松幽默"]
 
@@ -74,12 +142,11 @@ EXAM_LAST = set()          # 考卷被判轮句（训练构造时逐字规避）
 # ⚠️ 考卷 v3 也要进泄漏闸 —— 新增的 REJ 题（业务内越权）一旦漏进训练集，
 #   考场就从"测能力"退化成"测记忆"（考卷审计第③条的同族）。
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
-from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
-from u_build_v15_multiturn import (DRY, answer_turn, as_multiturn, build_family_rows,  # noqa: E402
-                                   real_reply, shape_check)
+from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR, DATA_VERSION as DV
+from v16_multiturn import (DRY, EXAM_FILES, answer_turn, as_multiturn, build_family_rows,  # noqa: E402
+                           real_reply, shape_check)
 
-for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "context_v3_exam.jsonl",
-            "context_v4_exam.jsonl", "talk_exam.jsonl"):
+for _fn in EXAM_FILES:          # 与 v16_multiturn 同一份清单
     for _x in open(f"data/u_route/{_fn}"):
         EXAM_LAST.add(json.loads(_x)["turns"][-1])
 
@@ -104,6 +171,14 @@ def gate(cond, msg) -> bool:
         print(f"  [闸-观察] {text}", flush=True)
         return False
     raise AssertionError(text)
+
+
+# ★ 桶数量下限（唯一定义；gate() 与 scripts/check_supply_vs_floors.py 两边 import 同一份。09-04 实案：供给脚本抠源码正则，
+#   assert 收成 gate() 后静默崩 ⇒ 数字提成常量）
+L1_FLOOR = 150
+L2_FLOOR = 150 if IS_V15 else 200      # 09-04 重登记：280 是"全库当底题"时代的数；SFT 桶供给 ~172、一题一行 ⇒ 150 留裁剪余量
+COT_FLOOR = 19 if IS_V15 else 40        # 19 = 穷举可行上界（26 §W4′）
+CHAT_BANK_FLOOR = 80
 
 
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
@@ -493,7 +568,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     out, tried, hit, trimmed = [], 0, 0, 0
     sem = asyncio.Semaphore(3)
 
-    inc = Path("data/u_route/v16_cot_partial.jsonl")
+    inc = Path(f"data/u_route/{DV}_cot_partial.jsonl")
     done = {}
     if inc.exists():
         for line in inc.open():
@@ -528,7 +603,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
                 b.gold.final_answer["reply"] = _rep[cid]
             # ★ W3②（26 §W3）：触发显性化——难例行题面加多步诊断问法，让"该想"在题面上可学
             #   （探针实测：族内 65.5% → 显性化后 88.5%，_audit/v15_w3/trigger_probe.json）
-            from u_build_v15_cot import explicit_hard_prompt
+            from v16_cot_prompt import explicit_hard_prompt
             b.case.user_message = explicit_hard_prompt(b.case.user_message, cid)
         base = await build_sft_row(b, tokenizer=tokenizer, registry=registry,
                                    index=0, split="train", config=None)
@@ -633,7 +708,7 @@ async def build_l2_l1(tokenizer, registry, client):
     _TERMINAL_OK = ("tool_call", "answer")
     # 09-04 run26：底题只来自 SFT 桶后 L2 只造出 144 行（<280 下限）。campaign 编号按裁定⑥/⑨ 在 entities 不在 context ⇒
     #   用 campaign_of（context→entities）取，SFT 桶供给 148→172 道；下限按供给重登记（见 l2_floor）。
-    from u_build_v15_multiturn import campaign_of as _cof
+    from v16_multiturn import campaign_of as _cof
     q_bundles = [b for b in bundles.values()
                  if b.gold and b.gold.actions
                  and b.gold.actions[0]["tool"] == "campaign.get_metrics"
@@ -664,7 +739,7 @@ async def build_l2_l1(tokenizer, registry, client):
     if not DRY:
         # ★ 历史里的上一轮助手内容必须是**真实终答人话**（不同形 #2）：源 case 若不在压舱人话缓存里，
         #   先让教师写好（同一份 ballast_replies 缓存，与冻结桶共用），不许落到占位符
-        from u_build_v15_multiturn import BALLAST_REPLIES as _BR
+        from v16_multiturn import BALLAST_REPLIES as _BR
         _need = [b.case_id for b in q_bundles + z_bundles
                  if b.case_id not in _BR and b.verifier.expected_behavior in ("tool_call", "answer")]
         if _need:
@@ -716,7 +791,8 @@ async def build_l2_l1(tokenizer, registry, client):
         # ★ 09-02（不同形 #1#2#3#4#6#7）：历史 = 真消息对（上一轮助手 = 真实终答人话），
         #   题面 context = 线上同形（账户 + 在投清单），字段清单 MIN_FIELDS，菜单全量
         b2 = as_multiturn(b, case_id=f"{b.case_id}_MT5", user_message=ask,
-                          prior=[(b.case.user_message, answer_turn(real_reply(b)))])
+                          prior=[(b.case.user_message, answer_turn(real_reply(b)))],
+                          final_answer={"reply": "PLACEHOLDER"})   # 两个分支下面都会用教师现写的 reply 覆盖
         if tool == "campaign.get_metrics":
             acts = [{"tool": tool, "arguments": {"campaign_id": cid2}}]
             if obj == "compare" and cid2 != cid:
@@ -944,7 +1020,7 @@ def density_gate(rows, tokenizer, name):
 #
 # 三道过滤缺一不可：① 长度/病句 ② 句式去重（抹掉数字后不许撞） ③ **禁编数**
 #   —— ③ 是最容易漏的：教师顺手编一个没出现过的数字，就等于在教模型幻觉。
-_BALLAST_CACHE = Path("data/u_route/v16_ballast_replies.json")
+_BALLAST_CACHE = Path(f"data/u_route/{DV}_ballast_replies.json")
 _BALLAST_FALLBACK = [0]   # 裁定⑭：缓存名带数据版本，旧名读不到
 ANGLES_BALLAST = [
     "先说结论再补一句依据", "从用户关心的那个点切入", "口语一点，像同事口头汇报",
@@ -1008,6 +1084,83 @@ def _no_invented_numbers(text: str, allowed: str) -> bool:
 def _no_invented_metrics(text: str, allowed: str) -> bool:
     """不许出现事实/题面里没有的指标名 —— 编一个指标名 = 把结论安到别的指标上。"""
     return all(w in allowed for w in _METRIC_WORDS if w in text)
+
+
+def _pattern_key(t: str) -> str:
+    """句式键：抹掉数字与编号（与出厂体检 v16_data_audit.norm 同口径）。"""
+    t = re.sub(r"\d+(\.\d+)?", "§N", t)
+    t = re.sub(r"(CMP|ACC|CRE|CASE|ASSET)_[A-Za-z0-9]+", "§ID", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _reply_ok(cand: str, allowed: str, lo: int = 12, hi: int = 160) -> bool:
+    return (lo <= len(cand) <= hi and not SICK.search(cand) and not _DUP.search(cand) and _tail_ok(cand)
+            and "{" not in cand and not has_oov(cand)
+            and _no_invented_numbers(cand, allowed) and _no_invented_metrics(cand, allowed))
+
+
+async def gen_fact_reply(client, ask: str, facts: str, *, used: set[str]) -> str:
+    """派生行（CLAF 跑题问政策/风控）的终答：用户问 ask、工具查到 facts ⇒ 教师按"查到 X 是 Y"写一两句。数字只能来自 facts/ask。"""
+    allowed = facts + " " + ask
+    cand = ""
+    for k in range(8):
+        cand = clean_reply(await teach(
+            client, T4B,
+            f"用户问：{ask}\n\n你已经{facts}\n\n用一到两句自然中文把查到的结果告诉用户，{ANGLES_BALLAST[k % len(ANGLES_BALLAST)]}。"
+            f"⚠️ 只能用上面给的数字，不许出现别的数字；不要列清单、不要 JSON、不要写『结论如下』。",
+            temp=0.95, max_tokens=120))
+        key = _pattern_key(cand)
+        if _reply_ok(cand, allowed) and key not in used:
+            used.add(key); _tail_note(cand)
+            return cand
+    gate(False, f"🔴 派生行终答：教师 8 次没写出合格人话（问={ask[:40]!r} · {facts[:60]}）")
+    _tail_note(cand)
+    return cand      # report 模式：留最后一条（已记账）
+
+
+async def gen_variant_reply(client, b, base: str, *, used: set[str]) -> str:
+    """六族派生行的终答：同一底题事实、**另写一句**（不复用压舱句 base；run27 体检"一个答案服务 ≥3 题面"就是复用抓出来的）。"""
+    fa = dict(b.gold.final_answer or {})
+    facts = _facts_line(fa)
+    ask = str(b.case.user_message or "")[:300]
+    allowed = facts + " " + ask + " " + base
+    base_key = _pattern_key(base) if base else None
+    prev = f"之前有一种说法是：「{base}」\n\n请换一个角度、换一种句式重新说一遍结论（不要照抄、不要只改几个字），" if base else "请"
+    cand = ""
+    for k in range(8):
+        cand = clean_reply(await teach(
+            client, T4B,
+            f"用户问：{ask}\n\n你已经查完了，事实是：{facts or '（无额外数据）'}\n\n{prev}用一到两句自然中文把结论说给用户听，"
+            f"{ANGLES_BALLAST[(k + 3) % len(ANGLES_BALLAST)]}。⚠️ 只能用上面出现过的数字，不许出现别的数字；不要列清单、不要 JSON。",
+            temp=1.0, max_tokens=110))
+        key = _pattern_key(cand)
+        if _reply_ok(cand, allowed) and key != base_key and key not in used:
+            used.add(key); _tail_note(cand)
+            return cand
+    gate(False, f"🔴 派生行终答：教师 8 次没写出与压舱句不同的合格人话（{b.case_id} 问={ask[:40]!r}）")
+    _tail_note(cand)
+    return cand
+
+
+async def gen_win_reply(client, cid: str, val: str, *, used: set[str]) -> str:
+    """WIN 窗内对照行的终答：用户问最早给 cid 定的数，记录里是 val ⇒ 教师一句话答出来（必须含 val、不许别的数字、句式不重复）。"""
+    allowed = f"{cid} {val}"
+    cand = ""
+    for k in range(8):
+        cand = clean_reply(await teach(
+            client, T4B,
+            f"对话开头用户说过「{cid} 这个月的预算上限定的是 {val}」，现在用户问你最早给 {cid} 说的那个数是多少，你翻记录找到了。"
+            f"用一句自然中文告诉用户那个数是 {val}，必须原样写出 {val} 和 {cid}，不许出现别的数字；"
+            f"不要用『你最早给…定的是…』这种套话，{ANGLES_BALLAST[k % len(ANGLES_BALLAST)]}。",
+            temp=1.0, max_tokens=60))
+        key = _pattern_key(cand)
+        if (_reply_ok(cand, allowed, lo=8, hi=90) and any(f in cand.replace(",", "") for f in value_forms(val))
+                and cid in cand and key not in used):
+            used.add(key); _tail_note(cand)
+            return cand
+    gate(False, f"🔴 WIN 终答：教师 8 次没写出合格句（{cid} {val}）")
+    _tail_note(cand)
+    return cand
 
 
 async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str]:
@@ -1124,7 +1277,8 @@ async def main() -> int:
     from syncopate.domains.adcampaign import build_domain
     global DEFS
     # 学生权重在（Modal）用学生自己的分词器；本机 DRY 无权重 ⇒ 同词表的 Qwen3.5-0.8B（model_paths.TEST_TOKENIZER）
-    _tok_path = STUDENT_MODEL if Path(STUDENT_MODEL, "tokenizer.json").exists() else TEST_TOKENIZER
+    from syncopate.core.model_paths import build_tokenizer_path
+    _tok_path = build_tokenizer_path()
     tokenizer = AutoTokenizer.from_pretrained(_tok_path)
     if DRY:
         print(f"[DRY] 结构演练模式：每桶 {DRY} 行、不调教师、不写缓存、不落 parquet（tokenizer={_tok_path}）")
@@ -1136,25 +1290,28 @@ async def main() -> int:
     #   run25 就把旧切分造的行原样命中了。"记得删缓存"不是机制 ⇒ 行缓存绑定切分 SHA：不一致就自动作废，谁也绕不过。
     import hashlib as _hl
     _split_sha = _hl.sha256(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json", "rb").read()).hexdigest()[:16]
-    _side = Path("data/u_route/v16_cache_split.json")
-    _row_caches = [Path(f"data/u_route/{n}") for n in ("v16_l2l1_rows.json", "v16_fam_rows.json", "v16_cot_rows.json", "v16_cot_partial.jsonl")]
-    # 行缓存还绑定「行构造器版本」：改了 L2/L1/六族/CoT 的造法就 bump，旧造法的行不许再命中（run26 实案：144 行的 L2 缓存会一直红）
-    ROW_BUILDER_TAG = "2026-09-04-r2"
+    _side = Path(f"data/u_route/{DV}_cache_split.json")
+    # 行缓存还绑定「行构造器版本」：改了哪一类的造法就 bump **那一类**的标签，只作废那一份（09-04 前任：一个总标签会把 CoT 20 分钟采样一起作废）
+    ROW_BUILDER_TAGS = {"l2l1": "2026-09-04-r2", "fam": "2026-09-05-r3", "cot": "2026-09-04-r2"}
+    _row_caches = {"l2l1": [f"{DV}_l2l1_rows.json"], "fam": [f"{DV}_fam_rows.json"], "cot": [f"{DV}_cot_rows.json", f"{DV}_cot_partial.jsonl"]}
     _sidecar = json.load(open(_side)) if _side.exists() else {}
-    _prev = (_sidecar.get("sft_split_sha"), _sidecar.get("row_builder_tag"))
-    _split_sha = (_split_sha, ROW_BUILDER_TAG)
-    if _prev != _split_sha:
-        _hit = [c for c in _row_caches if c.exists()]
-        for c in _hit:
-            c.unlink()
-        print(f"[缓存] 切分 SHA {_prev} → {_split_sha}：行缓存作废 {[c.name for c in _hit]}（文本类缓存 ballast/defs/chat 与切分无关，保留）", flush=True)
+    _prev_tags = _sidecar.get("row_builder_tags") or (
+        {k: _sidecar["row_builder_tag"] for k in ROW_BUILDER_TAGS} if _sidecar.get("row_builder_tag") else {})   # 旧格式（单标签）迁移
+    for _kind, _tag in ROW_BUILDER_TAGS.items():
+        _prev = (_sidecar.get("sft_split_sha"), _prev_tags.get(_kind))
+        if _prev != (_split_sha, _tag):
+            _hit = [Path(f"data/u_route/{n}") for n in _row_caches[_kind] if Path(f"data/u_route/{n}").exists()]
+            for c in _hit:
+                c.unlink()
+            print(f"[缓存] {_kind}：切分 SHA/构造器 {_prev} → {(_split_sha, _tag)}：行缓存作废 {[c.name for c in _hit]}"
+                  f"（文本类缓存 ballast/defs/chat 与切分无关，保留）", flush=True)
     if not DRY:
-        _side.write_text(json.dumps({"sft_split_sha": _split_sha[0], "row_builder_tag": _split_sha[1],
-                                     "note": "行缓存绑定的 SFT 切分 SHA + 行构造器版本；任一不一致 u_build 自动作废行缓存"}, ensure_ascii=False))
+        _side.write_text(json.dumps({"sft_split_sha": _split_sha, "row_builder_tags": ROW_BUILDER_TAGS,
+                                     "note": "行缓存绑定的 SFT 切分 SHA + 每类行构造器版本；任一不一致 u_build 自动作废该类行缓存"}, ensure_ascii=False))
 
     # 裁定⑭：v16 的定义/闲聊素材由 27B 教师重生成，缓存名带版本；v14.5 分支保留旧名（legacy）
-    cache_d = Path("data/u_route/v16_defs.json" if IS_V15 else "data/u_route/v145_defs.json")
-    cache_c = Path("data/u_route/v16_chat_mat.json" if IS_V15 else "data/u_route/v145_chat_mat.json")
+    cache_d = Path(f"data/u_route/{DV}_defs.json")
+    cache_c = Path(f"data/u_route/{DV}_chat_mat.json")
     async with httpx.AsyncClient(timeout=180) as client:
         if cache_d.exists():
             DEFS = json.load(open(cache_d))
@@ -1172,8 +1329,7 @@ async def main() -> int:
             chat_mat = await gen_chat(client, bank)
             if not DRY:
                 json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
-        cache_l = Path("data/u_route/v16_l2l1_rows.json" if IS_V15
-                       else "data/u_route/v145_l2l1_rows.json")
+        cache_l = Path(f"data/u_route/{DV}_l2l1_rows.json")
         if DRY:
             # ⚠️ 08-31 前的缓存是折叠文本形状，W2 之后**必须重建**；DRY 只演练构建路径
             l2, l1 = await build_l2_l1(tokenizer, registry, client)
@@ -1193,19 +1349,30 @@ async def main() -> int:
 
         async def _replay_fam(b, idx):
             return await _bsr(b, tokenizer=tokenizer, registry=registry, index=idx, split="train", config=None)
-        cache_f = Path("data/u_route/v16_fam_rows.json")
+        cache_f = Path(f"data/u_route/{DV}_fam_rows.json")
         if not DRY and cache_f.exists():
             fam = json.load(open(cache_f))
             print(f"[F] 家族行缓存命中（{len(fam)}）")
         else:
+            _used_fam: set[str] = set()      # 六族行终答句式去重（跨分支）
+
             async def _gen(cid, mname, val):
                 return await gen_l2_reply(client, cid, mname, val)
-            fam = await build_family_rows(tokenizer, registry, _bundles, DEFS, _replay_fam, _gen)
+
+            async def _gen_fact(ask, facts):
+                return await gen_fact_reply(client, ask, facts, used=_used_fam)
+
+            async def _gen_variant(b, base):
+                return await gen_variant_reply(client, b, base, used=_used_fam)
+
+            async def _gen_win(cid, val):
+                return await gen_win_reply(client, cid, val, used=_used_fam)
+            fam = await build_family_rows(tokenizer, registry, _bundles, DEFS, _replay_fam, _gen,
+                                          gen_fact=_gen_fact, gen_variant=_gen_variant, gen_win=_gen_win)
             if not DRY:
                 json.dump(fam, open(cache_f, "w"))
         print(f"[F] 家族行 {len(fam)}：{dict(Counter(r['bucket'] for r in fam))}")
-        cache_cot = Path("data/u_route/v16_cot_rows.json" if IS_V15
-                         else "data/u_route/v145_cot_rows.json")
+        cache_cot = Path(f"data/u_route/{DV}_cot_rows.json")
         if DRY:
             cot = []      # 旧缓存是 W2 之前的形状（裁剪菜单/ISO 时间/空块有梯度），DRY 不许混进画廊；W4 重采样
             print("[B] DRY：CoT 不用旧缓存（需教师重采样）")
@@ -1222,12 +1389,12 @@ async def main() -> int:
     #   ⛔ 2026-08-30 实案：闸写在 build_l2_l1 里，结果上一轮把 L1=0 的坏结果**写进了缓存**，
     #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
     if not DRY:
-        gate(len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数")
+        gate(len(l1) >= L1_FLOOR, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥{L1_FLOOR}）—— 缓存也算数")
         # 09-04 重登记：280 是按"全库当底题"标定的旧数（那正是泄漏）；SFT 桶供给 172 道、一题一行 ⇒ 下限 150（留裁剪余量）
-        gate(len(l2) >= (150 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行（SFT 桶一题一行的供给约 170）")
+        gate(len(l2) >= L2_FLOOR, f"🔴 L2 桶下限闸：仅 {len(l2)} 行（要 ≥{L2_FLOOR}；SFT 桶一题一行的供给约 170）")
 
     # held-out val 切分（每桶尾部拿走）
-    _l2_train = 280 if IS_V15 else 200
+    _l2_train = max(L2_FLOOR, len(l2) - 10)   # 09-05：原为 280（旧数）⇒ L2 只有 168 行时 val 切片为空且不报错；改为尾部留 10 行作 val
     l2, l2v = l2[:_l2_train], l2[_l2_train:_l2_train + 10]
     # ★ 08-30：L1 训练条数跟着"一行值多少 token"走 —— 去掉 report 步之后每行变短，
     #   150 行只够 2.7%（带宽下沿 3%）。⛔ 这里是**第二处**按旧口径写死的行数：
@@ -1246,7 +1413,7 @@ async def main() -> int:
     _train_ids = [c for c in _sft_ids if c not in set(_val_ids)]
     if DRY:
         _train_ids, _val_ids = _train_ids[:DRY], _val_ids[:max(1, DRY // 3)]
-    _fz = Path("_audit/v16"); _fz.mkdir(parents=True, exist_ok=True)
+    _fz = Path(f"_audit/{DV}"); _fz.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"case_id": _train_ids, "split": ["train"] * len(_train_ids)}).to_parquet(_fz / "_frozen_train.parquet")
     pd.DataFrame({"case_id": _val_ids, "split": ["val"] * len(_val_ids)}).to_parquet(_fz / "_frozen_val.parquet")
     if IS_V15:
@@ -1323,7 +1490,7 @@ async def main() -> int:
     #     穷举出的可行上界 = **19 行**（预算 35366 内，其中高覆盖行 9，surplus 恰好 0）。
     #     ⇒ 行数下限取实测上界 19。三条里只有行数下限是"拍的"，另外两条各有来源
     #       （token 带宽=梯度预算 · 覆盖率=N3 按需思考）。
-    _cot_floor = 19 if IS_V15 else 40
+    _cot_floor = COT_FLOOR
     if not DRY:
         gate(len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）")
     new_rows = l2 + l1 + chat_rows + fam + cot
@@ -1374,13 +1541,13 @@ async def main() -> int:
     gate(not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形")
     if DRY:
         _dry = pd.DataFrame(list(t13.to_dict("records")) + l2 + l1 + chat_rows + fam + cot)
-        from u_build_v15_multiturn import SOURCE_OF as _SRC
+        from v16_multiturn import SOURCE_OF as _SRC
         from syncopate.pipeline.split import assert_split_isolation as _asi, base_case_id as _bcid
         _dry["source_case_ids"] = [[_SRC.get(str(c)) or _bcid(str(c))] for c in _dry["case_id"]]
         _asi(_dry, Path(DEFAULT_SPLIT_DIR), "sft")          # 三桶隔离③：DRY 也走出口闸
-        _dp = Path("_audit/v16/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
+        _dp = Path(f"_audit/{DV}/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
         _dry.to_parquet(_dp)
-        print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）· 不提前返回，继续走全部结构闸")
+        print(f"[DRY] 演练产物 → {_dp}（给 scripts/v16_data_gallery.py 看终态）· 不提前返回，继续走全部结构闸")
         print(f"[DRY] 行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"
               f" · 缺真实终答的历史 {sc['missing_real_reply'][:5]}")
         # ★ 09-04 Chaoyu：结构闸必须本机就能验（419 冻结行数 / 考场泄漏 / think 双开头都是 DRY 提前返回才漏到云上的）
@@ -1449,7 +1616,7 @@ async def main() -> int:
     # 泄漏闸口径（第8次发射修订）：**被判轮**逐字必 0（防背答案）；铺垫轮是公共
     # 自然句式（「X是什么意思？」），逐字禁会禁掉整类表达 ⇒ 记数上报不判死
     first_turns = set()
-    for fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "talk_exam.jsonl"):
+    for fn in EXAM_FILES:
         for x in open(f"data/u_route/{fn}"):
             first_turns.update(json.loads(x)["turns"][:-1])
     leak_last, leak_first = 0, 0
@@ -1467,9 +1634,9 @@ async def main() -> int:
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
     # ★ 09-04 run27：出厂体检红了但 parquet 已经写进了正式目录 ⇒ 下游 need() 会把它当成品。改成先写 staging，体检全绿才搬进正式目录。
-    out = Path("_audit/v16/dry") if DRY else (Path("_audit/v16/report") if GATE_MODE == "report" else Path("_audit/v16/staging"))
+    out = Path(f"_audit/{DV}/dry") if DRY else (Path(f"_audit/{DV}/report") if GATE_MODE == "report" else Path(f"_audit/{DV}/staging"))
     # ★ 三桶隔离②③（09-04）：每行登记底题；落盘只走唯一带闸写盘函数（底题桶 == 产物桶，越桶直接抛）
-    from u_build_v15_multiturn import SOURCE_OF as _SRC
+    from v16_multiturn import SOURCE_OF as _SRC
     from syncopate.pipeline.split import base_case_id as _bcid
     from syncopate.pipeline.build_dataset import write_split_checked
     train_records = train.to_dict("records"); val_records = val.to_dict("records")
@@ -1496,7 +1663,7 @@ async def main() -> int:
     #     ㉖ 那次就是闸写在生产者里，缓存命中时整条闸被绕过去了。
     import importlib.util as _ilu
     _spec = _ilu.spec_from_file_location(
-        "v15_data_audit", Path(__file__).resolve().parent / "v15_data_audit.py")
+        "v16_data_audit", Path(__file__).resolve().parent / "v16_data_audit.py")
     _mod = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_mod)
     _audit = _mod.audit
     if DRY:

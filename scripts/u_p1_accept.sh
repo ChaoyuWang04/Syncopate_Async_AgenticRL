@@ -31,8 +31,8 @@ nohup python -m syncopate.runtime.worker --org-id org_demo --worker-id p1-accept
   --daily-cost-cap-micros 10000000000 > logs/u_route/p1_worker.log 2>&1 &
 WK=$!
 sleep 8
-.venv/bin/python scripts/u_exam_run.py --exam context --arm p1 --concurrency 4 > logs/u_route/p1_context.log 2>&1 || echo CTX-RUN-FAIL
-.venv/bin/python scripts/u_exam_run.py --exam talk --arm p1 --concurrency 4 > logs/u_route/p1_talk.log 2>&1 || echo TALK-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam context --arm p1 --concurrency 4 > logs/u_route/p1_context.log 2>&1 || echo CTX-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam talk --arm p1 --concurrency 4 > logs/u_route/p1_talk.log 2>&1 || echo TALK-RUN-FAIL
 kill $WK $API $SRV 2>/dev/null; sleep 5
 for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -u); do kill -9 $p 2>/dev/null; done
 

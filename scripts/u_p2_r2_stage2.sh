@@ -34,8 +34,8 @@ WK=$!
 sleep 8
 
 say "③ 考场两件"
-.venv/bin/python scripts/u_exam_run.py --exam context --arm v141 --concurrency 4 > logs/u_route/p2r2_context.log 2>&1 || echo CTX-RUN-FAIL
-.venv/bin/python scripts/u_exam_run.py --exam talk --arm v141 --concurrency 4 > logs/u_route/p2r2_talk.log 2>&1 || echo TALK-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam context --arm v141 --concurrency 4 > logs/u_route/p2r2_context.log 2>&1 || echo CTX-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam talk --arm v141 --concurrency 4 > logs/u_route/p2r2_talk.log 2>&1 || echo TALK-RUN-FAIL
 kill $WK $API $SRV 2>/dev/null; sleep 5
 for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -u); do kill -9 $p 2>/dev/null; done
 

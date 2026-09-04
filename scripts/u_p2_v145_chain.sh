@@ -25,7 +25,7 @@ done
 say "教师就绪"
 
 say "② S4 建库（门禁内置：份额/密度/OOV/泄漏/冻结）"
-python scripts/u_build_v14_5.py > logs/u_route/build_v145.log 2>&1 \
+python scripts/v16_build_sft.py > logs/u_route/build_v145.log 2>&1 \
   || { tail -15 logs/u_route/build_v145.log; kill $T4 $T8 2>/dev/null; echo BUILD-FAIL; exit 1; }
 grep -E "份额|密度|✅" logs/u_route/build_v145.log | tail -8
 kill $T4 $T8 2>/dev/null; sleep 8
@@ -94,14 +94,14 @@ nohup python -m syncopate.runtime.worker --org-id org_demo --worker-id v145-acce
   --daily-cost-cap-micros 10000000000 > logs/u_route/v145_worker.log 2>&1 &
 WK=$!
 sleep 8
-.venv/bin/python scripts/u_exam_run.py --exam context_v2 --arm v145 --concurrency 4 > logs/u_route/v145_ctxv2.log 2>&1 || echo CTXV2-RUN-FAIL
-.venv/bin/python scripts/u_exam_run.py --exam context --arm v145 --concurrency 4 > logs/u_route/v145_ctx.log 2>&1 || echo CTX-RUN-FAIL
-.venv/bin/python scripts/u_exam_run.py --exam talk --arm v145 --concurrency 4 > logs/u_route/v145_talk.log 2>&1 || echo TALK-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam context_v2 --arm v145 --concurrency 4 > logs/u_route/v145_ctxv2.log 2>&1 || echo CTXV2-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam context --arm v145 --concurrency 4 > logs/u_route/v145_ctx.log 2>&1 || echo CTX-RUN-FAIL
+.venv/bin/python scripts/v16_exam_run.py --exam talk --arm v145 --concurrency 4 > logs/u_route/v145_talk.log 2>&1 || echo TALK-RUN-FAIL
 kill $WK $API $SRV 2>/dev/null; sleep 5
 for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -u); do kill -9 $p 2>/dev/null; done
 
 say "⑥ 机判（v2 双词表 + v1 对照）+ 首步 + 盲评包"
-.venv/bin/python scripts/u_exam_judge_v2.py --context logs/u_route/run_v145_context_v2.jsonl | head -14
+.venv/bin/python scripts/v16_exam_judge_core.py --context logs/u_route/run_v145_context_v2.jsonl | head -14
 .venv/bin/python scripts/u_exam_judge.py --context logs/u_route/run_v145_context.jsonl | head -6
 .venv/bin/python - <<'PY'
 import json

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v15 · W1 —— 考卷 v4 全部新判类的负向认证 + gold 闭环自检（`26 §W1` 门槛③）。
 
-    .venv/bin/python scripts/v15_w1_exam_certify.py
+    .venv/bin/python scripts/v16_exam_certify.py
 
 每个新判类：≥5 类"应该挂"的答卷（该拒不拒/嘴拒手动/该 defer 直答/该办仍 clarify/空答/编造数字/
 复述上轮原话/旧参数粘连……按判类各取其适用的）逐条必须判红；一份 gold 必须判过。
@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 
 sys.path.insert(0, "scripts")
-from u_exam_judge_v4 import judge_item  # noqa: E402
+from v16_exam_judge import judge_item  # noqa: E402
 
 
 def T(behavior="answer", reply="", tools=(), proposal=None, args=None, status="succeeded",

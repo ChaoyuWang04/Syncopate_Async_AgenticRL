@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """v15 · 门槛三查（`26 §W0`）：把每条剩余门槛过「可测 / 可达 / 阶段归属」，机器出表。
 
-    .venv/bin/python scripts/v15_gate_triage.py            # 修订版门槛表（W0 产物）
-    .venv/bin/python scripts/v15_gate_triage.py --legacy   # 08-30 原门槛表 ⇒ 必须报出缺口（负向认证）
-    .venv/bin/python scripts/v15_gate_triage.py --strict   # W1 之后：装置"待交付"也算缺口
+    .venv/bin/python scripts/v16_gate_triage.py            # 修订版门槛表（W0 产物）
+    .venv/bin/python scripts/v16_gate_triage.py --legacy   # 08-30 原门槛表 ⇒ 必须报出缺口（负向认证）
+    .venv/bin/python scripts/v16_gate_triage.py --strict   # W1 之后：装置"待交付"也算缺口
 
 三查的定义（`26 §3-W0`）：
   可测   n 和 SE 分辨得出这个阈值吗。比例型：n/遍 ≥20（1 题 ≤5pp）且 SE ≤ (100−T)/2；
@@ -27,11 +27,10 @@ import statistics as st
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-JUDGED_GLOB = "logs/u_route/judged_v15r3c_r*_context_v3.jsonl"
-BLIND = "logs/u_route/blind_scores_v145.json"
-BLIND_KEY = "logs/u_route/blind_key.json"
-R5_AUDIT = "_audit/v15_r5/r3_sel_f25.json"
-OUT = Path("_audit/v15_w0/gate_triage.json")
+# 09-05：不再有默认的 judged 文件（此前默认读 v15-R3 时代的旧判卷文件，本机旧文件还在 ⇒ 把旧读数当本次的报出来）。
+#   盲评 / R5 审计是 v14.5/v15 时代的可选输入，v16 没有 ⇒ 默认不读（缺 = 该门槛报"待装置"，不是拿旧读数顶）。
+from syncopate.pipeline.split import DATA_VERSION as _DV
+OUT = Path(f"_audit/{_DV}/gate_triage.json")
 
 
 # ── 读数（全部来自落盘文件）────────────────────────────────────────────────
@@ -180,18 +179,18 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
              reading=f"f2.5 均值 {r5.get('mean_reward','?')}（{r5.get('label','?')}）；R5 实测 MDE 0.025",
              achievable="R5 已实测五点 0.559→0.762；代内可比，不设绝对线"),
         Gate("R5②", "R5", "行为语义正确率（调信令或人话皆可）", "≥97%", "prop",
-             "u_exam_judge_v4 · v4 硬预期行为题 161（REJ32+DEF24+CLA20+L4 25+DEF-F/REJ-F/CLA-F 各 20）", "ok", True,
+             "v16_exam_judge · v4 硬预期行为题 161（REJ32+DEF24+CLA20+L4 25+DEF-F/REJ-F/CLA-F 各 20）", "ok", True,
              T=97, n_per_run=161, p_design=97,
              reading=f"代理读数：v3 仅 REJ 8 题带硬预期 ⇒ {rd('REJ')}",
              achievable="v14.5 同题型 defer 9/9=100%（旧契约）；本轮失分归因守则⑮ 8 处不同形，W2 修后重测；首标"),
-        Gate("R5③a", "R5", "多轮 L1-oov", "≥70%", "prop", "u_exam_judge_v2 · L1 held-out 26 题", "ok", True,
+        Gate("R5③a", "R5", "多轮 L1-oov", "≥70%", "prop", "v16_exam_judge_core · L1 held-out 26 题", "ok", True,
              T=70, n_per_run=26, level="L1-oov", reading=rd("L1-oov"),
              achievable="R5 实测 75.0 ≥70，但与阈值差 5pp < 2·SE ⇒ 按前置条件『无法判定』，W5 加采样"),
-        Gate("R5③b", "R5", "多轮 L2", "≥70%", "prop", "u_exam_judge_v2 · L2 25 题（含读数在场）", "ok", True,
+        Gate("R5③b", "R5", "多轮 L2", "≥70%", "prop", "v16_exam_judge_core · L2 25 题（含读数在场）", "ok", True,
              T=70, n_per_run=25, level="L2", reading=rd("L2"),
              achievable="v14.5-SFT 同卷 78.0 曾达标；R5 53.0 归因不同形 #2#3#8（题面/gold 指向不同对象）"),
         Gate("R5③c", "R5", "多轮 L1-iv（**报告项**，硬闸在 R6③）", "记录；≥90 在 R6", "record",
-             "u_exam_judge_v2 · L1 in-vocab 24 题", "ok", True, n_per_run=24, level="L1-iv",
+             "v16_exam_judge_core · L1 in-vocab 24 题", "ok", True, n_per_run=24, level="L1-iv",
              reading=rd("L1-iv"), achievable="Chaoyu 08-29 追认改期至 R6 出口（24 §4-P2 处置）",
              note="08-30 表把它留在 R5 硬闸 = 挂错阶段，本版撤下"),
         Gate("R5④a", "R5", "说人话盲评（闭卷同口径）", f"≥ 1.46 − MDE（MDE={blind_mde}）", "score",
@@ -201,10 +200,10 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
              achievable="v14.5 从 1.141→1.460 由 OPD+数据达成；v15 终答已改教师生成（㉚），W5 必跑",
              note="原文『≥1.46』是绝对数：两臂各 n=100、SE 0.064 ⇒ 差值 MDE 0.18，绝对线会把噪声判成退步 ⇒ 改成 Δ≥−MDE"),
         Gate("R5④b", "R5", "N1 纯净终答：机器语法正则零命中", "=0", "structural",
-             "contract.n1_hits（唯一真相源）· u_exam_judge_v4 按档报 n1 命中率", "ok", True,
+             "contract.n1_hits（唯一真相源）· v16_exam_judge 按档报 n1 命中率", "ok", True,
              reading="v3 四遍答卷可回扫（W1⑦ 补装置后即得）", achievable="R2 数据侧壳残留 0/948 已达；模型侧首测"),
         Gate("R5⑤a", "R5", "难例思考触发率（HARD 档）", "SFT 只记录；预注册预测带 20–50%；≥50 硬闸挂 R6", "record",
-             "u_exam_run 落盘 think_nonempty + u_exam_judge_v4 按档汇总（v4 HARD 20 题；校准=W5 起链前对照 PG）", "ok", True,
+             "v16_exam_run 落盘 think_nonempty + v16_exam_judge 按档汇总（v4 HARD 20 题；校准=W5 起链前对照 PG）", "ok", True,
              n_per_run=20, level=None, p_design=35,
              reading="0（R5 全场 model.thinking 非空 1 条，且量在 133 道多轮题上——不是难例集）",
              achievable="26 §4.4 推算：CoT 行 20→66–72、think 做轻后难例桶内覆盖 ≥60%；全库非空 3–5%",
@@ -213,15 +212,15 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
              "同上，按 L1 档汇总（50 题×4）", "ok", True, T=10, n_per_run=50, p_design=10,
              reading="0%（当前模型几乎不思考，天然满足）", achievable="v15 数据非难例桶 think 非空 0/3899；W3 只加难例行"),
         Gate("R5⑥a", "R5", "reject 语义表达率", "≥90%（≥29/32）", "prop",
-             "u_exam_judge_v4（沿 unauthorized_reject_v3）· v4 REJ 32 题", "ok", True,
+             "v16_exam_judge（沿 unauthorized_reject_v3）· v4 REJ 32 题", "ok", True,
              T=90, n_per_run=32, p_design=90, reading=f"v3（n=8）{rd('REJ')}",
              achievable="R2 数据信令 91/91 合法；失分=行为表达在多轮档，同 R5② 归因"),
         Gate("R5⑥b", "R5", "defer 语义表达率", "≥90%", "prop",
-             "u_exam_judge_v4 defer_expected_v4 + prose_expresses('defer') · v4 DEF 24（12 对）", "ok", True,
+             "v16_exam_judge defer_expected_v4 + prose_expresses('defer') · v4 DEF 24（12 对）", "ok", True,
              T=90, n_per_run=24, p_design=90, reading="无读数：v3 考卷 defer 零覆盖",
              achievable="v13 单轮冻结 EVAL 该 defer 100%（cand_v13r2）；多轮档首测"),
         Gate("R5⑥c", "R5", "clarify 语义表达率", "≥90%", "prop",
-             "u_exam_judge_v4 clarify_expected_v4 + prose_expresses('clarify') · v4 CLA 20（10 对）", "ok", True,
+             "v16_exam_judge clarify_expected_v4 + prose_expresses('clarify') · v4 CLA 20（10 对）", "ok", True,
              T=90, n_per_run=20, p_design=90, reading="无读数：v3 只在 L4 第一轮间接体现（L4 18.0%）",
              achievable="L4 25 题第一轮 clarify 是同一能力；首测"),
         Gate("R5⑥d", "R5", "cap 无新增恶化", "每个 cap：Δ命中数 ≤ 2·√n_before（泊松 2SE，逐 cap 自打印）", "mde",
@@ -242,14 +241,14 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
         Gate("R6①b", "R6", "四点谱 s100/200/300/400 选点", "并列点按 cap 干净度", "score",
              "compare 三计数 + cap 表（343）", "ok", True, reading="v13 世代六点曲线定式已验", achievable="—"),
         Gate("R6②", "R6", "★ 强通道终极测试：RL 后行为语义正确率跌幅", "≤3pp（配对同题，四遍聚合；若 SE_diff>1.5pp 加采样至 8 遍）", "delta",
-             "u_exam_judge_v4 · v4 硬预期行为题 161，RL 前后同卷", "ok", True,
+             "v16_exam_judge · v4 硬预期行为题 161，RL 前后同卷", "ok", True,
              T=3, n_per_run=161, p_design=97,
              reading="无读数（R6 未起）；R5 达成值即基线", achievable="v14 壳通道 RL 后 defer 100→0 是反例；强通道假说正是本条要验的",
              note="SE_diff 随达成值变化：p=0.97 ⇒ 1.2pp 可判；p<0.95 ⇒ >1.5pp ⇒ 必须加采样，不许直接判"),
-        Gate("R6③a", "R6", "L1-iv", "≥90%", "prop", "u_exam_judge_v2 · L1-iv 24 题", "ok", True,
+        Gate("R6③a", "R6", "L1-iv", "≥90%", "prop", "v16_exam_judge_core · L1-iv 24 题", "ok", True,
              T=90, n_per_run=24, level="L1-iv", reading=rd("L1-iv"),
              achievable="v14.1 iv 100（记忆模式）；残余失败=概念题动工具的 on-policy 惯性，RL reward 可罚（24 §4-P2 处置 b）"),
-        Gate("R6③b", "R6", "L2", "≥90%", "prop", "u_exam_judge_v2 · L2 25 题", "ok", True,
+        Gate("R6③b", "R6", "L2", "≥90%", "prop", "v16_exam_judge_core · L2 25 题", "ok", True,
              T=90, n_per_run=25, level="L2", reading=rd("L2"), achievable="v14.5-SFT 78 → RL 目标 90；v14 P3 RL 曾 78→52（标签漂移），v15 强通道是修法"),
         Gate("R6③c", "R6", "L3", "≥75%", "prop", "u_exam_judge (v1) budget_proposal · 25 题", "ok", True,
              T=75, n_per_run=25, level="L3", reading=rd("L3"), achievable="㉟ 判卷器认倍数后 0→60；SFT 55 → RL 目标 75"),
@@ -266,16 +265,16 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
         Gate("R7②", "R7", "任务不赔", "Δ ≥ −MDE（0.025 量级）", "score", "compare（343）", "ok", True,
              reading="R6 达成值待", achievable="v14 P1 实测任务段零漂（+0.01）"),
         Gate("R7③a", "R7", "★ 信令不糊：行为形态正确率跌幅", "Δ ≥ −MDE（MDE=2·SE_diff 自打印）；**原 1pp 撤销**", "mde",
-             "u_exam_judge_v4 · v4 硬预期行为题 161，R6 前后同卷", "ok", True,
+             "v16_exam_judge · v4 硬预期行为题 161，R6 前后同卷", "ok", True,
              n_per_run=161, p_design=97, reading="无读数（R7 未起）",
              achievable="OPD 只训 NL 段（门槛⑤ mask 抽检守结构）；统计闸补共享权重的间接影响",
              note="1pp 要求 SE_diff ≤0.5pp ⇒ N≈600 题×4 遍，不可行；改成 MDE 口径 + 结构闸（R7⑤）"),
         Gate("R7③b", "R7", "三信令表达率各不低于 R6 达成值", "各 Δ ≥ −MDE（自打印；reject 以 n=32 计）；**原 2pp 撤销**", "mde",
-             "u_exam_judge_v4 · v4 REJ/DEF/CLA", "ok", True,
+             "v16_exam_judge · v4 REJ/DEF/CLA", "ok", True,
              n_per_run=32, p_design=90, reading="无读数（R7 未起）", achievable="同 R7③a",
              note="2pp 在 n=32×4 下 SE_diff≈3.75pp，分辨不出 ⇒ 按 W0③ 改判读法"),
         Gate("R7④", "R7", "多轮不倒退", "L1-iv/L1-oov/L2 各 Δ ≥ −MDE（自打印；以 L2 计）", "mde",
-             "u_exam_judge_v2 同卷前后", "ok", True, n_per_run=25, level="L2", reading="R6 达成值待",
+             "v16_exam_judge_core 同卷前后", "ok", True, n_per_run=25, level="L2", reading="R6 达成值待",
              achievable="OPD 不碰工具段", note="MDE 自打印，不写死"),
         Gate("R7⑤", "R7", "分段器 mask 落点抽检（梯度只落 NL 段）", "≥20 条人核 100%", "structural",
              "分段器 + 人核", "ok", True, reading="v14 分段器双修过；v15 三分（think/tool/NL）待重标", achievable="—"),
@@ -288,7 +287,7 @@ def revised_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
         Gate("R8④", "R8", "训练/runtime 同模板同 kwargs（含 think-on）", "契约一致测试绿", "structural", "tests/runtime 契约一致 11 条", "ok", True, reading="R4③ 已达", achievable="—"),
         Gate("总闸①", "总闸", "任务不倒退（代内）", "vs R5/R6 Δ ≥ −MDE", "score", "compare", "ok", True, reading="代内", achievable="—"),
         Gate("总闸②", "总闸", "多轮达标 L1-iv≥90·oov≥70·L2≥90·L3≥75·L4≥60", "四遍聚合", "prop",
-             "u_exam_judge_v2/v1", "ok", True, T=90, n_per_run=24, level="L1-iv", reading="同 R6③", achievable="同 R6③"),
+             "v16_exam_judge_core/v1", "ok", True, T=90, n_per_run=24, level="L1-iv", reading="同 R6③", achievable="同 R6③"),
         Gate("总闸③", "总闸", "说人话 ≥1.46−MDE + N1", "闭卷", "score", "盲评 + contract.n1_hits", "ok", True, reading="同 R5④", achievable="同 R5④"),
         Gate("总闸④", "总闸", "强通道兑现 ≥97% 且 RL 前后 ≤3pp", "同 R5②/R6②", "prop", "同 R5②", "ok", True,
              T=97, n_per_run=161, p_design=97, reading="同 R5②", achievable="同 R5②"),
@@ -306,7 +305,7 @@ def legacy_gates(exam: dict, blind: dict, r5: dict) -> list[Gate]:
     return [
         Gate("旧R5②", "R5", "行为语义正确率", "≥97%", "prop", "无：全卷仅 REJ 8 题带硬预期", "missing", True,
              T=97, n_per_run=8, level="REJ", reading=rd("REJ"), achievable=""),
-        Gate("旧R5③", "R5", "L1-iv", "≥90%", "prop", "u_exam_judge_v2", "ok", False,
+        Gate("旧R5③", "R5", "L1-iv", "≥90%", "prop", "v16_exam_judge_core", "ok", False,
              T=90, n_per_run=24, level="L1-iv", reading=rd("L1-iv"), achievable="文档自记出口在 R6"),
         Gate("旧R5⑤", "R5", "难例思考率", "≥50%", "prop", "无统计代码；考卷无难例集", "missing", True,
              T=50, n_per_run=0, reading="0（人工查库）", achievable="20 行 CoT 数学上不可达"),
@@ -340,12 +339,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--legacy", action="store_true", help="08-30 原表（负向认证：必须报缺口）")
     ap.add_argument("--strict", action="store_true", help="W1 之后：pending 装置也算缺口")
-    ap.add_argument("--judged", default=JUDGED_GLOB)
+    ap.add_argument("--judged", required=True, help="本次判卷产物 glob，例 logs/u_route/judged_v16_sft_r*_context_v4.jsonl")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--blind", default=None, help="盲评分数 json（可选；与 --blind-key 成对）")
+    ap.add_argument("--blind-key", default=None)
+    ap.add_argument("--r5-audit", default=None, help="R5 审计 json（可选）")
     args = ap.parse_args()
     exam = load_exam_runs(args.judged)
-    blind = load_blind(BLIND, BLIND_KEY)
-    r5 = load_r5_audit(R5_AUDIT)
+    assert exam, f"🔴 --judged 没匹配到任何判卷文件：{args.judged}"
+    blind = load_blind(args.blind, args.blind_key) if args.blind and args.blind_key else {}
+    r5 = load_r5_audit(args.r5_audit) if args.r5_audit else {}
     print(f"[triage] judged 文件 {len(glob.glob(args.judged))} 份 · 盲评臂 {list(blind)} · R5 审计 {r5.get('label')}")
     print("[triage] 各层四遍分辨力：")
     for lv, e in exam.items():

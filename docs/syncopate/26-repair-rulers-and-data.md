@@ -93,9 +93,9 @@ S5 闲聊与表达     闲聊、承接语、说人话
 
 | # | 维度 | 训练侧现状（出处） | 线上（出处） | 修在 |
 |---|---|---|---|---|
-| 1 | 历史的位置 | 折成文本塞进 `Case.user_message`：`"[上一轮] 用户：…\n[上一轮] 助手：…"`（`scripts/u_build_v14_5.py:609-610,686-693`）；结构根因=`Case` 只有一个 `user_message` 字段（`syncopate/core/schemas.py:76`） | 真消息对（`decider.py:152-190`） | W2 |
+| 1 | 历史的位置 | 折成文本塞进 `Case.user_message`：`"[上一轮] 用户：…\n[上一轮] 助手：…"`（`scripts/v16_build_sft.py:609-610,686-693`）；结构根因=`Case` 只有一个 `user_message` 字段（`syncopate/core/schemas.py:76`） | 真消息对（`decider.py:152-190`） | W2 |
 | 2 | 上一轮助手内容 | 机器标签式 summary 截 **120 字符**，缺失时兜底「已给出结论」（`:592,690`）——两种都不是人话 | 上一轮真实终答人话，**400 token** 截断（`decider.py:186-189`） | W2 |
-| 3 | 字段清单 | L2 行带真实机器字段（`rollout_loop.py:165` + `prompts/step_user.txt:9-12`）；L1 行 MIN_FIELDS 在 v15 下**整节消失**（`u_build_v14_5.py:698-699` + `contract.py:88-95`）——同一份数据里两个桶互相都不同形 | 整节消失 | W2 |
+| 3 | 字段清单 | L2 行带真实机器字段（`rollout_loop.py:165` + `prompts/step_user.txt:9-12`）；L1 行 MIN_FIELDS 在 v15 下**整节消失**（`v16_build_sft.py:698-699` + `contract.py:88-95`）——同一份数据里两个桶互相都不同形 | 整节消失 | W2 |
 | 4 | 目标对象 | 题面直接给 `campaign_id=CMP_x`（context 继承 v13，`:545-548,585`） | ~~只给在投清单~~ → **只给 account_id**，要自己用 `campaign.list` 查（09-02 裁定⑥；08-20 那版「清单塞 context」是演示环境补丁） | W2 ✅（多轮行 context=account_id） |
 | 5 | 当前时间 | ISO 带时区（`schemas.py:102-103`） | 纯日期（`decider.py:216`） | W2（训练改纯日期，已裁定） |
 | 6 | 工具菜单 | 按模板族裁剪（`scripts/set_tool_menus.py`；v8 时代 docstring 记 8–13，文档记 16–17，代码出处查不到，§7） | 全量 34 | W2（训练改全量 34，已裁定） |
@@ -112,11 +112,11 @@ S5 闲聊与表达     闲聊、承接语、说人话
                  空块是 mask=1 的监督目标（sft.py:100-121；_audit/v15_r2/gates.json）
                  ⇒ 97.8% 的 think 梯度在教「输出空思考」
 ② 重量×预算顶死  CoT 行监督 token 中位 2500（其中 think ≈1900），预算 = 非CoT 的 19%
-                 = 36253 ⇒ 数学上最多 20–24 行（u_build_v14_5.py:1056-1095；已复算证实）
+                 = 36253 ⇒ 数学上最多 20–24 行（v16_build_sft.py:1056-1095；已复算证实）
 ③ 覆盖率门槛自证 「难例桶非空 ≥60%」被选择算法恰好顶在 60.0%（约束是紧的）——
                  三个版本全是 60.0%，这条门槛量的是算法不是数据
 ④ 触发率没有尺子 无统计代码 + 考卷无难例集（§1.2-S4）；R5 表里的"0"是人工查库
-⑤ 教师边界      session.report 步被排除（教师 0/6 命中，u_build_v14_5.py:467-471）；
+⑤ 教师边界      session.report 步被排除（教师 0/6 命中，v16_build_sft.py:467-471）；
                  reject 类思考 2/5（24 §P0-5）⇒ CoT 完全不覆盖行为/信令决策——
                  而 R5 挂得最惨的恰是行为表达（reject 12.5%）
 ```
@@ -189,7 +189,7 @@ cancelled+session_reject；真库测试 `tests/runtime/test_clarify_turns_enter_
 
 ```
 · decider.py:113-118 注释「全量 30 个」→ 34（v15 加了 4 个信令工具，注释停在 v14）
-· u_build_v14_5.py:385 代码限额 40 vs :390 日志文案「限额 30」不一致
+· v16_build_sft.py:385 代码限额 40 vs :390 日志文案「限额 30」不一致
 · 建库 stdout（[CoT-v15] 命中率/预算行）从未入库 ⇒ 新纪律：建库输出一律 tee 进 _audit/
 ```
 
@@ -224,7 +224,7 @@ cancelled+session_reject；真库测试 `tests/runtime/test_clarify_turns_enter_
 
 **✅ W0 完成（2026-09-02，本机 0 GPU；修订表待 Chaoyu 批准）**
 ```
-产物   scripts/v15_gate_triage.py（三查机器出表，只读落盘文件）· _audit/v15_w0/gate_triage.json
+产物   scripts/v16_gate_triage.py（三查机器出表，只读落盘文件）· _audit/v15_w0/gate_triage.json
        25 §R5/R6/R7/总闸 门槛表就地改写 · 00 §5 ⑬ 附则「钉死判据前三查」
 读数   ① 38 条门槛零空格 ✓  ② 缺口 0（旧表 --legacy 报 7 条缺口 = 负向认证会红）✓
        ③ R6② 3pp：p=0.97 时 SE_diff 1.2 ≤1.5 可判；p<0.95 须加采样至 8 遍（写进表）
@@ -262,7 +262,7 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 
 配套尺子（都是现在没有的）：
 ```
-④ 思考率尺子：u_exam_run 把 run_events 里 kind='model.thinking' 的非空计数落进 jsonl（发射点
+④ 思考率尺子：v16_exam_run 把 run_events 里 kind='model.thinking' 的非空计数落进 jsonl（发射点
    agent_loop.py:148-152，空块 strip 后不发事件、口径天然正确），判卷器按 HARD / L1 分别出触发率
    ⚠️ 现 run_*.jsonl 不含事件，R5 的"1 条非空"来自训练机 PG ⇒ 校准（门槛④）得先做这一步
 ⑤ 修 v1 判卷器截断（u_exam_judge.py:145 的 fails[:20]）
@@ -273,7 +273,7 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 ⑨ 生成器结构断言扩到五个多样性维度：每科 ≥2 对象 · ≥2 问法模板（held-out 30%）· ≥2 历史长度 ·
    正反成对对齐 · WIN 必含 ≥7 轮历史；任一断言会红
 ⑩ 考场时长重估：133 题一遍 ~10 min ⇒ v4 约 400 题一遍 ~30 min，四遍 ~2 h（训练机，W5 排期用）
-⑪ 收尾：scripts/v15_gate_triage.py 登记表按 v4 实际题数回填（硬预期行为题 = REJ+DEF+CLA+L4+
+⑪ 收尾：scripts/v16_gate_triage.py 登记表按 v4 实际题数回填（硬预期行为题 = REJ+DEF+CLA+L4+
    DEF-F+REJ-F+CLA-F ≈ 160）并 --strict 零缺口
 ```
 
@@ -284,14 +284,14 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 | ③ 判卷器负向认证 | 每个新科目构造 ≥5 类劣化答卷（该拒不拒/嘴拒手动/该 defer 直答/该办仍 clarify/空答/**编造数字**/复述上轮原话/旧参数粘连），每类判红率 **100%**；gold 答卷 selfcheck 100% 判对 |
 | ④ 思考率尺子校准 | 考场 jsonl 带 thinking 计数（已交付）；读数 = PG 查库值的对照在 **W5 起链的第一遍**做（本机有 PG 但无模型端点，跑不了考场） |
 | ⑤ 装置足量 | 带硬预期行为的题合计 ≥ **150**，每种行为 ≥ **20**；报告项科目各 ≥10 |
-| ⑥ 三查零缺口 | `v15_gate_triage.py --strict` 退出码 0（登记表按 v4 实际题数回填） |
+| ⑥ 三查零缺口 | `v16_gate_triage.py --strict` 退出码 0（登记表按 v4 实际题数回填） |
 
 **✅ W1 完成（2026-09-02，本机 0 GPU）**
 ```
 产物   scripts/u_make_exams_v4.py → data/u_route/context_v4_exam.jsonl（361 题：L1 50·L2 25·L3 25·L4 25
        逐字继承 · REJ 32 · DEF 24 · CLA 20 · HARD 20 · DEF-F 20 · REJ-F 20 · CLA-F 20 · L2-x 20 · WIN 20 ·
-       META/PRG/COR/TIME 各 10 报告项）· scripts/u_exam_judge_v4.py（13 个新判类 + 按档读数：思考率/N1/
-       编造/写操作）· scripts/v15_w1_exam_certify.py · u_exam_run 加脚本化历史 + think_nonempty ·
+       META/PRG/COR/TIME 各 10 报告项）· scripts/v16_exam_judge.py（13 个新判类 + 按档读数：思考率/N1/
+       编造/写操作）· scripts/v16_exam_certify.py · v16_exam_run 加脚本化历史 + think_nonempty ·
        contract.n1_hits · compare 逐 cap 泊松 verdict · v1 判卷器去截断 · demo 加 CMP_7（样本不足型不成熟）
 读数   ① 结构断言：每科 ≥2 对象（REJ 6/DEF 4/HARD 4/L2-x 5）· ≥2 问法（4–17）· 成对 5 科全配对 ·
          L2-x 轮距 {1,3} · WIN 历史 {3,8} · 收场类型 answer/defer/reject/clarify 全在场；
@@ -319,7 +319,7 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
    已进版本管理，commit 0eabfa8）；不同形 #1#2#4#8 在同一段代码，一起修
 ③ 字段清单（#3，已裁定=对齐线上）：多轮行 required_answer_fields 一律 MIN_FIELDS
    ⇒ v15 下与线上一样整节消失；「读数在场」改由 gold 终答自带数字来教
-   （L2 判卷的「读数在场」闸不动，u_exam_judge_v2.py:97-99）
+   （L2 判卷的「读数在场」闸不动，v16_exam_judge_core.py:97-99）
 ④ 时间（#5，已裁定）：所有行「当前时间」渲染成纯日期（同线上）；随 W4 全量重建生效，
    重建后跑 v13 语义冻结四项全等确认压舱数据没走样
 ⑤ 菜单（#6，已裁定=训练改全量 34）：先实测全量菜单的 token 占用与现契约 prompt 预算；
@@ -356,8 +356,8 @@ REJ 档读数不可比、如实分列。新科目按下表；每科先过三查�
 代码   syncopate/core/prior_turns.py（历史→消息对的唯一渲染，decider 与 rollout_loop 共用）·
        rollout_loop.build_messages 加 prior + 纯日期 · CaseBundle.prior（内存字段，不落盘）·
        core/demo_context.py（线上 context 构造抽到 core，训练 chat 行同形）·
-       scripts/u_build_v15_multiturn.py（prod_context / as_multiturn / 六族第一波训练行 / 同形体检）·
-       u_build_v14_5：L2/L1 改真消息对（#1#2#3#4#6#7#8 一起修，switch 只取 env 里真实存在的另一条）、
+       scripts/v16_multiturn.py（prod_context / as_multiturn / 六族第一波训练行 / 同形体检）·
+       v16_build_sft：L2/L1 改真消息对（#1#2#3#4#6#7#8 一起修，switch 只取 env 里真实存在的另一条）、
        chat 行改走同一组渲染函数（此前走 probe 私渲染：v14 尾段 system + 假 context + summary 字段清单 = 四处不同形）、
        fam 桶 + 带宽 + manifest.render + 出厂同形体检 · sft_replay 认 gold.clarify_question
        · 34 条工具描述修剪 + system.txt 并入 4 条纪律（见 ⑤）
@@ -384,7 +384,7 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
    不能只靠隐藏的模板族标签——模型在题面上看不出「该想」，就永远学不会触发
 ③ 行为/信令思考补课：reject/defer 类不用裸 8B（P0-5 实测 2/5）——教师 prompt 注入
    契约上下文后重跑探针，≥70% 才用；不过线则该类显式不带 think 并登记（照抄 P0-5 结论）
-④ 带宽上沿 0.20→0.30（已裁定；改 u_build_v14_5.py:1139 的 bands["cot"]=(0.05,0.30)），
+④ 带宽上沿 0.20→0.30（已裁定；改 v16_build_sft.py:1139 的 bands["cot"]=(0.05,0.30)），
    选择算法重跑；可达性预算先算后训（§4.4 的算式，W5 实测回填）
 ```
 
@@ -398,11 +398,11 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
 **🔶 W3 本机部分完成（2026-09-02）——①④ 的读数要教师（训练机，并入 W4）**
 ```
 代码   ① think 做轻：gen_cot_v15 的 one_think max_tokens 900→350 + step_sample 画像闸（≤350 字·≤2 段·中文≥0.5），
-         命中判据「首动作名相等」未放宽（THINK_MAX_* 常量在 u_build_v14_5）
-       ② 触发显性化：scripts/u_build_v15_cot.py explicit_hard_prompt（4 前缀/4 后缀多步诊断问法，按 case_id 确定性选）
+         命中判据「首动作名相等」未放宽（THINK_MAX_* 常量在 v16_build_sft）
+       ② 触发显性化：scripts/v16_cot_prompt.py explicit_hard_prompt（4 前缀/4 后缀多步诊断问法，按 case_id 确定性选）
          接进 gen_cot_v15._row；只加在 CoT 行
-       ③ 可达性预算表：scripts/v15_w3_budget_table.py → _audit/v15_w3/budget_table.json
-       ④ 行为类 think 探针：scripts/v15_w3_behavior_think_probe.py（契约上下文 + 8B，≥70% 才入库）→ W4 跑
+       ③ 可达性预算表：scripts/v16_budget_table.py → _audit/v15_w3/budget_table.json
+       ④ 行为类 think 探针：scripts/v16_behavior_think_probe.py（契约上下文 + 8B，≥70% 才入库）→ W4 跑
        带宽上沿 0.30 已改（W2 时随 fam 桶一起）
 读数   ② 触发可学性探针（scripts/v15_w3_trigger_probe.py，哈希字符 n-gram + 5 折平衡准确率）：
          族级 83.8% · **族内 65.5%**（难例=隐藏标签，题面看不出该想）· 族内+显性化 **88.5% ≥80** ✓
@@ -416,7 +416,7 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
 
 ### W4 · 重建 + 出厂体检（训练机 = **Modal RTX PRO 6000×2**，Chaoyu 09-03 裁定；环境与试点见 08 §Modal；~1 小时）
 
-门槛：出厂体检全绿（`u_build_v14_5.py` 末尾已进流程）· 份额闸/密度闸/D-L 门禁全过 ·
+门槛：出厂体检全绿（`v16_build_sft.py` 末尾已进流程）· 份额闸/密度闸/D-L 门禁全过 ·
 **同形断言进出厂体检**（shape_check 在建库产物上跑，已接）· 建库 stdout tee 入 `_audit/`
 （§2.4 新纪律）· §7 欠账读数全部落盘。
 
@@ -426,15 +426,15 @@ DRY   U_BUILD_DRY=6 结构演练（0.6B tokenizer、不调教师、不落盘）�
    Chaoyu 定数改（默认建议 9216）且 launch_rl/vllm 启动脚本 max_model_len = 9216+8192 → 18432；
    `python -c "from syncopate.train.rollout_budget import *"` 判据行 [think-mode] 打出
 1  教师起服务（u_p2_v145_chain.sh 的 4B@8210 / 8B@8211 段）
-2  行为类 think 探针：scripts/v15_w3_behavior_think_probe.py --n 20 ⇒ _audit/v15_w3/behavior_think_probe.json；
+2  行为类 think 探针：scripts/v16_behavior_think_probe.py --n 20 ⇒ _audit/v15_w3/behavior_think_probe.json；
    ≥70% 的行为类才允许 gen_cot_v15 收（低于线的登记 §7 欠账，CoT 行不带其 think）
 3  ⚠️ 旧缓存作废：data/u_route/v15_l2l1_rows.json（折叠文本形状）与 v15_cot_rows.json（旧 think 画像）
    改名 *.pre_w2.json 留档，不许被命中（缓存命中会绕过全部新改造——㉒ 同族）
-4  建库：SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 python scripts/u_build_v14_5.py 2>&1 | tee _audit/v15_w4/build.log
+4  建库：SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 python scripts/v16_build_sft.py 2>&1 | tee _audit/v15_w4/build.log
    判据：[同形] 不同形 0 · 份额闸六桶在带（首次实测后把 v13/fam 带宽回填本表）· [CoT-v15] 命中率行入库 ·
-        出厂体检 ✅ · scripts/v15_r2_gates.py --prompt-budget data/sft/v15/train.parquet 零截断
+        出厂体检 ✅ · scripts/v16_prompt_budget_gate.py --prompt-budget data/sft/v15/train.parquet 零截断
 5  压舱不走样：scripts/v15_r2_migrate.py --scope frozen419 ⇒ 四项全等 419/419
-6  新池画像（W3 门槛①）：scripts/v15_w3_budget_table.py 对新 cot 缓存重跑 ⇒ p95 ≤500 字 · 段数 ≤2 · 中文 ≥0.5
+6  新池画像（W3 门槛①）：scripts/v16_budget_table.py 对新 cot 缓存重跑 ⇒ p95 ≤500 字 · 段数 ≤2 · 中文 ≥0.5
 7  影子重建判据（如时间允许）：scripts/run_pipeline_shadow_rebuild.sh 只到 3/6（batches SHA）
 ```
 
@@ -500,7 +500,7 @@ run15  压舱 687 ✅ · L2 290 / L1 250 / 家族 180 ✅ · **CoT 段崩**：ge
        · 压舱桶来源改为**当前切分 sft_cases**（val 每 6 取 1），不再依赖旧 parquet（裁定⑩）· DRY 不调教师用 "[DRY" 占位（正式产物红线）
 run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· **CoT 蒸馏真跑起来了**：难例池 114（BUD/DIA/FAIL/RAG/SCALE），
        27B 教师逐步采样，日志里 ≥14 条「收 X（1/10 步有思考）」；但收尾 **`预算 44885 内选中 0 行 · 聚合非空 think 0/0`** ⇒ CoT 桶下限闸
-       （≥19 行）红。⇒ 下一任第一件事：查「收」到「行」之间哪一步把 think 行丢了（u_build_v14_5.py gen_cot_v15 收尾 + main 里
+       （≥19 行）红。⇒ 下一任第一件事：查「收」到「行」之间哪一步把 think 行丢了（v16_build_sft.py gen_cot_v15 收尾 + main 里
        sur()/预算可行上界搜索 ≈ L1160–1200），怀疑点：① 27B 的 think 长度/段数/中文占比闸（THINK_MAX_*）② attach_think 对 XML 步的匹配
        ③ sur(r)≤0 全被判 neg。教师日志末尾有一次 EngineCore shutdown（16:47Z），先确认是收尾 teardown 还是中途死。
        读数：build.log = /vol/_audit/v16/build.log（本机副本 /tmp/v16/build.log 已失效，重新 `modal volume get`）
@@ -574,7 +574,7 @@ S4′ 机制冒烟  --steps sft_smoke --sft-arm mech_dry --max-steps 30
               判据 = 可训参数 37M±20%（抓 LoRA 正则里按 Qwen3-Next 猜的模块名）· loss/grad 有限 · 存档可被 peft 加载 ΔW>0 ·
               峰值显存 <180 GB · tok/s 记录。产物 /vol/checkpoints/sft/mech_dry **不是候选**。
 S5′ 链路冒烟  --steps exam_v4 --exam-arm plumb --exam-limit 40（学生底座、无 adapter）
-              判据 = seed→check 7 条 · 端点起 · API/worker 起 · u_exam_run rc 0 · judge_v4 rc 0 · triage 出表；分数不看（底座没训）。
+              判据 = seed→check 7 条 · 端点起 · API/worker 起 · v16_exam_run rc 0 · judge_v4 rc 0 · triage 出表；分数不看（底座没训）。
 S4′ 读数（09-04 01:46）✅ 机制全过：可训 42.3M（带内）· loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 显存峰值 74.1 GB · 30 步 346 s ·
               adapter 落盘（sel 点 81 MB）。探针首判红是 grad_norm 只上 wandb 没打 stdout + 峰值正则量错字样（已修：sft.py 每 5 步打判据行；**01:56 复跑三判全绿**，grad_norm 0.57–10.2）。
 S5′ 读数（09-04 01:42）✅ 链路全通：PG/Redis/语料 0 · 播种 7 campaign · 35B 端点起 500 s · 40 题 137 s · judge/triage rc 0
@@ -628,7 +628,7 @@ CoT 段 ✅ 通了：114 case 全部有思考行（run16 只有 64 且全是旧�
 ```
 
 **★ run24 出厂体检收口后的重大发现（09-04 12:40）：三桶隔离被破坏。** 用"底题在哪个桶"扫 run24 产物：1270 行里 **367 行越桶**（六族 48 + L2 56
-来自冻结 EVAL；六族 89 + L2 174 来自 RL 桶）。根因：u_build_v14_5 整批读 1670 题后各桶手动过滤，09-02 写的多轮/六族两条路径没过滤；
+来自冻结 EVAL；六族 89 + L2 174 来自 RL 桶）。根因：v16_build_sft 整批读 1670 题后各桶手动过滤，09-02 写的多轮/六族两条路径没过滤；
 出口没有"底题归属"判据，泄漏闸只比对考卷句。影响：今天之前的 v13/v15 读数已按裁定⑩作废、新栈上尚未用这份数据训过任何东西 ⇒ 无既有结论受损；
 不修就训 ⇒ S5 与五点谱虚高。Chaoyu：「要在硬机制上保证训练数据的可靠性」⇒ 守则⑱（00 §5）三层机制已在本机落地并验证：
 tests/pipeline/test_split_isolation.py 5 条绿 · 复核器对 run24 产物报 367 越桶（eval 104 / rl 263）· DRY 演练经出口闸 0 越桶。
@@ -654,21 +654,21 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 | stage | 底层入口（默认值来源） | 产物 | 判据 | 状态 |
 |---|---|---|---|---|
 | cases | `syncopate cases generate`（spec/out ← DATA_VERSION） | data/batches/v16 | gold 实跑验证、指纹去重 | ✅ 本机 2030 条 |
-| menus | `set_tool_menus.py`（--sft-audit=_audit/v8_sft_epoch1.json，git 内冻结输入；v15 prompt 一律全量，此表只供 verifier/routing） | case.tool_menu | — | ✅ |
+| menus | `set_tool_menus.py`（gold 并集 ∪ cap 动作工具 ∪ CORE；**09-05 起不再并入 v8 时代模型的评测审计**；v15 prompt 一律全量，此表只供 verifier/routing） | case.tool_menu | D7 菜单多样性 | ✅ 本机重算 1880/2030 条菜单变、三份切分 SHA 不变 |
 | split | `syncopate data split`（batch/out ← DATA_VERSION；eval-per-stratum 2 · sft-ratio 0.20） | data/splits/v16 | 三桶互斥实测 | ✅ 401/597/1032 |
-| gates | `check_data_gates.py` | — | D1–D11 | ✅ 全绿 |
+| gates | `check_data_gates.py --split-dir`（09-05 补：此前 runbook 没传 --split-dir ⇒ L1-L2 三桶泄漏闸被静默跳过） | — | D1–D11 + L1-L2 | ✅ 全绿（含 L1-L2） |
 | rl-data | `syncopate data build --pool rl`（val-every 5）+ 隔离复核 | data/rl/v16 | 出口隔离闸 | ✅ 云上曾建 660/165（旧切分；重建待跑） |
 | teacher | vLLM 27B @8210（max_model_len ← rollout_budget） | 进程 | /health | ✅ |
-| sft-data | `u_build_v14_5.py` + prompt 预算 + 隔离复核 + 画廊 | data/sft/v16 | 全部闸 + 出厂体检 + 隔离 | 🟡 run24 到出厂体检；新切分待 run25 |
+| sft-data | `v16_build_sft.py`（+ `v16_multiturn.py` / `v16_data_audit.py` / `v16_prompt_budget_gate.py` / `v16_data_gallery.py`）+ 隔离复核 + 画廊 | data/sft/v16（staging 全绿才搬） | 全部闸 + 出厂体检 + 隔离 | 🟡 run27 倒在出厂体检 3 项 ⇒ 09-05 修法已落地（见「09-05 审查与修法」）；run28 观察模式待跑 |
 | sft-train | `syncopate.train.sft`（model=STUDENT · 数据=DATA_VERSION · epochs 3 · bs 2×accum 8 · lr 1e-4 · LoRA r32/a64 attn_shared · save-epochs 1.5,2.5） | checkpoints/sft/v16 | loss/grad 有限 · ΔW>0 | ✅ 机制冒烟；真数据待 |
-| sft-eval | `entropy`（limit 24）+ `eval_local`（冻结 EVAL · 8 样本 · T=1） | _audit/v16_{entropy,eval}_* | — | ⬜ |
+| sft-eval | `entropy`（limit 24；09-05 修：response 上限从写死 2048 改读 rollout_budget）+ `eval_local`（冻结 EVAL · 8 样本 · T=1） | _audit/v16_{entropy,eval}_* | — | ⬜ |
 | sft-select | `select_sft_ckpt.py --auto --prune`（有梯度多 → 熵高） | SELECTED 软链 | 缺审计即红 | ⬜（--auto 新加） |
 | merge | `merge_adapter`（base=STUDENT） | models/Qwen3.6-35B-A3B-sft-v16 | bf16 保真 | ⬜ |
-| exam | `v15_r5_exam_chain.sh`（candidate 4 遍 / smoke 1 遍 40 题）→ judge_v4 → triage | logs/u_route · logs/v15_r5 | rc 0 · 三查出表 | ✅ 链路冒烟（底座） |
+| exam | `v16_exam_chain.sh`（candidate 4 遍 / smoke 1 遍 40 题）→ `v16_exam_judge.py`（接多遍）→ `v16_gate_triage.py --judged 本次产物`（rc 2=有缺口报不拦） | logs/u_route · logs/v15_r5 · _audit/v16/gate_triage_*.json | rc 0 · 三查出表 | ✅ 链路冒烟（底座，1 遍）；09-05 修了 candidate 档三处必死（日志目录/多遍判卷/三查读旧文件）；**门槛表数字仍按 v15 标定，待 v16 首考读数重登记** |
 | rl-train | `launch_rl_v1 --profile candidate`（model=合并 SFT · steps 400↓限 · n 8 · save-freq 25 · lr 3e-5 · FSDP2 · LoRA r32 排除专家 · gpus 2） | checkpoints/grpo/v16_cand | pool 行 · loss/grad 有限 · reward 非 0 | ✅ smoke 2 步；candidate 待 |
 | rl-adapter | `verl.model_merger merge --backend fsdp` + `check_lora_adapter.py` | models/adapters/rl_v16_candidate/lora_adapter | adapter 张量非零 | ⬜ **待云上验证**（FSDP2 分片 + save_lora_only） |
 | rl-eval | `eval_local --model 合并SFT --adapter RL` | _audit/v16_eval_rl_candidate.json | — | ⬜ |
-| opd-train | `torchrun opd --base <同 adapter 的底座> --adapter <RL 或 SFT 选中点>`（epochs 3 · batch 8 · lr 2e-5 · max-new 2048） | checkpoints/opd/v16_candidate | vocab 断言 · KL 有限 · adapter 落盘 | ✅ 机制冒烟 |
+| opd-train | `torchrun opd --base <同 adapter 的底座> --adapter <RL 或 SFT 选中点>`（epochs 3 · batch 8 · lr 2e-5 · max-new 2048；渲染/分段在 `syncopate/train/opd_render.py`，09-05 从探针脚本搬入，reference_now=今天、context 空） | checkpoints/opd/v16_candidate | vocab 断言 · KL 有限 · adapter 落盘 | ✅ 机制冒烟 |
 | opd-eval | `eval_local --model <同底> --adapter OPD final` | _audit/v16_eval_opd_candidate.json | — | ⬜ |
 
 切分格稀疏度（09-04 本机，124 格）：33 格满足「总数<8 或 SFT<2 或 EVAL<2」；最薄 INJ/memory_content/id_given 共 4 条（eval 1 / sft 2 / rl 1），
@@ -685,7 +685,34 @@ FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF
 ③ 7 个答案服务 ≥3 题面：六族行终答直接复用底题的压舱人话（同一句话在压舱行 / CLAF / REJF 三条不同对话路径末尾出现）
    ⇒ 修：六族行终答用教师**另写一句**（同事实、不同角度，不写缓存），不复用压舱缓存句
 ```
-这三条都是"六族行的终答来源"同一件事：派生行要有自己的教师人话，不能借压舱行的。下一任先改这三处（u_build_v15_multiturn：as_multiturn 注入 + CLAF 跑题 + WIN），本机 DRY + 供给核对过了再上云；上云用 `--build-gates report` 一次看全貌。
+这三条都是"六族行的终答来源"同一件事：派生行要有自己的教师人话，不能借压舱行的。下一任先改这三处（v16_multiturn：as_multiturn 注入 + CLAF 跑题 + WIN），本机 DRY + 供给核对过了再上云；上云用 `--build-gates report` 一次看全貌。
+
+**★ 09-05 管线审查与修法（Chaoyu：「runbook 固定了调谁，但被调的还是 v14.5/v15 名字的脚本，旧东西还在起作用吗？」⇒ 逐段审查，全部修）**
+```
+改名（git mv，旧文件留作 legacy 不动）  u_build_v14_5→v16_build_sft · u_build_v15_multiturn→v16_multiturn · u_build_v15_cot→v16_cot_prompt ·
+        v15_data_audit→v16_data_audit · v15_r2_gates→v16_prompt_budget_gate · v15_data_gallery→v16_data_gallery · v15_w3_behavior_think_probe→v16_behavior_think_probe ·
+        v15_w3_budget_table→v16_budget_table · v15_r5_exam_chain.sh→v16_exam_chain.sh · u_exam_run→v16_exam_run · u_exam_judge_v4→v16_exam_judge ·
+        u_exam_judge_v2→v16_exam_judge_core · v15_gate_triage→v16_gate_triage · v15_w1_exam_certify→v16_exam_certify；GLOSSARY 从 u_build_v14 搬进 v16_build_sft；
+        probe_opd_divergence 的 render_prompt_text/segment_text 搬进 syncopate/train/opd_render.py。判据：test_runbook_references_no_old_version_scripts
+        （runbook dry-run 输出不含旧版本名脚本 + v16 建库两脚本代码行不含旧物料名）
+机制缺口  ① supply 段崩（抠源码正则失效）⇒ L1/L2/CoT/闲聊下限提成 v16_build_sft 模块常量，供给脚本 import 同一份；测试真跑它 rc 0
+        ② gates 段没传 --split-dir ⇒ L1-L2 泄漏闸静默跳过 ⇒ 补上
+        ③ menus 段并入 _audit/v8_sft_epoch1.json（08-12 v8 模型评测审计）⇒ Chaoyu 裁定去掉（--sft-audit 默认 None）；本机重算菜单变 1880 条、切分 SHA 不变
+        ④ 考场链 candidate 档三处必死：日志目录在 mkdir 前被写 / 四遍文件传给单值 --context / 三查不接参数默认读 v15-R3 旧判卷文件 ⇒ 全修；三查 rc 2 报不拦
+        ⑤ 探针「无旧物料」判据的 open( 正则匹不到 ternary 里的 v145_* ⇒ 改为两脚本代码行 grep 旧名；探针把 staging/report 拷进 Volume
+        ⑥ 缓存标签一个总标签 ⇒ 拆 l2l1/fam/cot 三个各自绑定（本轮只作废 fam）；缓存/审计目录名从 DATA_VERSION 派生
+        ⑦ 分词器选择：画廊/预算表拿退役 Qwen3-4B 存不存在当判据、体检没有 TEST_TOKENIZER 回退 ⇒ model_paths.build_tokenizer_path 唯一定义
+        ⑧ 旧数字：entropy 写死 2048 · L2 val 切片按 280 切（168 行时 val 为空不报错）· select_sft_ckpt 接受没写 data_version 的旧审计 · 行为探针探全库含 EVAL/RL
+        ⑨ 多轮考卷集合 glob *exam* 与主脚本显式清单不同口径 ⇒ EXAM_FILES 唯一清单
+run27 三项红的修法（机制的改机制、多样性的加数据）
+        复用（×3）= 机制：as_multiturn 的"借压舱句"默认分支改成硬机制（正式一律报错、DRY 占位）；DEFF-recheck/REJF-legal/CLAF-filled 由教师按底题事实另写一句
+                  （gen_variant_reply：不许编数、句式≠压舱句、跨分支去重、只进 fam 行缓存）
+        CLAF 跑题 = 机制：政策/风控分支先带占位终答回放取工具观测（obs_json 取本轮 tool_response），教师按"用户问 X、查到 Y"写（gen_fact_reply，数字只能来自观测）
+        WIN = 多样性：答数终答交教师按 (campaign, 数值) 现写（gen_win_reply）；事实句 1→10 种、确认句 1→7、数值 4→12、问法 3→9、承认句 3→8，按序轮转不随机；
+                  底题 campaign 不再落 "CMP_4000" 假编号
+本机验证  定向 26 测试绿 · 全量 pytest（见 run28 记录）· DRY 演练 exit 0（六族 53 行 · 同形 0 · 越桶 0 · 三份缓存标签独立）· menus/split/gates/supply 全绿
+待 Chaoyu   三查门槛表数字（v16 首考读数后重登记）· OPD build_prompt 多轮仍是折叠文本（守则⑮ #1 同形欠账，OPD 现只用单轮 p1 提示）
+```
 
 **收口（09-04 14:45）**：run27 已跑完（见上）。之后的固定顺序：run27 红 ⇒ `modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates report`
 一次看全部红项 ⇒ 按"结构性/需裁定/真 bug"分类处理 ⇒ strict 建库全绿 ⇒ 画廊给 Chaoyu 逐条看 ⇒ `v16_pipeline.sh --profile smoke` 从 sft-train 跑到 opd-eval
@@ -705,17 +732,17 @@ FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF
 
 | 数字 | 出处 | 来历 | 处置 |
 |---|---|---|---|
-| 冻结桶 == 419 行 | u_build_v14_5 | v13 冻结桶行数 | ✅ 改派生相等（重放行数 == 冻结清单行数） |
-| CoT 预算 0.19/0.81 | u_build_v14_5 | CoT 带宽 ≤20% 时代 | ✅ 改 COT_SHARE_TARGET=0.28（裁定④ 上沿 30% 不顶满）；预计选行 52→~85 |
-| 六桶份额带宽 v13 .48–.62 / l2 .10–.17 / l1 .03–.09 / chat .01–.07 / fam .04–.12 / cot .05–.30 | u_build_v14_5 | v15 行重下标定；注释原话"待 W4 首次实测回填" | 🟡 v16 首建**只报读数**（manifest bands_mode=report_only_first_v16），CoT ≤30% 始终硬；Chaoyu 按读数批带宽 ⇒ U_BUILD_BANDS_STRICT=1 |
-| L2 ≥280 / L1 ≥150 / CoT ≥19 行 | u_build_v14_5 | v15 行重（"19 = 穷举可行上界"） | 保留为下限（run17 实测 290/250/52 全过；抬 CoT 目标后更宽裕） |
-| think 900 tok / 4096 字 / cjk≥0.5 | u_build_v14_5 | 8B 教师 | ✅ 裁定⑮：2048 / 撤 / 撤 + 截断闸 ≤3% |
-| TAIL_CAP=4（同一收尾句 ≤4 次） | u_build_v14_5 | "全库 922 行 ⇒ ≤0.4%" | 保留（v16 行数同量级；体检闸 2% 兜底） |
-| 出厂体检 2% / 8% / 3 / 35% / 2% | v15_data_audit.GATES | v14.5 健康值与病值分得开的位置 | 保留（形状闸，不是行数单位） |
-| prompt 预算余量 ≥300 | v15_r2_gates | 上限 9216 时代 | 保留（上限抬到 12288 只会更宽） |
-| 行为探针 ≥70% | v15_w3_behavior_think_probe | 设计值 | 保留（run17：defer 100 / reject 95 / clarify 35 ⇒ clarify 登记欠账） |
-| 撑破 8192 的打印 | u_build_v14_5 | 旧 response 上限 | ✅ 改读 rollout_budget |
-| 考场/尺子的 R5 门槛表 | v15_gate_triage | 按 v13/v15 读数标定 | ⏳ 不在建库链；S5 真评前另做一遍三查（可测/可达/阶段） |
+| 冻结桶 == 419 行 | v16_build_sft | v13 冻结桶行数 | ✅ 改派生相等（重放行数 == 冻结清单行数） |
+| CoT 预算 0.19/0.81 | v16_build_sft | CoT 带宽 ≤20% 时代 | ✅ 改 COT_SHARE_TARGET=0.28（裁定④ 上沿 30% 不顶满）；预计选行 52→~85 |
+| 六桶份额带宽 v13 .48–.62 / l2 .10–.17 / l1 .03–.09 / chat .01–.07 / fam .04–.12 / cot .05–.30 | v16_build_sft | v15 行重下标定；注释原话"待 W4 首次实测回填" | 🟡 v16 首建**只报读数**（manifest bands_mode=report_only_first_v16），CoT ≤30% 始终硬；Chaoyu 按读数批带宽 ⇒ U_BUILD_BANDS_STRICT=1 |
+| L2 ≥280 / L1 ≥150 / CoT ≥19 行 | v16_build_sft | v15 行重（"19 = 穷举可行上界"） | 保留为下限（run17 实测 290/250/52 全过；抬 CoT 目标后更宽裕） |
+| think 900 tok / 4096 字 / cjk≥0.5 | v16_build_sft | 8B 教师 | ✅ 裁定⑮：2048 / 撤 / 撤 + 截断闸 ≤3% |
+| TAIL_CAP=4（同一收尾句 ≤4 次） | v16_build_sft | "全库 922 行 ⇒ ≤0.4%" | 保留（v16 行数同量级；体检闸 2% 兜底） |
+| 出厂体检 2% / 8% / 3 / 35% / 2% | v16_data_audit.GATES | v14.5 健康值与病值分得开的位置 | 保留（形状闸，不是行数单位） |
+| prompt 预算余量 ≥300 | v16_prompt_budget_gate | 上限 9216 时代 | 保留（上限抬到 12288 只会更宽） |
+| 行为探针 ≥70% | v16_behavior_think_probe | 设计值 | 保留（run17：defer 100 / reject 95 / clarify 35 ⇒ clarify 登记欠账） |
+| 撑破 8192 的打印 | v16_build_sft | 旧 response 上限 | ✅ 改读 rollout_budget |
+| 考场/尺子的 R5 门槛表 | v16_gate_triage | 按 v13/v15 读数标定 | ⏳ 不在建库链；S5 真评前另做一遍三查（可测/可达/阶段） |
 
 **S1-4 补丁分诊结果（09-03，机器判据 = 在新栈镜像里 import 目标模块；上游对照 = verl 0.9 源码关键词扫描）**
 
@@ -748,21 +775,21 @@ FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF
 | 题面 context 变空（无账户、无清单） | 考题都在 user 话里点名 CMP_x，模型靠 get_metrics / campaign.list 自查；DEF/HARD 不再有清单可抄 | `tests/runtime/test_exam_path_after_w2.py` ✅ 训练与考场同形 |
 | account_id 运行态注入 | 模型不填 account_id 调 campaign.list / risk.check_account，收口按租户注入；worker 进程注册表须已装载 | 真库真 worker：`test_worker_injects_account_when_model_omits_it` ✅（执行记录带 ACC_DEMO） |
 | 工具描述修剪 | 判卷只认工具名与参数，不认描述 | 判卷器 13 判类负向认证 ✅ |
-| 上下文 18432 | 考场链 `v15_r5_exam_chain.sh` 与 decider 默认已同步；链改为 `--exam` 可选（默认 context_v4） | grep 无 14336 残留 ✅ |
+| 上下文 18432 | 考场链 `v16_exam_chain.sh` 与 decider 默认已同步；链改为 `--exam` 可选（默认 context_v4） | grep 无 14336 残留 ✅ |
 | clarify → waiting_for_user · 拒绝轮进历史 | 考场按 status 判终态，读 session 事件；L4/CLA-F/REJ-F 的历史现在线上能表达 | `test_clarify_turns_enter_history` 4 条 ✅ |
 | demo 加 CMP_7 | 训练机起链前 `seed_demo_data.py --check` 必须看到 7 条（安全线 GAME_SLG×华南 已有） | 起链清单第 0 步 |
 | 历史窗口 6 轮下沉到渲染函数 | WIN 题库里插 8 轮、渲染只见 6 轮，与 prior_turns LIMIT 6 一致 | `test_exam_scripted_prior` ✅ |
 | 空 think 不监督 | 只影响训练；思考率读数口径不变（model.thinking 非空事件） | — |
-| 三查登记表 | 硬预期行为题 161、装置全部到位 | `v15_gate_triage.py --strict` 零缺口 ✅ |
+| 三查登记表 | 硬预期行为题 161、装置全部到位 | `v16_gate_triage.py --strict` 零缺口 ✅ |
 
 **W5 起链清单（训练机，09-03 定）**
 ```
 0  python scripts/seed_demo_data.py --check   ⇒ 7 条 campaign（含 CMP_7）、安全线/基准/记忆表非空
 1  pgrep -f syncopate.runtime.worker 为空（陈旧 worker 抢队列，㉞）
-2  bash scripts/v15_r5_exam_chain.sh <合并模型> v15r4 context_v4（四遍；一遍 ~27 min）
+2  bash scripts/v16_exam_chain.sh <合并模型> v15r4 context_v4（四遍；一遍 ~27 min）
    ⚠️ 第一遍跑完先做 W1④ 校准：jsonl 的 think_nonempty 之和 == PG 里 model.thinking 计数
-3  scripts/u_exam_judge_v4.py --context logs/u_route/run_v15r4_r{1..4}_context_v4.jsonl
-4  scripts/v15_gate_triage.py 按四遍 judged 读数出表（R5 表：②③⑥ 判、⑤ 只记录、方差前置条件）
+3  scripts/v16_exam_judge.py --context logs/u_route/run_v15r4_r{1..4}_context_v4.jsonl
+4  scripts/v16_gate_triage.py 按四遍 judged 读数出表（R5 表：②③⑥ 判、⑤ 只记录、方差前置条件）
 5  盲评：u_exam_judge --blind（v15 vs v14.5 各 100，钥匙另存）+ N1 零命中
 ```
 
@@ -800,7 +827,7 @@ mask    训练器按 loss_mask 建 labels（sft.py:100-121）：assistant 轮整
 
 **不成立的一半（教师不是裸猜）**：教师拿到的 prompt = 完整 system 说明书 + 该题全部工具的
 JSON schema + gold 前缀（前几步真实工具调用与真实返回），从 `<think>\n` 续写
-（`u_build_v14_5.py:392-398,460-484`）；且只收「教师**自己也选中了** gold 下一步动作」的
+（`v16_build_sft.py:392-398,460-484`）；且只收「教师**自己也选中了** gold 下一步动作」的
 思考（拒绝采样 n=8，`:409-422`），明文承诺不是给答案编理由（`:366-367`）。
 实测 604 段思考里 **96.5% 含具体工具名、91.6% 含具体参数/ID**——内容真在推演工具选择；
 新采样步命中率 ≈63% 说明教师在这个上下文里大体解得动。
@@ -834,7 +861,7 @@ JSON schema + gold 前缀（前几步真实工具调用与真实返回），从 
 ### 4.4 可达性预算（先算后训——上一轮的学费就是没算这一步）
 
 现状账（全部实测/复算）：CoT 行重 ~2500 tok（think 占 ~1900），预算 = 非CoT×0.19/0.81
-= 36253 ⇒ 20 行封顶（`u_build_v14_5.py:1056-1095`）。
+= 36253 ⇒ 20 行封顶（`v16_build_sft.py:1056-1095`）。
 
 think 做轻后的推算（基于 114 行池的实测分布；**是推算，W4 重建后必须实测回填**）：
 
@@ -856,10 +883,10 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 
 | 设定 | 唯一来源 | 当前值 | 消费者（不许另写数） |
 |---|---|---|---|
-| 训练 prompt 上限 | `rollout_budget.MAX_PROMPT_LENGTH` | **12288**（09-04 裁定⑮；原 9216） | launch_rl `--max-prompt-length` 默认 · sft.py `SFT_MAX_LENGTH`=prompt+response · rollout 左截断计数 · `v15_r2_gates --prompt-budget` |
+| 训练 prompt 上限 | `rollout_budget.MAX_PROMPT_LENGTH` | **12288**（09-04 裁定⑮；原 9216） | launch_rl `--max-prompt-length` 默认 · sft.py `SFT_MAX_LENGTH`=prompt+response · rollout 左截断计数 · `v16_prompt_budget_gate --prompt-budget` |
 | 思考回复预算 | `rollout_budget.MAX_RESPONSE_LENGTH` | **12288**（think-on，09-04；原 8192）/2048 | launch_rl · eval_local `--max-new-tokens` 默认 · decider 单轮生成上限 · `MAX_TURN_ACCUMULATION`=+2048 |
 | RL/训练 max_model_len | launch_rl_v1 算 prompt+response | **24576** | verl `rollout.max_model_len` |
-| 服务 max_model_len | 启动脚本 `--max-model-len` | **24576**（stack_probe.SERVE_MAX_MODEL_LEN，容器内与 rollout_budget 相等断言） | `logs/runtime/start_vllm*.sh` · `scripts/b4_serve_4x.sh` · `scripts/v15_r5_exam_chain.sh`；decider `RUNTIME_MAX_MODEL_LEN` 默认 18432（ctx_cap=−256，生成上限 = min(8192, 余量)） |
+| 服务 max_model_len | 启动脚本 `--max-model-len` | **24576**（stack_probe.SERVE_MAX_MODEL_LEN，容器内与 rollout_budget 相等断言） | `logs/runtime/start_vllm*.sh` · `scripts/b4_serve_4x.sh` · `scripts/v16_exam_chain.sh`；decider `RUNTIME_MAX_MODEL_LEN` 默认 18432（ctx_cap=−256，生成上限 = min(8192, 余量)） |
 | think 开关 | `rollout_budget.THINK_ON`（v15 默认 on；`SYNCOPATE_THINK`） | on | `CHAT_TEMPLATE_KWARGS` · decider（`SYNCOPATE_RUNTIME_THINKING` 分叉待 R8④ 删） · launch_rl `[think-train]` 判据行 |
 | 采样参数 | `rollout_budget.SAMPLING_*` | T=1.0 · top_p=1.0 · top_k=−1 | RL · eval · decider（一份） |
 | 轮数上限 | `rollout_budget.assistant_turn_budget(max_steps)` | max_steps+1（v15 report 占一步） | build_sft_sample · build_dataset · RL extra_info |
@@ -869,12 +896,12 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 | 运行态注入参数 | `contract.RUNTIME_INJECTED_PARAMS` | {account_id} | ToolSpec.openai_schema 剥掉 · registry.execute 注入覆盖 · gold_script/visible_args · build_messages/visible_context · ActionGate 注入 |
 | 字段清单 | `contract.visible_answer_fields`（PROSE_FIELDS 过滤） | v15 多轮行=空 | step_user.txt `{% if answer_fields %}` |
 | 空 think 块 | `sft_replay._mask_empty_think` | 不监督 | SFT 样本 · 同构测试期望 |
-| 教师 think 采样 | `u_build_v14_5.THINK_MAX_*` | **2048 tok** / 不限字 / 不限段 / **语言不限**；截断闸 ≤3%（09-04） | gen_cot_v15 · behavior 探针 |
-| 数据份额带宽 | `u_build_v14_5.bands` | v13 .48–.62 · l2 .10–.17 · l1 .03–.09 · chat .01–.07 · fam .04–.12 · cot .05–.30 | 份额闸（W4 首测回填） |
+| 教师 think 采样 | `v16_build_sft.THINK_MAX_*` | **2048 tok** / 不限字 / 不限段 / **语言不限**；截断闸 ≤3%（09-04） | gen_cot_v15 · behavior 探针 |
+| 数据份额带宽 | `v16_build_sft.bands` | v13 .48–.62 · l2 .10–.17 · l1 .03–.09 · chat .01–.07 · fam .04–.12 · cot .05–.30 | 份额闸（W4 首测回填） |
 | 数据版本 | `pipeline/split.DATA_VERSION` | v13（case 库）；渲染版本记在 `data/sft/v15/manifest.json` 的 `render` | `assert_same_data_version` |
 
 **怎么看喂进去的数据长什么样**：训练数据存为 parquet（`data/sft/v15/train.parquet`，每行 = `input_ids` + `loss_mask` +
-`prompt_length` + 桶/轴/行为等元列，文本不直接存），`scripts/v15_data_gallery.py --parquet <文件>` 把每桶抽样解码成
+`prompt_length` + 桶/轴/行为等元列，文本不直接存），`scripts/v16_data_gallery.py --parquet <文件>` 把每桶抽样解码成
 Markdown：system 折叠 · 历史消息对 · 本轮 user 原文 · 逐轮 response，**被监督的 token 用 ⟦ ⟧ 包起来**，元信息含
 think 非空/空块数、空块是否有梯度、菜单工具数、纯日期、字段清单四项同形标记 + 全量桶统计表。本机演练产物：
 `_audit/v15_w2/gallery_dry.md`（DRY 行，教师文案是占位）；W4 建库后对真 parquet 再出一份。

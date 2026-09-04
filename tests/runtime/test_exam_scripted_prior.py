@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL"
 
 
 def test_scripted_prior_round_trips_through_prior_turns_with_window():
-    from u_exam_run import seed_prior
+    from v16_exam_run import seed_prior
 
     prior = [{"user": "CMP_4 日预算定 35000", "status": "succeeded", "result": {"text": "好的，已记下 35000。"}}]
     prior += [{"user": f"填充 {i}", "status": "succeeded", "result": {"text": f"回答 {i}"}} for i in range(7)]

@@ -111,6 +111,7 @@ def measure(model, tokenizer, bundles, domain, max_new_tokens: int,
     import asyncio
 
     from syncopate.train.rollout_loop import MAX_PROMPT_LENGTH, RolloutConfig, run_rollout
+    from syncopate.train.rollout_budget import MAX_RESPONSE_LENGTH
 
     engine = RecordingEngine(model, tokenizer, max_new_tokens, temperature)
     domain.registry.latency_scale = 0.0
@@ -120,7 +121,7 @@ def measure(model, tokenizer, bundles, domain, max_new_tokens: int,
         asyncio.run(run_rollout(
             bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
             config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
-                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=2048),
+                                 max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=MAX_RESPONSE_LENGTH),   # 09-05：原写死 2048（think 开着时其余段都是 12288）
             rollout_id="entropy"))
         chunk = engine.entropy[before:]
         per_case.append({"case_id": bundle.case_id, "tokens": len(chunk),

@@ -10,11 +10,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "v15_gate_triage.py"
+SCRIPT = ROOT / "scripts" / "v16_gate_triage.py"
+
+
+# 09-05：三查不再有默认输入（此前默认读这些 v15-R3 文件，把旧读数当本次的）⇒ 测试显式把版本管理里的历史夹具传进去
+FIXTURE = ["--judged", "logs/u_route/judged_v15r3c_r*_context_v3.jsonl",
+           "--blind", "logs/u_route/blind_scores_v145.json", "--blind-key", "logs/u_route/blind_key.json",
+           "--r5-audit", "_audit/v15_r5/r3_sel_f25.json"]
 
 
 def _run(*args):
-    p = subprocess.run([sys.executable, str(SCRIPT), *args, "--out", "/tmp/gate_triage_test.json"],
+    p = subprocess.run([sys.executable, str(SCRIPT), *FIXTURE, *args, "--out", "/tmp/gate_triage_test.json"],
                        cwd=ROOT, capture_output=True, text=True)
     return p.returncode, p.stdout
 

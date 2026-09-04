@@ -83,11 +83,11 @@ ENABLE_THINKING = THINK_ON
 #   ★ 抬到 5760 的依据是**真实约束**：服务侧 max_model_len 14336。
 #     5760 + 8192 = 13952 ≤ 14336（余量 384）⇒ **服务侧不用改**。
 #   ⚠️ 余量仍然薄（数据侧 5760−5430=330）：R2 之后任何加长 system/工具描述的改动
-#     都必须重量一次 prompt max —— 判据见 scripts/v15_r2_gates.py 的 --prompt-budget。
+#     都必须重量一次 prompt max —— 判据见 scripts/v16_prompt_budget_gate.py 的 --prompt-budget。
 # ★ 2026-09-02（Chaoyu 裁定：不爆显存就抬到线上真实形状）：5760 → **9216**。
 #   依据（26 §W2⑤ 实测）：全量 34 工具菜单 = 线上形状（守则⑮ #6），工具描述修剪后最长 prompt 仍 7167，
 #   多轮行再加最近 6 轮历史（每轮 ≤400 tok）⇒ 9216。9216 + 8192 = 17408 ⇒ 服务/RL max_model_len 18432
-#   （logs/runtime/start_vllm.sh · scripts/v15_r5_exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
+#   （logs/runtime/start_vllm.sh · scripts/v16_exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
 #   显存：Qwen3-4B 每 token KV ≈144 KB ⇒ 18432 一条 ≈2.65 GB；R6 起跑前按 25 §R6 V0⒠ 重测并发。
 # ★ 2026-09-04（Chaoyu 裁定：上限是按 5090 显存定的数字，B200 上只要不爆显存就抬；教师 CoT 必须完整）：9216 → **12288**，
 #   think-on response 8192 → **12288** ⇒ max_model_len 24576（服务/RL/eval 全部派生；stack_probe.SERVE_MAX_MODEL_LEN 有相等断言）。

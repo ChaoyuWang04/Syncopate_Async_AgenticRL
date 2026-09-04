@@ -2,8 +2,8 @@
 """U 路 P0 · 考场运行器：把考题打进**真实会话路径**（conversation API→worker→decider），
 逐轮收集 行为/回复/工具调用/审批提案，落机读原始结果。
 
-    .venv/bin/python scripts/u_exam_run.py --exam context --arm cand
-    .venv/bin/python scripts/u_exam_run.py --exam talk --arm base --concurrency 4
+    .venv/bin/python scripts/v16_exam_run.py --exam context --arm cand
+    .venv/bin/python scripts/v16_exam_run.py --exam talk --arm base --concurrency 4
 
 ⚠️ 打的是哪个模型由**当前 org_demo worker 的 decider 指向**决定（换臂=换 worker env），
    本脚本把 arm 名只当标签记录——标签与实际模型不一致是人祸，跑前自查 worker 日志。

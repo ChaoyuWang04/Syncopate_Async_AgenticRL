@@ -86,8 +86,8 @@ def _metric(kind: str, cand_dir: Path) -> dict | None:
         if (kind == "entropy") != is_entropy:
             continue
         ver = d.get("data_version")
-        if ver is not None and ver != DATA_VERSION:
-            continue                      # 写着别的版本 ⇒ 确定不是这次要的，跳过
+        if ver != DATA_VERSION:
+            continue                      # 写着别的版本或没写版本 ⇒ 不是这次要的，跳过（09-05：此前没写版本的旧审计也会被接受）
         return d
     return None
 

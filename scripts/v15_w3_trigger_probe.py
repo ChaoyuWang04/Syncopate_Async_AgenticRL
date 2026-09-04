@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, "scripts")
-from u_build_v15_cot import explicit_hard_prompt  # noqa: E402
+from v16_cot_prompt import explicit_hard_prompt  # noqa: E402
 from syncopate.pipeline.split import DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
 
 D = 2 ** 12

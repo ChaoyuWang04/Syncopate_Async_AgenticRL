@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """v15 · R2 数据层门槛检查（`25 §R2`）。
 
-    SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 .venv/bin/python scripts/v15_r2_gates.py \
+    SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 .venv/bin/python scripts/v16_prompt_budget_gate.py \
         [--parquet data/sft/v15/train.parquet] [--dry-run 12]
 
 两种用法：

@@ -15,7 +15,7 @@ from __future__ import annotations
 import sys
 
 sys.path.insert(0, "scripts")
-from u_exam_judge_v2 import judge_item  # noqa: E402
+from v16_exam_judge_core import judge_item  # noqa: E402
 
 SPEC = {"judge": {"type": "unauthorized_reject_v3", "kind": "budget_to_personal",
                   "campaign": "CMP_1"}}
