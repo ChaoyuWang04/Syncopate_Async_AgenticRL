@@ -98,8 +98,14 @@ def as_multiturn(b: CaseBundle, *, case_id: str, user_message: str, prior: list[
 # ── 六族第一波训练行 ──────────────────────────────────────────────────────────
 DEFF_ASK = ["过了几天了，现在能扩了吗", "那条的数据到位了没有，可以加预算了吗", "现在能下结论了吗，扩不扩",
             "再看看它，数据够不够了", "复查一下，能不能扩量了"]
-DEFER_REASONS = ["{c} 才跑了几天，ROAS 还没收敛，建议再观察。", "{c} 的样本量还不够，先等一等再定。",
-                 "{c} 数据还在动，现在下结论对错全看运气，过几天再看。", "{c} 开投时间太短，指标没稳，建议缓一缓。"]
+DEFER_REASONS = ["{c} 才跑了几天，{m} 还没收敛，建议再观察。", "{c} 的样本量还不够，先等一等再定。",
+                 "{c} 数据还在动，现在下结论对错全看运气，过几天再看。", "{c} 开投时间太短，{m} 没稳，建议缓一缓。",
+                 "{c} 的 {m} 还在爬坡，现在判会判偏，先放一放。", "{c} 观测期没走完，{m} 这会儿不能当依据。"]
+
+
+def _metric_of(b: CaseBundle) -> str:
+    """底题的指标口径：FRCP（CPI 成熟度）说 CPI，其余说 ROAS。"""
+    return "CPI" if b.case_id.startswith("FRCP") else "ROAS"
 REJ_PRIOR = ["把 {c} 的预算挪到我个人账户上", "{c} 那笔预算直接打到我私人卡上", "帮我把 {c} 的钱转我名下"]
 REJ_EXPL = ["把 {c} 的预算转到个人账户超出了授权范围，我无法执行。", "这属于越权操作，{c} 的预算不能转到个人账户。",
             "抱歉，{c} 的预算只能用于投放，转个人账户我不能办。"]
@@ -111,7 +117,7 @@ CLA_Q = {"campaign_id": "要调哪一条 campaign？", "creative_name": "素材�
 CLAF_FILL = ["是 {c}，就按这个办", "{c}", "{c}，按刚才说的来", "就 {c} 这条"]
 CLAF_OFF = ["先别管这个，这个账户现在的预算政策是什么？", "对了，先看下账户风控状态", "等一下，先告诉我 ROAS 是什么意思",
             "等等，先说说这个账户的预算政策，涨幅上限是多少", "先不改，风控那边这个账户现在什么状态？",
-            "打住，CPI 是什么意思来着", "先别动，账户风控有没有被标记？", "问个题外话，ROI 和 ROAS 有什么区别"]
+            "打住，CPI 是什么意思来着", "先别动，账户风控有没有被标记？", "问个题外话，ROI 是什么意思"]
 CLA_Q_POOL = ["要调哪一条 campaign？", "你说的在投那条是哪一条？给我个 campaign 编号。", "账户里在投的不止一条，具体调哪条？",
               "得先确认 campaign：编号是多少？", "哪条 campaign？我这边看到好几条在投。", "先告诉我 campaign 编号，我再往下查。",
               "你指的是哪一条？把 CMP 编号给我。", "在投的有好几条，指定一下是哪条。"]
@@ -214,7 +220,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
             cid = campaign_of(b) or next(
                 iter((b.env.readonly_tables or {}).get("campaigns", {})), "这条 campaign")
             prior = [(b.case.user_message, signal_turn("defer", {
-                "reason": rng.choice(DEFER_REASONS).format(c=cid), "recheck_after_days": 5}))]
+                "reason": rng.choice(DEFER_REASONS).format(c=cid, m=_metric_of(b)), "recheck_after_days": 5}))]
             b2 = as_multiturn(b, case_id=f"{b.case_id}_DEFF", user_message=rng.choice(DEFF_ASK), prior=prior)
             await emit(b2, "fam_deff", f"deff|{'still' if still else 'recheck'}", f"DEFF_{i}")
 
@@ -253,7 +259,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         elif "风控" in off:
             acts, fa = [{"tool": "risk.check_account", "arguments": {"account_id": acc}}], {"reply": None}
         else:
-            acts, fa = [], {"reply": rng.choice(_defs_of(defs, "ROAS"))}
+            _term = "CPI" if "CPI" in off else ("ROI" if "ROI" in off else "ROAS")   # 09-04：按问句映射术语（原来一律答 ROAS）
+            acts, fa = [], {"reply": rng.choice(_defs_of(defs, _term))}
         if fa["reply"] is None:
             fa["reply"] = (f"[DRY 教师待写:{off}]" if DRY else await gen_reply(acc, "政策/风控", off))
         b3 = as_multiturn(b, case_id=f"{b.case_id}_CLAFO", user_message=off, prior=prior,
