@@ -79,6 +79,33 @@ PROBE_LAYERS = [
 
 # ── 组 merge：「合并」到底有没有把增量放进权重 ────────────────────────────────
 
+@check("data", "★ 三桶隔离：训练集每一行的底题都在它自己的桶里（守则⑱）")
+def _split_isolation(log):
+    """🔴 2026-09-04 抓到：v16 run24 产物 1270 行里 367 行底题来自冻结 EVAL/RL 桶（专用建库脚本各桶手动过滤，两条路径漏了）。
+    出口写盘函数已带闸；这里是独立复核（落盘产物 + 当前切分）。产物不在本机 ⇒ 跳过（不算过、也不算红）。"""
+    from syncopate.pipeline.split import DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR, split_isolation_report
+    import pandas as pd
+    ok, seen = True, 0
+    for pool, d in (("sft", DEFAULT_SFT_DIR), ("rl", DEFAULT_RL_DIR)):
+        for name in ("train", "val"):
+            pq = ROOT / d / f"{name}.parquet"
+            if not pq.exists():
+                continue
+            seen += 1
+            df = pd.read_parquet(pq)
+            if "case_id" not in df.columns and "extra_info" in df.columns:
+                df = pd.DataFrame({"case_id": [e["case_id"] for e in df["extra_info"]]})
+            rep = split_isolation_report(df, ROOT / DEFAULT_SPLIT_DIR, pool)
+            c = rep["counts"]
+            log(f"  {'✅' if rep['ok'] else '🔴'} {pq}: eval={c['eval']} sft={c['sft']} rl={c['rl']} 无底题={c['none']} · 越桶 {len(rep['offenders'])}")
+            for cid, base, bucket in rep["offenders"][:5]:
+                log(f"     ✗ {cid} ← {base} 在 {bucket} 桶")
+            ok = ok and rep["ok"]
+    if not seen:
+        log("  ⏭ 本机没有训练集 parquet，跳过")
+    return ok
+
+
 @check("merge", "合并模型的权重必须真的不同于它的基座")
 def _merge_actually_changed(log):
     """🔴 2026-08-18 抓到过：models/Qwen3-4B-rl-v13-s110 与 SFT 模型逐位相同。
