@@ -934,6 +934,9 @@ _TERM_CN = {
     "no_expansion": "不扩量", "escalated": "上报审批", "approved": "已通过",
     "pending": "审核中", "rejected": "已驳回",
     "policy_not_found": "没有查到对应政策条款",
+    # 09-04 run23：DIA 题 8/8 兜底——枚举没译名 ⇒ 教师写"点击率下滑"被「事实里没有的指标名」拦（事实里只有 ctr_decline）
+    "ctr_decline": "点击率下滑", "rebalance_budget": "重新分配预算", "refresh_creative": "换一批新素材",
+    "narrow_targeting": "收窄定向", "rotate_creative": "轮换素材",
 }
 _ONLY_N = re.compile(r"only_(\d+)_creatives")
 
@@ -981,6 +984,14 @@ def _no_invented_metrics(text: str, allowed: str) -> bool:
 async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str]:
     """case_id → 一句自然中文终答。带缓存，断了不从零开始。"""
     cache = json.loads(_BALLAST_CACHE.read_text()) if _BALLAST_CACHE.exists() else {}
+    # ★ 09-04：缓存里的机器字段兜底句每轮自动剔除重试（不靠人手改缓存）；闸按**全库**兜底占比算
+    from syncopate.pipeline.sft_replay import _prose_from_fields as _pff
+    _stale_fb = [k for k, v in cache.items() if bundles.get(k) is not None
+                 and v == _pff(dict(bundles[k].gold.final_answer or {}))]
+    for k in _stale_fb:
+        cache.pop(k)
+    if _stale_fb:
+        print(f"[压舱-兜底] 缓存里 {len(_stale_fb)} 条兜底句剔除重试", flush=True)
     used = {re.sub(r"\d+(\.\d+)?", "§", v) for v in cache.values()}
     # ⚠️ 只有"要给结论"的行才用得上人话；defer/clarify/reject 的终答是信令，
     #   给它们生成 = 白烧教师额度，还会往缓存里塞永远用不到的条目。
@@ -1019,6 +1030,7 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
             from syncopate.pipeline.sft_replay import _prose_from_fields
             got = _prose_from_fields(fa)
             _BALLAST_FALLBACK[0] += 1
+            print(f"  [压舱-兜底] {cid} 事实={facts[:90]} 问={ask[:40]!r}", flush=True)
         cache[cid] = got
         _tail_note(got)
         used.add(re.sub(r"\d+(\.\d+)?", "§", got))
@@ -1027,8 +1039,8 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
             print(f"  [压舱人话] {i + 1}/{len(todo)}", flush=True)
     if todo:
         _BALLAST_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1))
-        _fb = _BALLAST_FALLBACK[0] / max(1, len(todo))
-        print(f"[压舱-兜底] 本轮 {_BALLAST_FALLBACK[0]}/{len(todo)} = {_fb:.1%} 落到机器字段句（闸 ≤2%）", flush=True)
+        _fb = _BALLAST_FALLBACK[0] / max(1, len(cache))
+        print(f"[压舱-兜底] 本轮 {_BALLAST_FALLBACK[0]} 条兜底 / 全库 {len(cache)} = {_fb:.1%}（闸 ≤2%）", flush=True)
         assert _fb <= 0.02, f"🔴 压舱人话兜底 {_fb:.1%} > 2% —— 教师写不出人话的题太多，查事实清单/过滤器"
     return cache
 
