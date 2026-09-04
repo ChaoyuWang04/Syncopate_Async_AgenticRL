@@ -877,7 +877,8 @@ def p_rl_cfg(extra: str = "") -> dict:
         rec["build_rl_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1)); rec["build_rl_tail"] = open(f"{aud}/build_rl.log", errors="replace").read()[-800:]
     try: rec["rl_manifest"] = json.load(open(f"{REPO}/data/rl/v16/manifest.json"))
     except Exception as ex: rec["rl_manifest_err"] = repr(ex)[:200]
-    r = _sh(f"{PY} -m syncopate.train.launch_rl_v1 --cfg-only --logger console {extra} > {aud}/cfg_only.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=900)
+    # 键名判据用 smoke 档（candidate 档会先断言合并 SFT 模型存在——那是另一段的事）
+    r = _sh(f"{PY} -m syncopate.train.launch_rl_v1 --profile smoke --cfg-only --logger console {extra} > {aud}/cfg_only.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=900)
     rec["cfg_rc"] = int(re.search(r"RC=(\d+)", r["out"]).group(1))
     log = open(f"{aud}/cfg_only.log", errors="replace").read()
     rec["cfg_tail"] = log[-3000:]

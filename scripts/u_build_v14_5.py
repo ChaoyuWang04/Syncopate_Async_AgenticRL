@@ -87,7 +87,12 @@ for _fn in ("context_exam.jsonl", "context_exam_v2.jsonl", "context_v3_exam.json
 _SEED = [0]
 
 
+OFFLINE = os.environ.get("SYNCOPATE_TEACHER_OFFLINE", "0") == "1"   # 09-04：离线全量建库——教师材料只能来自缓存，缺一条就红（本机验闸用）
+
+
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
+    if OFFLINE:
+        raise RuntimeError(f"🔴 离线模式（SYNCOPATE_TEACHER_OFFLINE=1）缓存缺失，需要教师现写：{prompt[:80]!r}")
     if DRY:
         _SEED[0] += 1     # 占位带序号：DRY 下去重/尾部配额闸也能过（裁定⑭后 DRY 不再有任何缓存可命中）
         return f"[DRY 教师待写 #{_SEED[0]}] 这条的数据核对完毕，细节口径我再核一轮。"
@@ -411,6 +416,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     print(f"[CoT-v15] 难例池 {len(capped)}（族 {sorted(hard_pref)}，族内限额 30）")
 
     async def one_think(ctx: str):
+        if OFFLINE:
+            raise RuntimeError("🔴 离线模式：CoT 缓存缺失，需要教师采样（先在云上建一次把 v16_cot_rows.json 存进缓存）")
         _SEED[0] += 1
         r = await client.post(f"{T8B}/completions", json={
             # ★ 09-02 W3①（26 §W3）：think 做轻——上限 900→350 token；段数/字数闸在 step_sample

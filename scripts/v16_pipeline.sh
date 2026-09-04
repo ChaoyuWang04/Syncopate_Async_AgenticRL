@@ -66,6 +66,12 @@ stage_sft_data(){ say "[stage sft-data] 建库（教师物料→六桶→全部�
   run "$PY scripts/v15_r2_gates.py --prompt-budget $SFT_DIR/train.parquet"
   run "$PY scripts/check_split_isolation.py $SFT_DIR/train.parquet $SFT_DIR/val.parquet --pool sft"
   run "$PY scripts/v15_data_gallery.py --parquet $SFT_DIR/train.parquet > $AUD/$DV/gallery.md"; }
+# 本机离线全量建库：教师材料全部来自云盘缓存（modal volume get），缺一条就红——改闸之后先在本机把整条建库跑到底，不上云试错
+stage_sft_data_offline(){ say "[stage sft-data-offline] 拉云盘缓存 → 离线建库（全部闸 + 出厂体检）"; need "$SPLIT/sft_cases.json"
+  run "mkdir -p data/u_route && for f in v16_ballast_replies v16_defs v16_chat_mat v16_l2l1_rows v16_fam_rows v16_cot_rows; do modal volume get syncopate-home _audit/$DV/cache/\$f.json data/u_route/\$f.json --force >/dev/null || echo \"⚠️ 缓存缺 \$f\"; done"
+  run "SYNCOPATE_TEACHER_OFFLINE=1 $PY scripts/u_build_v14_5.py 2>&1 | tee $AUD/$DV/build_offline.log"
+  run "$PY scripts/v15_r2_gates.py --prompt-budget $SFT_DIR/train.parquet"
+  run "$PY scripts/check_split_isolation.py $SFT_DIR/train.parquet $SFT_DIR/val.parquet --pool sft"; }
 stage_sft_train(){ say "[stage sft-train] $PROFILE"; need "$SFT_DIR/train.parquet"
   if [ "$PROFILE" = smoke ]; then run "$PY -m syncopate.train.sft --out ${SFT_OUT}_smoke --epochs 1 --batch-size 1 --grad-accum 8 --max-steps 30 --no-wandb --wandb-run sft_${DV}_smoke"
   else run "$PY -m syncopate.train.sft --out $SFT_OUT --wandb-run sft_$DV"; fi; }
