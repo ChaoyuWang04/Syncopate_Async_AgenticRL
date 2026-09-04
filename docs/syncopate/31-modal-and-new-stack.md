@@ -9,7 +9,7 @@
 ## 0 · 一句话现场（09-04 14:45 收口）
 
 **新栈全管线的"机器部分"全部冒烟通过（SFT 机制 / 考场链路 / RL verl 0.9 首次跑通 / OPD 机制）；管线收成唯一入口 `scripts/v16_pipeline.sh`（17 stage，默认值直接跑）；
-三桶隔离做成硬机制（守则⑱）；题库扩量到 2030 道新情景；唯一还没落地的产物 = v16 SFT 训练集：run27 正在云上跑最后几道闸（出厂体检那几项可能红、且属于"要 Chaoyu 裁定"的类型）。**
+三桶隔离做成硬机制（守则⑱）；题库扩量到 2030 道新情景；唯一还没落地的产物 = v16 SFT 训练集：run27 走到最后一道闸（出厂体检）剩 3 项，全是六族行终答的生成方式问题，修法已写在 26 §W4′ run27。**
 真数据的 SFT/评测/RL/OPD 一步都还没跑（都等训练集）。
 
 ---
@@ -104,7 +104,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 09-04 13:30 扩量后重定：本机与 Modal 各自生成 2030 条 / 8121 文件，三份切分 SHA 逐一相同（Modal 128 s）；SHA 在 _audit/v16/local_gen_sha.json |
-| S3 v16 训练集建库 | 🟡 run17–27（09-04）逐道闸显形并修（见 26 §W4′ 各 run 记录）；**run27 在跑**，若红下一轮用 `--build-gates report` 一次看全貌 |
+| S3 v16 训练集建库 | 🟡 run27（09-04 15:01）走到出厂体检，剩 3 项全是"六族行终答借用压舱人话/走错生成器"（26 §W4′ run27 有修法）；parquet 已能写出但未过体检不进正式目录 |
 | S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |
 | S6 RL 冒烟（verl 0.9 V1） | ✅ 09-04 01:54 **首次跑通**：B200×2 · 2 步 580 s · 动态分池在 TaskRunnerV1 进程生效 · loss/grad 有限 · reward 0.34/0.39 · 权重同步 · LoRA-only ckpt（233 MB/rank）· wandb syncopate-b200/rl_v16_smoke |

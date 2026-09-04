@@ -675,7 +675,19 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF/aligned 等格 **SFT=0**（难度代理排序把它们全排到 RL 桶）。
 ⇒ 待裁：是否给 SFT 加「每格 ≥1」保底（split._apply_sft_floors 现只按模板/结局/行为保底，不按格）。
 
-**收口（09-04 14:45）**：run27 在跑（strict）。之后的固定顺序：run27 红 ⇒ `modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates report`
+**run27（09-04 15:01，2135 s）**：L2 168（供给 172）· L1 250 · CoT 78 行/27.9%（命中 67%，截断 0.1%）· 份额 v13 56.5 / l2 4.3 / l1 2.3 / chat 1.4 / fam 7.6 / cot 27.9（只报）
+· 同形 656 行 0 不同形 · OOV 0 · 泄漏 0 · 隔离 1152+109 行 0 越桶 · **parquet 已写**（当时写进了正式目录 ⇒ 已改成 staging 全绿才搬，云盘上那份已删）。
+倒在出厂体检 3 项，全是六族行的终答生成方式：
+```
+① fam_claf 句式 10%：跑题分支"先看风控/政策"的回复走了指标人话生成器 ⇒ 生出 "ACC_x 的政策/风控是 先别动…，需要进一步对比随时说。" 这种病句（真 bug）
+   ⇒ 修：跑题分支先回放拿工具观测（policy.get_budget_rule 的 max_increase_pct / risk.check_account 的 risk_flag），再让教师按"查到 X 是 Y"写人话
+② fam_win 句式 25%：20 行只有 8 种句式，12 个模板变体 rng.choice 重复 ⇒ 修：WIN 回答也交教师按事实（cid, val）现写（禁编数过滤保住数字）
+③ 7 个答案服务 ≥3 题面：六族行终答直接复用底题的压舱人话（同一句话在压舱行 / CLAF / REJF 三条不同对话路径末尾出现）
+   ⇒ 修：六族行终答用教师**另写一句**（同事实、不同角度，不写缓存），不复用压舱缓存句
+```
+这三条都是"六族行的终答来源"同一件事：派生行要有自己的教师人话，不能借压舱行的。下一任先改这三处（u_build_v15_multiturn：as_multiturn 注入 + CLAF 跑题 + WIN），本机 DRY + 供给核对过了再上云；上云用 `--build-gates report` 一次看全貌。
+
+**收口（09-04 14:45）**：run27 已跑完（见上）。之后的固定顺序：run27 红 ⇒ `modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates report`
 一次看全部红项 ⇒ 按"结构性/需裁定/真 bug"分类处理 ⇒ strict 建库全绿 ⇒ 画廊给 Chaoyu 逐条看 ⇒ `v16_pipeline.sh --profile smoke` 从 sft-train 跑到 opd-eval
 （先把每段接上）⇒ candidate 档。**待 Chaoyu 裁定**：L1 底题复用作历史（现状允许）· 切分格 SFT=0 是否加保底 · 六桶份额带宽回填（run 读数已在）。
 

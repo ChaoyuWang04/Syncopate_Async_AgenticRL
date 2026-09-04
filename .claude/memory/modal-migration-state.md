@@ -1,6 +1,6 @@
 ---
 name: modal-migration-state
-description: ★09-04 14:45 收口：新栈全管线机器部分全冒烟通过；唯一入口 scripts/v16_pipeline.sh；守则⑱ 三桶隔离硬机制；题库扩量 2030；v16 SFT 训练集仍未落地（run27 在跑最后几道闸，红了用 --build-gates report 看全貌）；三件待 Chaoyu 裁定；唯一入口 docs/syncopate/31
+description: ★09-04 15:05 收口：新栈全管线机器部分全冒烟通过；唯一入口 scripts/v16_pipeline.sh；守则⑱ 三桶隔离硬机制；题库扩量 2030；v16 SFT 训练集仍未落地（run27 在跑最后几道闸，红了用 --build-gates report 看全貌）；三件待 Chaoyu 裁定；唯一入口 docs/syncopate/31
 metadata:
   type: project
 ---
@@ -11,7 +11,7 @@ metadata:
 
 **新栈冒烟读数**：SFT 机制 42.3M/74 GB/30 步 346 s · 考场链路全通（35B 端点冷启 500 s）· RL verl 0.9 V1 sync 2 步 580 s（step2 37 s，LoRA-only ckpt 233 MB/rank）· OPD 机制通（vocab 相同）· 老师 CoT：英文思考、命中 67%、截断 0.1%。
 
-**卡点**：v16 SFT 训练集 run17–27 逐道闸显形（26 §W4′ 有全表）；run27 在跑；剩下最可能红的是出厂体检小桶句式（结构性、要裁定）。**未验**：rl-adapter（verl 0.9 model_merger 对 FSDP2+LoRA-only）· sft-eval/select/merge/rl-eval/opd 真数据链。
+**卡点**：v16 SFT 训练集。run27（09-04 15:01）走到最后一道闸出厂体检，剩 3 项全是「六族行终答借压舱人话 / CLAF 跑题回复走错生成器 / WIN 模板重复」⇒ 修法在 26 §W4′ run27（派生行要有自己的教师人话）。产物先写 staging、体检全绿才搬正式目录（已改）。下一轮上云用 `--build-gates report`。**未验**：rl-adapter（verl 0.9 model_merger 对 FSDP2+LoRA-only）· sft-eval/select/merge/rl-eval/opd 真数据链。
 
 **待 Chaoyu 裁定**：L1 底题复用作历史 · 切分格 SFT=0 加保底否 · 六桶份额带宽回填。
 
