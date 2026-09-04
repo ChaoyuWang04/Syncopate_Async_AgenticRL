@@ -578,7 +578,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         r["index"] = 95000 + i
     print(f"[CoT-v15] 候选 {len(got)} 行（选择交给 main 的预算环节，两个约束一起解）")
     out = got
-    print(f"[CoT-v15] 预算裁剪 {trimmed} 段 think（撑破 8192 response 预算的长轨迹）")
+    print(f"[CoT-v15] 预算裁剪 {trimmed} 段 think（撑破 response 预算 {__import__('syncopate.train.rollout_budget', fromlist=['MAX_RESPONSE_LENGTH']).MAX_RESPONSE_LENGTH} 的长轨迹）")
     print(f"[CoT-v15] 保留 {len(out)} 行 · 采样步数 {tried} · 命中 {hit}"
           f"（命中率 {hit/max(1,tried):.0%}）")
     # 丢弃原因分布（先量后动：这一行是 09-04 诊断的读数位置）
@@ -1185,7 +1185,10 @@ async def main() -> int:
     #   = 截了个寂寞——train 里还是全量、闸读的还是旧份额）
     non_cot_tok = int(t13.supervised_tokens.sum()) + \
         sum(r["supervised_tokens"] for r in l2 + l1 + chat_rows + fam)
-    budget = int(non_cot_tok * 0.19 / 0.81)
+    # ★ 09-04 全量自检：这里原来写死 0.19/0.81（CoT 带宽 ≤20% 时代的数）——Chaoyu 08-31 裁定④ 已把上沿抬到 30%
+    #   （不顶满），份额闸也早是 (0.05, 0.30)，预算公式没跟着改 ⇒ 又一个"两处各写各的"。目标取 28%（上沿 30% 留 2pp）。
+    COT_SHARE_TARGET = 0.28
+    budget = int(non_cot_tok * COT_SHARE_TARGET / (1 - COT_SHARE_TARGET))
     acc, kept = 0, []
     if IS_V15:
         # ★ 两个约束一起解：① token 预算（份额带宽 5–20% 的直接来源）
@@ -1274,10 +1277,21 @@ async def main() -> int:
     #   ⚠️ 数字待 W4 首次实测回填（先按行数估：fam ≈200 行 × ~700 tok ≈ 8–10%）
     bands = {"v13": (0.48, 0.62), "l2": (0.10, 0.17), "l1": (0.03, 0.09),
              "chat": (0.01, 0.07), "fam": (0.04, 0.12), "cot": (0.05, 0.30)}
+    # ★ 09-04 全量自检：五桶带宽是 v15 行重下标定的（27B 人话更长、think 上限 2048 ⇒ 行重全变）。按上面那行注释的原计划
+    #   「首次实测回填」：v16 首建**只报读数**（manifest 记 bands_mode=report_only），Chaoyu 按读数批准带宽后
+    #   U_BUILD_BANDS_STRICT=1 变硬闸。⚠️ CoT 上沿 30% 是裁定④，**始终硬**（守则：空门槛不等于通过）。
+    _strict = os.environ.get("U_BUILD_BANDS_STRICT", "0") == "1"
     for k, (lo, hi) in bands.items():
         if DRY:
             continue
-        assert lo <= share[k] <= hi, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
+        ok_band = lo <= share[k] <= hi
+        if k == "cot":
+            assert share[k] <= hi, f"🔴 CoT 份额 {share[k]:.1%} > 上沿 {hi:.0%}（裁定④）"
+        if _strict:
+            assert ok_band, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
+        elif not ok_band:
+            print(f"  [份额-报告] {k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]（首建只报，待回填带宽）")
+    print(f"[份额] 模式={'硬闸' if _strict else '首建报告（U_BUILD_BANDS_STRICT=1 变硬闸）'}")
     # ★ 同形体检（守则⑮）：建库产物上再跑一遍（W2⑥ 的测试在真产物上复跑）
     sc = shape_check(tokenizer, l2 + l1 + chat_rows + fam)
     print(f"[同形] 多轮行 {sc['n']} · 不同形 {len(sc['bad'])} · 缺真实终答 {len(sc['missing_real_reply'])}")
@@ -1377,7 +1391,9 @@ async def main() -> int:
                 "total": len(train), "val": len(val),
                 "sup_tok_share": {k: round(v, 4) for k, v in share.items()},
                 "axis_counts": dict(axes),
-                "gates": "份额±带宽 · 密度 · OOV=0 · 泄漏=0 · 冻结419 全过"}
+                "bands_mode": "strict" if os.environ.get("U_BUILD_BANDS_STRICT", "0") == "1" else "report_only_first_v16",
+                "cot_share_target": 0.28,
+                "gates": "份额（见 bands_mode）· CoT≤30% 硬 · 密度 · OOV=0 · 泄漏=0 · 冻结桶行数派生相等"}
     json.dump(manifest, open(out / "manifest.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(manifest, ensure_ascii=False, indent=1))
     # ── 出厂体检（`25 §7㉙`，Chaoyu 08-30：「不能走完完整训练之后再返工来做检查」）──
