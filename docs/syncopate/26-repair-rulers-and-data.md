@@ -660,7 +660,7 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 | rl-data | `syncopate data build --pool rl`（val-every 5）+ 隔离复核 | data/rl/v16 | 出口隔离闸 | ✅ 云上曾建 660/165（旧切分；重建待跑） |
 | teacher | vLLM 27B @8210（max_model_len ← rollout_budget） | 进程 | /health | ✅ |
 | sft-data | `v16_build_sft.py`（+ `v16_multiturn.py` / `v16_data_audit.py` / `v16_prompt_budget_gate.py` / `v16_data_gallery.py`）+ 隔离复核 + 画廊 | data/sft/v16（staging 全绿才搬） | 全部闸 + 出厂体检 + 隔离 | ✅ **run28 全绿**：1222 行 / 18 桶，云盘 /vol/data/sft/v16 |
-| sft-train | `syncopate.train.sft`（model=STUDENT · 数据=DATA_VERSION · epochs 3 · bs 2×accum 8 · lr 1e-4 · LoRA r32/a64 attn_shared · save-epochs 1.5,2.5） | checkpoints/sft/v16 | loss/grad 有限 · ΔW>0 | ✅ 机制冒烟；真数据待 |
+| sft-train | `syncopate.train.sft`（model=STUDENT · 数据=DATA_VERSION · epochs 3 · bs 2×accum 8 · lr 1e-4 · LoRA r32/a64 attn_shared · save-epochs 1.5,2.5；**现为单卡**：探针给 GPU_ONE，且自动 torchrun 阈值是"≥4 张空闲卡"） | checkpoints/sft/v16 | loss/grad 有限 · ΔW>0 | ✅ **真数据冒烟 09-04 17:24**：30 步 317 s · val loss 0.31 · ΔW 0.54% · 42.3M · **208 sup-tok/s（单卡 bs 2，显存用不到一半）** ⇒ 待做 batch 三臂标定后改两卡 |
 | sft-eval | `entropy`（limit 24；09-05 修：response 上限从写死 2048 改读 rollout_budget）+ `eval_local`（冻结 EVAL · 8 样本 · T=1） | _audit/v16_{entropy,eval}_* | — | ⬜ |
 | sft-select | `select_sft_ckpt.py --auto --prune`（有梯度多 → 熵高） | SELECTED 软链 | 缺审计即红 | ⬜（--auto 新加） |
 | merge | `merge_adapter`（base=STUDENT） | models/Qwen3.6-35B-A3B-sft-v16 | bf16 保真 | ⬜ |
@@ -726,6 +726,19 @@ build_v16   ✅  缓存：l2l1/cot 命中、fam 按新标签作废重造（168 �
 人工抽看    WIN 答数带 campaign 与数值、句式各异；CLAF 跑题政策/风控回答的数字全部来自工具观测（涨幅上限/审批线/月度上限/风控标记）；
             派生行终答与压舱句不同句。⚠️ 个别终答夹带机器词（"决策状态已确认为executed"）——体检现只查"人话进 report"，不查"机器词进人话"，登记为下一轮闸候选
 ```
+
+**S4 真数据 SFT 冒烟（09-04 17:24，run28 产物，探针 sft_smoke / runbook `--profile smoke sft-train`）✅**
+```
+输入 data/sft/v16/train.parquet（1222 行）· 单卡 B200 · bs 2 × accum 8 · lr 1e-4 · LoRA r32 attn_shared · 30 步停
+读数 可训 42.3M · loss 首窗 1.06 → 末窗 0.28 · val loss 0.3079（answer 1.81 / clarify 0.63 / reject 0.55 / tool_call 0.28 / defer 0.18）· grad_norm 0.71–5.42 全有限
+     · ‖ΔW‖/‖W‖ 0.54% · 用时 317 s · 吞吐 ~208 sup-tok/s · adapter → /vol/checkpoints/sft/v16_smoke（**不是候选**）
+判据 loss ✓ grad ✓ trainable ✓；峰值显存那行探针没抓到（正则量的字样与 sft.py 打印不一致 ⇒ 下一轮顺手修）
+结论 真数据首次进训练，机制与数据都健康。一个 epoch 153 步 ⇒ 3 epoch 按此速度约 80 min，而显存用不到一半：
+     单卡 bs 2 是 4×5090 时代的配方。⇒ 排队：三臂标定（单卡 2×8 / 单卡 8×2 / 两卡 2×4，有效 batch 16、lr 不动，比吞吐/峰值显存/loss 曲线重合）后改默认
+```
+
+**探针缺口（09-05 核对）**：stack_probe 只有 sft_smoke / exam_v4 / rl_cfg / rl_smoke / opd_smoke / eval_ab 六个步，runbook 的 sft-eval · sft-select · merge · rl-adapter · rl-eval · opd-eval
+六段**没有对应探针步**（交接里"每段对应一个步"不成立）⇒ 要接 smoke 链到底，先给探针加一个通用步（按 stage 名逐段调 runbook、产物落 Volume）。
 
 **收口（09-04 14:45）**：run27 已跑完（见上）。之后的固定顺序：run27 红 ⇒ `modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates report`
 一次看全部红项 ⇒ 按"结构性/需裁定/真 bug"分类处理 ⇒ strict 建库全绿 ⇒ 画廊给 Chaoyu 逐条看 ⇒ `v16_pipeline.sh --profile smoke` 从 sft-train 跑到 opd-eval

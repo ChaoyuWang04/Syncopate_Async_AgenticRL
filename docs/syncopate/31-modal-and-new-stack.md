@@ -12,7 +12,7 @@
 三桶隔离做成硬机制（守则⑱）；题库扩量到 2030 道新情景；**v16 SFT 训练集 run28 全绿落地（1222 行 / 18 桶，出厂体检零红，云盘 /vol/data/sft/v16）**。
 09-05 同日按 Chaoyu 要求逐段审查了整条管线：v16 路径上的旧名脚本全部改名 v16_*、去掉 v8 审计输入、补上被跳过的泄漏闸、
 修了考场链 candidate 档三处必死与供给脚本崩（清单在 26 §W4′「09-05 管线审查与修法」，读数在 run28 块）。**
-下一步 = runbook smoke 档从 sft-train 跑到 opd-eval（真数据首次进训练）。
+S4 真数据 SFT 冒烟已通过（30 步全绿）。下一步：① SFT batch 三臂标定后把默认改成两卡；② 给探针加通用 stage 步，把 smoke 链从 sft-eval 接到 opd-eval；③ candidate 档。
 
 ---
 
@@ -107,7 +107,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 09-04 13:30 扩量后重定：本机与 Modal 各自生成 2030 条 / 8121 文件，三份切分 SHA 逐一相同（Modal 128 s）；SHA 在 _audit/v16/local_gen_sha.json |
 | S3 v16 训练集建库 | ✅ run28（09-04 17:13）`--build-gates report` 零红：1222 行 / 18 桶 · 同形 0 · 越桶 0 · 出厂体检全绿（26 §W4′ run28） |
-| S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
+| S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（09-04 01:46）+ **真数据 09-04 17:24**：run28 训练集 30 步 317 s · val loss 0.31 · ΔW 0.54% · 42.3M · ~208 sup-tok/s（单卡 bs 2，显存用不到一半 ⇒ 待 batch 标定改两卡）· adapter /vol/checkpoints/sft/v16_smoke |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |
 | S6 RL 冒烟（verl 0.9 V1） | ✅ 09-04 01:54 **首次跑通**：B200×2 · 2 步 580 s · 动态分池在 TaskRunnerV1 进程生效 · loss/grad 有限 · reward 0.34/0.39 · 权重同步 · LoRA-only ckpt（233 MB/rank）· wandb syncopate-b200/rl_v16_smoke |
 | S7 OPD 冒烟 | 🟡 机制通（vocab ✓ · 42.3M · 真蒸馏步 KL 有限 · adapter 落盘）；底座无 adapter 几乎全跳步 ⇒ 语义冒烟等 S4 真 SFT adapter |
