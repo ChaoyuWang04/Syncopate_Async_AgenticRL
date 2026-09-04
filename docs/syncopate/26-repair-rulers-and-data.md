@@ -675,6 +675,11 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF/aligned 等格 **SFT=0**（难度代理排序把它们全排到 RL 桶）。
 ⇒ 待裁：是否给 SFT 加「每格 ≥1」保底（split._apply_sft_floors 现只按模板/结局/行为保底，不按格）。
 
+**run26（09-04 14:23）**：六族/压舱/CoT（157 候选、命中 67%、截断 0.1%）全过，倒在 **L2 下限 280 vs 造出 144**——280 是"全库当底题"时代的数，
+隔离后 SFT 桶供给 148（context 里的 campaign 编号）/172（entities）。⇒ campaign 按 context→entities 取，下限重登记 150，行缓存加绑构造器版本 tag。
+**为什么本机过、云上不过**：DRY 每桶 6 行、数量闸（行数下限/份额）在 DRY 里被跳过，我的自检扫了"数字是不是旧的"，没算"数字和当前供给对不对"。
+⇒ 新增 `scripts/check_supply_vs_floors.py`（不调教师，只数 SFT 桶供给对照全部下限；runbook `supply` stage + 管线前提检查 data 组）。
+
 **本机可验（09-04 Chaoyu：不想在云上再因旧数字/闸设置重来）**：DRY 演练不再提前返回，`U_BUILD_DRY=6` 在本机走完 人话通道 → 密度（样本 ≥20 才判比例）
 → OOV → 考场泄漏 → 出口写盘（唯一带闸函数）→ 三桶隔离，产物落 `_audit/v16/dry/`，只跳过依赖教师真文本的出厂体检；抓到过写盘函数编辑没落盘。
 教师材料一旦在云上生成并进缓存（`/vol/_audit/v16/cache/v16_*.json`），`scripts/v16_pipeline.sh sft-data-offline` 把缓存拉回本机、以

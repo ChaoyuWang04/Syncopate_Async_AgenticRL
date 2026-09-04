@@ -57,6 +57,7 @@ stage_cases(){ say "[stage cases] 题库 $DV"; run "$PY -m syncopate cases gener
 stage_menus(){ say "[stage menus]"; need "$BATCH/manifest.json"; run "$PY scripts/set_tool_menus.py --batch $BATCH --sft-audit _audit/v8_sft_epoch1.json"; }
 stage_split(){ say "[stage split]"; need "$BATCH/manifest.json"; run "$PY -m syncopate data split --batch $BATCH --out $SPLIT"; }
 stage_gates(){ say "[stage gates] D1–D11 + 三桶互斥"; need "$SPLIT/sft_cases.json"; run "$PY scripts/check_data_gates.py --batch $BATCH"; }
+stage_supply(){ say "[stage supply] 本机供给核对：SFT 桶每类底题供给 vs 建库数量闸（不调教师；run26 那种 144<280 在这里就红）"; need "$SPLIT/sft_cases.json"; run "$PY scripts/check_supply_vs_floors.py"; }
 stage_rl_data(){ say "[stage rl-data]"; need "$SPLIT/rl_cases.json"; run "$PY -m syncopate data build --pool rl --batch $BATCH --split-dir $SPLIT --out $RL_DIR --val-every 5"; run "$PY scripts/check_split_isolation.py $RL_DIR/train.parquet $RL_DIR/val.parquet --pool rl"; }
 stage_teacher(){ say "[stage teacher] 27B @8210（长驻；已起则跳过）"; if curl -sf "${TEACHER_URL%/v1}/health" >/dev/null 2>&1; then say "  教师已在线"; else
   run "nohup $PY -m vllm.entrypoints.openai.api_server --model $TEACHER --served-model-name t --max-model-len $MAX_MODEL_LEN --gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{\"image\": 0, \"video\": 0}' --max-num-seqs 64 > logs/teacher_$DV.log 2>&1 &"
@@ -100,7 +101,7 @@ stage_opd_train(){ say "[stage opd-train] 学生@GPU0 · 教师+锚@GPU1"; ad="$
 stage_opd_eval(){ say "[stage opd-eval]"; need "$OPD_OUT/final"; base="$(opd_base)"; [ "$PROFILE" = smoke ] && base="$STUDENT"
   run "$PY -m syncopate.train.eval_local --model $base --adapter $OPD_OUT/final --samples-per-case 8 --out $AUD/${DV}_eval_opd_${PROFILE}.json"; }
 
-ALL=(cases menus split gates rl-data teacher sft-data sft-train sft-eval sft-select merge exam rl-train rl-adapter rl-eval opd-train opd-eval)
+ALL=(cases menus split gates supply rl-data teacher sft-data sft-train sft-eval sft-select merge exam rl-train rl-adapter rl-eval opd-train opd-eval)
 run_stage(){ local s="$1"; local fn="stage_${s//-/_}"; declare -F "$fn" >/dev/null || { echo "🔴 未知 stage：$s（可选：${ALL[*]} all）"; exit 2; }; "$fn"; }
 if [ "$STAGE" = all ]; then for s in "${ALL[@]}"; do run_stage "$s"; done; else run_stage "$STAGE"; fi
 say "done ($STAGE, profile=$PROFILE, dry=$DRY)"

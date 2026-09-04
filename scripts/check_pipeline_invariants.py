@@ -106,6 +106,16 @@ def _split_isolation(log):
     return ok
 
 
+@check("data", "★ 供给 vs 数量闸：SFT 桶每类底题供给 ≥ 建库行数下限（run26：L2 144 < 280 本机没算过）")
+def _supply_vs_floors(log):
+    import subprocess, sys as _sys
+    r = subprocess.run([_sys.executable, "scripts/check_supply_vs_floors.py"], cwd=ROOT, capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        if line.startswith("  ") or line.startswith("[供给]"):
+            log(line)
+    return r.returncode == 0
+
+
 @check("merge", "合并模型的权重必须真的不同于它的基座")
 def _merge_actually_changed(log):
     """🔴 2026-08-18 抓到过：models/Qwen3-4B-rl-v13-s110 与 SFT 模型逐位相同。
