@@ -86,6 +86,10 @@ def as_multiturn(b: CaseBundle, *, case_id: str, user_message: str, prior: list[
         b2.gold.actions = gold_actions
     if final_answer is not None:
         b2.gold.final_answer = final_answer
+    elif (b2.verifier.expected_behavior in ("tool_call", "answer")) and not (b2.gold.final_answer or {}).get("reply"):
+        # 09-04 run24 体检：六族终答退化成机器字段句 —— 底题人话与压舱行同源（教师人话缓存），不许落回字段句
+        b2.gold.final_answer = dict(b2.gold.final_answer or {})
+        b2.gold.final_answer["reply"] = real_reply(b)
     b2.prior = [{"user_message": u, "result": r} for u, r in prior]
     assert "[上一轮]" not in b2.case.user_message
     return b2
@@ -151,6 +155,11 @@ def _defs_of(defs: dict, term: str) -> list[str]:
     return defs[term]
 
 
+def campaign_of(b: CaseBundle) -> str | None:
+    """底题的 campaign 编号：裁定⑥/⑨ 后 context 只带 account_id ⇒ 先 context 再 entities（09-04：CLAF 底题池 2→30）。"""
+    return (b.case.context or {}).get("campaign_id") or (b.case.entities or {}).get("campaign_id")
+
+
 def _m(camps: dict, cid: str, key: str):
     v = camps[cid].get(key)
     try:
@@ -171,22 +180,31 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         row["bucket"] = bucket; row["sub_axis"] = axis; row["pair"] = pair
         rows.append(row)
 
-    n = 6 if DRY else 20
+    import os as _os
+    n = int(_os.environ.get("U_BUILD_FAM_N") or (6 if DRY else 20))
     fresh_defer = [b for c, b in bundles.items() if c.startswith("FRESH") and b.gold
                    and b.verifier.expected_behavior == "defer"]
     fresh_ok = [b for c, b in bundles.items() if c.startswith("FRESH") and b.gold
                 and b.verifier.expected_behavior == "tool_call"]
     q = [b for b in bundles.values() if b.gold and b.gold.actions
-         and b.gold.actions[0]["tool"] == "campaign.get_metrics" and b.case.context.get("campaign_id")]
+         and b.gold.actions[0]["tool"] == "campaign.get_metrics" and campaign_of(b)]
     rej = [b for c, b in bundles.items() if c.startswith("REJ") and b.gold]
-    bud = [b for c, b in bundles.items() if c.startswith("BUD") and b.gold and b.case.context.get("campaign_id")]
+    bud = [b for c, b in bundles.items() if c.startswith("BUD") and b.gold and campaign_of(b)]
     for lst in (fresh_defer, fresh_ok, q, rej, bud):
         rng.shuffle(lst)
+    # ★ 09-04（守则⑱ 后底题只来自 SFT 桶）：每条分支的行数 = min(n, 底题数)，**不一题多用**；不够的如实打印。
+    def _take(lst, name):
+        k = min(n, len(lst))
+        if k < n:
+            print(f"  [六族] {name} 底题只有 {len(lst)} 道 < {n} ⇒ 造 {k} 行（不复用底题）", flush=True)
+        return lst[:k]
+    fresh_defer_n, fresh_ok_n = _take(fresh_defer, "DEFF-still"), _take(fresh_ok, "DEFF-mature")
+    q_n, rej_n, bud_n = _take(q, "REJF-legal"), _take(rej, "REJF-still"), _take(bud, "CLAF")
 
     # DEF-F：上一轮 defer → 「现在够了吗」；仍不成熟(FRESH defer) vs 已成熟(FRESH tool_call) 成对
-    for i in range(n):
-        for b, still in ((fresh_defer[i % len(fresh_defer)], True), (fresh_ok[i % len(fresh_ok)], False)):
-            cid = b.case.context.get("campaign_id") or next(
+    for i, (b, still) in enumerate([(b, True) for b in fresh_defer_n] + [(b, False) for b in fresh_ok_n]):
+        if True:
+            cid = campaign_of(b) or next(
                 iter((b.env.readonly_tables or {}).get("campaigns", {})), "这条 campaign")
             prior = [(b.case.user_message, signal_turn("defer", {
                 "reason": rng.choice(DEFER_REASONS).format(c=cid), "recheck_after_days": 5}))]
@@ -194,13 +212,14 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
             await emit(b2, "fam_deff", f"deff|{'still' if still else 'mature'}", f"DEFF_{i}")
 
     # REJ-F：上一轮拒了越权 → 合法请求（q 案 gold）vs 换说法仍越权（REJ 案 gold）
-    for i in range(n):
-        bq, br = q[i % len(q)], rej[i % len(rej)]
-        cid = bq.case.context["campaign_id"]
+    for i, bq in enumerate(q_n):
+        cid = campaign_of(bq)
         prior = [(rng.choice(REJ_PRIOR).format(c=cid), signal_turn("reject", {
             "reason_code": "unauthorized", "explanation": rng.choice(REJ_EXPL).format(c=cid)}))]
         b2 = as_multiturn(bq, case_id=f"{bq.case_id}_REJF", user_message=rng.choice(LEGAL_PREFIX) + bq.case.user_message, prior=prior)
         await emit(b2, "fam_rejf", "rejf|legal", f"REJF_{i}")
+    for i, br in enumerate(rej_n):
+        cid = campaign_of(br) or "CMP_0000"
         cid2 = re.search(r"CMP_\d+", br.case.user_message)
         cid2 = cid2.group(0) if cid2 else cid
         prior2 = [(rng.choice(REJ_PRIOR).format(c=cid2), signal_turn("reject", {
@@ -209,9 +228,8 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         await emit(b3, "fam_rejf", "rejf|still", f"REJF_{i}")
 
     # CLA-F：上一轮追问 campaign → 补全后接着办（BUD 案 gold）vs 答非所问（零写：policy 查询 gold）
-    for i in range(n):
-        b = bud[i % len(bud)]
-        cid = b.case.context["campaign_id"]
+    for i, b in enumerate(bud_n):
+        cid = campaign_of(b)
         vague = re.sub(r"\s*CMP_\d+\s*的?", "", b.case.user_message).replace("把 的", "把").strip() or "帮我把日预算调一下"
         prior = [(vague, signal_turn("clarify", {"question": CLA_Q["campaign_id"], "missing_fields": ["campaign_id"]}))]
         b2 = as_multiturn(b, case_id=f"{b.case_id}_CLAF", user_message=rng.choice(CLAF_FILL).format(c=cid), prior=prior)

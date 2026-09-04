@@ -1113,14 +1113,16 @@ async def main() -> int:
         else:
             print("[A1] 定义改写 61×3 …", flush=True)
             DEFS = await gen_defs(client)
-            json.dump(DEFS, open(cache_d, "w"), ensure_ascii=False)
+            if not DRY:                       # DRY 占位不许落成缓存（09-04：本机 DRY 曾把 "[DRY 定义待写" 写进 v16_defs.json）
+                json.dump(DEFS, open(cache_d, "w"), ensure_ascii=False)
         if cache_c.exists():
             chat_mat = json.load(open(cache_c))
             print(f"[A3] chat 缓存命中（{len(chat_mat)} 条）")
         else:
             print("[A3] chat 素材 …", flush=True)
             chat_mat = await gen_chat(client, bank)
-            json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
+            if not DRY:
+                json.dump(chat_mat, open(cache_c, "w"), ensure_ascii=False)
         cache_l = Path("data/u_route/v16_l2l1_rows.json" if IS_V15
                        else "data/u_route/v145_l2l1_rows.json")
         if DRY:
