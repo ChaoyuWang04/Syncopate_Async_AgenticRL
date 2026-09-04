@@ -77,7 +77,7 @@ DEFAULT_ANSWER_FIELDS = [
 # 且 prompt 里 ~4.2k 的 system+工具 schema 是**所有会话共享的 prefix**（cache 命中）。
 # ⚠️ 改这个数必须同时改 vLLM 起服务的 `--max-model-len`（两边必须一致，
 #   起服务命令在 `docs/syncopate/09 §0`）—— 服务端小于这里 = 400 报错。
-RUNTIME_MAX_MODEL_LEN = int(os.environ.get("SYNCOPATE_RUNTIME_MAX_LEN", "18432"))   # 09-02：9216+8192 → 18432
+RUNTIME_MAX_MODEL_LEN = int(os.environ.get("SYNCOPATE_RUNTIME_MAX_LEN", "24576"))   # 09-04：12288+12288 → 24576（rollout_budget 派生值）
 
 # 一轮历史最多渲染多少 token 的结论（超了截断并计数——静默砍是禁的）
 from syncopate.core.prior_turns import PRIOR_ANSWER_BUDGET, render_prior_messages  # noqa: E402

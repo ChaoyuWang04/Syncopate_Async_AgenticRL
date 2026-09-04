@@ -540,7 +540,8 @@ run16  ✅ 前四段全过（压舱/L2 290/L1 250/家族 180 缓存命中）· *
          ——契约是一轮一个调用，这条会被 first_action 判错但不算"想错"。
          本机零成本复算：cjk 尺子若改成「中文字 ÷ (中文字+拉丁字母)」（不再被 campaign.get_metrics 这类标识符和数字稀释）：
          B 臂 p50 0.67、≥0.5 占 72%、全链通过 **52%**；A 臂仍 1%。
-⇒ 待 Chaoyu 裁定（三选一，都不是我能拍的；**我的推荐 = ②+改尺子**：引子让教师用中文想且动作更准，尺子改成不被标识符稀释的口径后
+★ 09-04 裁定⑮（见 §6）：A/B 停掉，**撤中文闸、CoT 语言不限**；上限抬到教师 CoT 完整为止。
+⇒（历史）待 Chaoyu 裁定（三选一，都不是我能拍的；**我的推荐 = ②+改尺子**：引子让教师用中文想且动作更准，尺子改成不被标识符稀释的口径后
    半数样本可收，19 行下限按 114 case×~8 步×4 样本算余量充足）：① 撤 cjk 闸，收英文思考（学生学"英文想、中文答"）② 让教师用中文想：<think> 后加中文引子
    （B 臂 zh_prefix 正在量：cjk 与 action_match 是否保持）或系统指令 ③ 换会中文思考的教师。B 臂读数出来后一并呈报。
 ```
@@ -735,10 +736,10 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 
 | 设定 | 唯一来源 | 当前值 | 消费者（不许另写数） |
 |---|---|---|---|
-| 训练 prompt 上限 | `rollout_budget.MAX_PROMPT_LENGTH` | **9216** | launch_rl `--max-prompt-length` 默认 · sft.py `SFT_MAX_LENGTH`=prompt+response · rollout 左截断计数 · `v15_r2_gates --prompt-budget` |
-| 思考回复预算 | `rollout_budget.MAX_RESPONSE_LENGTH` | 8192（think-on）/2048 | launch_rl · eval_local `--max-new-tokens` 默认 · decider 单轮生成上限 · `MAX_TURN_ACCUMULATION`=+2048 |
-| RL/训练 max_model_len | launch_rl 算 prompt+response | 17408 | verl `rollout.max_model_len` |
-| 服务 max_model_len | 启动脚本 `--max-model-len` | **18432** | `logs/runtime/start_vllm*.sh` · `scripts/b4_serve_4x.sh` · `scripts/v15_r5_exam_chain.sh`；decider `RUNTIME_MAX_MODEL_LEN` 默认 18432（ctx_cap=−256，生成上限 = min(8192, 余量)） |
+| 训练 prompt 上限 | `rollout_budget.MAX_PROMPT_LENGTH` | **12288**（09-04 裁定⑮；原 9216） | launch_rl `--max-prompt-length` 默认 · sft.py `SFT_MAX_LENGTH`=prompt+response · rollout 左截断计数 · `v15_r2_gates --prompt-budget` |
+| 思考回复预算 | `rollout_budget.MAX_RESPONSE_LENGTH` | **12288**（think-on，09-04；原 8192）/2048 | launch_rl · eval_local `--max-new-tokens` 默认 · decider 单轮生成上限 · `MAX_TURN_ACCUMULATION`=+2048 |
+| RL/训练 max_model_len | launch_rl_v1 算 prompt+response | **24576** | verl `rollout.max_model_len` |
+| 服务 max_model_len | 启动脚本 `--max-model-len` | **24576**（stack_probe.SERVE_MAX_MODEL_LEN，容器内与 rollout_budget 相等断言） | `logs/runtime/start_vllm*.sh` · `scripts/b4_serve_4x.sh` · `scripts/v15_r5_exam_chain.sh`；decider `RUNTIME_MAX_MODEL_LEN` 默认 18432（ctx_cap=−256，生成上限 = min(8192, 余量)） |
 | think 开关 | `rollout_budget.THINK_ON`（v15 默认 on；`SYNCOPATE_THINK`） | on | `CHAT_TEMPLATE_KWARGS` · decider（`SYNCOPATE_RUNTIME_THINKING` 分叉待 R8④ 删） · launch_rl `[think-train]` 判据行 |
 | 采样参数 | `rollout_budget.SAMPLING_*` | T=1.0 · top_p=1.0 · top_k=−1 | RL · eval · decider（一份） |
 | 轮数上限 | `rollout_budget.assistant_turn_budget(max_steps)` | max_steps+1（v15 report 占一步） | build_sft_sample · build_dataset · RL extra_info |
@@ -748,7 +749,7 @@ SFT 出口预注册预测    ⇒ HARD 档触发率 20–50%（区间宽是诚实
 | 运行态注入参数 | `contract.RUNTIME_INJECTED_PARAMS` | {account_id} | ToolSpec.openai_schema 剥掉 · registry.execute 注入覆盖 · gold_script/visible_args · build_messages/visible_context · ActionGate 注入 |
 | 字段清单 | `contract.visible_answer_fields`（PROSE_FIELDS 过滤） | v15 多轮行=空 | step_user.txt `{% if answer_fields %}` |
 | 空 think 块 | `sft_replay._mask_empty_think` | 不监督 | SFT 样本 · 同构测试期望 |
-| 教师 think 采样 | `u_build_v14_5.THINK_MAX_*` | 900 tok / 4096 字 / 不限段（不缩短） | gen_cot_v15 · behavior 探针 |
+| 教师 think 采样 | `u_build_v14_5.THINK_MAX_*` | **2048 tok** / 不限字 / 不限段 / **语言不限**；截断闸 ≤3%（09-04） | gen_cot_v15 · behavior 探针 |
 | 数据份额带宽 | `u_build_v14_5.bands` | v13 .48–.62 · l2 .10–.17 · l1 .03–.09 · chat .01–.07 · fam .04–.12 · cot .05–.30 | 份额闸（W4 首测回填） |
 | 数据版本 | `pipeline/split.DATA_VERSION` | v13（case 库）；渲染版本记在 `data/sft/v15/manifest.json` 的 `render` | `assert_same_data_version` |
 
@@ -833,6 +834,17 @@ prompt 集 v2 = 419 骨架 + chat_bank_v2 + S2 held-out 句式 + 多轮占比 14
                       不再读（难例族收成常量 HARD_FAMILIES，v16 首遍考场后重定）。缓存文件名全带版本（v16_*），旧名物理上读不到；
                       run14–16 写在 Volume 的 v15_* 缓存搬进 cache/pre_v16_run16/ 留档。判据：建库脚本源码 grep 旧文件名 = 0（探针 stale 步）。
                       同日放行的诊断（先量后动）：CoT/行为探针过滤链每类丢弃计数 + 27B 原始思考画像（§W4′ S3-diag）。
+```
+
+```
+⑮ 09-04 CoT 语言不限 + 上限抬  Chaoyu 原话「撤掉中文的 cot 的闸门，cot 无论什么语言都可以」「上限都是基于之前 5090 显存上限选用的数字，
+                      适当增加，只要不爆显存都 ok，确保老师的 cot 是完整的，或者截断率有一个很低的门槛」。落地：
+                      · 撤 cjk≥0.5 闸（CoT 采样与行为探针都只记录不拦）；字数闸撤（对英文会按字数砍）；唯一长度闸 = token 上限
+                      · THINK_MAX_TOKENS 900 → 2048；截断闸：finish_reason=length 占比 ≤3%（gen_cot_v15 末尾断言，红 = 抬上限重注册）
+                      · MAX_PROMPT_LENGTH 9216 → 12288 · think-on MAX_RESPONSE_LENGTH 8192 → 12288 · 服务/RL/eval max_model_len 24576
+                        （decider.RUNTIME_MAX_MODEL_LEN · start_vllm.sh · exam_chain · stack_probe 四处同步；容器内相等断言）
+                      · opd --max-new 200 → 2048（think-on 学生要先想再答）
+                      · E-think A/B 两臂已停（不再需要）；先验留档：E27 + 本日 S3-diag（英文思考 68% 选中 gold）
 ```
 
 **唯一还开着的批准**：W0 产物（修订版 R5 门槛表）做完后一次呈报（09-02 已口头批：按推荐执行）。

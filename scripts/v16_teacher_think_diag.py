@@ -98,12 +98,12 @@ async def main() -> int:
             n_seg = len([p for p in re.split(r"\n\s*\n|\n", think) if p.strip()])
             got = first_action(post) if closed else None
             # 现行链（THINK_MAX_TOKENS=900 · THINK_MAX_CHARS · THINK_MAX_SEGS · cjk≥0.5 · 首动作==gold）逐闸判
-            within_900 = closed and (n_tok_think + 2) <= B.THINK_MAX_TOKENS
+            within_900 = closed and (n_tok_think + 2) <= B.THINK_MAX_TOKENS   # 名字沿用，实际按当前 THINK_MAX_TOKENS 判
             gates = {"closed_within_900": within_900, "chars_ok": len(think) <= B.THINK_MAX_CHARS,
                      "segs_ok": n_seg <= B.THINK_MAX_SEGS, "cjk_ok": cjk >= 0.5, "action_ok": got == want}
             return {"case_id": cid, "step": si, "want": want, "got": got, "closed": closed, "finish_reason": fin,
                     "think_tokens": n_tok_think, "think_chars": len(think), "cjk": round(cjk, 3), "n_seg": n_seg,
-                    "gates": gates, "pass_current_chain": all(gates.values()),
+                    "gates": gates, "pass_current_chain": all(v for k, v in gates.items() if k != "cjk_ok"),   # 09-04：语言不入链
                     "think_head": think[:600], "post_head": post[:300]}
 
         jobs = []

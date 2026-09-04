@@ -102,7 +102,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 1670 条/6681 文件，Modal 3.5 min |
-| S3 v16 训练集建库 | 🔴 归因已定 + 诊断已出（26 §W4′ S3-diag）：**27B 教师全程英文思考 ⇒ 中文闸拦下 100%**；中文引子臂让通过率 0%→35%（改尺子后 52%）；**等 Chaoyu 三选一**后重跑 build_v16 |
+| S3 v16 训练集建库 | 🟡 裁定⑮（09-04）：撤中文闸、CoT 语言不限、THINK 上限 2048 + 截断闸 ≤3%、全链上限 12288/12288/24576 ⇒ run17 build_v16 在跑 |
 | S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |
 | S6 RL 冒烟（verl 0.9 V1） | ✅ 09-04 01:54 **首次跑通**：B200×2 · 2 步 580 s · 动态分池在 TaskRunnerV1 进程生效 · loss/grad 有限 · reward 0.34/0.39 · 权重同步 · LoRA-only ckpt（233 MB/rank）· wandb syncopate-b200/rl_v16_smoke |

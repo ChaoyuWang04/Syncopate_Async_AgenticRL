@@ -53,6 +53,9 @@ HF_MODELS = {   # 09-03 晚裁定⑫：最新模型。Qwen3.5-9B/27B 已在 Volu
     "Qwen/Qwen3.5-0.8B": f"{MODELS}/Qwen3.5-0.8B",         # 测试分词（1.6 GiB）
 }
 TEACHER = f"{MODELS}/Qwen3.8-27B"
+# 09-04：服务侧上限 = rollout_budget.MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH（12288+12288）。本文件本机也要 import 所以写常量，
+#   容器内各服务步先 assert 与 rollout_budget 相等（守则①「两个东西应当相同」），漂了直接红。
+SERVE_MAX_MODEL_LEN = 24576
 STUDENT = f"{MODELS}/Qwen3.6-35B-A3B"
 
 LOCAL_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -337,7 +340,7 @@ def p_vllm() -> dict:
     vol.reload()
     model = STUDENT
     open("/tmp/bench.py", "w").write(_BENCH)
-    base = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name m --max-model-len 18432 "
+    base = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name m --max-model-len {SERVE_MAX_MODEL_LEN} "
             f"--gpu-memory-utilization 0.85 --port 8300 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}'")
     variants = {"mtp_off": base, "mtp_on": base + " --speculative-config '{\"method\": \"mtp\", \"num_speculative_tokens\": 2}'"}
     out = {}
@@ -520,7 +523,7 @@ def p_vllm_ep() -> dict:
     学习项 = all2all 后端/MoE 核/attention 后端日志行 + 每 token 耗时（对照单卡）。"""
     vol.reload()
     open("/tmp/bench.py", "w").write(_BENCH)
-    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {STUDENT} --served-model-name m --max-model-len 18432 "
+    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {STUDENT} --served-model-name m --max-model-len {SERVE_MAX_MODEL_LEN} "
            f"--gpu-memory-utilization 0.85 --port 8300 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' "
            f"--data-parallel-size 2 --enable-expert-parallel")
     log = "/tmp/vllm_ep.log"
@@ -646,9 +649,17 @@ def p_rebuild_v16(expected_sha: str = "") -> dict:
 TEACHER_ENV = {**RUN_ENV, "SYNCOPATE_TEACHER_LANG_URL": "http://127.0.0.1:8210/v1", "SYNCOPATE_TEACHER_THINK_URL": "http://127.0.0.1:8210/v1"}
 
 
+def _assert_serve_len() -> None:
+    """服务侧 max_model_len 必须 == rollout_budget 派生值（在容器里 import 仓库代码核）。"""
+    r = _sh(f"{PY} -c \"from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH as p, MAX_RESPONSE_LENGTH as r; print(p+r)\"", cwd=REPO, env=RUN_ENV)
+    got = (r["out"].strip().splitlines() or ["?"])[-1]
+    assert got == str(SERVE_MAX_MODEL_LEN), f"🔴 服务侧 max_model_len {SERVE_MAX_MODEL_LEN} != rollout_budget 派生 {got}（两处漂了）"
+
+
 def _start_teacher(log: str = "/tmp/vllm_teacher.log", wait_s: int = 1500):
+    _assert_serve_len()
     """Qwen3.8-27B 教师 @8210（两角色同端点）。返回 (proc, up, secs)。build_v16 与 teacher_diag 共用。"""
-    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len 18432 "
+    cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len {SERVE_MAX_MODEL_LEN} "
            f"--gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' --max-num-seqs 64")
     proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
     up = False; t0 = time.time()
@@ -806,9 +817,10 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
     rs = _sh(f"{PY} scripts/seed_demo_data.py", cwd=REPO, env=env, timeout=600); rec["seed"] = {"rc": rs["rc"], "tail": rs["out"][-300:]}
     r0 = _sh(f"{PY} scripts/seed_demo_data.py --check", cwd=REPO, env=env, timeout=600); rec["seed_check"] = {"rc": r0["rc"], "tail": r0["out"][-300:]}
     lora = f" --enable-lora --max-lora-rank 64 --lora-modules {served}={adapter}" if adapter else ""
-    vcmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name {model} --max-model-len 18432 "
+    vcmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name {model} --max-model-len {SERVE_MAX_MODEL_LEN} "
             f"--gpu-memory-utilization 0.85 --port 8100 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}'{lora}")
     vlog = "/tmp/vllm_exam.log"
+    _assert_serve_len()
     vproc = subprocess.Popen(f"exec {vcmd} > {vlog} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
     up = False; t0 = time.time()
     while time.time() - t0 < 1500 and vproc.poll() is None:

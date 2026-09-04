@@ -90,7 +90,7 @@ async def main() -> int:
                         if not think: drop["empty_think"] += 1; continue
                         if len(think) > B.THINK_MAX_CHARS: drop["too_long_chars"] += 1; continue
                         if n_seg > B.THINK_MAX_SEGS: drop["too_many_segs"] += 1; continue
-                        if cjk < 0.5: drop["cjk_below_0.5"] += 1; continue
+                        drop["cjk_below_0.5(只记录不拦)"] += int(cjk < 0.5)   # 09-04 裁定：语言不限
                         if name != want: drop["action_mismatch"] += 1; drop[f"mismatch:{want}->{name}"] += 1; continue
                         drop["hit"] += 1
                         ok = think; break

@@ -109,7 +109,7 @@ def main() -> int:
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch", type=int, default=8, help="每 rank 每步样本数")
     ap.add_argument("--lr", type=float, default=2e-5)
-    ap.add_argument("--max-new", type=int, default=200)
+    ap.add_argument("--max-new", type=int, default=2048)   # 09-04：think-on 学生要先想再答，200 会把回复截没（B200 上不缺）
     ap.add_argument("--save-every", type=int, default=30)
     ap.add_argument("--probe-every", type=int, default=20, help="零掩码对照断言间隔")
     ap.add_argument("--no-wandb", action="store_true")

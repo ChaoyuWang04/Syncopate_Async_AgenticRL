@@ -89,10 +89,14 @@ ENABLE_THINKING = THINK_ON
 #   多轮行再加最近 6 轮历史（每轮 ≤400 tok）⇒ 9216。9216 + 8192 = 17408 ⇒ 服务/RL max_model_len 18432
 #   （logs/runtime/start_vllm.sh · scripts/v15_r5_exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
 #   显存：Qwen3-4B 每 token KV ≈144 KB ⇒ 18432 一条 ≈2.65 GB；R6 起跑前按 25 §R6 V0⒠ 重测并发。
-MAX_PROMPT_LENGTH = 9216
+# ★ 2026-09-04（Chaoyu 裁定：上限是按 5090 显存定的数字，B200 上只要不爆显存就抬；教师 CoT 必须完整）：9216 → **12288**，
+#   think-on response 8192 → **12288** ⇒ max_model_len 24576（服务/RL/eval 全部派生；stack_probe.SERVE_MAX_MODEL_LEN 有相等断言）。
+#   依据：学生 Qwen3.6-35B-A3B 30/40 层是线性注意力（KV 不随长度涨），10 层全注意力 GQA ⇒ 每 token KV 极小；
+#   SFT 实测 17408 上限下峰值 74 GB / 183 GB；RL 冒烟 response 均值 1.3k token，抬上限只是给尾巴留余量。
+MAX_PROMPT_LENGTH = 12288
 
 # 一条轨迹里**模型生成 + 工具返回**加起来的 token 预算
-MAX_RESPONSE_LENGTH = 8192 if THINK_ON else 2048
+MAX_RESPONSE_LENGTH = 12288 if THINK_ON else 2048
 
 if THINK_ON:
     # 判据行：think 模式必须显式可见，静默生效 = 下一个「机制在但没接上」

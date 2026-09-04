@@ -247,7 +247,12 @@ ASST = "<|im_start|>assistant"
 # ⛔ 09-02 Chaoyu 裁定：**不缩短 CoT**——教师思考 p50 691 字/6 段，没有证据说明多出来的是啰嗦而不是必要推演；
 #   "空块占 98%" 的比例问题改由 sft_replay 把空 think 块 mask 掉解决，不靠砍思考长度换行数。
 #   这里保留原采样约束（900 token 上限、≤4096 字、不限段数）；W3① 撤回。
-THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 900, 4096, 10 ** 6
+# ★ 09-04 Chaoyu 裁定（26 §W4′ S3-diag 读数后）：① **撤中文闸**——CoT 语言不限（27B 全英文思考，语言与目标无关）；
+#   ② 教师 CoT 必须完整：token 上限 900 → **2048**（实测英文 p90 326/max 894、中文引子臂 max 1688）；
+#   ③ 字数闸撤（4096 字对英文 ≈1000 token，会把长思考按字数砍掉，违背"不缩短 CoT"）；唯一长度闸 = token 上限；
+#   ④ 注册截断闸：finish_reason=length 的样本占比 ≤ 3%（gen_cot_v15 末尾断言），红了 = 上限不够、重新注册。
+THINK_MAX_TOKENS, THINK_MAX_CHARS, THINK_MAX_SEGS = 2048, 10 ** 6, 10 ** 6
+THINK_TRUNC_RATE_MAX = 0.03
 
 
 async def gen_cot(client, tok, max_rows=100) -> list[dict]:
@@ -412,7 +417,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
             "model": "t", "prompt": ctx + "<think>\n", "max_tokens": THINK_MAX_TOKENS,
             "seed": _SEED[0], "temperature": 0.7, "top_p": 0.95})
         r.raise_for_status()
-        return r.json()["choices"][0]["text"]
+        ch = r.json()["choices"][0]
+        return ch["text"], ch.get("finish_reason")
 
     def first_action(text: str):
         # 线格式无关（Qwen3.5 教师吐的是 XML `<function=…>`，旧缓存是 JSON）：走 parsing_v15 的解析器
@@ -434,8 +440,11 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
         for g in gens:
             if isinstance(g, Exception):
                 drop["exception"] += 1; continue
+            g, fin = g
             if "</think>" not in g:
-                drop["no_close_think(900tok内没写完)"] += 1; think_lens.append(len(g)); continue
+                # 分两类：length = 真截断（进截断闸）；stop = 老师写完想法直接进动作没写 </think>（格式失败，与上限无关）
+                drop["no_close_truncated(length)" if fin == "length" else "no_close_eos(格式)"] += 1
+                think_lens.append(len(g)); continue
             think, post = g.split("</think>", 1)
             think = think.strip()
             think_lens.append(len(think))
@@ -448,8 +457,7 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
                 drop["too_long_chars"] += 1; continue
             if n_seg > THINK_MAX_SEGS:
                 drop["too_many_segs"] += 1; continue
-            if cjk < 0.5:
-                drop["cjk_below_0.5"] += 1; continue
+            drop["cjk_below_0.5(只记录不拦)"] += int(cjk < 0.5)     # 裁定：语言不限
             got_action = first_action(post)
             if got_action == want:
                 drop["hit"] += 1
@@ -580,6 +588,11 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     _q = (lambda q: _tl[min(len(_tl) - 1, int(q * len(_tl)))]) if _tl else (lambda q: 0)
     print(f"[CoT-diag] 采样 {sum(_main.values())} 条 ⇒ {dict(_main)} · 动作不符 top: {_mm}")
     print(f"[CoT-diag] think 字数 p50/p90/max = {_q(0.5)}/{_q(0.9)}/{_tl[-1] if _tl else 0}（含未写完的按已吐字数计）")
+    _n = sum(v for k, v in _main.items() if k != "exception")
+    _trunc = drop.get("no_close_truncated(length)", 0) / max(1, _n)
+    print(f"[CoT-trunc] 教师 CoT 截断率 {_trunc:.1%}（{drop.get('no_close_truncated(length)', 0)}/{_n}，闸 ≤{THINK_TRUNC_RATE_MAX:.0%}，上限 {THINK_MAX_TOKENS} tok）")
+    assert _n == 0 or _trunc <= THINK_TRUNC_RATE_MAX, (
+        f"🔴 教师 CoT 截断率 {_trunc:.1%} > {THINK_TRUNC_RATE_MAX:.0%} —— THINK_MAX_TOKENS={THINK_MAX_TOKENS} 不够，抬上限并重新注册")
     return out
 
 
