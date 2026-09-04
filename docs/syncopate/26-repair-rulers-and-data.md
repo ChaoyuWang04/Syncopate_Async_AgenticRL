@@ -659,7 +659,7 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 | gates | `check_data_gates.py --split-dir`（09-05 补：此前 runbook 没传 --split-dir ⇒ L1-L2 三桶泄漏闸被静默跳过） | — | D1–D11 + L1-L2 | ✅ 全绿（含 L1-L2） |
 | rl-data | `syncopate data build --pool rl`（val-every 5）+ 隔离复核 | data/rl/v16 | 出口隔离闸 | ✅ 云上曾建 660/165（旧切分；重建待跑） |
 | teacher | vLLM 27B @8210（max_model_len ← rollout_budget） | 进程 | /health | ✅ |
-| sft-data | `v16_build_sft.py`（+ `v16_multiturn.py` / `v16_data_audit.py` / `v16_prompt_budget_gate.py` / `v16_data_gallery.py`）+ 隔离复核 + 画廊 | data/sft/v16（staging 全绿才搬） | 全部闸 + 出厂体检 + 隔离 | 🟡 run27 倒在出厂体检 3 项 ⇒ 09-05 修法已落地（见「09-05 审查与修法」）；run28 观察模式待跑 |
+| sft-data | `v16_build_sft.py`（+ `v16_multiturn.py` / `v16_data_audit.py` / `v16_prompt_budget_gate.py` / `v16_data_gallery.py`）+ 隔离复核 + 画廊 | data/sft/v16（staging 全绿才搬） | 全部闸 + 出厂体检 + 隔离 | ✅ **run28 全绿**：1222 行 / 18 桶，云盘 /vol/data/sft/v16 |
 | sft-train | `syncopate.train.sft`（model=STUDENT · 数据=DATA_VERSION · epochs 3 · bs 2×accum 8 · lr 1e-4 · LoRA r32/a64 attn_shared · save-epochs 1.5,2.5） | checkpoints/sft/v16 | loss/grad 有限 · ΔW>0 | ✅ 机制冒烟；真数据待 |
 | sft-eval | `entropy`（limit 24；09-05 修：response 上限从写死 2048 改读 rollout_budget）+ `eval_local`（冻结 EVAL · 8 样本 · T=1） | _audit/v16_{entropy,eval}_* | — | ⬜ |
 | sft-select | `select_sft_ckpt.py --auto --prune`（有梯度多 → 熵高） | SELECTED 软链 | 缺审计即红 | ⬜（--auto 新加） |
@@ -712,6 +712,19 @@ run27 三项红的修法（机制的改机制、多样性的加数据）
                   底题 campaign 不再落 "CMP_4000" 假编号
 本机验证  定向 26 测试绿 · 全量 pytest（见 run28 记录）· DRY 演练 exit 0（六族 53 行 · 同形 0 · 越桶 0 · 三份缓存标签独立）· menus/split/gates/supply 全绿
 待 Chaoyu   三查门槛表数字（v16 首考读数后重登记）· OPD build_prompt 多轮仍是折叠文本（守则⑮ #1 同形欠账，OPD 现只用单轮 p1 提示）
+```
+
+**★ run28（09-04 17:13 起，rebuild 128 s + build 587 s，`--build-gates report`）：全绿，零红项，v16 SFT 训练集首次落地。**
+```
+rebuild_v16 ✅  容器按新代码重生成 2030 题（菜单不再并入 v8 审计）· 三份切分 SHA 与本机逐一相同
+build_v16   ✅  缓存：l2l1/cot 命中、fam 按新标签作废重造（168 行：deff 40 · rejf 28 · claf 40 · l2x 20 · win 40）· 压舱/定义/闲聊缓存复用
+            L2 158（val 10）· L1 240 · CoT 78 行/27.9%（聚合非空 think 60.0%）· 同形 646 行 0 不同形 · OOV 0 · 泄漏 0 · 隔离 0 越桶
+            份额（只报）v13 56.5 / l2 4.1 / l1 2.3 / chat 1.4 / fam 7.8 / cot 27.9 —— l2/l1 仍在带外，待 Chaoyu 回填带宽
+            出厂体检 ✅：全部终答 1136 条唯一 990、句式最高频 0.4%；fam_claf 40/40 唯一 · fam_win 20/20 · fam_deff/rejf/l2x 各 20/20；预设答案「无」；
+                       信令自由文本最高频 7.0%（闸 35%）；think 段逐字最高频 0.5%
+            产物 data/sft/v16/train.parquet 1222 行 · 18 桶（report 目录全绿后搬进正式目录）；prompt 预算零截断；画廊 0 占位
+人工抽看    WIN 答数带 campaign 与数值、句式各异；CLAF 跑题政策/风控回答的数字全部来自工具观测（涨幅上限/审批线/月度上限/风控标记）；
+            派生行终答与压舱句不同句。⚠️ 个别终答夹带机器词（"决策状态已确认为executed"）——体检现只查"人话进 report"，不查"机器词进人话"，登记为下一轮闸候选
 ```
 
 **收口（09-04 14:45）**：run27 已跑完（见上）。之后的固定顺序：run27 红 ⇒ `modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates report`
