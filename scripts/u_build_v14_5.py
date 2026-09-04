@@ -1112,6 +1112,21 @@ async def main() -> int:
     registry.latency_scale = 0.0
     bank = [json.loads(x) for x in open("data/u_route/chat_bank_v2.jsonl")]
 
+    # ★ 09-04 run25 实案：行缓存（L2/L1/六族/CoT 的 input_ids）是按**某一版切分**造的；切分换了（扩量后 SHA 变）而缓存没删，
+    #   run25 就把旧切分造的行原样命中了。"记得删缓存"不是机制 ⇒ 行缓存绑定切分 SHA：不一致就自动作废，谁也绕不过。
+    import hashlib as _hl
+    _split_sha = _hl.sha256(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json", "rb").read()).hexdigest()[:16]
+    _side = Path("data/u_route/v16_cache_split.json")
+    _row_caches = [Path(f"data/u_route/{n}") for n in ("v16_l2l1_rows.json", "v16_fam_rows.json", "v16_cot_rows.json", "v16_cot_partial.jsonl")]
+    _prev = json.load(open(_side)).get("sft_split_sha") if _side.exists() else None
+    if _prev != _split_sha:
+        _hit = [c for c in _row_caches if c.exists()]
+        for c in _hit:
+            c.unlink()
+        print(f"[缓存] 切分 SHA {_prev} → {_split_sha}：行缓存作废 {[c.name for c in _hit]}（文本类缓存 ballast/defs/chat 与切分无关，保留）", flush=True)
+    if not DRY:
+        _side.write_text(json.dumps({"sft_split_sha": _split_sha, "note": "行缓存绑定的 SFT 切分 SHA；不一致时 u_build 自动作废行缓存"}, ensure_ascii=False))
+
     # 裁定⑭：v16 的定义/闲聊素材由 27B 教师重生成，缓存名带版本；v14.5 分支保留旧名（legacy）
     cache_d = Path("data/u_route/v16_defs.json" if IS_V15 else "data/u_route/v145_defs.json")
     cache_c = Path("data/u_route/v16_chat_mat.json" if IS_V15 else "data/u_route/v145_chat_mat.json")
