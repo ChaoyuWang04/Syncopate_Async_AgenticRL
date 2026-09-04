@@ -1,23 +1,21 @@
 ---
 name: modal-migration-state
-description: ★09-04 04:xx：新栈全管线机制冒烟全通（SFT/考场/RL verl0.9 V1/OPD）；S3 建库卡在一个待裁定（27B 教师英文思考撞中文闸，推荐=中文引子+改尺子）；裁定⑭ v16 不混旧物料已落地；唯一入口 docs/syncopate/31
+description: ★09-04 14:45 收口：新栈全管线机器部分全冒烟通过；唯一入口 scripts/v16_pipeline.sh；守则⑱ 三桶隔离硬机制；题库扩量 2030；v16 SFT 训练集仍未落地（run27 在跑最后几道闸，红了用 --build-gates report 看全貌）；三件待 Chaoyu 裁定；唯一入口 docs/syncopate/31
 metadata:
   type: project
 ---
 
-**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**；施工与判据 `26 §W4′`（「S3 run16 成行 0 的归因」「S3-diag」「并行冒烟」+ S4′–S7 读数）；探针 `modal_app/stack_probe.py`（步：teacher_diag · sft_smoke · exam_v4 · rl_cfg · rl_smoke · opd_smoke）。
+**入口文档 = `docs/syncopate/31-modal-and-new-stack.md`**（§0 一句话现场 · §4 进度 · §5 怎么起）；施工与判据 `26 §W4′`（每个 run 倒在哪、修了什么、闸表、固定管线 stage 表）；守则 `00 §5`（⑯⑰⑱ 本轮新增/扩写）；探针 `modal_app/stack_probe.py`（只调 runbook）。
 
-**裁定链（Chaoyu 09-03/04）**：⑩ v16 从零重来 · ⑪ 全新栈学新东西 · ⑫ 一切在 B200 · ⑬ 教师用大的（Qwen3.8-27B 兼两角色）· **⑭ v16 不许混进任何旧版本产物**（4B/8B 物料全由 27B 重生成、v13 triage 不读、缓存名 v16_*、旧缓存搬 pre_v16_run16/）。
+**已落地（09-04）**：裁定⑭ v16 不混旧物料 · ⑮ CoT 语言不限+上限 12288/12288/24576+THINK 2048 · 守则⑱ 三桶隔离三层硬机制（源头/登记/出口唯一写盘 + 复核器）· 题库扩量新情景（拒绝 14 种、RELN/FRCP/BCUT；2030 道；两地 SHA 同）· **固定管线 runbook `scripts/v16_pipeline.sh`**（17 stage · --dry-run · smoke/candidate 档；所有入口默认值从 DATA_VERSION/model_paths 派生；test_pipeline_defaults 守着）· 本机可验：DRY 走完全部结构闸；`check_supply_vs_floors.py` 供给对数量闸；离线全量建库 `sft-data-offline`；闸观察模式 `U_BUILD_GATES=report`（一次看全部红项）· 行缓存绑定切分 SHA + 构造器版本 tag（自动作废）· 云盘过时产物已清（冒烟 ckpt、v15 归档缓存）。
 
-**★ 09-04 裁定⑮（已落地）**：CoT **语言不限**（撤 cjk/字数闸；27B 全英文思考，英文思考 68% 选中 gold，质量好）；教师 CoT 必须完整：THINK_MAX_TOKENS 900→2048 + 截断闸 finish_reason=length ≤3%（gen_cot_v15 断言）；全链上限抬（5090 时代数字）：MAX_PROMPT 12288 · think-on RESPONSE 12288 · 服务/RL/eval max_model_len 24576（decider/start_vllm/exam_chain/stack_probe 四处同步 + 容器内相等断言）；opd --max-new 2048。E-think A/B（CoT 开/关）两臂已停，设计留在 26 §W4′ E-think 备查。**run17 build_v16 在跑**（撤闸后第一次），过了 ⇒ 画廊给 Chaoyu 逐条看 ⇒ 真数据 S4→S5→S6→S7。
+**新栈冒烟读数**：SFT 机制 42.3M/74 GB/30 步 346 s · 考场链路全通（35B 端点冷启 500 s）· RL verl 0.9 V1 sync 2 步 580 s（step2 37 s，LoRA-only ckpt 233 MB/rank）· OPD 机制通（vocab 相同）· 老师 CoT：英文思考、命中 67%、截断 0.1%。
 
-**新栈全管线冒烟读数（09-04，全在 26 §W4′）**：S4′ SFT 机制（DRY 占位数据）✅ 可训 42.3M · ΔW 0.63% · 峰值 74 GB · 30 步 346 s · S5′ 考场链路 ✅（端点起 500 s 待查）· S6 **RL verl 0.9 V1 sync 首次跑通** ✅ B200×2 · 2 步 580 s（step2 37 s）· 动态分池在 TaskRunnerV1 进程生效 · LoRA-only ckpt 233 MB/rank · S7 OPD 机制 ✅（vocab 相同、真蒸馏步 KL 有限、adapter 落盘）但底座几乎全跳步 ⇒ 语义冒烟等真 SFT adapter。**真数据版 S4→S5→S6→S7 全部等 S3 建库过。**
+**卡点**：v16 SFT 训练集 run17–27 逐道闸显形（26 §W4′ 有全表）；run27 在跑；剩下最可能红的是出厂体检小桶句式（结构性、要裁定）。**未验**：rl-adapter（verl 0.9 model_merger 对 FSDP2+LoRA-only）· sft-eval/select/merge/rl-eval/opd 真数据链。
 
-**verl 0.9 要点**：`trainer.use_v1` + `trainer.v1.trainer_mode`（sync/colocate_async/separate_async）；`create_rl_sampler` 在 `trainer/ppo/utils.py`，V1 trainer_base 导入时绑名 ⇒ 补丁要挂定义处+消费者（已改）；`save_lora_only` 要 `+` 追加；入口 `launch_rl_v1.py`（旧 launch_rl.py 留给旧栈）。
+**待 Chaoyu 裁定**：L1 底题复用作历史 · 切分格 SFT=0 加保底否 · 六桶份额带宽回填。
 
-**坑（本轮新增）**：本机 HTTPS `git push` 静默挂死 ⇒ 一律 SSH 推；`pkill -f "git push"` 会杀自己的 shell；并行臂同分钟收尾会盖掉本机 summary（已改带秒+步名）；判据红了先问「量的是不是那件事」——本轮四次红全是判据量错对象（stale 缓存名 / grad_norm 只上 wandb / 峰值字样 / KL 正则）。
+**坑（本轮）**：HTTPS push 挂死 ⇒ SSH 推；pkill -f 会杀自己；`modal volume rm` 不吃 --yes；判据红先问"量的是不是那件事"（本轮 6 次红是判据量错对象）；"记得删缓存"不是机制（run25 实案）；DRY 不走数量闸 ⇒ 供给要单独算。
 
-**Why：** Chaoyu 09-04「一切都是 v16」+「能并行的多起机器，最终整条管线跑通」。
-**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；读数在 `/vol/_audit/v16/` 用 `modal volume get` 拉；每步先注册判据再跑。
-
-**★ 09-04 下午三件大事**：① 守则⑱ 三桶隔离硬机制（源头 load_split_bundles · 每行 source_case_ids · 出口唯一写盘函数 + 复核器；run24 产物曾有 367 行越桶）② 扩量 = 新情景新数据（拒绝请求 5→14 种、新模板 RELN/FRCP/BCUT；题库 2030 条、切分 401/597/1032、SHA 在 _audit/v16/local_gen_sha.json）③ **固定管线 runbook `scripts/v16_pipeline.sh`**（17 stage，--dry-run，smoke/candidate 档；所有入口默认值从 DATA_VERSION/model_paths 派生；探针只调它；test_pipeline_defaults 守着）。未验：rl-adapter（verl 0.9 model_merger 对 FSDP2+save_lora_only）、sft-eval/select/merge 真数据链、切分格稀疏（33 格薄，SFT=0 的格待裁保底）。
+**Why：** Chaoyu 09-04：一切 v16 · 硬机制保证数据可靠 · 固定脚本默认值直接跑 · 放开闸看全貌。
+**How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；本机 `bash scripts/v16_pipeline.sh --dry-run all` 看每段命令；改闸先本机 DRY/供给核对/离线建库，再上云。

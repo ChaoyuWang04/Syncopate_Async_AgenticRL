@@ -6,9 +6,11 @@
 
 ---
 
-## 0 · 一句话现场（09-04 00:30）
+## 0 · 一句话现场（09-04 14:45 收口）
 
-**家已经搬到 Modal 的 B200 上，新栈九步探针全绿，仓库全量测试在容器里绿；v16 题库两地生成逐字节相同；v16 训练集建库跑了四次（run13–16），前五段全通，卡在最后一段 CoT 蒸馏的「收到行」之间（教师采样成功、成行为 0）。** 训练、评测、RL、OPD 一步都还没在新栈上跑。
+**新栈全管线的"机器部分"全部冒烟通过（SFT 机制 / 考场链路 / RL verl 0.9 首次跑通 / OPD 机制）；管线收成唯一入口 `scripts/v16_pipeline.sh`（17 stage，默认值直接跑）；
+三桶隔离做成硬机制（守则⑱）；题库扩量到 2030 道新情景；唯一还没落地的产物 = v16 SFT 训练集：run27 正在云上跑最后几道闸（出厂体检那几项可能红、且属于"要 Chaoyu 裁定"的类型）。**
+真数据的 SFT/评测/RL/OPD 一步都还没跑（都等训练集）。
 
 ---
 
@@ -102,13 +104,14 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
 | S2 v16 题库确定性 | ✅ 09-04 13:30 扩量后重定：本机与 Modal 各自生成 2030 条 / 8121 文件，三份切分 SHA 逐一相同（Modal 128 s）；SHA 在 _audit/v16/local_gen_sha.json |
-| S3 v16 训练集建库 | 🟡 裁定⑮（09-04）：撤中文闸、CoT 语言不限、THINK 上限 2048 + 截断闸 ≤3%、全链上限 12288/12288/24576 ⇒ run17 build_v16 在跑 |
+| S3 v16 训练集建库 | 🟡 run17–27（09-04）逐道闸显形并修（见 26 §W4′ 各 run 记录）；**run27 在跑**，若红下一轮用 `--build-gates report` 一次看全貌 |
 | S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |
 | S6 RL 冒烟（verl 0.9 V1） | ✅ 09-04 01:54 **首次跑通**：B200×2 · 2 步 580 s · 动态分池在 TaskRunnerV1 进程生效 · loss/grad 有限 · reward 0.34/0.39 · 权重同步 · LoRA-only ckpt（233 MB/rank）· wandb syncopate-b200/rl_v16_smoke |
 | S7 OPD 冒烟 | 🟡 机制通（vocab ✓ · 42.3M · 真蒸馏步 KL 有限 · adapter 落盘）；底座无 adapter 几乎全跳步 ⇒ 语义冒烟等 S4 真 SFT adapter |
 
 ```
+（run17–27 的逐轮记录在 26 §W4′：CoT 语言闸 → 419 旧行数 → OOV 跑量 → 考场泄漏 → think 双开头/压舱兜底 → DIA 译名 → 三桶隔离 367 行越桶 → 旧切分行缓存 → L2 供给 144<280）
 run13  hydrate 即死：secret 按环境变量条件定义，本机/容器求值不同
 run14  L2/L1 断言 FRESH_0125 无人话终答：源题没按收场类型过滤（defer 无人话终答），旧缓存作废后显形
 run15  CoT 段崩：候选从上一版 parquet 选（v16 没有上一版）；同时发现教师动作解析/行为探针按 JSON 找 "name":（XML 下永远 0）
