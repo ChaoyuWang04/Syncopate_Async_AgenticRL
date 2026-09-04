@@ -675,6 +675,11 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF/aligned 等格 **SFT=0**（难度代理排序把它们全排到 RL 桶）。
 ⇒ 待裁：是否给 SFT 加「每格 ≥1」保底（split._apply_sft_floors 现只按模板/结局/行为保底，不按格）。
 
+**本机可验（09-04 Chaoyu：不想在云上再因旧数字/闸设置重来）**：DRY 演练不再提前返回，`U_BUILD_DRY=6` 在本机走完 人话通道 → 密度（样本 ≥20 才判比例）
+→ OOV → 考场泄漏 → 出口写盘（唯一带闸函数）→ 三桶隔离，产物落 `_audit/v16/dry/`，只跳过依赖教师真文本的出厂体检；抓到过写盘函数编辑没落盘。
+教师材料一旦在云上生成并进缓存（`/vol/_audit/v16/cache/v16_*.json`），`scripts/v16_pipeline.sh sft-data-offline` 把缓存拉回本机、以
+`SYNCOPATE_TEACHER_OFFLINE=1`（缓存缺失即红、绝不去调教师）在本机把整条建库连出厂体检跑到底 ⇒ 之后改闸先本机验，不上云试错。
+
 **全量自检：建库链上"按旧数字定的闸"（09-04 Chaoyu：别出一条修一条，先全量扫）**
 
 | 数字 | 出处 | 来历 | 处置 |

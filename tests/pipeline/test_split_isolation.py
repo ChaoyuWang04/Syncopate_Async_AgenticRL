@@ -55,3 +55,16 @@ def test_load_split_bundles_never_returns_other_buckets():
     b = load_split_bundles(Path(DEFAULT_BATCH_DIR), SPLIT, "sft")
     assert set(b) == set(_ids("sft"))
     assert not (set(b) & set(_ids("eval"))) and not (set(b) & set(_ids("rl")))
+
+
+def test_checked_writer_exists_and_gates(tmp_path):
+    """唯一写盘函数必须存在且真的拦越桶（09-04：一次编辑没落盘，本机 DRY 走到底才抓到）。"""
+    from syncopate.pipeline.build_dataset import write_split_checked
+    ev, sft = _ids("eval")[0], _ids("sft")[0]
+    good = [{"case_id": sft, "input_ids": [1], "loss_mask": [1], "total_length": 1}]
+    man = write_split_checked(tmp_path / "ok", good, [], split_dir=SPLIT, pool="sft")
+    assert (tmp_path / "ok" / "train.parquet").exists() and man["isolation"]["offenders"] == 0
+    with pytest.raises(AssertionError, match="三桶隔离"):
+        write_split_checked(tmp_path / "bad", [{"case_id": ev, "input_ids": [1], "loss_mask": [1], "total_length": 1}], [],
+                            split_dir=SPLIT, pool="sft")
+    assert not (tmp_path / "bad" / "train.parquet").exists(), "越桶时不许落盘"
