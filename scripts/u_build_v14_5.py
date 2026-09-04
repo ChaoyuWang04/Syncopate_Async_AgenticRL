@@ -1377,7 +1377,10 @@ async def main() -> int:
     leak_last, leak_first = 0, 0
     for r in new_rows:
         txt = tokenizer.decode(list(r["input_ids"])[:r["prompt_length"]])
-        leak_last += sum(1 for t in EXAM_LAST if len(t) >= 8 and t in txt)
+        for t in EXAM_LAST:
+            if len(t) >= 8 and t in txt:
+                leak_last += 1
+                print(f"   ✗ 考场被判句泄漏：{r.get('bucket')} {r.get('case_id')} 句「{t[:40]}」")   # 09-04 run21：闸红要说是谁
         leak_first += sum(1 for t in first_turns if len(t) >= 8 and t in txt)
     print(f"[泄漏] 被判轮命中 {leak_last}（必须 0）· 铺垫轮 {leak_first}（上报）")
     assert leak_last == 0, f"🔴 考场被判句泄漏 {leak_last}"

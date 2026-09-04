@@ -104,6 +104,29 @@ CLAF_FILL = ["是 {c}，就按这个办", "{c}", "{c}，按刚才说的来", "�
 CLAF_OFF = ["先别管这个，这个账户现在的预算政策是什么？", "对了，先看下账户风控状态", "等一下，先告诉我 ROAS 是什么意思"]
 L2X_ASK = [("差的那条", "worse"), ("好的那条", "better"), ("烧钱多的那条", "spend"), ("第一个", "first"), ("第二个", "second")]
 L2X_METRIC = [("消耗", "spend_7d"), ("安装量", "installs_7d"), ("CPI", "cpi"), ("点击率", "ctr")]
+# 09-04 run21：考卷 v4 的被判句与 L2X_ASK×L2X_METRIC 的模板逐字同形（「差的那条的CPI是多少？」）⇒ 训练问法必须绕开考卷被判句。
+#   与 u_build_v14_5.EXAM_LAST 同一口径（所有考卷文件的末轮句），这里独立加载避免循环 import。
+import glob as _glob
+import json as _json
+EXAM_LAST_MT: set[str] = set()
+for _f in _glob.glob("data/u_route/*exam*.jsonl"):
+    for _x in open(_f):
+        try:
+            EXAM_LAST_MT.add(_json.loads(_x)["turns"][-1])
+        except Exception:
+            pass
+L2X_ASK_VARIANTS = ["{ref}的{m}是多少？", "那{ref}的{m}呢？", "{ref}的{m}现在是多少？", "帮我看下{ref}的{m}", "{ref}那条{m}是多少"]
+
+
+def l2x_ask(ref: str, mname: str) -> str:
+    """按变体顺序取第一个不与考卷被判句逐字撞车的问法；全撞就报错（不许静默用撞车句）。"""
+    for v in L2X_ASK_VARIANTS:
+        ask = v.format(ref=ref, m=mname)
+        if ask not in EXAM_LAST_MT:
+            return ask
+    raise RuntimeError(f"L2X 问法全部与考卷被判句撞车：{ref}/{mname}")
+
+
 WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着"]
 # (问句, 术语)——助手回答按术语名从定义库精确取，取不到直接报错（不许落回占位；eCPM 是考卷 held-out 词，不用）
 WIN_FILL = [("ROAS 是什么意思？", "ROAS"), ("那 CPI 呢", "CPI"), ("CTR 呢？", "CTR"), ("回本周期是什么", "回本周期"),
@@ -216,7 +239,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
         mname, mkey = L2X_METRIC[i % len(L2X_METRIC)]
         val = _m(camps, tgt, mkey)
         rep = f"[DRY 教师待写:{tgt} {mname} {val}]" if DRY else await gen_reply(tgt, mname, val)
-        b2 = as_multiturn(b, case_id=f"{b.case_id}_L2X", user_message=f"{ref}的{mname}是多少？", prior=prior,
+        b2 = as_multiturn(b, case_id=f"{b.case_id}_L2X", user_message=l2x_ask(ref, mname), prior=prior,
                           gold_actions=[{"tool": "campaign.get_metrics", "arguments": {"campaign_id": tgt}}],
                           final_answer={"summary": f"{tgt} {mkey}={val}", "reply": rep}, behavior="tool_call")
         await emit(b2, "fam_l2x", f"l2x|{kind}|{'far' if i % 3 == 2 else 'near'}", f"L2X_{i}")
