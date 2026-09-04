@@ -124,6 +124,8 @@ def main(argv=None) -> int:
     ap.add_argument("out_dir", type=Path)
     ap.add_argument("--keep", default=None, help="选中的候选名（如 epoch1 / sel_f0.25）")
     ap.add_argument("--prune", action="store_true", help="删掉所有未选中的 sel_f*")
+    ap.add_argument("--auto", action="store_true",
+                    help="固定管线用：所有候选都有审计时按（有梯度多 → 决策位熵高）自动选，写 <out>/SELECTED 软链；缺审计就红，不猜")
     args = ap.parse_args(argv)
 
     out = args.out_dir if args.out_dir.is_absolute() else ROOT / args.out_dir
@@ -181,6 +183,18 @@ def main(argv=None) -> int:
         print("\n⚠️ **不要拿 val_loss 选** —— 它在这份数据上不含信息（见本脚本文档串）")
         print("⚠️ 先只跑熵（≈1 分钟/点）排序，前二才跑 eval_local（15 分钟/点）")
 
+    if args.auto:
+        if missing:
+            print("\n🔴 --auto 要求每个候选都有 entropy + eval 审计（上面列了缺的）—— 先跑 sft-eval")
+            return 1
+        ranked = sorted(rows, key=lambda r: (-(r[3] or 0), -(r[2] or 0.0)))
+        best = ranked[0][0]
+        args.keep = best.name
+        link = out / "SELECTED"
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(best.name)
+        print(f"\n✅ --auto 选中 {best.name}（有梯度 {ranked[0][3]} · 熵 {ranked[0][2]}）→ {link}")
     if not args.prune:
         if args.keep:
             print(f"\n（未加 --prune，不会删任何东西。要清理：--keep {args.keep} --prune）")

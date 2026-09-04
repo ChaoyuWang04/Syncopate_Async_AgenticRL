@@ -114,6 +114,7 @@ def main() -> int:
     ap.add_argument("--probe-every", type=int, default=20, help="零掩码对照断言间隔")
     ap.add_argument("--no-wandb", action="store_true")
     ap.add_argument("--adapter", default="", help="学生起点 LoRA（v16 SFT/RL 产物）；空 = 底座上新建 r=32 LoRA（冒烟）")
+    ap.add_argument("--base", default=STUDENT_BASE, help="学生底座；RL adapter 训在合并 SFT 模型之上时要传那个合并模型（评测同底）")
     ap.add_argument("--lora-targets", default=None, help="新建 LoRA 的 target_modules 正则；默认同 sft.py 的 attn_shared")
     ap.add_argument("--max-steps", type=int, default=0, help="冒烟：跑满 N 步就停（0=不限）")
     args = ap.parse_args()
@@ -139,12 +140,13 @@ def main() -> int:
     from syncopate.train.rollout_budget import (SAMPLING_TEMPERATURE,
                                                 SAMPLING_TOP_K, SAMPLING_TOP_P)
 
-    tok = AutoTokenizer.from_pretrained(STUDENT_BASE)
+    STUDENT_BASE_ = args.base
+    tok = AutoTokenizer.from_pretrained(STUDENT_BASE_)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     log("加载学生…")
     student = AutoModelForCausalLM.from_pretrained(
-        STUDENT_BASE, dtype=torch.bfloat16, device_map={"": rank})
+        STUDENT_BASE_, dtype=torch.bfloat16, device_map={"": rank})
     if args.adapter:
         student = PeftModel.from_pretrained(student, args.adapter, is_trainable=True)
     else:
@@ -166,7 +168,7 @@ def main() -> int:
     assert _ttok.get_vocab() == tok.get_vocab(), "🔴 学生/教师 vocab 不同 ⇒ 逐 token 蒸馏非法（裁定⑬）"
     log("[opd-vocab] 学生/教师 vocab 逐项相同 ✓（教师侧用学生模板渲染的同一串 token id）")
     anchor_base = AutoModelForCausalLM.from_pretrained(
-        STUDENT_BASE, dtype=torch.bfloat16,
+        STUDENT_BASE_, dtype=torch.bfloat16,
         device_map={"": aux_dev})
     anchor = (PeftModel.from_pretrained(anchor_base, args.adapter, is_trainable=False).eval()
               if args.adapter else anchor_base.eval())

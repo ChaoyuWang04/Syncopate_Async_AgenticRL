@@ -22,6 +22,7 @@ from syncopate.core.runner import run_plan
 from syncopate.core.verifier_engine import score_trajectory
 from syncopate.domains.adcampaign import build_domain
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DATA_VERSION as _DV, DEFAULT_BATCH_DIR as _DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR as _DEFAULT_SPLIT_DIR  # noqa: E402
 
 
 def _score_gold(bundle, domain, latency_scale: float):
@@ -214,20 +215,21 @@ def build_parser() -> argparse.ArgumentParser:
     build.set_defaults(func=cmd_cases_build)
 
     gen = cases.add_parser("generate", help="按配额批量生成 case（含 gold 实跑验证）")
-    gen.add_argument("--spec", default="configs/buckets/v3.yaml")
-    gen.add_argument("--out", default="data/batches/v3")
+    # 2026-09-04（Chaoyu：每一段必须是固定管线、默认值就能跑通）：默认值全部从 DATA_VERSION 派生，不再写死旧版本
+    gen.add_argument("--spec", default=f"configs/buckets/{_DV}.yaml")
+    gen.add_argument("--out", default=_DEFAULT_BATCH_DIR)
     gen.set_defaults(func=cmd_cases_generate)
 
     data = sub.add_parser("data", help="训练数据构造").add_subparsers(dest="action", required=True)
     dbuild = data.add_parser("build", help="四件套 -> parquet")
     dbuild.add_argument("--pool", choices=["rl", "sft"], required=True)
-    dbuild.add_argument("--batch", default="data/batches/v3")
+    dbuild.add_argument("--batch", default=_DEFAULT_BATCH_DIR)
     dbuild.add_argument("--out", default=None)
     dbuild.add_argument("--val-every", type=int, default=5)
     dbuild.add_argument("--artifact-root", default="data/rollouts")
     dbuild.add_argument("--model", default=TEST_TOKENIZER, help="SFT 分词用")
     dbuild.add_argument("--max-length", type=int, default=8192)
-    dbuild.add_argument("--split-dir", default=None,
+    dbuild.add_argument("--split-dir", default=_DEFAULT_SPLIT_DIR,
                         help="三桶目录（如 data/splits/v2），只取 --pool 对应的桶。"
                              "★ 不给就必须显式 --full-batch")
     dbuild.add_argument("--full-batch", action="store_true",
@@ -235,8 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
     dbuild.set_defaults(func=lambda a: cmd_data_build(_default_out(a)))
 
     dsplit = data.add_parser("split", help="切三桶（EVAL 冻结 / SFT / RL）并实测互斥性")
-    dsplit.add_argument("--batch", default="data/batches/v2")
-    dsplit.add_argument("--out", default="data/splits/v2")
+    dsplit.add_argument("--batch", default=_DEFAULT_BATCH_DIR)
+    dsplit.add_argument("--out", default=_DEFAULT_SPLIT_DIR)
     dsplit.add_argument("--eval-per-stratum", type=int, default=2)
     dsplit.add_argument("--sft-ratio", type=float, default=0.20)
     dsplit.add_argument("--dead-from", default=None,
@@ -248,7 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
     dsplit.set_defaults(func=cmd_data_split)
 
     dreport = data.add_parser("report", help="训练数据分布体检")
-    dreport.add_argument("--batch", default="data/batches/v2")
+    dreport.add_argument("--batch", default=_DEFAULT_BATCH_DIR)
     dreport.add_argument("--val-every", type=int, default=8)
     dreport.add_argument("--out", default=None)
     dreport.set_defaults(func=cmd_data_report)
@@ -261,7 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _default_out(args: argparse.Namespace) -> argparse.Namespace:
     if args.out is None:
-        args.out = f"data/{args.pool}/v3"
+        args.out = f"data/{args.pool}/{_DV}"
     return args
 
 

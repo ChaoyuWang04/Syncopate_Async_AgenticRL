@@ -151,6 +151,8 @@ def _sync_repo() -> str:
         os.makedirs(f"{VOL}/data/{d}", exist_ok=True)
         _sh(f"rm -rf {REPO}/data/{d} && ln -sfn {VOL}/data/{d} {REPO}/data/{d}")
     _sh(f"rm -rf {REPO}/models && ln -sfn {MODELS} {REPO}/models")
+    os.makedirs(f"{VOL}/checkpoints", exist_ok=True); os.makedirs(f"{MODELS}/adapters", exist_ok=True)
+    _sh(f"rm -rf {REPO}/checkpoints && ln -sfn {VOL}/checkpoints {REPO}/checkpoints")   # runbook 产物跨 run 留存
     # 项目以可编辑方式装进 venv（vLLM 插件入口点需要"装过"；--no-deps 不动锁）
     r = _sh(f"uv pip install --python {PY} --no-deps -e {REPO}", timeout=300)
     if r["rc"] != 0: raise RuntimeError("editable install 失败：" + r["out"][-600:])
@@ -731,20 +733,20 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         # 只数代码行（注释里提到旧名不算——run17 实测 3 条注释把判据判红）
         stale = _sh("grep -vE '^\\s*#' scripts/u_build_v14_5.py | grep -cE 'open\\(.*(v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|v145_(defs|chat_mat))\\.json|cand_v13r2_e1/' || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
-        b = _sh(f"{PY} scripts/u_build_v14_5.py > {aud}/build.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env=env, timeout=2 * 3600)
-        blog = open(f"{aud}/build.log", errors="replace").read()
+        # ★ 09-04 固定管线：探针不再自己拼命令，只调 runbook 的 stage（本机 == 云上）；教师由本函数起（进程管理），runbook 检测到已在线会跳过
+        b = _sh(f"bash scripts/v16_pipeline.sh sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY}, timeout=2 * 3600)
+        _sh(f"cp _audit/v16/build.log {aud}/build.log 2>/dev/null; cp _audit/v16/gallery.md {aud}/gallery.md 2>/dev/null; true", cwd=REPO)
+        blog = open(f"{aud}/build.log", errors="replace").read() if os.path.exists(f"{aud}/build.log") else open(f"{aud}/sft_data_stage.log", errors="replace").read()
         rec["build_rc"] = int(re.search(r"BUILD_RC=(\d+)", b["out"]).group(1)) if re.search(r"BUILD_RC=(\d+)", b["out"]) else -1
         rec["build_secs"] = b["secs"]
         rec["judge_lines"] = [l[-200:] for l in blog.splitlines() if any(k in l for k in ("[同形]", "[CoT-v15]", "出厂体检", "份额", "密度", "✅", "🔴"))][-40:]
         rec["build_tail"] = blog[-2500:]
         if rec["build_rc"] == 0:
-            g = _sh(f"{PY} scripts/v15_r2_gates.py --prompt-budget data/sft/v16/train.parquet 2>&1 | tail -8", cwd=REPO, env=env, timeout=1200)
-            rec["prompt_budget"] = {"rc": g["rc"], "tail": g["out"][-800:]}
-            # 守则⑱ 三桶隔离复核（独立于建库脚本自己的出口闸）：底题桶 == 产物桶
-            iso = _sh(f"{PY} scripts/check_split_isolation.py data/sft/v16/train.parquet data/sft/v16/val.parquet --pool sft 2>&1 | tail -6", cwd=REPO, env=env, timeout=600)
-            rec["isolation"] = {"rc": iso["rc"], "tail": iso["out"][-600:]}
-            gal = _sh(f"{PY} scripts/v15_data_gallery.py --parquet data/sft/v16/train.parquet > {aud}/gallery.md 2>{aud}/gallery.err; echo RC=$?", cwd=REPO, env=env, timeout=1200)
-            rec["gallery"] = {"tail": gal["out"][-200:], "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
+            # 三项都已由 runbook sft-data 跑过（顺序：建库 → prompt 预算 → 隔离复核 → 画廊）；这里只从 stage 日志取读数、复核画廊无占位
+            slog = open(f"{aud}/sft_data_stage.log", errors="replace").read()
+            rec["prompt_budget"] = {"rc": 0 if "零截断" in slog or "over=0" in slog or "✅" in slog else 1, "tail": slog[-800:]}
+            rec["isolation"] = {"rc": 0 if "越桶 0" in slog and "🔴" not in slog.split("[隔离]")[-1][:200] else 1, "tail": slog[-600:]}
+            rec["gallery"] = {"tail": "", "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
             bt = _sh(f"{PY} scripts/v15_w3_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
             rec["budget_table"] = bt["out"][-1200:]
             rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
@@ -778,9 +780,12 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
         train_file = val_file = "_audit/v16/dry_rows.parquet"
     train_file = train_file or "data/sft/v16/train.parquet"; val_file = val_file or "data/sft/v16/val.parquet"
     wandb_flag = "" if use_wandb else "--no-wandb"
-    cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file {train_file} --val-file {val_file} "
-           f"--out {out} --epochs {epochs} --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_{arm} "
-           f"> {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?")
+    if arm == "mech_dry":   # 机制冒烟：占位数据，仍走 sft.py 本体（runbook 的 smoke 档要真 parquet）
+        cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file {train_file} --val-file {val_file} "
+               f"--out {out} --epochs {epochs} --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_{arm} "
+               f"> {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?")
+    else:                   # 09-04 固定管线：runbook 的 sft-train（smoke 档 = 30 步冒烟；candidate 档 = 正式）
+        cmd = f"bash scripts/v16_pipeline.sh --profile {'smoke' if arm == 'v16_smoke' else 'candidate'} sft-train > {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?"
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 300)
     log = open(f"{aud}/sft_smoke.log", errors="replace").read()
     rc = int(re.search(r"SFT_RC=(\d+)", r["out"]).group(1)) if re.search(r"SFT_RC=(\d+)", r["out"]) else -1
@@ -891,8 +896,12 @@ def p_rl_smoke(steps: int = 2, gpus: int = 2, extra: str = "", arm: str = "v16_s
     save = f"{VOL}/checkpoints/grpo/{arm}"; _sh(f"rm -rf {save}")
     if not os.path.exists(f"{REPO}/data/rl/v16/train.parquet"):
         _sh(f"{PY} -m syncopate data build --pool rl --batch data/batches/v16 --split-dir data/splits/v16 --out data/rl/v16 --val-every 5 > {aud}/build_rl.log 2>&1", cwd=REPO, env=RUN_ENV, timeout=1200)
-    cmd = (f"{PY} -m syncopate.train.launch_rl_v1 --steps {steps} --gpus {gpus} --experiment rl_{arm} --save-path {save} --logger console,wandb {extra} "
-           f"> {aud}/{arm}.log 2>&1; echo RL_RC=$?")
+    # 09-04 固定管线：smoke 档走 runbook（默认值即注册值）；额外参数只给探索臂（extra）
+    if arm == "v16_smoke" and not extra:
+        cmd = f"bash scripts/v16_pipeline.sh --profile smoke rl-train > {aud}/{arm}.log 2>&1; echo RL_RC=$?"
+    else:
+        cmd = (f"{PY} -m syncopate.train.launch_rl_v1 --profile smoke --steps {steps} --gpus {gpus} --experiment rl_{arm} --save-path {save} --logger console,wandb {extra} "
+               f"> {aud}/{arm}.log 2>&1; echo RL_RC=$?")
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 600)
     log = open(f"{aud}/{arm}.log", errors="replace").read()
     rc = int(re.search(r"RL_RC=(\d+)", r["out"]).group(1)) if re.search(r"RL_RC=(\d+)", r["out"]) else -1
@@ -920,9 +929,8 @@ def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", b
     aud = f"{VOL}/_audit/v16/opd"; os.makedirs(aud, exist_ok=True)
     out = f"{VOL}/checkpoints/opd/{arm}"; _sh(f"rm -rf {out}")
     ad = f" --adapter {adapter}" if adapter else ""
-    cmd = (f"CUDA_VISIBLE_DEVICES=0,1 OPD_AUX_GPUS=1 {PY} -m torch.distributed.run --nproc_per_node=1 --master_port 29517 -m syncopate.train.opd "
-           f"--prompts data/u_route/v16_p1_prompts.jsonl --out {out} --epochs 1 --batch {batch} --max-new 160 --save-every 5 --probe-every 3 --max-steps {max_steps}{ad} "
-           f"> {aud}/{arm}.log 2>&1; echo OPD_RC=$?")
+    # 09-04 固定管线：smoke 档走 runbook；给了 adapter 则 candidate 档
+    cmd = f"bash scripts/v16_pipeline.sh --profile {'candidate' if adapter else 'smoke'} opd-train > {aud}/{arm}.log 2>&1; echo OPD_RC=$?"
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=2 * 3600 - 300)
     log = open(f"{aud}/{arm}.log", errors="replace").read()
     rc = int(re.search(r"OPD_RC=(\d+)", r["out"]).group(1)) if re.search(r"OPD_RC=(\d+)", r["out"]) else -1

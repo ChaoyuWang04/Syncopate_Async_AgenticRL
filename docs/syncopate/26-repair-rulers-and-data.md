@@ -649,6 +649,32 @@ SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新�
 ⚠️ S2 判据换值：Modal 上 rebuild_v16 必须与新 SHA 逐一相同；Volume 上旧 v16 批次/切分/缓存全部作废重生成（一个写者：建库前先 rebuild）
 ```
 
+**★ 固定管线 runbook（09-04 Chaoyu：每一段必须固定脚本、默认值直接跑就健康）= `scripts/v16_pipeline.sh`；stage 表（事实来自代码，不是记忆）**
+
+| stage | 底层入口（默认值来源） | 产物 | 判据 | 状态 |
+|---|---|---|---|---|
+| cases | `syncopate cases generate`（spec/out ← DATA_VERSION） | data/batches/v16 | gold 实跑验证、指纹去重 | ✅ 本机 2030 条 |
+| menus | `set_tool_menus.py`（--sft-audit=_audit/v8_sft_epoch1.json，git 内冻结输入；v15 prompt 一律全量，此表只供 verifier/routing） | case.tool_menu | — | ✅ |
+| split | `syncopate data split`（batch/out ← DATA_VERSION；eval-per-stratum 2 · sft-ratio 0.20） | data/splits/v16 | 三桶互斥实测 | ✅ 401/597/1032 |
+| gates | `check_data_gates.py` | — | D1–D11 | ✅ 全绿 |
+| rl-data | `syncopate data build --pool rl`（val-every 5）+ 隔离复核 | data/rl/v16 | 出口隔离闸 | ✅ 云上曾建 660/165（旧切分；重建待跑） |
+| teacher | vLLM 27B @8210（max_model_len ← rollout_budget） | 进程 | /health | ✅ |
+| sft-data | `u_build_v14_5.py` + prompt 预算 + 隔离复核 + 画廊 | data/sft/v16 | 全部闸 + 出厂体检 + 隔离 | 🟡 run24 到出厂体检；新切分待 run25 |
+| sft-train | `syncopate.train.sft`（model=STUDENT · 数据=DATA_VERSION · epochs 3 · bs 2×accum 8 · lr 1e-4 · LoRA r32/a64 attn_shared · save-epochs 1.5,2.5） | checkpoints/sft/v16 | loss/grad 有限 · ΔW>0 | ✅ 机制冒烟；真数据待 |
+| sft-eval | `entropy`（limit 24）+ `eval_local`（冻结 EVAL · 8 样本 · T=1） | _audit/v16_{entropy,eval}_* | — | ⬜ |
+| sft-select | `select_sft_ckpt.py --auto --prune`（有梯度多 → 熵高） | SELECTED 软链 | 缺审计即红 | ⬜（--auto 新加） |
+| merge | `merge_adapter`（base=STUDENT） | models/Qwen3.6-35B-A3B-sft-v16 | bf16 保真 | ⬜ |
+| exam | `v15_r5_exam_chain.sh`（candidate 4 遍 / smoke 1 遍 40 题）→ judge_v4 → triage | logs/u_route · logs/v15_r5 | rc 0 · 三查出表 | ✅ 链路冒烟（底座） |
+| rl-train | `launch_rl_v1 --profile candidate`（model=合并 SFT · steps 400↓限 · n 8 · save-freq 25 · lr 3e-5 · FSDP2 · LoRA r32 排除专家 · gpus 2） | checkpoints/grpo/v16_cand | pool 行 · loss/grad 有限 · reward 非 0 | ✅ smoke 2 步；candidate 待 |
+| rl-adapter | `verl.model_merger merge --backend fsdp` + `check_lora_adapter.py` | models/adapters/rl_v16_candidate/lora_adapter | adapter 张量非零 | ⬜ **待云上验证**（FSDP2 分片 + save_lora_only） |
+| rl-eval | `eval_local --model 合并SFT --adapter RL` | _audit/v16_eval_rl_candidate.json | — | ⬜ |
+| opd-train | `torchrun opd --base <同 adapter 的底座> --adapter <RL 或 SFT 选中点>`（epochs 3 · batch 8 · lr 2e-5 · max-new 2048） | checkpoints/opd/v16_candidate | vocab 断言 · KL 有限 · adapter 落盘 | ✅ 机制冒烟 |
+| opd-eval | `eval_local --model <同底> --adapter OPD final` | _audit/v16_eval_opd_candidate.json | — | ⬜ |
+
+切分格稀疏度（09-04 本机，124 格）：33 格满足「总数<8 或 SFT<2 或 EVAL<2」；最薄 INJ/memory_content/id_given 共 4 条（eval 1 / sft 2 / rl 1），
+FAIL 家族多格总数 6–7；BUD/executed/id_given、SCALE/over·tight、CONF/aligned 等格 **SFT=0**（难度代理排序把它们全排到 RL 桶）。
+⇒ 待裁：是否给 SFT 加「每格 ≥1」保底（split._apply_sft_floors 现只按模板/结局/行为保底，不按格）。
+
 **全量自检：建库链上"按旧数字定的闸"（09-04 Chaoyu：别出一条修一条，先全量扫）**
 
 | 数字 | 出处 | 来历 | 处置 |

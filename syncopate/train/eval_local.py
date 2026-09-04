@@ -476,7 +476,7 @@ def _report_recovery(rows: list[dict]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地自回归推理评测")
-    parser.add_argument("--model", default=TEST_TOKENIZER)
+    parser.add_argument("--model", default=STUDENT_MODEL)   # 2026-09-04：默认评学生底座（测试要小模型自己传）
     parser.add_argument("--adapter", default=None, help="LoRA adapter 目录，不给就是基座")
     # ★ 默认值来自**一份共用常量**（`pipeline/split.py`）——此前这里写死 v2，
     #   而 `data/batches/v2` 在本机根本不存在。⚠️ 这两个参数必须同时动，见下面的断言。
@@ -512,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="评测时把 480 秒审核压掉；测异步时才设 1.0")
     parser.add_argument("--gpu-util", type=float, default=0.85,
                         help="vLLM 的显存份额。评测独占整卡，可以给大 —— KV 池越大命中率越高")
-    parser.add_argument("--out", default=None)
+    parser.add_argument("--out", default=None, help="审计 json；不给则按 _audit/<DATA_VERSION>_eval_<模型或adapter名>.json 落盘（评测必须有产物）")
     parser.add_argument("--families", default="", help="只评这些模板族（逗号分隔，如 BUD,DIA,FAIL,RAG,SCALE）；空=全部")
     parser.add_argument("--from-audit", default=None,
                         help="★ 不跑模型，直接对一份已有的审计 JSON 重出报告。"
@@ -521,6 +521,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.max_new_tokens is None:
         args.max_new_tokens = MAX_RESPONSE_LENGTH   # 预算本身已随 THINK_ON 切换（2048/8192）
+    if args.out is None and not args.from_audit:
+        _tag = Path(args.adapter).name if args.adapter else Path(args.model).name
+        _dv = data_version_of(args.split_dir) if args.split_dir else "nosplit"
+        args.out = f"_audit/{_dv}_eval_{_tag}.json"
+        print(f"[评测] --out 未给 ⇒ {args.out}")
 
     if args.from_audit:
         return _rereport(ROOT / args.from_audit, ROOT / args.batch)

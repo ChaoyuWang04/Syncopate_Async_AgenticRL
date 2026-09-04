@@ -103,18 +103,22 @@ def build_overrides(a: argparse.Namespace) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Syncopate GRPO 启动器（v16 · verl 0.9 V1 · B200）")
-    p.add_argument("--model", default=STUDENT_MODEL)
+    # ★ 2026-09-04（Chaoyu：默认值必须是"直接跑就健康"的正式值）：两套注册档位，smoke 只验机制、candidate 才是训练。
+    #   candidate 的数字来源：步数下限 400（守则⑩，真正该停看 pool_readout 的零梯度率平台）· save-freq 25（E29 口径）·
+    #   组大小 8（GRPO 默认）· 模型 = 合并后的 SFT 模型（RL 起点不许是裸底座，launch_rl_v1 断言 lora_adapter 不在目录里）。
+    p.add_argument("--profile", default="candidate", choices=["smoke", "candidate"])
+    p.add_argument("--model", default=None, help="candidate 默认 models/<学生名>-sft-<DATA_VERSION>（合并后）；smoke 默认学生底座")
     p.add_argument("--train-file", default=f"{DEFAULT_RL_DIR}/train.parquet")
     p.add_argument("--val-file", default=f"{DEFAULT_RL_DIR}/val.parquet")
-    p.add_argument("--save-path", default="checkpoints/grpo/v16_smoke")
+    p.add_argument("--save-path", default=None)
     p.add_argument("--project", default="syncopate-b200")
-    p.add_argument("--experiment", default="rl_v16_smoke")
+    p.add_argument("--experiment", default=None)
     p.add_argument("--logger", default="console,wandb")
     p.add_argument("--mode", default="sync", choices=["sync", "colocate_async", "separate_async"])
     p.add_argument("--gpus", type=int, default=2)
-    p.add_argument("--steps", type=int, default=2)
+    p.add_argument("--steps", type=int, default=None, help="smoke 2 · candidate 400（下限，见守则⑩）")
     p.add_argument("--seed", type=int, default=1234)
-    p.add_argument("--rollout-n", type=int, default=4)
+    p.add_argument("--rollout-n", type=int, default=None, help="smoke 4 · candidate 8")
     p.add_argument("--train-batch-size", type=int, default=2)
     p.add_argument("--val-batch-size", type=int, default=2)
     p.add_argument("--ppo-mini-batch-size", type=int, default=2)
@@ -133,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--attn-implementation", default="flash_attention_2")
     p.add_argument("--prefix-grouper", default="False", choices=["True", "False"])
     p.add_argument("--lr", default="3e-5")
-    p.add_argument("--save-freq", type=int, default=2)
+    p.add_argument("--save-freq", type=int, default=None, help="smoke 2 · candidate 25")
     p.add_argument("--save-lora-only", default="True", choices=["True", "False"])
     p.add_argument("--vllm-log-level", default="INFO")
     p.add_argument("--latency-scale", type=float, default=0.0, help="冒烟 0；正式异步对照实验用 0.01/1.0")
@@ -144,6 +148,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("extra", nargs="*")
     a = p.parse_args(argv)
     a.prefix_grouper = a.prefix_grouper == "True"; a.save_lora_only = a.save_lora_only == "True"
+    from syncopate.pipeline.split import DATA_VERSION as _DV
+    _student = Path(STUDENT_MODEL).name
+    _prof = {"smoke": dict(model=STUDENT_MODEL, steps=2, rollout_n=4, save_freq=2, save_path=f"checkpoints/grpo/{_DV}_smoke", experiment=f"rl_{_DV}_smoke"),
+             "candidate": dict(model=f"models/{_student}-sft-{_DV}", steps=400, rollout_n=8, save_freq=25, save_path=f"checkpoints/grpo/{_DV}_cand", experiment=f"rl_{_DV}_cand")}[a.profile]
+    for k, v in _prof.items():
+        if getattr(a, k) is None:
+            setattr(a, k, v)
+    if a.profile == "candidate" and not Path(a.model).exists():
+        raise SystemExit(f"🔴 candidate 档要的 RL 起点 {a.model} 不存在：先跑 sft-train → sft-select → merge（scripts/v16_pipeline.sh）")
+    print(f"[rl-v1] profile={a.profile} model={a.model} steps={a.steps} n={a.rollout_n} save_freq={a.save_freq} save_path={a.save_path}", flush=True)
 
     from syncopate.train.rollout_budget import MAX_RESPONSE_LENGTH, THINK_ON
     from syncopate.core.contract import IS_V15

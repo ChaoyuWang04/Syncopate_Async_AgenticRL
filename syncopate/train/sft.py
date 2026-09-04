@@ -328,10 +328,12 @@ def _save_selection_point(model, out_root: Path, frac: float, step: int) -> Path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Syncopate 最小 LoRA SFT")
-    parser.add_argument("--model", default=TEST_TOKENIZER)
-    parser.add_argument("--train-file", default="data/sft/v3/train.parquet")
-    parser.add_argument("--val-file", default="data/sft/v3/val.parquet")
-    parser.add_argument("--out", default="checkpoints/sft/run")
+    # 2026-09-04：默认值 = 固定管线的正式值（学生底座 · DATA_VERSION 数据 · 版本化输出）；测试要小模型自己显式传
+    from syncopate.pipeline.split import DATA_VERSION as _DV, DEFAULT_SFT_DIR as _SFT_DIR
+    parser.add_argument("--model", default=STUDENT_MODEL)
+    parser.add_argument("--train-file", default=f"{_SFT_DIR}/train.parquet")
+    parser.add_argument("--val-file", default=f"{_SFT_DIR}/val.parquet")
+    parser.add_argument("--out", default=f"checkpoints/sft/{_DV}")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--grad-accum", type=int, default=8)

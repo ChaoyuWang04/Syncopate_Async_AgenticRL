@@ -204,7 +204,10 @@ E21 就是被一句顺手写的「DDP 下各 rank 的 LoRA 应该相同」炸出
 **⑧ 提交按路径 `git add <具体文件>`，别用 `-a`** —— 两条线共用一个仓库。
 
 **⑨ 跑训练只走固定管线，契约参数一个都不许在脚本里传。**（2026-08-19 立，判据见 `08 §4.0`）
-入口只有 `syncopate.train.sft` 和 `syncopate.train.launch_rl`；
+★ 2026-09-04 起（Chaoyu：每一段必须是固定脚本、默认值直接跑就健康、不许依赖谁临场敲参数）：**唯一入口 = `scripts/v16_pipeline.sh <stage|all>`**
+（数据→SFT+eval→RL+eval→OPD+eval 共 17 个 stage，`--dry-run` 列命令，`--profile smoke|candidate` 两套注册档位；云上探针只调它，不再各写命令；
+判据 `tests/pipeline/test_pipeline_defaults.py`：所有入口默认值从 DATA_VERSION/model_paths 派生、runbook 每个 stage 可列出且引用的脚本都存在）。
+底层入口仍是 `syncopate.train.sft` / `syncopate.train.launch_rl_v1`（verl 0.9）/ `syncopate.train.opd` / `syncopate.train.eval_local`；
 长度预算与采样参数的唯一来源是 `rollout_budget.py`，**不传就是对的**。
 ⚠️ 判据是「**一律不许传**」而不是「传的值要对」—— 因为 2026-08-18 那 11 个脚本
 **传的值当时是对的**，正是它们成了下一次漂移的来源。

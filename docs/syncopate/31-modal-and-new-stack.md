@@ -123,6 +123,8 @@ run16  前五段全过；CoT 蒸馏采样成功（≥14 条「收」）但成行
 ## 5 · 怎么起（命令都在 `modal_app/README.md`，这里只给顺序）
 
 ```
+★ 固定管线   bash scripts/v16_pipeline.sh [--dry-run] [--profile smoke|candidate] <stage|all>   # 09-04 起唯一入口（本机 == 云上）
+             stages: cases menus split gates rl-data teacher sft-data sft-train sft-eval sft-select merge exam rl-train rl-adapter rl-eval opd-train opd-eval
 环境健康   modal run modal_app/stack_probe.py --steps versions,gpu,nccl        # 换镜像/换卡后
 建库       modal run --detach modal_app/stack_probe.py --steps build_v16       # 读数 /vol/_audit/v16/
 冒烟       modal run --detach modal_app/stack_probe.py --steps sft_smoke --max-steps 30
