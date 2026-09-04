@@ -1293,7 +1293,7 @@ async def main() -> int:
     # ── 门禁 ──
     # ★ 09-04 run17 实案：这里原来写死 419（v13 冻结桶行数）——v16 按"每 6 取 1"派生是 420 ⇒ 按旧单位标定的阈值又一次不报错地失效。
     #   判据改成「两个东西应当相同」：重放行数 == 冻结清单行数（派生，不写数）。
-    assert DRY or len(t13) == len(_train_ids), f"🔴 冻结校验失败：重放 {len(t13)} 行 != 冻结清单 {len(_train_ids)} 行"
+    assert len(t13) == len(_train_ids), f"🔴 冻结校验失败：重放 {len(t13)} 行 != 冻结清单 {len(_train_ids)} 行"   # DRY 也核（09-04：419 那次 DRY 跳过了）
     tok_by = {"v13": int(t13.supervised_tokens.sum()),
               "l2": sum(r["supervised_tokens"] for r in l2),
               "l1": sum(r["supervised_tokens"] for r in l1),
@@ -1337,10 +1337,10 @@ async def main() -> int:
         _asi(_dry, Path(DEFAULT_SPLIT_DIR), "sft")          # 三桶隔离③：DRY 也走出口闸
         _dp = Path("_audit/v16/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
         _dry.to_parquet(_dp)
-        print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）")
-        print(f"[DRY] 演练完成：行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"
+        print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）· 不提前返回，继续走全部结构闸")
+        print(f"[DRY] 行数 {dict((k, len(v)) for k, v in [('l2', l2), ('l1', l1), ('chat', chat_rows), ('fam', fam), ('cot', cot)])}"
               f" · 缺真实终答的历史 {sc['missing_real_reply'][:5]}")
-        return 0
+        # ★ 09-04 Chaoyu：结构闸必须本机就能验（419 冻结行数 / 考场泄漏 / think 双开头都是 DRY 提前返回才漏到云上的）
     if IS_V15:
         # ── 闸：人话不许出现在机器通道 + 信令自由文本不许是同一句（`25 §7㉗㉘`）──
         #
@@ -1423,7 +1423,7 @@ async def main() -> int:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
-    out = Path(DEFAULT_SFT_DIR)
+    out = Path("_audit/v16/dry") if DRY else Path(DEFAULT_SFT_DIR)   # DRY 产物落审计目录；正式目录只许正式建库写
     # ★ 三桶隔离②③（09-04）：每行登记底题；落盘只走唯一带闸写盘函数（底题桶 == 产物桶，越桶直接抛）
     from u_build_v15_multiturn import SOURCE_OF as _SRC
     from syncopate.pipeline.split import base_case_id as _bcid
@@ -1455,6 +1455,9 @@ async def main() -> int:
         "v15_data_audit", Path(__file__).resolve().parent / "v15_data_audit.py")
     _mod = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_mod)
     _audit = _mod.audit
+    if DRY:
+        print(f"[DRY] 出厂体检跳过（依赖教师真文本；结构闸 + 出口写盘 + 隔离已全部走过）· 产物 {out}/train.parquet")
+        return 0
     rep = _audit(out / "train.parquet")
     if not rep["ok"]:
         print("🔴 出厂体检未通过 ⇒ 不许进训练（见上面的 🔴 行）")
