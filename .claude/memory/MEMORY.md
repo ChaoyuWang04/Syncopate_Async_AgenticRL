@@ -1,4 +1,5 @@
-- [Modal+B200 新栈现场](modal-migration-state.md) — ★09-04 收口：全管线机器部分冒烟通过；唯一入口 scripts/v16_pipeline.sh；守则⑱ 隔离硬机制；题库 2030；SFT 训练集 run27 在跑；入口 docs/syncopate/31
+- [Modal+B200 新栈现场](modal-migration-state.md) — ★09-05：run27 三红修法落地 + 全管线逐段审查修完（旧名脚本全改 v16_*、v8 审计去掉、泄漏闸补上、考场链三处必死修了）；run28 观察模式在云上跑；入口 docs/syncopate/31
+- [被调脚本也得是当前版本](pipeline-callees-must-be-current-too.md) — ★09-05 Chaoyu：runbook 固定"调谁"≠被调的是新版；一天查出 9 类旧东西还在起作用且不报错；旧版本号的名字本身就是线索
 - [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★09-03：W0–W3 本机收官（九条裁定全落地）；下一步 Modal PRO 6000×2 做 W4/W5；B200 归 infra 探针
 - [模型只装知识不装运行态身份](model-learns-knowledge-not-runtime-identity.md) — ★09-02 裁定⑨：account_id/清单一律 runtime 注入；数据要逐条渲染给人看（画廊抓到 4 条脚本没抓到的）
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
