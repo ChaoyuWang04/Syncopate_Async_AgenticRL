@@ -88,6 +88,22 @@ _SEED = [0]
 
 
 OFFLINE = os.environ.get("SYNCOPATE_TEACHER_OFFLINE", "0") == "1"   # 09-04：离线全量建库——教师材料只能来自缓存，缺一条就红（本机验闸用）
+# ★ 09-04 Chaoyu：「为什么不放开闸观察全貌，而是红一道停一道」——闸的观察模式。
+#   strict（默认）：闸红即停（正式建库）；report：所有闸都算、都打印、不中断，产物落 _audit/<DV>/report/（不进正式目录），末尾汇总红绿表，退出码仍非 0。
+GATE_MODE = os.environ.get("U_BUILD_GATES", "strict")
+GATE_FAILS: list[str] = []
+
+
+def gate(cond, msg) -> bool:
+    """所有数量/内容闸的唯一入口：strict 抛 AssertionError；report 记账继续。msg 可以是字符串或零参 lambda（延迟格式化）。"""
+    if cond:
+        return True
+    text = msg() if callable(msg) else str(msg)
+    if GATE_MODE == "report":
+        GATE_FAILS.append(text)
+        print(f"  [闸-观察] {text}", flush=True)
+        return False
+    raise AssertionError(text)
 
 
 async def teach(client, base, prompt, sys_prompt="", max_tokens=200, temp=0.8):
@@ -599,8 +615,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
     _n = sum(v for k, v in _main.items() if k != "exception")
     _trunc = drop.get("no_close_truncated(length)", 0) / max(1, _n)
     print(f"[CoT-trunc] 教师 CoT 截断率 {_trunc:.1%}（{drop.get('no_close_truncated(length)', 0)}/{_n}，闸 ≤{THINK_TRUNC_RATE_MAX:.0%}，上限 {THINK_MAX_TOKENS} tok）")
-    assert _n == 0 or _trunc <= THINK_TRUNC_RATE_MAX, (
-        f"🔴 教师 CoT 截断率 {_trunc:.1%} > {THINK_TRUNC_RATE_MAX:.0%} —— THINK_MAX_TOKENS={THINK_MAX_TOKENS} 不够，抬上限并重新注册")
+    gate(_n == 0 or _trunc <= THINK_TRUNC_RATE_MAX,
+         f"🔴 教师 CoT 截断率 {_trunc:.1%} > {THINK_TRUNC_RATE_MAX:.0%} —— THINK_MAX_TOKENS={THINK_MAX_TOKENS} 不够，抬上限并重新注册")
     return out
 
 
@@ -905,15 +921,15 @@ def density_gate(rows, tokenizer, name):
     print(f"  [密度:{name}] 最高频尾 {top[1]}/{len(reps)}={top[1]/len(reps):.0%} "
           f"({top[0]!r}) · 病句 {sick} · distinct3={dist3:.2f}")
     # 比例闸只在样本 ≥20 时判（DRY 每桶 6 行 ⇒ 1/6 就是 17%，量的是样本量不是复读）；正式建库 L2/L1/chat 都 ≥80
-    assert len(reps) < 20 or top[1] / len(reps) <= 0.10, f"🔴 {name} 话术密度超标"
-    assert sick == 0, f"🔴 {name} 病句 {sick} 条"
+    gate(len(reps) < 20 or top[1] / len(reps) <= 0.10, f"🔴 {name} 话术密度超标")
+    gate(sick == 0, f"🔴 {name} 病句 {sick} 条")
     if reports:
         rtails = Counter(reports)
         rtop = rtails.most_common(1)[0]
         print(f"  [密度:{name}/report] 最高频参数组 {rtop[1]}/{len(reports)}="
               f"{rtop[1]/len(reports):.0%}")
-        assert rtop[1] / len(reports) <= 0.10, (
-            f"🔴 {name} 的 session.report 参数模板化超标（{rtop[0][:80]}）")
+        gate(rtop[1] / len(reports) <= 0.10,
+             f"🔴 {name} 的 session.report 参数模板化超标（{rtop[0][:80]}）")
 
 
 # ── 压舱桶的终答人话：**教师生成**，不是模板拼接（`25 §7㉙`）──────────────────
@@ -1054,7 +1070,7 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
         _BALLAST_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1))
         _fb = _BALLAST_FALLBACK[0] / max(1, len(cache))
         print(f"[压舱-兜底] 本轮 {_BALLAST_FALLBACK[0]} 条兜底 / 全库 {len(cache)} = {_fb:.1%}（闸 ≤2%）", flush=True)
-        assert _fb <= 0.02, f"🔴 压舱人话兜底 {_fb:.1%} > 2% —— 教师写不出人话的题太多，查事实清单/过滤器"
+        gate(_fb <= 0.02, f"🔴 压舱人话兜底 {_fb:.1%} > 2% —— 教师写不出人话的题太多，查事实清单/过滤器")
     return cache
 
 
@@ -1206,9 +1222,9 @@ async def main() -> int:
     #   ⛔ 2026-08-30 实案：闸写在 build_l2_l1 里，结果上一轮把 L1=0 的坏结果**写进了缓存**，
     #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
     if not DRY:
-        assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
+        gate(len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数")
         # 09-04 重登记：280 是按"全库当底题"标定的旧数（那正是泄漏）；SFT 桶供给 172 道、一题一行 ⇒ 下限 150（留裁剪余量）
-        assert len(l2) >= (150 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行（SFT 桶一题一行的供给约 170）"
+        gate(len(l2) >= (150 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行（SFT 桶一题一行的供给约 170）")
 
     # held-out val 切分（每桶尾部拿走）
     _l2_train = 280 if IS_V15 else 200
@@ -1284,9 +1300,9 @@ async def main() -> int:
         kept = [{k: v for k, v in r.items() if not k.startswith("_")} for r in sel]
         print(f"[CoT-v15] 预算 {budget} 内选中 {len(kept)} 行（可行上界搜索）· "
               f"聚合非空 think {ne}/{bl} = {ne/max(1,bl):.1%}（门槛 ≥60%）")
-        assert bl == 0 or ne / bl >= 0.60, (
-            f"🔴 CoT 聚合覆盖率 {ne/max(1,bl):.1%} < 60% —— 预算与覆盖率无法同时满足，"
-            f"停下来报 Chaoyu，不许自己放宽")
+        gate(bl == 0 or ne / bl >= 0.60,
+             f"🔴 CoT 聚合覆盖率 {ne/max(1,bl):.1%} < 60% —— 预算与覆盖率无法同时满足，"
+             f"停下来报 Chaoyu，不许自己放宽")
     else:
         for r in cot:
             if acc + r["supervised_tokens"] > budget:
@@ -1309,7 +1325,7 @@ async def main() -> int:
     #       （token 带宽=梯度预算 · 覆盖率=N3 按需思考）。
     _cot_floor = 19 if IS_V15 else 40
     if not DRY:
-        assert len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）"
+        gate(len(cot) >= _cot_floor, f"🔴 CoT 桶下限闸：仅 {len(cot)} 行（要 ≥{_cot_floor}）")
     new_rows = l2 + l1 + chat_rows + fam + cot
     train = pd.concat([t13, pd.DataFrame(new_rows)], ignore_index=True)
     valrows = l2v + l1v + chatv
@@ -1320,7 +1336,7 @@ async def main() -> int:
     # ── 门禁 ──
     # ★ 09-04 run17 实案：这里原来写死 419（v13 冻结桶行数）——v16 按"每 6 取 1"派生是 420 ⇒ 按旧单位标定的阈值又一次不报错地失效。
     #   判据改成「两个东西应当相同」：重放行数 == 冻结清单行数（派生，不写数）。
-    assert len(t13) == len(_train_ids), f"🔴 冻结校验失败：重放 {len(t13)} 行 != 冻结清单 {len(_train_ids)} 行"   # DRY 也核（09-04：419 那次 DRY 跳过了）
+    gate(len(t13) == len(_train_ids), f"🔴 冻结校验失败：重放 {len(t13)} 行 != 冻结清单 {len(_train_ids)} 行")   # DRY 也核（09-04：419 那次 DRY 跳过了）
     tok_by = {"v13": int(t13.supervised_tokens.sum()),
               "l2": sum(r["supervised_tokens"] for r in l2),
               "l1": sum(r["supervised_tokens"] for r in l1),
@@ -1344,9 +1360,9 @@ async def main() -> int:
             continue
         ok_band = lo <= share[k] <= hi
         if k == "cot":
-            assert share[k] <= hi, f"🔴 CoT 份额 {share[k]:.1%} > 上沿 {hi:.0%}（裁定④）"
+            gate(share[k] <= hi, f"🔴 CoT 份额 {share[k]:.1%} > 上沿 {hi:.0%}（裁定④）")
         if _strict:
-            assert ok_band, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]"
+            gate(ok_band, f"🔴 份额闸：{k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]")
         elif not ok_band:
             print(f"  [份额-报告] {k}={share[k]:.1%} ∉ [{lo:.0%},{hi:.0%}]（首建只报，待回填带宽）")
     print(f"[份额] 模式={'硬闸' if _strict else '首建报告（U_BUILD_BANDS_STRICT=1 变硬闸）'}")
@@ -1355,7 +1371,7 @@ async def main() -> int:
     print(f"[同形] 多轮行 {sc['n']} · 不同形 {len(sc['bad'])} · 缺真实终答 {len(sc['missing_real_reply'])}")
     for cid, why in sc["bad"][:10]:
         print(f"   ✗ {cid}: {why}")
-    assert not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形"
+    gate(not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形")
     if DRY:
         _dry = pd.DataFrame(list(t13.to_dict("records")) + l2 + l1 + chat_rows + fam + cot)
         from u_build_v15_multiturn import SOURCE_OF as _SRC
@@ -1400,8 +1416,8 @@ async def main() -> int:
               f"信令自由文本 {len(sig_lines)} 种/{sum(sig_lines.values())} 次 · "
               f"最高频 {top_share:.0%}"
               + (f" ('{top[0][0][:24]}')" if top else ""))
-        assert prose_in_report == 0, f"🔴 人话进了机器通道 {prose_in_report} 处"
-        assert top_share <= 0.35, f"🔴 信令话术复读 {top_share:.0%}（≤35%）—— 会长成万能出口"
+        gate(prose_in_report == 0, f"🔴 人话进了机器通道 {prose_in_report} 处")
+        gate(top_share <= 0.35, f"🔴 信令话术复读 {top_share:.0%}（≤35%）—— 会长成万能出口")
     density_gate(l2, tokenizer, "L2")
     density_gate(l1, tokenizer, "L1")
     density_gate(chat_rows, tokenizer, "chat")
@@ -1428,7 +1444,7 @@ async def main() -> int:
                     teach_hits += 1
                     print(f"   ✗ OOV 教学面：DEFS[{term}] 词「{t}」：{v[:80]!r}")
     print(f"[OOV] 教学面命中 {teach_hits}（必须 0）· 全语料自然词用 {ambient_hits}（上报不判）")
-    assert teach_hits == 0, f"🔴 OOV 定义教学泄漏 {teach_hits} 次"
+    gate(teach_hits == 0, f"🔴 OOV 定义教学泄漏 {teach_hits} 次")
     # 考场泄漏：考卷第二轮句子逐字不得出现在训练 user 文本
     # 泄漏闸口径（第8次发射修订）：**被判轮**逐字必 0（防背答案）；铺垫轮是公共
     # 自然句式（「X是什么意思？」），逐字禁会禁掉整类表达 ⇒ 记数上报不判死
@@ -1445,12 +1461,12 @@ async def main() -> int:
                 print(f"   ✗ 考场被判句泄漏：{r.get('bucket')} {r.get('case_id')} 句「{t[:40]}」")   # 09-04 run21：闸红要说是谁
         leak_first += sum(1 for t in first_turns if len(t) >= 8 and t in txt)
     print(f"[泄漏] 被判轮命中 {leak_last}（必须 0）· 铺垫轮 {leak_first}（上报）")
-    assert leak_last == 0, f"🔴 考场被判句泄漏 {leak_last}"
+    gate(leak_last == 0, f"🔴 考场被判句泄漏 {leak_last}")
     for r in new_rows + valrows:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
-    out = Path("_audit/v16/dry") if DRY else Path(DEFAULT_SFT_DIR)   # DRY 产物落审计目录；正式目录只许正式建库写
+    out = Path("_audit/v16/dry") if DRY else (Path("_audit/v16/report") if GATE_MODE == "report" else Path(DEFAULT_SFT_DIR))   # DRY/观察模式产物落审计目录；正式目录只许全绿的正式建库写
     # ★ 三桶隔离②③（09-04）：每行登记底题；落盘只走唯一带闸写盘函数（底题桶 == 产物桶，越桶直接抛）
     from u_build_v15_multiturn import SOURCE_OF as _SRC
     from syncopate.pipeline.split import base_case_id as _bcid
@@ -1487,7 +1503,12 @@ async def main() -> int:
         return 0
     rep = _audit(out / "train.parquet")
     if not rep["ok"]:
-        print("🔴 出厂体检未通过 ⇒ 不许进训练（见上面的 🔴 行）")
+        GATE_FAILS.append(f"🔴 出厂体检 {len(rep.get('findings', []))} 项")
+    if GATE_FAILS:
+        print(f"\n══ 闸汇总（模式={GATE_MODE}）：{len(GATE_FAILS)} 条红 ══")
+        for t in GATE_FAILS:
+            print("  " + t.splitlines()[0][:160])
+        print(f"⇒ 产物在 {out}（{'观察模式：不进正式目录' if GATE_MODE == 'report' else '不许进训练'}）")
         return 1
     print(f"✅ {'v15' if IS_V15 else 'v14.5'} 构建完成，全部门禁通过")
     return 0
