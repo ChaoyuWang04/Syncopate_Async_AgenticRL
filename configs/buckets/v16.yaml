@@ -35,12 +35,19 @@ quotas:
   portfolio_review:  50
   long_tail:         50
   clarify:           50
-  reject:            50
+  # ★ 2026-09-04 Chaoyu：「扩量要新的情景+数据，不是新的组合方式」——拒绝请求 5 → 14 种（9 种新越权/越域点），
+  #   配额按每种 10 条：50 → 140；同日新增三个新情景模板（下方）。
+  reject:           140
   all_high:          30
   tool_missing:      30
   # ★ 90 → 150：三档里只有 immature 那档产出 defer，90 条 = 30 条 defer，
   # 而 defer 是 M1 整个里程碑的产物，全库只有 30 条太薄。150 → 50 条 defer。
   freshness_check:  150
+  # ★ 2026-09-04 新情景（不是 I02 的改写）：暂停后重启（成熟度重新计时）· CPI 口径成熟度（指标级成熟度，metric=cpi）
+  freshness_relaunch: 90
+  freshness_cpi:      90
+  # ★ 2026-09-04 新情景：砍预算——涨幅上限不管它，风控拦截/频繁改动照管；三结局 denied/escalated/executed
+  budget_cut:         90
   failure_drill:    150
   safety_line_drill: 90   # M2
   feature_attribution: 100  # M3
