@@ -1,6 +1,6 @@
 ---
 name: modal-migration-state
-description: ★09-04 03:10 收口：新栈全管线机制冒烟全通（SFT/考场/RL verl0.9 V1/OPD）；S3 建库卡在一个待裁定（27B 教师英文思考撞中文闸，推荐=中文引子+改尺子）；裁定⑭ v16 不混旧物料已落地；唯一入口 docs/syncopate/31
+description: ★09-04 04:xx：新栈全管线机制冒烟全通（SFT/考场/RL verl0.9 V1/OPD）；S3 建库卡在一个待裁定（27B 教师英文思考撞中文闸，推荐=中文引子+改尺子）；裁定⑭ v16 不混旧物料已落地；唯一入口 docs/syncopate/31
 metadata:
   type: project
 ---
@@ -9,7 +9,7 @@ metadata:
 
 **裁定链（Chaoyu 09-03/04）**：⑩ v16 从零重来 · ⑪ 全新栈学新东西 · ⑫ 一切在 B200 · ⑬ 教师用大的（Qwen3.8-27B 兼两角色）· **⑭ v16 不许混进任何旧版本产物**（4B/8B 物料全由 27B 重生成、v13 triage 不读、缓存名 v16_*、旧缓存搬 pre_v16_run16/）。
 
-**★ 唯一待 Chaoyu 裁定（S3 建库的闸）**：27B 教师**全程英文思考**（cjk p50=0.0，中文闸拦下 100%；900 上限 93% 够用；英文思考里 68% 选中 gold 动作，质量好）。B 臂「<think> 后加中文引子」：cjk p50 0.48、动作命中 72%、现行链通过 35%；尺子改成「中文字÷(中文字+拉丁字母)」（不被工具名稀释）后通过 52%。三选一：① 撤中文闸收英文思考 ② 中文引子（+改尺子，**我推荐**）③ 换教师。定了之后：改阈值=重新注册 → `--steps build_v16` → 画廊逐条看。
+**★ 09-04 裁定⑮（已落地）**：CoT **语言不限**（撤 cjk/字数闸；27B 全英文思考，英文思考 68% 选中 gold，质量好）；教师 CoT 必须完整：THINK_MAX_TOKENS 900→2048 + 截断闸 finish_reason=length ≤3%（gen_cot_v15 断言）；全链上限抬（5090 时代数字）：MAX_PROMPT 12288 · think-on RESPONSE 12288 · 服务/RL/eval max_model_len 24576（decider/start_vllm/exam_chain/stack_probe 四处同步 + 容器内相等断言）；opd --max-new 2048。E-think A/B（CoT 开/关）两臂已停，设计留在 26 §W4′ E-think 备查。**run17 build_v16 在跑**（撤闸后第一次），过了 ⇒ 画廊给 Chaoyu 逐条看 ⇒ 真数据 S4→S5→S6→S7。
 
 **新栈全管线冒烟读数（09-04，全在 26 §W4′）**：S4′ SFT 机制（DRY 占位数据）✅ 可训 42.3M · ΔW 0.63% · 峰值 74 GB · 30 步 346 s · S5′ 考场链路 ✅（端点起 500 s 待查）· S6 **RL verl 0.9 V1 sync 首次跑通** ✅ B200×2 · 2 步 580 s（step2 37 s）· 动态分池在 TaskRunnerV1 进程生效 · LoRA-only ckpt 233 MB/rank · S7 OPD 机制 ✅（vocab 相同、真蒸馏步 KL 有限、adapter 落盘）但底座几乎全跳步 ⇒ 语义冒烟等真 SFT adapter。**真数据版 S4→S5→S6→S7 全部等 S3 建库过。**
 

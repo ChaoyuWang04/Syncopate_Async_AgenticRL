@@ -1,19 +1,16 @@
 {
- "generated_on": "samwang-X870I (local, 2026-09-03)",
- "spec": "configs/buckets/v16.yaml",
- "count": 1670,
- "rejected": 8,
- "splits": {
-  "eval": 342,
-  "sft": 503,
-  "rl": 825
+ "generated_at": "2026-09-04 13:09",
+ "spec": "configs/buckets/v16.yaml (2026-09-04 新情景版)",
+ "count": 2030,
+ "split": {
+  "eval": 401,
+  "sft": 597,
+  "rl": 1032
  },
- "batch_files": 6681,
  "sha256": {
-  "eval_cases": "b15e314a6e491eee91a558aa545f2791c8a0e4599689fc7195c42cd07f80347e",
-  "rl_cases": "05a9c8c677f72e15ad4b28418f7790b607bd55f877abec67d20102f0e221e1f9",
-  "sft_cases": "831bfe1b39b515d22272f576a77097db5ee7f5044709b5976fdc0d0195246c03",
-  "split_report": "09da497fdb7801d8871564d770ac977f1592a708b91e8f72abb983f3722e51f3"
+  "eval_cases": "57b61bc011e7b7334b7068ef70aee8a7a8caf74d709f1842d85aa05eb616dcd8",
+  "sft_cases": "c6461cf733c3a05173e03e98137ed939c9508ce3862212af3d508ec7df3a1bef",
+  "rl_cases": "d2988d10643037abd0d28a7f1e645ca7e3554ae9e0b3458fc4df6ae8c755e042"
  },
- "judge": "Modal 上 p_rebuild_v16 生成的三份切分 SHA 必须逐一相同（S2 确定性判据）"
+ "note": "S2 判据：Modal 生成必须与此逐一相同；旧值（1670 条）见 git 历史"
 }

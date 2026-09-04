@@ -2,11 +2,11 @@
  "batch_dir": "data/batches/v16",
  "mode": "difficulty_proxy",
  "counts": {
-  "eval": 342,
-  "sft": 503,
-  "rl": 825
+  "eval": 401,
+  "sft": 597,
+  "rl": 1032
  },
- "strata_count": 106,
+ "strata_count": 124,
  "overlaps_by_content_sha256": {
   "eval∩sft": 0,
   "eval∩rl": 0,
@@ -15,14 +15,14 @@
  "duplicate_content_pairs": 0,
  "leakage": {
   "L1_exact_message_and_answer": {
-   "cross_bucket_groups": 40,
+   "cross_bucket_groups": 35,
    "affected_eval": 0,
    "affected_eval_ids": [],
    "by_template": {},
    "affected_eval_ratio": 0.0
   },
   "L2_skeleton_and_answer_non_exempt": {
-   "cross_bucket_groups": 79,
+   "cross_bucket_groups": 87,
    "affected_eval": 0,
    "affected_eval_ids": [],
    "by_template": {},
@@ -35,8 +35,8 @@
   },
   "eval_leakage_free": true,
   "train_pool_overlap_groups": {
-   "L1": 40,
-   "L2": 79
+   "L1": 35,
+   "L2": 87
   },
   "passed": true
  },
@@ -47,6 +47,12 @@
   "ATTR|tool_call|flat|must_discover": 6,
   "ATTR|tool_call|insufficient|id_given": 9,
   "ATTR|tool_call|insufficient|must_discover": 12,
+  "BCUT|tool_call|denied|id_given": 8,
+  "BCUT|tool_call|denied|must_discover": 10,
+  "BCUT|tool_call|escalated|id_given": 19,
+  "BCUT|tool_call|escalated|must_discover": 18,
+  "BCUT|tool_call|executed|id_given": 19,
+  "BCUT|tool_call|executed|must_discover": 16,
   "BUD|tool_call|denied|id_given": 14,
   "BUD|tool_call|denied|must_discover": 14,
   "BUD|tool_call|escalated|id_given": 40,
@@ -95,6 +101,12 @@
   "FAIL|tool_call|timeout_applied|must_discover": 8,
   "FAIL|tool_call|timeout_lost|id_given": 8,
   "FAIL|tool_call|timeout_lost|must_discover": 7,
+  "FRCP|defer|immature|id_given": 15,
+  "FRCP|defer|immature|must_discover": 15,
+  "FRCP|tool_call|mature|id_given": 16,
+  "FRCP|tool_call|mature|must_discover": 14,
+  "FRCP|tool_call|partial|id_given": 15,
+  "FRCP|tool_call|partial|must_discover": 15,
   "FRESH|defer|immature|id_given": 25,
   "FRESH|defer|immature|must_discover": 25,
   "FRESH|tool_call|mature|id_given": 25,
@@ -139,8 +151,14 @@
   "RAG|tool_call|escalated_stale|must_discover": 14,
   "RAG|tool_call|executed|id_given": 12,
   "RAG|tool_call|executed|must_discover": 14,
-  "REJ|reject|-|id_given": 26,
-  "REJ|reject|-|must_discover": 24,
+  "REJ|reject|-|id_given": 70,
+  "REJ|reject|-|must_discover": 70,
+  "RELN|defer|immature|id_given": 15,
+  "RELN|defer|immature|must_discover": 15,
+  "RELN|tool_call|mature|id_given": 16,
+  "RELN|tool_call|mature|must_discover": 14,
+  "RELN|tool_call|partial|id_given": 15,
+  "RELN|tool_call|partial|must_discover": 15,
   "SCALE|tool_call|headroom|id_given": 12,
   "SCALE|tool_call|headroom|must_discover": 18,
   "SCALE|tool_call|over|id_given": 17,
@@ -156,10 +174,12 @@
    "reject": 12
   },
   "template": {
+   "BCUT": 12,
    "CONF": 12,
    "CRE": 12,
    "DIA": 12,
    "FAIL": 2,
+   "FRESH": 12,
    "HIGH": 12,
    "INJ": 12,
    "LONG": 12,
@@ -167,9 +187,10 @@
    "POL": 12,
    "POLM": 12,
    "POLU": 12,
-   "SCALE": 7
+   "RELN": 12
   },
   "outcome": {
+   "('BCUT', 'denied')": 2,
    "('BUD', 'denied')": 4,
    "('BUD', 'executed')": 1,
    "('CHAT', 'chitchat')": 2,
@@ -184,17 +205,21 @@
    "('FAIL', 'source_conflict')": 4,
    "('FAIL', 'timeout_applied')": 4,
    "('FAIL', 'timeout_lost')": 4,
-   "('FRESH', 'mature')": 4,
-   "('FRESH', 'partial')": 4,
+   "('FRCP', 'mature')": 4,
+   "('FRCP', 'partial')": 4,
+   "('FRESH', 'immature')": 1,
+   "('FRESH', 'mature')": 1,
    "('INJ', 'memory_content')": 2,
    "('INJ', 'safety_line_note')": 3,
    "('POL', 'answered_v2_from_superseded')": 2,
    "('POL', 'escalated_no_policy')": 2,
-   "('SCALE', 'tight')": 2
+   "('RELN', 'immature')": 2,
+   "('RELN', 'mature')": 1
   }
  },
  "sft_template_counts": {
   "ATTR": 83,
+  "BCUT": 14,
   "BUD": 30,
   "CHAT": 14,
   "CLAR": 12,
@@ -202,7 +227,8 @@
   "CRE": 14,
   "DIA": 12,
   "FAIL": 46,
-  "FRESH": 20,
+  "FRCP": 20,
+  "FRESH": 14,
   "GEO": 78,
   "HIGH": 12,
   "INJ": 17,
@@ -212,8 +238,9 @@
   "POL": 16,
   "POLM": 12,
   "POLU": 12,
-  "RAG": 18,
+  "RAG": 48,
   "REJ": 12,
-  "SCALE": 14
+  "RELN": 15,
+  "SCALE": 35
  }
 }
