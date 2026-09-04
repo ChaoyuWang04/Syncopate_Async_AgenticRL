@@ -356,7 +356,7 @@ RL 跑到步数就停 = **在还有东西可学的时候停下**。
 **和 Modal 打交道的坑（每次撞到就加一行；细节与命令在 `modal_app/README.md §运维坑`，这里只留判据）**
 ```
 停 app 必带 --yes     非交互终端 `modal app stop` 静默不执行 ⇒ 停完 `modal app list` 必须看到它消失（09-03 白烧 B200 40 min）
-删 Volume/文件同理    `modal volume delete/rm` 也要 --yes；删前 `modal volume ls` 看一眼内容
+删 Volume 要 --yes     `modal volume delete <名> --yes`；⚠️ 删文件的 `modal volume rm <名> <路径>` **不吃 --yes**（09-04 实测报 No such option，命令静默没删 ⇒ 删完 `modal volume ls` 核对）
 GPU 函数可抢占且不可关 每步幂等、结果落 Volume、长任务 --detach；不要在一个函数里串太多步
 镜像层顺序           三件套（pyproject/uv.lock/uv.toml）在前、代码不进镜像 ⇒ 改代码不重建镜像；改依赖才重建
 AOT 优先于 JIT       FlashInfer/FA 这类库能装预编译就装（flashinfer-jit-cache/cubin、mjun0812 flash-attn 轮子）；
