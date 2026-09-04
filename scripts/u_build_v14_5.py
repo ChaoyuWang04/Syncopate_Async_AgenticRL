@@ -615,10 +615,13 @@ async def build_l2_l1(tokenizer, registry, client):
     #   那是④族（DEF-F/REJ-F/CLA-F）的事，不进这里。此前 v13 时代靠累积的压舱缓存碰巧盖住，v16 重编号+缓存作废后
     #   FRESH_0125（defer）撞到 real_reply 断言。与下面 `_need` 的过滤保持同一条件。
     _TERMINAL_OK = ("tool_call", "answer")
+    # 09-04 run26：底题只来自 SFT 桶后 L2 只造出 144 行（<280 下限）。campaign 编号按裁定⑥/⑨ 在 entities 不在 context ⇒
+    #   用 campaign_of（context→entities）取，SFT 桶供给 148→172 道；下限按供给重登记（见 l2_floor）。
+    from u_build_v15_multiturn import campaign_of as _cof
     q_bundles = [b for b in bundles.values()
                  if b.gold and b.gold.actions
                  and b.gold.actions[0]["tool"] == "campaign.get_metrics"
-                 and b.case.context.get("campaign_id")
+                 and _cof(b)
                  and b.verifier.expected_behavior in _TERMINAL_OK]
     z_bundles = [b for b in bundles.values() if b.gold and not b.gold.actions
                  and b.verifier.expected_behavior in _TERMINAL_OK]
@@ -662,10 +665,11 @@ async def build_l2_l1(tokenizer, registry, client):
     #   ⇒ 抬的是**行数**不是带宽 —— 带宽表达的是「数据追问该拿多少梯度预算」，
     #     这个设计意图与契约无关，不该因为换了承载通道就放宽（守则③）。
     l2_cap = DRY if DRY else (290 if IS_V15 else 210)
+    print(f"[L2] 底题供给（SFT 桶、get_metrics 首动作、有 campaign）= {len(q_bundles)} 道 · 一题一行不复用 · 上限 {l2_cap}", flush=True)
     for b in q_bundles:
         if len(l2_rows) >= l2_cap:
             break
-        cid = b.case.context["campaign_id"]
+        cid = _cof(b)
         mname, mkey = METRICS[i % len(METRICS)]
         obj = obj_seq[i % 100]
         tool = tool_seq[i % 100]
@@ -1118,14 +1122,19 @@ async def main() -> int:
     _split_sha = _hl.sha256(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json", "rb").read()).hexdigest()[:16]
     _side = Path("data/u_route/v16_cache_split.json")
     _row_caches = [Path(f"data/u_route/{n}") for n in ("v16_l2l1_rows.json", "v16_fam_rows.json", "v16_cot_rows.json", "v16_cot_partial.jsonl")]
-    _prev = json.load(open(_side)).get("sft_split_sha") if _side.exists() else None
+    # 行缓存还绑定「行构造器版本」：改了 L2/L1/六族/CoT 的造法就 bump，旧造法的行不许再命中（run26 实案：144 行的 L2 缓存会一直红）
+    ROW_BUILDER_TAG = "2026-09-04-r2"
+    _sidecar = json.load(open(_side)) if _side.exists() else {}
+    _prev = (_sidecar.get("sft_split_sha"), _sidecar.get("row_builder_tag"))
+    _split_sha = (_split_sha, ROW_BUILDER_TAG)
     if _prev != _split_sha:
         _hit = [c for c in _row_caches if c.exists()]
         for c in _hit:
             c.unlink()
         print(f"[缓存] 切分 SHA {_prev} → {_split_sha}：行缓存作废 {[c.name for c in _hit]}（文本类缓存 ballast/defs/chat 与切分无关，保留）", flush=True)
     if not DRY:
-        _side.write_text(json.dumps({"sft_split_sha": _split_sha, "note": "行缓存绑定的 SFT 切分 SHA；不一致时 u_build 自动作废行缓存"}, ensure_ascii=False))
+        _side.write_text(json.dumps({"sft_split_sha": _split_sha[0], "row_builder_tag": _split_sha[1],
+                                     "note": "行缓存绑定的 SFT 切分 SHA + 行构造器版本；任一不一致 u_build 自动作废行缓存"}, ensure_ascii=False))
 
     # 裁定⑭：v16 的定义/闲聊素材由 27B 教师重生成，缓存名带版本；v14.5 分支保留旧名（legacy）
     cache_d = Path("data/u_route/v16_defs.json" if IS_V15 else "data/u_route/v145_defs.json")
@@ -1198,7 +1207,8 @@ async def main() -> int:
     #     下一轮缓存一命中就绕过了闸 —— 判据必须长在「实际会被用的那份数据」上。
     if not DRY:
         assert len(l1) >= 150, f"🔴 L1 桶下限闸：仅 {len(l1)} 行（要 ≥150）—— 缓存也算数"
-        assert len(l2) >= (280 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行"
+        # 09-04 重登记：280 是按"全库当底题"标定的旧数（那正是泄漏）；SFT 桶供给 172 道、一题一行 ⇒ 下限 150（留裁剪余量）
+        assert len(l2) >= (150 if IS_V15 else 200), f"🔴 L2 桶下限闸：仅 {len(l2)} 行（SFT 桶一题一行的供给约 170）"
 
     # held-out val 切分（每桶尾部拿走）
     _l2_train = 280 if IS_V15 else 200
