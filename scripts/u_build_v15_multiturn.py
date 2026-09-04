@@ -109,7 +109,12 @@ STILL_UNAUTH = ["那走公司账户，把 {c} 的预算转到我名下，一样�
 CLA_Q = {"campaign_id": "要调哪一条 campaign？", "creative_name": "素材名称叫什么？",
          "region": "投放地域是哪里？", "requested_budget": "预算要调到多少？"}
 CLAF_FILL = ["是 {c}，就按这个办", "{c}", "{c}，按刚才说的来", "就 {c} 这条"]
-CLAF_OFF = ["先别管这个，这个账户现在的预算政策是什么？", "对了，先看下账户风控状态", "等一下，先告诉我 ROAS 是什么意思"]
+CLAF_OFF = ["先别管这个，这个账户现在的预算政策是什么？", "对了，先看下账户风控状态", "等一下，先告诉我 ROAS 是什么意思",
+            "等等，先说说这个账户的预算政策，涨幅上限是多少", "先不改，风控那边这个账户现在什么状态？",
+            "打住，CPI 是什么意思来着", "先别动，账户风控有没有被标记？", "问个题外话，ROI 和 ROAS 有什么区别"]
+CLA_Q_POOL = ["要调哪一条 campaign？", "你说的在投那条是哪一条？给我个 campaign 编号。", "账户里在投的不止一条，具体调哪条？",
+              "得先确认 campaign：编号是多少？", "哪条 campaign？我这边看到好几条在投。", "先告诉我 campaign 编号，我再往下查。",
+              "你指的是哪一条？把 CMP 编号给我。", "在投的有好几条，指定一下是哪条。"]
 L2X_ASK = [("差的那条", "worse"), ("好的那条", "better"), ("烧钱多的那条", "spend"), ("第一个", "first"), ("第二个", "second")]
 L2X_METRIC = [("消耗", "spend_7d"), ("安装量", "installs_7d"), ("CPI", "cpi"), ("点击率", "ctr")]
 # 09-04 run21：考卷 v4 的被判句与 L2X_ASK×L2X_METRIC 的模板逐字同形（「差的那条的CPI是多少？」）⇒ 训练问法必须绕开考卷被判句。
@@ -209,7 +214,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
             prior = [(b.case.user_message, signal_turn("defer", {
                 "reason": rng.choice(DEFER_REASONS).format(c=cid), "recheck_after_days": 5}))]
             b2 = as_multiturn(b, case_id=f"{b.case_id}_DEFF", user_message=rng.choice(DEFF_ASK), prior=prior)
-            await emit(b2, "fam_deff", f"deff|{'still' if still else 'mature'}", f"DEFF_{i}")
+            await emit(b2, "fam_deff", f"deff|{'still' if still else 'recheck'}", f"DEFF_{i}")
 
     # REJ-F：上一轮拒了越权 → 合法请求（q 案 gold）vs 换说法仍越权（REJ 案 gold）
     for i, bq in enumerate(q_n):
@@ -218,8 +223,13 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
             "reason_code": "unauthorized", "explanation": rng.choice(REJ_EXPL).format(c=cid)}))]
         b2 = as_multiturn(bq, case_id=f"{bq.case_id}_REJF", user_message=rng.choice(LEGAL_PREFIX) + bq.case.user_message, prior=prior)
         await emit(b2, "fam_rejf", "rejf|legal", f"REJF_{i}")
+    rej_n = [b for b in rej_n if (b.gold.final_answer or {}).get("reject_reason") == "unauthorized"]   # 追问是"还是要转到我名下"=越权，标签必须一致
+    if len(rej_n) < n:
+        print(f"  [六族] REJF-still 越权类底题只有 {len(rej_n)} 道（out_of_scope 类不用于此分支）", flush=True)
     for i, br in enumerate(rej_n):
-        cid = campaign_of(br) or "CMP_0000"
+        _camps = list((br.env.readonly_tables or {}).get("campaigns", {}))
+        cid = campaign_of(br) or (_camps[0] if _camps else None)
+        assert cid, f"🔴 {br.case_id} 没有任何真实 campaign 可用于追问（不许兜底假编号）"
         cid2 = re.search(r"CMP_\d+", br.case.user_message)
         cid2 = cid2.group(0) if cid2 else cid
         prior2 = [(rng.choice(REJ_PRIOR).format(c=cid2), signal_turn("reject", {
@@ -231,7 +241,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
     for i, b in enumerate(bud_n):
         cid = campaign_of(b)
         vague = re.sub(r"\s*CMP_\d+\s*的?", "", b.case.user_message).replace("把 的", "把").strip() or "帮我把日预算调一下"
-        prior = [(vague, signal_turn("clarify", {"question": CLA_Q["campaign_id"], "missing_fields": ["campaign_id"]}))]
+        prior = [(vague, signal_turn("clarify", {"question": rng.choice(CLA_Q_POOL), "missing_fields": ["campaign_id"]}))]
         b2 = as_multiturn(b, case_id=f"{b.case_id}_CLAF", user_message=rng.choice(CLAF_FILL).format(c=cid), prior=prior)
         await emit(b2, "fam_claf", "claf|filled", f"CLAF_{i}")
         acc = b.case.context.get("account_id", "ACC_DEMO")
