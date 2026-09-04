@@ -228,7 +228,8 @@ ANGLES_L2 = ["可附一句简短观察", "顺带说一句这个数是高是低",
 
 async def gen_l2_reply(client, cid, mname, val) -> str:
     if DRY:
-        return f"{cid} 的{mname}是 {val}。[DRY 教师待写]"
+        _SEED[0] += 1     # 占位带序号：DRY 走密度/尾部配额闸时量的是结构，不能被同一句占位判死
+        return f"{cid} 的{mname}是 {val}。[DRY 教师待写 #{_SEED[0]}]"
     for k in range(4):
         rep = clean_reply(await teach(
             client, T4B,
