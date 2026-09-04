@@ -900,7 +900,8 @@ def density_gate(rows, tokenizer, name):
     dist3 = len(grams) / max(1, tot)
     print(f"  [密度:{name}] 最高频尾 {top[1]}/{len(reps)}={top[1]/len(reps):.0%} "
           f"({top[0]!r}) · 病句 {sick} · distinct3={dist3:.2f}")
-    assert top[1] / len(reps) <= 0.10, f"🔴 {name} 话术密度超标"
+    # 比例闸只在样本 ≥20 时判（DRY 每桶 6 行 ⇒ 1/6 就是 17%，量的是样本量不是复读）；正式建库 L2/L1/chat 都 ≥80
+    assert len(reps) < 20 or top[1] / len(reps) <= 0.10, f"🔴 {name} 话术密度超标"
     assert sick == 0, f"🔴 {name} 病句 {sick} 条"
     if reports:
         rtails = Counter(reports)
