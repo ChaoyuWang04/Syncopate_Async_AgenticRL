@@ -19,3 +19,5 @@ metadata:
 
 **Why：** Chaoyu 09-04「一切都是 v16」+「能并行的多起机器，最终整条管线跑通」。
 **How to apply：** 接手先读 31 → 26 §W4′ → `modal app list`；读数在 `/vol/_audit/v16/` 用 `modal volume get` 拉；每步先注册判据再跑。
+
+**★ 09-04 下午三件大事**：① 守则⑱ 三桶隔离硬机制（源头 load_split_bundles · 每行 source_case_ids · 出口唯一写盘函数 + 复核器；run24 产物曾有 367 行越桶）② 扩量 = 新情景新数据（拒绝请求 5→14 种、新模板 RELN/FRCP/BCUT；题库 2030 条、切分 401/597/1032、SHA 在 _audit/v16/local_gen_sha.json）③ **固定管线 runbook `scripts/v16_pipeline.sh`**（17 stage，--dry-run，smoke/candidate 档；所有入口默认值从 DATA_VERSION/model_paths 派生；探针只调它；test_pipeline_defaults 守着）。未验：rl-adapter（verl 0.9 model_merger 对 FSDP2+save_lora_only）、sft-eval/select/merge 真数据链、切分格稀疏（33 格薄，SFT=0 的格待裁保底）。
