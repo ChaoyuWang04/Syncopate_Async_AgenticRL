@@ -101,7 +101,7 @@ secret      wandb-secret（Chaoyu 建，键 WANDB_API_KEY；判据 --steps wandb
 | 环境（九步探针）| ✅ |
 | S0 对齐地图 | ✅ 639/10/318 → 951 passed 全绿 |
 | S1 对齐（v16 口径、模型路径、XML 线格式、补丁分诊、PG/Redis） | ✅（26 §W4′ 逐条） |
-| S2 v16 题库确定性 | ✅ 1670 条/6681 文件，Modal 3.5 min |
+| S2 v16 题库确定性 | 🟡 09-04 扩量后重定：本机 2030 条 · 切分 401/597/1032 · SHA 见 _audit/v16/local_gen_sha.json；Modal 需重跑 rebuild_v16 对齐 |
 | S3 v16 训练集建库 | 🟡 裁定⑮（09-04）：撤中文闸、CoT 语言不限、THINK 上限 2048 + 截断闸 ≤3%、全链上限 12288/12288/24576 ⇒ run17 build_v16 在跑 |
 | S4 SFT 冒烟（p_sft_smoke） | ✅ 机制 mech_dry（DRY 占位数据）：可训 42.3M · loss 1.93→0.29 · ‖ΔW‖/‖W‖ 0.63% · 峰值 74 GB · 30 步 346 s · adapter 落盘；真数据版等 S3 |
 | S5 考场 v4 单容器（p_exam_v4） | ✅ 链路 plumb（底座、40 题）：PG/Redis/播种/端点（起 500 s）/40 题 137 s/judge/triage 全 rc 0；分数不看 |

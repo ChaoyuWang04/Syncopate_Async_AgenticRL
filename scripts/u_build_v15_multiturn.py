@@ -187,14 +187,16 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
 
     import os as _os
     n = int(_os.environ.get("U_BUILD_FAM_N") or (6 if DRY else 20))
-    fresh_defer = [b for c, b in bundles.items() if c.startswith("FRESH") and b.gold
+    # 09-04 新情景并入：FRESH（新开）· RELN（暂停后重启）· FRCP（CPI 口径）都是"数据成熟度"题，追问"现在能扩了吗"同样成立
+    _FRESH_FAMS = ("FRESH", "RELN", "FRCP")
+    fresh_defer = [b for c, b in bundles.items() if c.split("_")[0] in _FRESH_FAMS and b.gold
                    and b.verifier.expected_behavior == "defer"]
-    fresh_ok = [b for c, b in bundles.items() if c.startswith("FRESH") and b.gold
+    fresh_ok = [b for c, b in bundles.items() if c.split("_")[0] in _FRESH_FAMS and b.gold
                 and b.verifier.expected_behavior == "tool_call"]
     q = [b for b in bundles.values() if b.gold and b.gold.actions
          and b.gold.actions[0]["tool"] == "campaign.get_metrics" and campaign_of(b)]
     rej = [b for c, b in bundles.items() if c.startswith("REJ") and b.gold]
-    bud = [b for c, b in bundles.items() if c.startswith("BUD") and b.gold and campaign_of(b)]
+    bud = [b for c, b in bundles.items() if c.split("_")[0] in ("BUD", "BCUT") and b.gold and campaign_of(b)]   # 砍预算题同样"没说哪条"
     for lst in (fresh_defer, fresh_ok, q, rej, bud):
         rng.shuffle(lst)
     # ★ 09-04（守则⑱ 后底题只来自 SFT 桶）：每条分支的行数 = min(n, 底题数)，**不一题多用**；不够的如实打印。

@@ -636,6 +636,19 @@ run24 的其余体检项（量法改为只看监督区后）：六族终答是�
 **待 Chaoyu 裁定**：底题限 SFT 桶后六族底题池变小（FRESH 20 / REJ 12 / 带 campaign 的 BUD 2）：① 评测集和 RL 集都排除、六族缩到每族 12 行、
 行数下限重登记（推荐）② 只排除评测集、允许 RL 题做 SFT 多轮底题。
 
+**★ 09-04 扩量 = 新情景新数据（Chaoyu：「要真正的多样性，要新的数据，不是新的组合方式」）**
+```
+拒绝请求 5 → 14 种（9 种新越权/越域点：导出用户手机号 · 停竞品广告 · 刷假量假好评 · 换成个人付款卡 · 管理员绕过审批 ·
+          安全线表外泄给代理 · 查同事工资 · 写请假邮件 · 翻译合同），每种 5 种题面；配额 50 → 140
+新模板   freshness_relaunch（RELN：暂停后重启，成熟度重新计时，世界带 paused_days/relaunched_days_ago）· freshness_cpi（FRCP：CPI 口径、
+          metric=cpi、终答报 cpi）· budget_cut（BCUT：砍预算，三结局 denied/escalated(budget_decrease)/executed，无安全线要求）；各 90
+判据     作者测试 116 全绿（含每模板每分支 gold 实跑、题面池风格 ≥4/相似度 ≤0.40）· 本机生成 2030 条（拒 0）· D1–D11 全绿 ·
+          切分 eval 401 / sft 597 / rl 1032（SHA 见 _audit/v16/local_gen_sha.json：eval 57b61bc0… sft c6461cf7… rl d2988d10…）
+SFT 桶新题  RELN 15 · FRCP 20 · BCUT 14 · REJ 12（模板保底 12；新拒绝题主要进 RL 117 条）· FRESH 14 · BUD 30
+六族底题池  DEFF ← FRESH/RELN/FRCP · CLAF ← BUD/BCUT · REJF-still ← REJ(unauthorized)；每分支 = min(20, 底题数)，不复用
+⚠️ S2 判据换值：Modal 上 rebuild_v16 必须与新 SHA 逐一相同；Volume 上旧 v16 批次/切分/缓存全部作废重生成（一个写者：建库前先 rebuild）
+```
+
 **全量自检：建库链上"按旧数字定的闸"（09-04 Chaoyu：别出一条修一条，先全量扫）**
 
 | 数字 | 出处 | 来历 | 处置 |
