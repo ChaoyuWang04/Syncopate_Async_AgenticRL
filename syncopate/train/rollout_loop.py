@@ -281,6 +281,7 @@ async def run_rollout(
     response_mask: list[int] = []
     response_logprobs: list[float] = []
     segments: list[dict[str, Any]] = []
+    step_texts: list[str] = []          # 每步模型原文（含 <think>）：E-think 语言/长度读数用，不进训练张量
     # 我们自己补的轮次结束符没有 rollout logprob，只能填占位值。
     # 这会给 TIS 带来一点系统性偏差，所以把数量记下来让它可量化。
     placeholder_logprobs = 0
@@ -354,6 +355,7 @@ async def run_rollout(
         placeholder_logprobs += missing
         response_logprobs.extend(new_logprobs + [0.0] * missing)
         segments.append({"type": "assistant", "step": step, "token_count": len(new_ids), "mask": 1})
+        step_texts.append(text)
         # ---- 2. 解析（契约二选一；v14 分支逐字节不变）----
         if IS_V15:
             p15 = parse_step_v15(text)
@@ -499,6 +501,7 @@ async def run_rollout(
         },
         metrics={
             "num_steps": step,
+            "step_texts": step_texts,
             "tool_errors": tool_errors,
             "parse_errors": parse_errors,
             "truncated": trajectory.truncated,

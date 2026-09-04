@@ -920,12 +920,41 @@ def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", b
     return _record(f"opd_smoke_{arm}", ok, rec)
 
 
+# ─────────────────────────── E-think · CoT 开/关 A/B（B200 单卡一臂；两臂并行各起一台） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=131072, timeout=5 * 3600, secrets=SECRETS)
+def p_eval_ab(think: int = 0, arm: str = "", model: str = "", adapter: str = "", samples: int = 8, limit: int = 0, families: str = "", gpu_util: float = 0.85) -> dict:
+    """26 §W4′ E-think：同一份 eval_local（冻结 EVAL 342 题 × samples），只变 SYNCOPATE_THINK。判据 J1–J6 在 26 里预注册，
+    本步只产读数（/vol/_audit/v16/eval/<arm>.json）+ 有效性（rc 0 · 行数 == 题数）。分析在本机 scripts/v16_think_ab_report.py。"""
+    _sync_repo()
+    aud = f"{VOL}/_audit/v16/eval"; os.makedirs(aud, exist_ok=True)
+    model = model or STUDENT; arm = arm or f"think_{'on' if think else 'off'}"
+    env = {**RUN_ENV, "SYNCOPATE_THINK": str(int(think))}
+    ad = f" --adapter {adapter}" if adapter else ""
+    lim = f" --limit {limit}" if limit else ""
+    fam = f" --families {families}" if families else ""
+    cmd = (f"{PY} -m syncopate.train.eval_local --model {model}{ad} --samples-per-case {samples} --gpu-util {gpu_util}{lim}{fam} "
+           f"--out _audit/v16/eval/{arm}.json > {aud}/{arm}.log 2>&1; echo RC=$?")
+    t0 = time.time()
+    r = _sh(cmd, cwd=REPO, env=env, timeout=5 * 3600 - 600)
+    rc = int(re.search(r"RC=(\d+)", r["out"]).group(1)) if re.search(r"RC=(\d+)", r["out"]) else -1
+    _sh(f"cp _audit/v16/eval/{arm}.json {aud}/ 2>/dev/null; true", cwd=REPO)
+    log = open(f"{aud}/{arm}.log", errors="replace").read()
+    rec = {"arm": arm, "think": think, "model": model, "rc": rc, "wall_secs": round(time.time() - t0, 1), "samples": samples,
+           "think_mode_line": [l for l in log.splitlines() if "[think-mode]" in l][:1], "summary_tail": log[-3500:], "topology": _topology()}
+    try:
+        j = json.load(open(f"{aud}/{arm}.json")); rec["n_rows"] = len(j["rows"]); rec["mean_reward"] = sum(x["reward"] for x in j["rows"]) / max(1, len(j["rows"]))
+    except Exception as ex: rec["json_err"] = repr(ex)[:200]
+    vol.commit()
+    ok = rc == 0 and rec.get("n_rows", 0) > 0
+    return _record(f"eval_ab_{arm}", ok, rec)
+
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke"):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = ""):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -957,6 +986,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "rl_cfg" in want: run("rl_cfg", p_rl_cfg, rl_extra)
     if "rl_smoke" in want: run("rl_smoke", p_rl_smoke, rl_steps, rl_gpus, rl_extra, rl_arm)
     if "opd_smoke" in want: run("opd_smoke", p_opd_smoke, opd_steps, opd_adapter, opd_arm)
+    if "eval_ab" in want: run("eval_ab", p_eval_ab, ab_think, ab_arm, "", ab_adapter, ab_samples, ab_limit, ab_families)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     # 09-04：并行多臂时两个 run 同一分钟收尾会互相覆盖（exam_plumb 被 rl_cfg 盖掉过）⇒ 文件名带秒 + 步名

@@ -513,6 +513,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gpu-util", type=float, default=0.85,
                         help="vLLM 的显存份额。评测独占整卡，可以给大 —— KV 池越大命中率越高")
     parser.add_argument("--out", default=None)
+    parser.add_argument("--families", default="", help="只评这些模板族（逗号分隔，如 BUD,DIA,FAIL,RAG,SCALE）；空=全部")
     parser.add_argument("--from-audit", default=None,
                         help="★ 不跑模型，直接对一份已有的审计 JSON 重出报告。"
                              "补了新尺子之后，用它把历史基线的值反算出来 —— "
@@ -540,8 +541,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         bundles = load_cases(ROOT / args.batch, args.per_class, args.split_every)
 
+    if args.families:
+        _fams = {f.strip() for f in args.families.split(",") if f.strip()}
+        bundles = [b for b in bundles if b.case_id.split("_")[0] in _fams]
     label = (f"{args.model}" + (f" + {args.adapter}" if args.adapter else " (基座)")
-             + " [vllm]")
+             + f" [vllm][think={'on' if THINK_ON else 'off'}]")
     print(f"[评测] {label}   {len(bundles)} 条 case，temperature={args.temperature}")
 
     rows = []
@@ -570,8 +574,19 @@ def main(argv: list[str] | None = None) -> int:
         result = score_trajectory(
             bundle, output.trajectory, output.sandbox,
             policy_scorer=domain.policy_scorer, decision_fn=domain.decision_fn, caps=domain.caps)
+        # ★ E-think（26 §W4′）：思考语言/长度与终答语言，读数不判分
+        import re as _re
+        _steps = output.metrics.get("step_texts", [])
+        _thinks = [m.group(1).strip() for t in _steps for m in [_re.search(r"<think>(.*?)</think>", t, _re.S)] if m and m.group(1).strip()]
+        _cjk = lambda t: len(_re.findall(r"[一-鿿]", t)) / max(1, len(_re.findall(r"[一-鿿A-Za-z]", t)))
+        _reply = _re.sub(r"<think>.*?</think>", "", output.trajectory.final_text or "", flags=_re.S)
+        _reply = _re.sub(r"<tool_call>.*?</tool_call>", "", _reply, flags=_re.S).strip()
         return {
             "reward": result.reward,
+            "think_steps": len(_thinks),
+            "think_chars": statistics.median(len(t) for t in _thinks) if _thinks else None,
+            "think_cjk": statistics.median(_cjk(t) for t in _thinks) if _thinks else None,
+            "reply_cjk": _cjk(_reply) if _reply else None,
             "parse_ok": output.trajectory.parse_ok,
             "parse_errors": output.metrics["parse_errors"],
             "tool_errors": output.metrics["tool_errors"],
@@ -618,6 +633,10 @@ def main(argv: list[str] | None = None) -> int:
             **{f"trunc_{r}": sum(g.get("truncation_reason") == r for g in group) / len(group)
                for r in ("tokens", "observation", "turns")},
             "num_steps": statistics.mean(g["num_steps"] for g in group),
+            "think_steps_mean": statistics.mean(g.get("think_steps", 0) for g in group),
+            "think_chars_med": (lambda xs: statistics.median(xs) if xs else None)([g["think_chars"] for g in group if g.get("think_chars") is not None]),
+            "think_cjk_med": (lambda xs: statistics.median(xs) if xs else None)([g["think_cjk"] for g in group if g.get("think_cjk") is not None]),
+            "reply_cjk_med": (lambda xs: statistics.median(xs) if xs else None)([g["reply_cjk"] for g in group if g.get("reply_cjk") is not None]),
             "caps": [c for g in group for c in g["caps"]],
             "behavior": collections.Counter(g["behavior"] for g in group).most_common(1)[0][0],
             # ★ 逐次采样的行为要全留下：defer 的双向准确率是按采样次数算的，
