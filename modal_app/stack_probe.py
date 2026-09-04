@@ -740,6 +740,9 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         if rec["build_rc"] == 0:
             g = _sh(f"{PY} scripts/v15_r2_gates.py --prompt-budget data/sft/v16/train.parquet 2>&1 | tail -8", cwd=REPO, env=env, timeout=1200)
             rec["prompt_budget"] = {"rc": g["rc"], "tail": g["out"][-800:]}
+            # 守则⑱ 三桶隔离复核（独立于建库脚本自己的出口闸）：底题桶 == 产物桶
+            iso = _sh(f"{PY} scripts/check_split_isolation.py data/sft/v16/train.parquet data/sft/v16/val.parquet --pool sft 2>&1 | tail -6", cwd=REPO, env=env, timeout=600)
+            rec["isolation"] = {"rc": iso["rc"], "tail": iso["out"][-600:]}
             gal = _sh(f"{PY} scripts/v15_data_gallery.py --parquet data/sft/v16/train.parquet > {aud}/gallery.md 2>{aud}/gallery.err; echo RC=$?", cwd=REPO, env=env, timeout=1200)
             rec["gallery"] = {"tail": gal["out"][-200:], "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
             bt = _sh(f"{PY} scripts/v15_w3_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
@@ -750,7 +753,8 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         _teardown(proc); open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()[-20000:]); vol.commit()
     ok = (rec.get("build_rc") == 0 and rec.get("stale_caches_present", 1) == 0
           and any("不同形 0" in l or "不同形: 0" in l for l in rec.get("judge_lines", []))
-          and rec.get("prompt_budget", {}).get("rc") == 0 and rec.get("gallery", {}).get("dry_hits", 1) == 0)
+          and rec.get("prompt_budget", {}).get("rc") == 0 and rec.get("gallery", {}).get("dry_hits", 1) == 0
+          and rec.get("isolation", {}).get("rc") == 0)
     return _record("build_v16", ok, rec)
 
 

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -504,3 +505,68 @@ def assert_same_data_version(batch: str | Path, split_dir: str | Path) -> str:
             f"去另一个版本的 batch 里读，量出一个看起来合理的错数字。\n"
             f"⇒ 两个都传 {DATA_VERSION}，或者两个都不传（默认已是 {DATA_VERSION}）。")
     return vb
+
+
+# ═══════════ 三桶隔离的硬机制（2026-09-04 Chaoyu：数据可靠性不能靠每个写行的人记得过滤）═══════════
+#
+# 事故：v16 run24 产物里六族行 48 条 / L2 多轮行 56 条的底题来自**冻结 EVAL**、另有 263 条来自 RL 桶——
+#   专用建库脚本从题库目录整批读题再各自手动过滤，多轮/六族两条路径（09-02）漏了过滤；出口没有任何判据问
+#   「这行的底题在哪个桶」，考卷句级泄漏闸看不见改写过的题面。
+# 机制（三层，缺一不可）：
+#   ① 源头：建库脚本只能拿到 `load_split_bundles(..., "sft")`——EVAL/RL 的题根本不进内存
+#   ② 每行带 `source_case_ids`（底题编号列表；派生行由 as_multiturn/建库时登记）
+#   ③ 出口：`assert_split_isolation(rows, split_dir, pool)` 在**唯一写盘函数**里跑，所有产物必须经它；
+#      独立检查器 scripts/check_split_isolation.py 对落盘 parquet 复核（探针/管线前提检查都调它）
+
+_DERIVED_SUFFIX = re.compile(r"_(COT15|COT5|MT5|DEFF|REJF|CLAF|CLAFO|L2X|WIN|WINI)$")
+
+
+def base_case_id(case_id: str) -> str:
+    """派生行编号 → 底题编号（FRESH_0039_DEFF → FRESH_0039；L1F_0007 这类无底题的返回原值）。"""
+    cid = str(case_id)
+    prev = None
+    while prev != cid:                        # 允许多层后缀（X_MT5_COT15）
+        prev, cid = cid, _DERIVED_SUFFIX.sub("", cid)
+    return cid
+
+
+def load_split_bundles(batch_dir: Path, split_dir: Path, pool: str) -> dict[str, CaseBundle]:
+    """只装某一桶的题（源头隔离）。pool ∈ eval / sft / rl。"""
+    wanted = set(load_bucket(Path(split_dir), pool))
+    allb = load_bundles(Path(batch_dir))
+    out = {c: b for c, b in allb.items() if c in wanted}
+    missing = wanted - set(out)
+    assert not missing, f"切分里有 {len(missing)} 道题不在题库：{sorted(missing)[:5]}"
+    return out
+
+
+def split_isolation_report(rows: list[dict[str, Any]] | Any, split_dir: Path, pool: str) -> dict[str, Any]:
+    """逐行核对底题归属。rows 可以是 dict 列表或 DataFrame（需 case_id 列，可选 source_case_ids 列）。
+    返回 {ok, counts:{eval,sft,rl,none}, offenders:[(case_id, base, bucket)…]}。"""
+    buckets = {name: set(load_bucket(Path(split_dir), name)) for name in ("eval", "sft", "rl")}
+    counts = {"eval": 0, "sft": 0, "rl": 0, "none": 0}
+    offenders: list[tuple[str, str, str]] = []
+    it = rows.to_dict("records") if hasattr(rows, "to_dict") else rows
+    for r in it:
+        src = r.get("source_case_ids")
+        if src is None or (hasattr(src, "__len__") and len(src) == 0):
+            src = [base_case_id(r.get("case_id", ""))]
+        for s in list(src):
+            s = str(s)
+            hit = next((n for n, ids in buckets.items() if s in ids), "none")
+            counts[hit] += 1
+            if hit not in (pool, "none"):
+                offenders.append((str(r.get("case_id")), s, hit))
+    return {"ok": not offenders, "pool": pool, "counts": counts, "offenders": offenders}
+
+
+def assert_split_isolation(rows: Any, split_dir: Path, pool: str) -> dict[str, Any]:
+    """出口硬闸：任一底题落在别的桶 ⇒ 直接抛。判据行必打（守则①：两个东西应当相同 —— 底题桶 == 产物桶）。"""
+    rep = split_isolation_report(rows, split_dir, pool)
+    c = rep["counts"]
+    print(f"[隔离] 产物桶={pool} · 底题归属 eval={c['eval']} sft={c['sft']} rl={c['rl']} 无底题={c['none']} · "
+          f"越桶 {len(rep['offenders'])}（必须 0）", flush=True)
+    for cid, base, bucket in rep["offenders"][:10]:
+        print(f"   ✗ {cid} ← {base} 在 {bucket} 桶")
+    assert rep["ok"], f"🔴 三桶隔离被破坏：{len(rep['offenders'])} 行的底题来自别的桶（首条 {rep['offenders'][0]}）"
+    return rep

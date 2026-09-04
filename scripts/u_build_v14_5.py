@@ -152,7 +152,7 @@ async def gen_defs(client) -> dict[str, list[str]]:
             f"以「{term}」开头，措辞和书面定义不同，直接输出。",
         ]
         for i in range(5):
-            if len(versions) >= 3:
+            if len(versions) >= 5:      # 09-04：3→5 版（250 行 L1 / 61 词 ⇒ 3 版必有同一定义服务 ≥3 题面；出厂体检"预设答案"闸）
                 break
             t = await teach(client, T4B, angles[i], temp=0.9)
             t = clean_reply(t)
@@ -392,12 +392,12 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
       不是给 gold 编理由（Goodhart 那条线不能越）。
     """
     from syncopate.pipeline.build_dataset import build_sft_row
-    from syncopate.pipeline.split import load_bundles
+    from syncopate.pipeline.split import load_split_bundles
 
     hard_pref = set(HARD_FAMILIES)          # 裁定⑭：族名常量，不读 v13 triage 产物
     # ★ 09-04 裁定⑩：候选池 = 当前切分的 sft 桶（不再读上一版 parquet——v16 之前根本没有 parquet）
     sft_ids = json.load(open(f"{DEFAULT_SPLIT_DIR}/sft_cases.json"))["case_ids"]
-    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
+    bundles = load_split_bundles(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")   # 三桶隔离①：只装 SFT 桶
     cands = [c for c in sft_ids if c.split("_")[0] in hard_pref and c in bundles]
     cands.sort(key=lambda c: -len(bundles[c].gold.actions))     # 长轨迹优先（多步=思考有用武之地）
     percnt, capped = Counter(), []
@@ -600,8 +600,8 @@ async def gen_cot_v15(client, tokenizer, registry, max_rows=60, target=0.60):
 
 async def build_l2_l1(tokenizer, registry, client):
     from syncopate.pipeline.build_dataset import build_sft_row
-    from syncopate.pipeline.split import load_bundles
-    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
+    from syncopate.pipeline.split import load_split_bundles
+    bundles = load_split_bundles(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")   # 三桶隔离①：EVAL/RL 的题不进内存
     # ★ 09-04（v16 首次全量重建暴露）：L2/L1 的历史轮是「上一轮助手的真实终答人话」，所以源 case 只能是
     #   终答型（tool_call / answer）——defer/clarify/reject 收场的 case 没有"人话终答"，历史该是信令自己的话，
     #   那是④族（DEF-F/REJ-F/CLA-F）的事，不进这里。此前 v13 时代靠累积的压舱缓存碰巧盖住，v16 重编号+缓存作废后
@@ -1054,9 +1054,9 @@ async def _replay_frozen(tokenizer, registry, parquet_path: str, base_index: int
       —— 全量 419 条已由 scripts/v15_r2_migrate.py 证过（25 §R2①）。
     """
     from syncopate.pipeline.build_dataset import build_sft_row
-    from syncopate.pipeline.split import load_bundles
+    from syncopate.pipeline.split import load_split_bundles
     df = pd.read_parquet(parquet_path)
-    bundles = load_bundles(Path(DEFAULT_BATCH_DIR))
+    bundles = load_split_bundles(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")   # 三桶隔离①：只装 SFT 桶
     # ★ v15：这批 case 的 gold **没有 reply**（v14 终答是 JSON 壳）⇒ 终答人话要有真实来源。
     #   不给 client 就会落回模板兜底 —— 那正是 ㉖/㉙ 的病根，所以这里**要求**给。
     replies = {}
@@ -1137,7 +1137,8 @@ async def main() -> int:
         # ★ 09-02 W2⑦：六族第一波训练行（DEF-F/REJ-F/CLA-F/L2-x/WIN，各成对）
         from syncopate.pipeline.build_dataset import build_sft_row as _bsr
         from syncopate.pipeline.split import load_bundles as _lb
-        _bundles = _lb(Path(DEFAULT_BATCH_DIR))
+        from syncopate.pipeline.split import load_split_bundles as _lsb
+        _bundles = _lsb(Path(DEFAULT_BATCH_DIR), Path(DEFAULT_SPLIT_DIR), "sft")   # 三桶隔离①（09-04 事故：六族行 48 条底题来自 EVAL）
 
         async def _replay_fam(b, idx):
             return await _bsr(b, tokenizer=tokenizer, registry=registry, index=idx, split="train", config=None)
@@ -1321,6 +1322,10 @@ async def main() -> int:
     assert not sc["bad"], f"🔴 同形体检 {len(sc['bad'])} 处不同形"
     if DRY:
         _dry = pd.DataFrame(list(t13.to_dict("records")) + l2 + l1 + chat_rows + fam + cot)
+        from u_build_v15_multiturn import SOURCE_OF as _SRC
+        from syncopate.pipeline.split import assert_split_isolation as _asi, base_case_id as _bcid
+        _dry["source_case_ids"] = [[_SRC.get(str(c)) or _bcid(str(c))] for c in _dry["case_id"]]
+        _asi(_dry, Path(DEFAULT_SPLIT_DIR), "sft")          # 三桶隔离③：DRY 也走出口闸
         _dp = Path("_audit/v16/dry_rows.parquet"); _dp.parent.mkdir(parents=True, exist_ok=True)
         _dry.to_parquet(_dp)
         print(f"[DRY] 演练产物 → {_dp}（给 scripts/v15_data_gallery.py 看终态）")
@@ -1410,9 +1415,14 @@ async def main() -> int:
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
     out = Path(DEFAULT_SFT_DIR)
-    out.mkdir(parents=True, exist_ok=True)
-    train.to_parquet(out / "train.parquet")
-    val.to_parquet(out / "val.parquet")
+    # ★ 三桶隔离②③（09-04）：每行登记底题；落盘只走唯一带闸写盘函数（底题桶 == 产物桶，越桶直接抛）
+    from u_build_v15_multiturn import SOURCE_OF as _SRC
+    from syncopate.pipeline.split import base_case_id as _bcid
+    from syncopate.pipeline.build_dataset import write_split_checked
+    train_records = train.to_dict("records"); val_records = val.to_dict("records")
+    for r in train_records + val_records:
+        cid = str(r.get("case_id", ""))
+        r["source_case_ids"] = [_SRC.get(cid) or _bcid(cid)]
     axes = Counter(r.get("sub_axis", "?").split("|")[0] for r in new_rows)
     manifest = {"version": "v15" if IS_V15 else "v14.5", "seed": 1455,
                 "sources": {"v13_train": len(t13), "multiturn_l2": len(l2),
@@ -1426,7 +1436,7 @@ async def main() -> int:
                 "bands_mode": "strict" if os.environ.get("U_BUILD_BANDS_STRICT", "0") == "1" else "report_only_first_v16",
                 "cot_share_target": 0.28,
                 "gates": "份额（见 bands_mode）· CoT≤30% 硬 · 密度 · OOV=0 · 泄漏=0 · 冻结桶行数派生相等"}
-    json.dump(manifest, open(out / "manifest.json", "w"), ensure_ascii=False, indent=1)
+    manifest = write_split_checked(out, train_records, val_records, split_dir=Path(DEFAULT_SPLIT_DIR), pool="sft", manifest_extra=manifest)
     print(json.dumps(manifest, ensure_ascii=False, indent=1))
     # ── 出厂体检（`25 §7㉙`，Chaoyu 08-30：「不能走完完整训练之后再返工来做检查」）──
     #   ⚠️ 必须在**落盘之后**跑真产物，不是跑内存里的中间态 ——

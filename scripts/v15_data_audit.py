@@ -50,12 +50,16 @@ def norm(t: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
-def split_row(text: str) -> dict:
-    """一行训练样本 → 各通道文本。"""
+def split_row(text: str, response_text: str | None = None) -> dict:
+    """一行训练样本 → 各通道文本。
+    ★ 09-04 run24：终答/think/信令只从 **response 区**（prompt_length 之后，真正被监督的部分）取——历史轮是 prompt 上下文
+      不是教学目标，之前把六族行历史里的助手句当"终答"量，fam_deff/claf/rejf 30% 同句全是历史轮（真终答是信令、没有人话）。
+      user 仍取全文（题面/泄漏闸要看历史）。"""
     out = {"user": [], "think": [], "calls": [], "prose": []}
     out["user"] = [u.strip() for u in _USER.findall(text)
                    if "<tool_response>" not in u]
-    for seg in _ASSIST.findall(text):
+    src = response_text if response_text is not None else text
+    for seg in (_ASSIST.findall(src) if response_text is None else _assist_segments_in_response(src)):
         for th in _THINK.findall(seg):
             if th.strip():
                 out["think"].append(th.strip())
@@ -72,6 +76,19 @@ def split_row(text: str) -> dict:
 # 概念追问的问法壳。⚠️ 「什么是毛利？」「毛利又是什么」「那毛利呢」是**同一个问题**，
 #   同一句定义回答它们是对的 —— 把问法当成不同题面，会把正确的行为报成"预设答案"。
 #   （08-30 实测：16 项误报全是这一种。判据要量的是"答案与题面无关"，不是"字面不同"。）
+def _assist_segments_in_response(resp: str) -> list[str]:
+    """response 区以 assistant 正文开头（没有 <|im_start|>assistant 头；模板已把 "<think>\n" 写进 prompt ⇒ 首段以思考正文开头，
+    以 </think> 收），后续轮次有头 ⇒ 首段补回 <think> 开头后 + 常规匹配。"""
+    segs = []
+    head = resp.split("<|im_end|>", 1)[0]
+    if head.strip():
+        if "</think>" in head and "<think>" not in head:
+            head = "<think>" + head          # 补回被 prompt 吃掉的开头，让 _THINK 能整块识别
+        segs.append(head)
+    segs += _ASSIST.findall(resp)
+    return segs
+
+
 _ASK_SHELL = ["再说说", "什么是", "又是什么", "是什么意思", "是什么", "那", "呢"]
 
 
@@ -117,7 +134,8 @@ def audit(path: Path, model: str = STUDENT_MODEL) -> dict:
     rows = []
     for _, r in df.iterrows():
         text = tok.decode(list(r["input_ids"])[:r["total_length"]])
-        ch = split_row(text)
+        resp_text = tok.decode(list(r["input_ids"])[int(r["prompt_length"]):r["total_length"]]) if "prompt_length" in r else None
+        ch = split_row(text, resp_text)
         ch["bucket"] = r.get("bucket", "?")
         ch["case_id"] = r.get("case_id", "?")
         rows.append(ch)
@@ -138,7 +156,7 @@ def audit(path: Path, model: str = STUDENT_MODEL) -> dict:
         if last:
             prose_all.append(last)
             prose_by_bucket[ch["bucket"]].append(last)
-            q = ch["user"][0] if ch["user"] else ""
+            q = ch["user"][-1] if ch["user"] else ""      # 09-04：多轮行按**被回答的那一轮**（最后一个 user）归键，不是历史首轮
             answer_to_prompts[last].add(qkey(q))
         user_all += ch["user"][:1]
         think_all += ch["think"]

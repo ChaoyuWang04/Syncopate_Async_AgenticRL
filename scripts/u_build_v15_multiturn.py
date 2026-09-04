@@ -66,11 +66,15 @@ def real_reply(bundle: CaseBundle) -> str:
     raise AssertionError(f"🔴 {bundle.case_id} 没有真实终答人话可作历史（不许用占位符，守则⑮ #2）")
 
 
+SOURCE_OF: dict[str, str] = {}      # 派生行编号 → 底题编号（split.assert_split_isolation 的 source_case_ids 来源）
+
+
 def as_multiturn(b: CaseBundle, *, case_id: str, user_message: str, prior: list[dict],
                  gold_actions: list[dict] | None = None, final_answer: dict | None = None,
                  behavior: str | None = None) -> CaseBundle:
     b2 = copy.deepcopy(b)
     b2.case.case_id = case_id
+    SOURCE_OF[case_id] = b.case_id          # 三桶隔离②：派生行登记底题（出口闸按它核）
     b2.case.user_message = user_message
     b2.case.context = prod_context(b)
     b2.case.tool_menu = None                      # 全量菜单（裁定②）
@@ -128,7 +132,9 @@ def l2x_ask(ref: str, mname: str) -> str:
 
 
 WIN_REPLY = ["你最早给 {c} 定的是 {v}。", "最开始你说的 {c} 那个数是 {v}。", "记录里 {c} 最早的那个值是 {v}。",
-             "{c} 你一开始给的是 {v}。", "翻到了，{c} 最早定的数是 {v}。", "开头那次你给 {c} 定的数是 {v}。"]   # 09-04：单模板 50% 同句
+             "{c} 你一开始给的是 {v}。", "翻到了，{c} 最早定的数是 {v}。", "开头那次你给 {c} 定的数是 {v}。",
+             "查到了：{c} 最早那次定的是 {v}。", "你第一次给 {c} 报的数是 {v}。", "{c} 最初的那个数是 {v}，我这边有记录。",
+             "回头看记录，{c} 一开始定的是 {v}。", "最早那次，{c} 你说的是 {v}。", "{c} 开头你给的数是 {v}，没记错的话。"]   # 09-04：12 变体
 WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着"]
 # (问句, 术语)——助手回答按术语名从定义库精确取，取不到直接报错（不许落回占位；eCPM 是考卷 held-out 词，不用）
 WIN_FILL = [("ROAS 是什么意思？", "ROAS"), ("那 CPI 呢", "CPI"), ("CTR 呢？", "CTR"), ("回本周期是什么", "回本周期"),

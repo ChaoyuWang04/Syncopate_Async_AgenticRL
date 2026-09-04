@@ -234,6 +234,15 @@ def build(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     train_path, val_path = out_dir / "train.parquet", out_dir / "val.parquet"
+    # ★ 三桶隔离出口闸（2026-09-04）：底题桶 == 产物桶，越桶直接抛；没有切分目录（--full-batch）明说无法核
+    if split_dir:
+        from syncopate.pipeline.split import assert_split_isolation
+        for _rows in (train_rows, val_rows):
+            _iso = [{"case_id": (r["extra_info"]["case_id"] if pool == "rl" else r["case_id"])} for r in _rows]
+            if _iso:
+                assert_split_isolation(_iso, Path(split_dir), pool)
+    else:
+        print("[隔离] ⚠️ 没有切分目录（--full-batch）：无法核底题桶，只许用于造 v1 之前的旧批次", flush=True)
     _write_parquet(train_path, train_rows)
     _write_parquet(val_path, val_rows)
     (out_dir / "manifest.json").write_text(
