@@ -728,7 +728,8 @@ def p_build_v16(skip_probe: bool = False) -> dict:
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
             _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
         # 旧物料不许命中（裁定⑭）：判据 = 建库脚本源码里不再出现任何旧缓存/物料文件名（前任 09-04 核对：原判据数的是取回的新缓存，第二次起必红）
-        stale = _sh("grep -cE 'v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)\\.json|v145_(defs|chat_mat)\\.json\"|cand_v13r2_e1/' scripts/u_build_v14_5.py || true", cwd=REPO)["out"].strip()
+        # 只数代码行（注释里提到旧名不算——run17 实测 3 条注释把判据判红）
+        stale = _sh("grep -vE '^\\s*#' scripts/u_build_v14_5.py | grep -cE 'open\\(.*(v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|v145_(defs|chat_mat))\\.json|cand_v13r2_e1/' || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
         b = _sh(f"{PY} scripts/u_build_v14_5.py > {aud}/build.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env=env, timeout=2 * 3600)
         blog = open(f"{aud}/build.log", errors="replace").read()

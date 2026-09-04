@@ -1257,7 +1257,9 @@ async def main() -> int:
     val = pd.concat([v13v, pd.DataFrame(valrows)], ignore_index=True)
 
     # ── 门禁 ──
-    assert DRY or len(t13) == 419, "冻结校验失败"
+    # ★ 09-04 run17 实案：这里原来写死 419（v13 冻结桶行数）——v16 按"每 6 取 1"派生是 420 ⇒ 按旧单位标定的阈值又一次不报错地失效。
+    #   判据改成「两个东西应当相同」：重放行数 == 冻结清单行数（派生，不写数）。
+    assert DRY or len(t13) == len(_train_ids), f"🔴 冻结校验失败：重放 {len(t13)} 行 != 冻结清单 {len(_train_ids)} 行"
     tok_by = {"v13": int(t13.supervised_tokens.sum()),
               "l2": sum(r["supervised_tokens"] for r in l2),
               "l1": sum(r["supervised_tokens"] for r in l1),
