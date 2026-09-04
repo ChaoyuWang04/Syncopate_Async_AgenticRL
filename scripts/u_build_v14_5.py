@@ -182,7 +182,7 @@ async def gen_chat(client, bank) -> list[dict]:
             continue
         summ = clean_reply(await teach(
             client, T4B, f"用不超过 12 个字概括这句话的主旨（直接输出概括）：{rep}", "", 30))[:20]
-        if not summ or rep.startswith(summ):
+        if not summ or rep.startswith(summ) or has_oov(summ):
             summ = f"{style}回应"
         row = {"prompt": item["prompt"], "reply": rep, "summary": summ,
                "style": style, "source": item["source"], "turns": 1}
@@ -193,7 +193,7 @@ async def gen_chat(client, bank) -> list[dict]:
                 client, T4B,
                 f"上一轮同事问：「{item['prompt']}」你答：「{rep}」现在对方追问：「{fu}」"
                 f"请自然地补充回应（一到三句，不重复原话）。", sysp, 220))
-            if 20 <= len(rep2) <= 400 and not SICK.search(rep2) and "{" not in rep2:
+            if 20 <= len(rep2) <= 400 and not SICK.search(rep2) and "{" not in rep2 and not has_oov(rep2):
                 row.update({"turns": 2, "followup": fu, "reply2": rep2})
         out.append(row)
     assert len(out) >= 85, f"chat 素材不足 {len(out)}"
@@ -1353,10 +1353,18 @@ async def main() -> int:
         if r.get("bucket") in ("multiturn_l1", "chat_shell"):
             gold = tokenizer.decode(
                 list(r["input_ids"])[r["prompt_length"]:r["total_length"]])
-            teach_hits += sum(1 for t in OOV if t in gold)
+            for t in OOV:
+                if t in gold:
+                    teach_hits += 1
+                    _i = gold.find(t)
+                    print(f"   ✗ OOV 教学面：{r.get('bucket')} {r.get('case_id')} 词「{t}」…{gold[max(0, _i - 50):_i + 30]!r}")
         ambient_hits += n
-    for vs in DEFS.values():
-        teach_hits += sum(1 for v in vs for t in OOV if t in v)
+    for term, vs in DEFS.items():
+        for v in vs:
+            for t in OOV:
+                if t in v:
+                    teach_hits += 1
+                    print(f"   ✗ OOV 教学面：DEFS[{term}] 词「{t}」：{v[:80]!r}")
     print(f"[OOV] 教学面命中 {teach_hits}（必须 0）· 全语料自然词用 {ambient_hits}（上报不判）")
     assert teach_hits == 0, f"🔴 OOV 定义教学泄漏 {teach_hits} 次"
     # 考场泄漏：考卷第二轮句子逐字不得出现在训练 user 文本
