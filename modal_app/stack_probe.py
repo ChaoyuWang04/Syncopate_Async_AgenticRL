@@ -705,7 +705,7 @@ def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096, arm: s
 
 # ─────────────────────────── S3 · v16 训练集建库（B200 单卡：Qwen3.8-27B 教师 + 26 §W4 七步） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=3 * 3600, secrets=SECRETS)
-def p_build_v16(skip_probe: bool = False) -> dict:
+def p_build_v16(skip_probe: bool = False, gates: str = "strict") -> dict:
     """W4 七步（v16/B200 版）：① 教师起服务（Qwen3.8-27B @8210，两角色同端点）② 行为类 think 探针（≥70% 才收）
     ③ 旧缓存已在 git 里改名作废（*.pre_v16.json，不许命中）④ 建库 tee 入 /vol/_audit/v16/build.log
     ⑤ 判据：[同形] 不同形 0 · [CoT-v15] 命中率行在 · 出厂体检 ✅ · prompt 预算零截断 · 产物 grep "[DRY" = 0
@@ -734,7 +734,8 @@ def p_build_v16(skip_probe: bool = False) -> dict:
         stale = _sh("grep -vE '^\\s*#' scripts/u_build_v14_5.py | grep -cE 'open\\(.*(v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|v145_(defs|chat_mat))\\.json|cand_v13r2_e1/' || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
         # ★ 09-04 固定管线：探针不再自己拼命令，只调 runbook 的 stage（本机 == 云上）；教师由本函数起（进程管理），runbook 检测到已在线会跳过
-        b = _sh(f"bash scripts/v16_pipeline.sh sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY}, timeout=2 * 3600)
+        # gates=report：闸观察模式（所有闸都算不中断、产物落 _audit/v16/report、末尾汇总）——一次看全貌，不再红一道停一道
+        b = _sh(f"bash scripts/v16_pipeline.sh sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY, "U_BUILD_GATES": gates}, timeout=2 * 3600)
         _sh(f"cp _audit/v16/build.log {aud}/build.log 2>/dev/null; cp _audit/v16/gallery.md {aud}/gallery.md 2>/dev/null; true", cwd=REPO)
         blog = open(f"{aud}/build.log", errors="replace").read() if os.path.exists(f"{aud}/build.log") else open(f"{aud}/sft_data_stage.log", errors="replace").read()
         rec["build_rc"] = int(re.search(r"BUILD_RC=(\d+)", b["out"]).group(1)) if re.search(r"BUILD_RC=(\d+)", b["out"]) else -1
@@ -980,7 +981,7 @@ ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm"
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = ""):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = "", build_gates: str = "strict"):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -1005,7 +1006,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "wandb" in want: run("wandb", p_wandb)
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
-    if "build_v16" in want: run("build_v16", p_build_v16)
+    if "build_v16" in want: run("build_v16", p_build_v16, False, build_gates)
     if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens, diag_arm, diag_arm == "base")
     if "sft_smoke" in want: run("sft_smoke", p_sft_smoke, max_steps, False, sft_arm, sft_train_file, sft_val_file, sft_epochs)
     if "exam_v4" in want: run("exam_v4", p_exam_v4, exam_model, exam_adapter, exam_arm, exam_passes, 4, exam_limit)
