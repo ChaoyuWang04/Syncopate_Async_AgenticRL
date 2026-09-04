@@ -127,6 +127,8 @@ def l2x_ask(ref: str, mname: str) -> str:
     raise RuntimeError(f"L2X 问法全部与考卷被判句撞车：{ref}/{mname}")
 
 
+WIN_REPLY = ["你最早给 {c} 定的是 {v}。", "最开始你说的 {c} 那个数是 {v}。", "记录里 {c} 最早的那个值是 {v}。",
+             "{c} 你一开始给的是 {v}。", "翻到了，{c} 最早定的数是 {v}。", "开头那次你给 {c} 定的数是 {v}。"]   # 09-04：单模板 50% 同句
 WIN_ASK = ["我最开始给 {c} 说的那个数是多少？", "开头我提到 {c} 时给的数字还记得吗？", "最早我说 {c} 的那个数值是多少来着"]
 # (问句, 术语)——助手回答按术语名从定义库精确取，取不到直接报错（不许落回占位；eCPM 是考卷 held-out 词，不用）
 WIN_FILL = [("ROAS 是什么意思？", "ROAS"), ("那 CPI 呢", "CPI"), ("CTR 呢？", "CTR"), ("回本周期是什么", "回本周期"),
@@ -263,7 +265,7 @@ async def build_family_rows(tokenizer, registry, bundles: dict[str, CaseBundle],
                                   behavior="clarify")
             else:
                 b2 = as_multiturn(b, case_id=f"{b.case_id}_WINI", user_message=ask, prior=prior,
-                                  gold_actions=[], final_answer={"reply": f"你最早给 {cid} 定的是 {val}。"},
+                                  gold_actions=[], final_answer={"reply": rng.choice(WIN_REPLY).format(c=cid, v=val)},
                                   behavior="answer")
             await emit(b2, "fam_win", f"win|{'out' if out_of_window else 'in'}", f"WIN_{i}")
     return rows
@@ -286,9 +288,14 @@ def shape_check(tokenizer, rows: list[dict]) -> dict:
             bad.append((r["case_id"], "多轮行没有历史助手消息"))
         # ★ 空 think 块不许有梯度（Chaoyu 09-02 裁定；闲聊行曾漏掉——画廊抓到）
         resp, rm = list(r["input_ids"])[r["prompt_length"]:], list(r["loss_mask"])[r["prompt_length"]:]
-        pat = _empty_think_ids(tokenizer)
-        if any(resp[i:i + len(pat)] == pat and any(rm[i:i + len(pat)]) for i in range(len(resp) - len(pat) + 1)):
+        pat, opener = _empty_think_ids(tokenizer)
+        # 模板已开 <think> 时，空块 = response 起点或紧跟 prompt/env（前一 token mask 0）的 "\n</think>\n\n"
+        if any(resp[i:i + len(pat)] == pat and any(rm[i:i + len(pat)]) and ((not opener) or i == 0 or rm[i - 1] == 0)
+               for i in range(len(resp) - len(pat) + 1)):
             bad.append((r["case_id"], "空 think 块有梯度"))
+        # 09-04 run22：训练行不许出现双开头（模板写了 <think>\n、构造代码又写一次）
+        if "<think>\n<think>" in tokenizer.decode(list(r["input_ids"])[:r["total_length"]]):
+            bad.append((r["case_id"], "think 双开头"))
     return {"n": len(rows), "bad": bad, "missing_real_reply": list(_missing)}
 
 
@@ -298,6 +305,7 @@ _ET: dict[int, list[int]] = {}
 def _empty_think_ids(tokenizer):
     k = id(tokenizer)
     if k not in _ET:
-        from syncopate.pipeline.sft_replay import EMPTY_THINK
-        _ET[k] = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
+        from syncopate.pipeline.sft_replay import EMPTY_THINK, EMPTY_THINK_RESP, think_opener_in_prompt
+        opener = think_opener_in_prompt(tokenizer)
+        _ET[k] = (tokenizer.encode(EMPTY_THINK_RESP if opener else EMPTY_THINK, add_special_tokens=False), opener)
     return _ET[k]

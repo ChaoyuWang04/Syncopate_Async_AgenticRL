@@ -68,7 +68,7 @@ def gold_script(bundle: CaseBundle, behavior: str | None = None,
     else:
         steps.append(render_final_answer(resolved, bundle.gold.final_answer))
     if ENABLE_THINKING:
-        steps = attach_think(steps, thinking or {})
+        steps = attach_think(steps, thinking or {}, opener_in_prompt=_OPENER_FLAG[0])
     return steps
 
 
@@ -112,18 +112,30 @@ _REJECT_LINES = {
         "我没有执行这一步的权限，得由有授权的同事来操作。",
         "超出我能动的范围了，这类操作要走授权流程。",
         "这属于授权外的动作，我不能替你执行。",
+        "这一步我没有权限碰，需要授权的人来点。",
+        "权限不够，这个我执行不了，得找有授权的同事。",
+        "这类操作在我权限之外，走一下授权再说。",
+        "我这边没被授权做这个，不能替你点下去。",
     ],
     "out_of_scope": [
         "这个不在投放这块的范围里，我帮不上。",
         "这超出了我能处理的事情，换个投放相关的问题我再看看。",
         "这件事和广告投放没关系，我这边没法处理。",
         "我只管投放这一摊，这个问题我答不了。",
+        "这个和投放业务不沾边，我这里处理不了。",
+        "超出投放助手的范围了，这个我帮不上忙。",
+        "这不是投放相关的事，我没法接。",
+        "这一类我不负责，换个投放上的问题吧。",
     ],
     "policy": [
         "这么做会踩到平台政策，不能执行。",
         "平台政策不允许这样操作，我这边过不了。",
         "这和现行的广告政策冲突，做不了。",
         "按政策这条路是封死的，得换个做法。",
+        "这个操作违反平台政策，我不能做。",
+        "政策不允许，这条我这边执行不了。",
+        "这样做会触犯广告政策，做不了，得换方案。",
+        "平台规则明确禁止这么做，我这边过不去。",
     ],
 }
 _CLARIFY_LINES = [
@@ -131,12 +143,20 @@ _CLARIFY_LINES = [
     "得知道 {mf} 才能往下走，能补一下吗？",
     "麻烦给个 {mf}，不然这一步定不下来。",
     "缺 {mf} 这个信息，补上我就继续。",
+    "先把 {mf} 告诉我，我才能接着往下查。",
+    "这一步卡在 {mf} 上，补一下我立刻继续。",
+    "我还需要 {mf}，有了它就能定下来。",
+    "少了 {mf}，能给一下吗？给了就往下走。",
 ]
 _DEFER_LINES = [
     "现在这个数还在动，等它稳下来再下结论。",
     "观测窗口还不够，这时候判断容易判反。",
     "数据还没收敛，再等等更靠谱。",
     "现在下结论对错全看运气，先等数据稳。",
+    "数据还在爬坡，现在判会判偏，再等一等。",
+    "样本还不够稳，先别下结论，过几天再看。",
+    "这会儿数字还没定型，急着判容易翻车。",
+    "观测期没走完，等数据收敛了再定。",
 ]
 
 
@@ -191,6 +211,8 @@ _FIELD_CN = {
     "approved_budget": "核准预算", "review_status": "审核状态", "asset_id": "素材 ID",
     "data_maturity": "数据成熟度", "missing_field": "缺少字段",
     "conflict_record_ids": "冲突记录", "recheck_after_days": "建议复查天数",
+    "can_decide": "现在能否下结论", "historical_d7_cpi": "近 7 日历史 CPI", "safety_ceiling": "安全线上限",
+    "decision": "决策", "factor": "调整系数", "action": "动作", "block": "拦下",
 }
 _CONCLUSION_CN = {
     "positive": "有正向效果", "negative": "有负向效果",
@@ -232,10 +254,24 @@ def _prose_from_fields(fa: dict) -> str:
     return "、".join(parts) + "。"
 
 
-EMPTY_THINK = "<think>\n\n</think>\n\n"
+EMPTY_THINK = "<think>\n\n</think>\n\n"          # 整块字面量（模板自己不开 <think> 时用；Qwen3 时代）
+EMPTY_THINK_RESP = "\n</think>\n\n"               # 模板已在生成提示里写了 "<think>\n" 时，response 区只剩收尾
 
 
-def attach_think(steps: list[str], thinking: dict[int, str]) -> list[str]:
+def think_opener_in_prompt(tokenizer: Any) -> bool:
+    """模板的 assistant 生成提示是否已经以 "<think>\n" 结尾（Qwen3.5+ enable_thinking=True 是；Qwen3 不是）。
+    ★ 09-04 run22 出厂体检抓到：训练行每个 assistant 轮都是 "<think>\n<think>\n\n</think>"——模板开了一次、
+      attach_think 又开了一次 ⇒ 会教模型吐双开头。判据「训练样例 == 线上模型看到的形状」（守则⑮）。"""
+    from syncopate.train.rollout_loop import CHAT_TEMPLATE_KWARGS
+    key = ("opener", id(tokenizer))
+    if key not in _EMPTY_THINK_IDS:
+        txt: str = tokenizer.apply_chat_template([{"role": "user", "content": "…"}], add_generation_prompt=True,
+                                                 tokenize=False, **CHAT_TEMPLATE_KWARGS)
+        _EMPTY_THINK_IDS[key] = txt.endswith("<think>\n")   # type: ignore[assignment]
+    return bool(_EMPTY_THINK_IDS[key])
+
+
+def attach_think(steps: list[str], thinking: dict[int, str], opener_in_prompt: bool = False) -> list[str]:
     """★ think-on 下**每个** assistant 轮都要显式写出 think 段（`25 §3.2` 修法 B）。
 
     ⚠️ 只做 A（切 think-on）不做 B 的后果是实测过的：监督段直接以 <tool_call> 开头、
@@ -247,7 +283,10 @@ def attach_think(steps: list[str], thinking: dict[int, str]) -> list[str]:
     out = []
     for i, body in enumerate(steps):
         content = (thinking.get(i) or "").strip()
-        prefix = f"<think>\n{content}\n</think>\n\n" if content else EMPTY_THINK
+        if opener_in_prompt:      # 模板已写 "<think>\n"：response 只从思考正文开始（与线上模型看到的一致）
+            prefix = f"{content}\n</think>\n\n" if content else EMPTY_THINK_RESP
+        else:
+            prefix = f"<think>\n{content}\n</think>\n\n" if content else EMPTY_THINK
         out.append(prefix + body)
     return out
 
@@ -309,7 +348,7 @@ async def build_sft_sample(
         max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
     output = await run_rollout(
         bundle, registry=registry, tokenizer=tokenizer,
-        generate=_ScriptedEngine(tokenizer, gold_script(bundle, thinking=thinking)),
+        generate=_ScriptedEngine(tokenizer, (_OPENER_FLAG.__setitem__(0, think_opener_in_prompt(tokenizer)) or gold_script(bundle, thinking=thinking))),
         config=config,
         rollout_id="gold", run_id="sft",
     )
@@ -339,20 +378,25 @@ async def build_sft_sample(
     )
 
 
-_EMPTY_THINK_IDS: dict[int, list[int]] = {}
+_EMPTY_THINK_IDS: dict = {}
+_OPENER_FLAG = [False]      # gold_script 没有 tokenizer ⇒ build_sft_sample 先按模板定下这个开关（同一进程同一模板）
 
 
 def _mask_empty_think(tokenizer: Any, ids: list[int], mask: list[int], *, start: int) -> int:
     """把 response 区里每个 EMPTY_THINK 的 token 段 loss_mask 置 0；返回置零的块数。
     ⚠️ 按 token 序列匹配（不是按字符），与 attach_think 产出的字面量同源；
        tokenizer 若把 "</think>\n\n" 与后续文本合并分词，会匹配不到 ⇒ 用测试守着（test_rollout_loop）。"""
-    key = id(tokenizer)
+    opener = think_opener_in_prompt(tokenizer)
+    key = ("pat", id(tokenizer), opener)
     pat = _EMPTY_THINK_IDS.get(key)
     if pat is None:
-        pat = _EMPTY_THINK_IDS[key] = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
+        pat = _EMPTY_THINK_IDS[key] = tokenizer.encode(EMPTY_THINK_RESP if opener else EMPTY_THINK, add_special_tokens=False)
     n, L, i = 0, len(pat), start
     while i <= len(ids) - L:
-        if ids[i:i + L] == pat and any(mask[i:i + L]):
+        # 模板开了 <think> 时，"\n</think>\n\n" 也会出现在**非空**思考的末尾 ⇒ 只在前一个 token 属于 prompt/env（mask 0）
+        # 或正好在 response 起点时才算"空块"（空块前面紧挨着模板写的 "<think>\n"）
+        empty_here = (not opener) or i == start or mask[i - 1] == 0
+        if ids[i:i + L] == pat and any(mask[i:i + L]) and empty_here:
             for j in range(i, i + L):
                 mask[j] = 0
             n += 1

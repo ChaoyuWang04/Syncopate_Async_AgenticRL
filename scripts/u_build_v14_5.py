@@ -815,8 +815,9 @@ def build_chat_rows(tokenizer, chat_mat):
             # v15：闲聊没有机器可核字段 ⇒ 不发 session.report，终答就是一句人话。
             # ★ 但 think 段必须显式写出来（门槛⑤⒜=100%）——闲聊属"简单题"，
             #   填**空块**正是在教「这种题不用想」（N3 按需思考的负样本那一半）。
-            from syncopate.pipeline.sft_replay import EMPTY_THINK
-            gtext = EMPTY_THINK + reply + "<|im_end|>"
+            from syncopate.pipeline.sft_replay import EMPTY_THINK, EMPTY_THINK_RESP, think_opener_in_prompt
+            # 09-04 run22：模板已在生成提示里写了 "<think>\n" 时，这里只能写收尾（否则双开头）——与 sft_replay.attach_think 同规则
+            gtext = (EMPTY_THINK_RESP if think_opener_in_prompt(tokenizer) else EMPTY_THINK) + reply + "<|im_end|>"
         else:
             gold = {"behavior": "answer",
                     "answer": {"summary": c["summary"], "reply": reply}}
@@ -914,7 +915,8 @@ def density_gate(rows, tokenizer, name):
 #
 # 三道过滤缺一不可：① 长度/病句 ② 句式去重（抹掉数字后不许撞） ③ **禁编数**
 #   —— ③ 是最容易漏的：教师顺手编一个没出现过的数字，就等于在教模型幻觉。
-_BALLAST_CACHE = Path("data/u_route/v16_ballast_replies.json")   # 裁定⑭：缓存名带数据版本，旧名读不到
+_BALLAST_CACHE = Path("data/u_route/v16_ballast_replies.json")
+_BALLAST_FALLBACK = [0]   # 裁定⑭：缓存名带数据版本，旧名读不到
 ANGLES_BALLAST = [
     "先说结论再补一句依据", "从用户关心的那个点切入", "口语一点，像同事口头汇报",
     "先点出关键数字再说结论", "简短直接，一句话说完", "带一句下一步建议",
@@ -995,17 +997,20 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
         ask = str(b.case.user_message or "")[:300]
         allowed = facts + " " + ask
         got = ""
-        for k in range(5):
+        # ★ 09-04 run22 体检根因：5 次尝试 + 「句式不许与已有重复」在同事实族（51 条 FRESH 同为 partial/4 天）上把
+        #   措辞用尽 ⇒ 89/1021 条落到机器字段兜底句（"can_decide否、数据成熟度 partial…"）⇒ 六族 30% 同句、38 个预设答案。
+        #   改：10 次尝试；后 5 次放开"句式不重复"（少量复读 ≪ 兜底句同句）；兜底占比进闸（≤2%）。
+        for k in range(10):
             cand = clean_reply(await teach(
                 client, T4B,
                 f"用户问：{ask}\n\n你已经查完了，事实是：{facts or '（无额外数据）'}\n\n"
                 f"用一到两句自然中文把结论说给用户听，{ANGLES_BALLAST[(i + k) % len(ANGLES_BALLAST)]}。"
                 f"⚠️ 只能用上面给的数字，不许出现别的数字；不要列清单、不要 JSON、不要写『结论如下』。",
-                temp=0.95, max_tokens=110))
+                temp=0.95 if k < 5 else 1.05, max_tokens=110))
             key = re.sub(r"\d+(\.\d+)?", "§", cand)
             if (12 <= len(cand) <= 160 and not SICK.search(cand)
                     and not _DUP.search(cand) and _tail_ok(cand)
-                    and "{" not in cand and key not in used
+                    and "{" not in cand and (key not in used or k >= 5)
                     and _no_invented_numbers(cand, allowed)
                     and _no_invented_metrics(cand, allowed)):
                 got = cand
@@ -1013,6 +1018,7 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
         if not got:                       # 兜底：宁可留模板，也要**记账**（见下方闸）
             from syncopate.pipeline.sft_replay import _prose_from_fields
             got = _prose_from_fields(fa)
+            _BALLAST_FALLBACK[0] += 1
         cache[cid] = got
         _tail_note(got)
         used.add(re.sub(r"\d+(\.\d+)?", "§", got))
@@ -1021,6 +1027,9 @@ async def ballast_replies(client, bundles, case_ids: list[str]) -> dict[str, str
             print(f"  [压舱人话] {i + 1}/{len(todo)}", flush=True)
     if todo:
         _BALLAST_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1))
+        _fb = _BALLAST_FALLBACK[0] / max(1, len(todo))
+        print(f"[压舱-兜底] 本轮 {_BALLAST_FALLBACK[0]}/{len(todo)} = {_fb:.1%} 落到机器字段句（闸 ≤2%）", flush=True)
+        assert _fb <= 0.02, f"🔴 压舱人话兜底 {_fb:.1%} > 2% —— 教师写不出人话的题太多，查事实清单/过滤器"
     return cache
 
 

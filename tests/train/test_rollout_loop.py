@@ -504,7 +504,7 @@ def test_empty_think_blocks_are_masked_but_nonempty_think_is_supervised(tokenize
     from syncopate.core.contract import IS_V15
     if not IS_V15:
         pytest.skip("v15 契约专有")
-    from syncopate.pipeline.sft_replay import EMPTY_THINK, build_sft_sample
+    from syncopate.pipeline.sft_replay import EMPTY_THINK, EMPTY_THINK_RESP, build_sft_sample, think_opener_in_prompt
     bundle = next(iter(SEED_BUILDERS.values()))()
     n_turns = len(bundle.gold.actions) + 2
     config = RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))
@@ -513,11 +513,17 @@ def test_empty_think_blocks_are_masked_but_nonempty_think_is_supervised(tokenize
                                      thinking={0: "先查指标再判断成熟度。"}))
     resp = s.input_ids[s.prompt_length:]
     resp_mask = s.loss_mask[s.prompt_length:]
-    pat = tokenizer.encode(EMPTY_THINK, add_special_tokens=False)
-    empties = [i for i in range(len(resp) - len(pat) + 1) if resp[i:i + len(pat)] == pat]
+    opener = think_opener_in_prompt(tokenizer)
+    pat = tokenizer.encode(EMPTY_THINK_RESP if opener else EMPTY_THINK, add_special_tokens=False)
+    empties = [i for i in range(len(resp) - len(pat) + 1)
+               if resp[i:i + len(pat)] == pat and ((not opener) or i == 0 or resp_mask[i - 1] == 0)]
     assert empties, "样本里应有空 think 块（简单轮）"
     for i in empties:
         assert not any(resp_mask[i:i + len(pat)]), "空 think 块不许有梯度"
+    # ★ 09-04 run22 出厂体检抓到的双开头：模板写了 "<think>\n" 后 attach_think 又写一次
+    full = tokenizer.decode(s.input_ids[:s.total_length])
+    assert "<think>\n<think>" not in full, "think 开头写了两次（模板 + attach_think）"
+    assert full.count("<think>") == full.count("</think>"), "think 开/闭标签数不等"
     supervised = tokenizer.decode([t for t, m in zip(resp, resp_mask) if m == 1])
     assert "先查指标再判断成熟度" in supervised, "非空 think 必须仍被监督"
     assert "<think>\n\n</think>" not in supervised, "空 think 块不该出现在监督段里"
