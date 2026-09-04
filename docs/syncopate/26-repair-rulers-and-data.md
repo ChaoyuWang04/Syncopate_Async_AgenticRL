@@ -613,6 +613,20 @@ CoT 段 ✅ 通了：114 case 全部有思考行（run16 只有 64 且全是旧�
 （CoT 预算 19% 版）：v13 58.6% · l2 9.0% · l1 2.9% · chat 1.8% · fam 8.8% · cot 18.9%。CoT 目标改 28% 后其余按比例缩 ≈ v13 52 / l2 8 / l1 2.6 / chat 1.6 / fam 7.8。
 ⇒ 待 Chaoyu 按 run19 读数批六桶带宽（U_BUILD_BANDS_STRICT=1）。
 
+**run19–22（09-04 11:05–11:28）**：run19 OOV 教学面 1（闲聊第二轮"跑量"，源头补过滤、chat 缓存重生成）· run21 考场泄漏 2
+（fam_l2x 追问模板与考卷 v4 被判句同形 ⇒ 变体表绕开）· **run22 parquet 首次落盘（1268 行/val 108）**，倒在出厂体检 7 项——两条真根因：
+```
+① ★ think 双开头（真 bug，体检「think 段逐字 93% = '<think>'」抓到的）：Qwen3.5 模板 enable_thinking=True 的生成提示已以 "<think>\n" 结尾，
+   sft_replay.attach_think 与 chat 行又各写一次 ⇒ 每个 assistant 轮 "<think>\n<think>\n\n</think>"，会教学生吐双开头，且空块掩码
+   按旧字面量匹配。修：think_opener_in_prompt(tokenizer) 模板感知，response 区只写 "{think}\n</think>\n\n"/"\n</think>\n\n"；
+   空块掩码只认紧跟 prompt/env 的收尾；同形体检加「双开头」项；test_rollout_loop 加断言。DRY 152 行 0 双开头。
+② 压舱人话兜底 57/1021 条是机器字段句（"can_decide否、数据成熟度 partial、建议复查天数 4。"）：5 次尝试 + 句式去重在同事实族
+   （51 条 FRESH 同 partial/4 天）上把措辞用尽 ⇒ 这一句进了 13 行终答、六族历史轮、"38 个预设答案"、sequential_dependency 9.1%。
+   修：10 次尝试、后 5 次放开去重、兜底占比闸 ≤2%（新注册）、_FIELD_CN 补 can_decide 等；缓存里 57 条剔除重生成。
+③ 信令话术池 4 句/类 → 8（fam_rejf 22.5% 同句）· WIN 回复 1 模板 → 6 变体（fam_win 50%）。⚠️ 六族 40 行桶的「句式 ≤8%」在
+   结构性答案（defer 字段/记数回答）上仍可能红 ⇒ run23 读数后若仍红，按"结构性同形"单独裁定，不放宽通用闸。
+```
+
 **全量自检：建库链上"按旧数字定的闸"（09-04 Chaoyu：别出一条修一条，先全量扫）**
 
 | 数字 | 出处 | 来历 | 处置 |
