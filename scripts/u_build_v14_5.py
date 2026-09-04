@@ -1466,7 +1466,8 @@ async def main() -> int:
         assert r["supervised_tokens"] > 0 and \
             len(r["input_ids"]) == len(r["loss_mask"]) == r["total_length"], r["case_id"]
 
-    out = Path("_audit/v16/dry") if DRY else (Path("_audit/v16/report") if GATE_MODE == "report" else Path(DEFAULT_SFT_DIR))   # DRY/观察模式产物落审计目录；正式目录只许全绿的正式建库写
+    # ★ 09-04 run27：出厂体检红了但 parquet 已经写进了正式目录 ⇒ 下游 need() 会把它当成品。改成先写 staging，体检全绿才搬进正式目录。
+    out = Path("_audit/v16/dry") if DRY else (Path("_audit/v16/report") if GATE_MODE == "report" else Path("_audit/v16/staging"))
     # ★ 三桶隔离②③（09-04）：每行登记底题；落盘只走唯一带闸写盘函数（底题桶 == 产物桶，越桶直接抛）
     from u_build_v15_multiturn import SOURCE_OF as _SRC
     from syncopate.pipeline.split import base_case_id as _bcid
@@ -1508,8 +1509,15 @@ async def main() -> int:
         print(f"\n══ 闸汇总（模式={GATE_MODE}）：{len(GATE_FAILS)} 条红 ══")
         for t in GATE_FAILS:
             print("  " + t.splitlines()[0][:160])
-        print(f"⇒ 产物在 {out}（{'观察模式：不进正式目录' if GATE_MODE == 'report' else '不许进训练'}）")
+        print(f"⇒ 产物留在 {out}（{'观察模式' if GATE_MODE == 'report' else '体检未过'}：不进正式目录 {DEFAULT_SFT_DIR}）")
         return 1
+    # 全绿 ⇒ staging 搬进正式目录（唯一能写正式目录的路径）
+    import shutil as _sh
+    final = Path(DEFAULT_SFT_DIR)
+    if final.exists():
+        _sh.rmtree(final)
+    _sh.move(str(out), str(final))
+    print(f"✅ 出厂体检全绿 ⇒ {out} → {final}")
     print(f"✅ {'v15' if IS_V15 else 'v14.5'} 构建完成，全部门禁通过")
     return 0
 
