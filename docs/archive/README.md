@@ -1,60 +1,41 @@
-# 📦 archive — 历史记录，**不是当前状态**
+# docs/archive — 历史资料
 
-> **这个目录里的一切都不该被当成"现在该怎么做"。**
-> 当前状态与操作指南一律看：
->
-> ```
-> docs/syncopate/00-START.md    主线：现在在哪 / 下一步
-> docs/syncopate/01-TASKS.md    主线：执行顺序的唯一来源（曾用号 20，已退役）
-> docs/syncopate/21-...numbers.md ⛔ 哪些数字不能引用
-> docs/syncopate/08-...environment.md  环境与命令
-> docs/infra_exp/00-START.md   infra 线
-> ```
->
-> 🆕 2026-08-19 压缩令新进三份（存活结论已蒸馏进 `22 §H`，未闭合项捞进 `01-TASKS`）：
-> `02-credit-assignment`（判定"做了没用"，切入点应是 caps 归因）·
-> `17-rl-learning-blocked`（活的部分已各归其位；⚠️ §6.7"占位 logprob 已排除"后被推翻，见 18 §2 P8）·
-> `19-2026-08-18-postmortem`（共同形状已成 00-START 守则）
+> **这里没有当前答案，也没有待办。**
+> 主线现状只看 `docs/syncopate/00-START.md`，infra 现状只看
+> `docs/infra_exp/00-START.md`；待办分别只看两边的 `01-TASKS.md`。
 
-> 🆕 2026-08-19 infra 侧重组进一份：
-> `E12-weight-sync`（核心谜题随前提消失——以为推 132 MB 实推 8.4 GB；
-> 现值 param_sync 0.97 s/0.8%，见 infra_exp/E22 §6.4；作废登记在 infra_exp/02-DECISIONS §4）
+归档的作用是保留旧方案、旧机器结果、施工过程和调查笔记。归档文档可能包含
+已经失效的数字、路径、判断或待办，不能直接拿来指导现在的运行。
 
-## 为什么要有这个目录（2026-08-18）
+## 目录地图
 
-Chaoyu 定的一条：**`docs/` 里的当前文档必须"所有事实都正确、0 干扰信息 ——
-没做就是没做，等待做就是等待做"。**
-
-而项目里有一类文档，它们**当时是对的、现在是错的**，但删掉又会丢掉
-「上机之前我们以为会怎样」这份价值（那是本项目明确写下的约定）。
-⇒ 两者的解法不是二选一，是**分开放**：
-
-```
-操作文档（照着做的）  → docs/syncopate/ 等，必须 0 错误
-历史记录（回头看的）  → 这里，标清楚"这是快照"
-```
-
-★ 注意区别：**归档 ≠ 作废。** 「数字作废」有专门的登记表
-（`../syncopate/21-invalidated-numbers.md`，且有判据强制）；
-这里放的是**整份定格的文档**，它们内部的事实在**当时**是对的。
-
-## 里面有什么
-
-| 文档 | 为什么归档 |
+| 路径 | 保存什么 |
 |---|---|
-| `01-runpod-deployment.md` | H100 单卡部署清单 —— **备用路径，从未启用**。实际一直跑 4×5090 |
-| `03-data-distribution.md` | **v2** 数据的分布报告；当前是 v13，两者毫无关系 |
-| `04-status-audit.md` | 定格在 **2026-08-10** 的全量勘察；里面点名的问题大多已修 |
-| `16-m7b-rl-run.md` | M7-b 那一跑的完整记录 —— 🔴 **结论全部作废**（跑在两个基石级 bug 上，见 `21`），但过程与踩过的坑仍有价值 |
-| `llm-rl-framework.md` | 框架选型的全景调查（Chaoyu 写）—— 选型已定（**verl 不换**），它现在是背景不是决策 |
+| `syncopate/pre-consolidation-v16/` | 主线整合前的 v16 施工、决策、机器和状态快照 |
+| `syncopate/legacy-notes/` | 更早的主线调查、数据与轨迹分析、训练记录、复盘和旧部署说明 |
+| `infra_exp/legacy-4x5090/` | 旧 4×5090 时期的 E01～E33、设计文档、简历材料和已退役的跨线文件 |
+| `infra_exp/legacy-notes/` | 旧框架调研、verl 学习笔记、调度/训推一致性/去 padding/权重同步调查 |
+| `infra_exp/b-series/` | B200/B300 时代已经结束并验收过的完整实验报告；目前还没有正式报告 |
 
-## ⚠️ 刻意**没有**搬进来的两份
+`docs/archive/` 根目录只保留这份地图，不再平铺历史文档。
 
-```
-docs/distributed-training-design-v0.1.md    被 infra 的 4 份文档引用
-docs/ostinato-project-design-v0.2.md        被 infra 的 3 份文档引用
-```
+## 本次分流
 
-它们同样是"设计记录"，但**搬走会断掉 infra 线的引用**，而那条线由另一个窗口维护。
-⇒ 它们已经自带「本文件是设计记录，当前有效的以 XX 为准」的头部，
-**要搬也该由 infra 那边一起动。** 记在这里，免得下一个人以为是漏了。
+原先散落在 archive 根部和旧学习笔记目录的资料按责任线归档：
+
+- 主线：项目概览、状态审计、数据分布、轨迹、verifier/reward、sandbox、
+  信用分配、RunPod 旧部署、第一次 RL、M7-b、RL 学不动和 2026-08-18 复盘。
+- infra：框架选型、为什么用 verl、资源调度、训推不一致、remove padding 和
+  E12 权重同步。
+
+原文件名全部保留，方便追溯旧引用；目录位置表示它现在归哪条线管理。
+
+## 归档规则
+
+1. 当前事实提炼回 `docs/syncopate/02～07` 或 `docs/infra_exp/02～05`。
+2. 未完成事项只进入对应线路的 `01-TASKS.md`，不能留在归档中继续追踪。
+3. B 系列施工报告与原始证据先放 `_audit/infra/Bxx/`；实验结束后，完整报告
+   才移入 `infra_exp/b-series/`。
+4. 归档后原则上冻结内容；只修坏链接、归档提示或会造成误读的明显标记。
+5. 引用旧数字前，先看
+   [`syncopate/pre-consolidation-v16/21-invalidated-numbers.md`](syncopate/pre-consolidation-v16/21-invalidated-numbers.md)。

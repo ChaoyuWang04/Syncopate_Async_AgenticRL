@@ -7,7 +7,7 @@ metadata:
   modified: 2026-08-17T12:00:00.000Z
 ---
 
-**2026-08-17 刨到底的一条**（完整叙事见 `docs/infra_exp/E18-rank3-allgather-collapse.md`）。
+**2026-08-17 在 4×5090 上刨到底的一条**（完整叙事见 `docs/archive/infra_exp/legacy-4x5090/E18-rank3-allgather-collapse.md`）。
 
 ## 结论
 
@@ -30,7 +30,7 @@ metadata:
 ## How to apply
 
 1. **引用「卡间带宽」之前先问是哪个算子、几个 rank。** 用 all-reduce 的数推算 all_gather
-   会错 8–12 倍 —— 我就是这么把预测做错的。尺子：`scripts/probe_collective_bw.py`、
+   会错 8–12 倍 —— 我就是这么把预测做错的。尺子：`scripts/infra/probe_collective_bw.py`、
    `probe_alignment_cliff.py`。
 2. **应急手段** `NCCL_PROTO=LL128`（3 卡 ZeRO-3 47.94→14.40 s，3.33×），
    ⚠️ **代价 all_reduce −30% / broadcast −41%** ⇒ **不能全局开**；

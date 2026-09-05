@@ -35,7 +35,7 @@
 ---
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18　**★ 2026-08-19 升级为主战场**
-> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../../infra_exp/E21-ddp-not-syncing.md)
+> 归属：独立线（`docs/upstream/`）。完整实验记录：[`E21-ddp-not-syncing.md`](../../archive/infra_exp/legacy-4x5090/E21-ddp-not-syncing.md)
 > 配套：[`../READY-fsdp-shard-alignment/2-case.md`](../READY-fsdp-shard-alignment/2-case.md)（同一根因的上游那一半）
 
 > 🆕 **2026-08-19 · 提交前调查完成，五条结论**：
@@ -153,7 +153,7 @@ D  纯 DDP（对照组）                                [0.27395082] ×3       
 ```
 
 ⇒ **根因在 FSDP，但 verl 的 mesh 构造是触发条件；而 FSDP1 上游已确认不修（#154888）。**
-产物：`_audit/infra/e21_grad_sync_matrix.json` · 脚本 `scripts/repro_fsdp_hybrid_nosync.py`。
+产物：`_audit/infra/e21_grad_sync_matrix.json` · 脚本 `scripts/infra/repro_fsdp_hybrid_nosync.py`。
 
 ---
 
@@ -258,7 +258,7 @@ e. 唯一改变的语义 = 梯度归约的进程组：size-1 分片组 → 复�
 ## 附 · PyTorch 侧背景（#154888 已确认并关成 not_planned）
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
-> 归属：独立线（`docs/upstream/`）。完整实验记录：[`../infra_exp/E21-ddp-not-syncing.md`](../../infra_exp/E21-ddp-not-syncing.md)
+> 归属：独立线（`docs/upstream/`）。完整实验记录：[`E21-ddp-not-syncing.md`](../../archive/infra_exp/legacy-4x5090/E21-ddp-not-syncing.md)
 > 姊妹文档：[`../READY-fsdp-shard-alignment/2-case.md`](../READY-fsdp-shard-alignment/2-case.md)（同一批调查里的另一个上游问题）
 
 ---
@@ -335,7 +335,7 @@ NCCL       2.27.5（torch 自带）
 
 ## 3 · 最小复现（3 卡，纯 PyTorch，不依赖任何训练框架）
 
-完整脚本：本仓库 `scripts/repro_fsdp_hybrid_nosync.py`。核心就这几行：
+完整脚本：本仓库 `scripts/infra/repro_fsdp_hybrid_nosync.py`。核心就这几行：
 
 ```python
 mesh = init_device_mesh("cuda", (world, 1), mesh_dim_names=["ddp", "fsdp"])   # ← 分片维 = 1
@@ -495,7 +495,7 @@ if sharding_strategy in (ShardingStrategy.HYBRID_SHARD, ShardingStrategy._HYBRID
 ## 8 · 提交清单（真要提的时候照做）
 
 - [x] 复核 torch 主干 / 最新 release 是否已修 ——**未修**（§2；#154888 closed not_planned）
-- [ ] 把 `scripts/repro_fsdp_hybrid_nosync.py` 精简成**不依赖本仓库**的单文件（去掉四变体，只留 A + D 对照）
+- [ ] 把 `scripts/infra/repro_fsdp_hybrid_nosync.py` 精简成**不依赖本仓库**的单文件（去掉四变体，只留 A + D 对照）
 - [ ] 附 §3 的表（**必须含 DDP 对照组** —— 它证明测试装置本身是对的）
 - [ ] 附 §4 的真实训练证据（LoRA `B` 零初始化那条判据尤其有说服力）
 - [ ] 明确写出 §7 的四条"还没做的"

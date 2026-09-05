@@ -31,6 +31,6 @@ RL 只强化模型在**它实际看到的那个 prompt** 下的行为。
   **5120 下重测之前不许动 reward**；③ 夜跑各臂**之间**的相对比较仍是受控对照 ——
   作废的是**解释**，不是排序。
 - ⇒ 主线 R-1 已从队首撤下，换成「5120 下重测 lr 1e-4」。回信：
-  ~~INFRA-TO-MAINLINE-2026-08-19b.md~~（信件已删；⛔ 铁律：往来只走根目录 `MAINLINE-INFRA.md`）
+  ~~INFRA-TO-MAINLINE-2026-08-19b.md~~（历史信件已删；当前跨线沟通直接使用 Codex 独立任务消息工具，事项只进唯一负责方 TASKS）
 
 相关：[[infra-line-state]] [[blank-thresholds-are-not-passes]] [[observed-needs-an-owner]]

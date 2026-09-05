@@ -24,7 +24,7 @@ runtime 只给了一个格子 —— `summary`「本次任务的结论」。
 （`{"decision":"scale_down","factor":0.8}`）⇒ **"说清楚"从来不在目标函数里**。
 ⇒ 短标签**不是退化，是学到位了**。要改得动数据契约（v14），不是只改 prompt。
 
-## 三个变体的实测（`scripts/probe_answer_fields.py`）
+## 三个变体的实测（`scripts/v16/probe_answer_fields.py`）
 
 | 表格 | 闲聊·自然语言 token | 任务·首步调工具 |
 |---|---|---|
@@ -40,7 +40,7 @@ B 档下问「查一下 CMP_1 昨天的花费」，它**不调工具了，直接
 ⇒ **表格暗示了它的工作是什么。** 表上只写"请用人话说清楚"，它就以为活是**写字**，
 忘了活其实是**先查、再说**。
 ⇒ 一般化：**只优化表达，会把办事能力换走。** 这条此前只是设计文档里的"担心"，
-现在是十分钟买到的实测证据（`docs/syncopate/22 §J-6`）。
+现在是十分钟买到的实测证据（历史见 `docs/archive/syncopate/pre-consolidation-v16/22-decision-log.md §J-6`）。
 
 ## 怎么用
 

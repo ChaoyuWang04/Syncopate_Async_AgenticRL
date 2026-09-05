@@ -20,7 +20,7 @@ metadata:
 --purpose candidate   上线候选 —— 受最少步数 + 完成判据约束
 ```
 
-**任何跑都随便跑；只有「声称自己是上线候选」的跑才过闸**（`scripts/candidate_gate.py`）。
+**任何跑都随便跑；只有「声称自己是上线候选」的跑才过闸**（`syncopate/train/candidate_gate.py`）。
 
 ## ★ 那"主线忘了声明"怎么办 —— **不靠记性**
 

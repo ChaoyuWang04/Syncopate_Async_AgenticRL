@@ -10,7 +10,7 @@ account_id 这类身份来自登录态，和 run_id 同类：不进 prompt、不
 由沙盒/收口按当前租户注入，**模型填了也覆盖**（安全）。campaign 清单几万条每天在变，
 不进提示词，靠 campaign.list 自己翻。落地：`contract.RUNTIME_INJECTED_PARAMS` 一处定义。
 
-**Why：** 09-02 Chaoyu 逐条看训练数据画廊（`scripts/v16_data_gallery.py`）抓到四条我自己的
+**Why：** 09-02 Chaoyu 逐条看训练数据画廊（`syncopate/pipeline/data_gallery.py`）抓到四条我自己的
 脚本判据没抓到的问题：闲聊行空 think 块有梯度、压舱行列字段清单、context 塞 7 条 campaign 清单
 （08-20 演示补丁被当产品形状）、WIN 行 8 轮全进 prompt 而 gold 说"看不到"（=教撒谎）。
 脚本只能抓被告知要抓的东西；**数据必须逐条渲染成人能读的样子**，元信息行就是判据。

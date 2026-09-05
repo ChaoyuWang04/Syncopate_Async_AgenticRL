@@ -1,11 +1,11 @@
 # tilelang · warp 特化流水的释放 barrier 计数与生产者分区不同步 ⇒ 数据竞态
 
 ```
-状态     DRAFT —— 待上游考据（Claude：复现最小化 + 上游代码定位 + 按 tilelang issue 模板成稿）
+状态     DRAFT —— 待上游考据（负责该包的 Codex：复现最小化 + 上游代码定位 + 按 tilelang issue 模板成稿）
 目标仓库  tile-ai/tilelang（0.1.13 复现）
 性质     正确性 bug（静默、尺寸相关才显形）
-原始发现  ../../infra_exp/E30-tilelang-nvfp4-gemm.md §4（2026-08-27）
-复现载体  scripts/tl_mxfp8_gemm.py（本仓库）——把 SFA_sh/SFB_sh 两个 T.copy 删掉即触发
+原始发现  ../../archive/infra_exp/legacy-4x5090/E30-tilelang-nvfp4-gemm.md §4（2026-08-27）
+复现载体  syncopate/train/tilelang_mxfp8.py（本仓库）——把 SFA_sh/SFB_sh 两个 T.copy 删掉即触发
 ```
 
 ## 现象（全部实测）
@@ -30,6 +30,6 @@
 
 ## 补充证据（08-27 晚）：缺陷代价已定价
 
-裸 CUDA 复刻同一 kernel（TMA+warp 特化+64×64 大块，`scripts/mxf8_gemm_limit_tma.cu`）
+裸 CUDA 复刻同一 kernel（TMA+warp 特化+64×64 大块，`scripts/infra/mxf8_gemm_limit_tma.cu`）
 实测 **627 TFLOPS**，tilelang 版被寄存器机制限制在 543 ⇒ 该缺陷/限制的性能代价 ≈15%，
 且 627 即消费卡寄存器包络顶点（E30 §10）——PR/issue 里可作为"修复收益上界"引用。

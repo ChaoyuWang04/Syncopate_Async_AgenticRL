@@ -20,15 +20,15 @@
   [#5550](https://github.com/vllm-project/vllm/issues/5550) ·
   [#5907](https://github.com/vllm-project/vllm/issues/5907)）——不重复报；
   我们的 V1/0.12/sm120 复现参数（util 0.6 + 批 8192 必死；0.55→0.72 + 批 2048 过）
-  最多补条评论。本地解法已固化在 scripts/e31_step1_offline.py。
+  最多补条评论。本地解法已固化在 scripts/infra/e31_step1_offline.py。
 
 ## 材料清单（全在仓库）
 
 E30（kernel/包络/机理全套）· E31（统一 FP8 六步含定界负结果）·
-scripts/mxf8_gemm_limit_tma.cu（T1 kernel）· probe_mxf8_scale_mapping.cu ·
+scripts/infra/mxf8_gemm_limit_tma.cu（T1 kernel）· probe_mxf8_scale_mapping.cu ·
 logs/e31/step3_offline.json（定界工件）· tests/train/test_e31_*.py（54 项常驻）
 
-## 提交前待办（Claude 考据）
+## 提交前待办（负责该包的 Codex 考据）
 
 - [ ] 各 issue 的最新回复态（搜索时点 2026-08-27）
 - [ ] RL 社区数据点用什么载体（issue 评论 / discussion / 短文）——归 Chaoyu 定调

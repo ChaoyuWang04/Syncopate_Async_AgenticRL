@@ -1,11 +1,14 @@
 ---
 name: u-route-unified-training
-description: U 路（OPD+多轮+CoT）P0-P2 已收官、P3 首跑判定完；P3/P4 并入 v15（见 v15-contract-refactor）；本文=v14 世代终态与坑清单
+description: U 路（OPD+多轮+CoT）的 v14 历史终态与坑清单；当前状态只看 docs/syncopate/00-START.md 与 01-TASKS.md
 metadata:
   type: project
 ---
 
-U 路（Chaoyu 08-28 融合裁定）=「数据合一、监督分家」的 v14 世代主线。**08-29 终态**：P0 ✅ P1 ✅（说人话 1.37 超底座）P2 ✅ v14.5 收官（六过一改期：四遍考场聚合 L1-iv 68.8/90 线改期 P3 出口·L1-oov 71.2 ✓·L2 78 ✓·盲评 1.460 vs P1 1.141·话术复读 66%→1%）；P3 首跑判定=任务分 +0.068 但**行为标签通道漂移**（defer 9/9→0/9、L2 78→52，机理=标签寄生自研壳弱通道+训练分布外无锚）不晋级 ⇒ **P3/P4 并入 [[v15-contract-refactor]] 的 R6/R5**。判定全史与教训在 docs/syncopate/24 §4/§7。
+> **历史记忆，不是当前队列。** 现行训练状态看 `docs/syncopate/04-TRAINING.md`，
+> 当前任务只看 `docs/syncopate/01-TASKS.md`。
+
+U 路（Chaoyu 08-28 融合裁定）=「数据合一、监督分家」的 v14 世代主线。**08-29 终态**：P0 ✅ P1 ✅（说人话 1.37 超底座）P2 ✅ v14.5 收官（六过一改期：四遍考场聚合 L1-iv 68.8/90 线改期 P3 出口·L1-oov 71.2 ✓·L2 78 ✓·盲评 1.460 vs P1 1.141·话术复读 66%→1%）；P3 首跑判定=任务分 +0.068 但**行为标签通道漂移**（defer 9/9→0/9、L2 78→52，机理=标签寄生自研壳弱通道+训练分布外无锚）不晋级 ⇒ **P3/P4 并入 [[v15-contract-refactor]] 的 R6/R5**。判定全史与教训在 `docs/archive/syncopate/pre-consolidation-v16/24-unified-conversation-training.md §4/§7`。
 
 **v14 世代沉淀的方法论（v15 继续用）**：
 - 数据：程序造事实·教师穿语言·判据把关；五闸（份额=监督token口径带宽·密度=收尾句/病句/distinct·OOV教学面·被判句泄漏·冻结）；对照对（判别行为的数据必须成对）；外部语料只走 模式A题库注入/模式B模式抽取（S1 题库 120/S2 句式库 42 模板/S3 revision 正则 14 条全在 data/u_route/ 可复用）。

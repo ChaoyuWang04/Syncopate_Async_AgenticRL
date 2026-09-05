@@ -1,0 +1,762 @@
+# Syncopate · 09 — M9 Runtime 上线态
+
+> 📦 **历史施工与交接快照，不代表当前部署状态。** 现行说明见
+> [Runtime](../../../syncopate/06-RUNTIME.md) 和 [Serving](../../../syncopate/07-SERVING.md)。
+
+> 更新于 **2026-09-02**（K 线收官；§0.0 是交接入口）。M9.1–M9.6 施工完成（08-17）；M9.7 压测在 B-5 做过一轮，
+> **Celery 化后需重测**（27 §14 挂账 S-05）。
+> ★★ **验收 / 设计符合性 → `11-runtime-acceptance.md`**（2026-08-17 独立审计，40 条判据
+> 逐条核对；**结论：45 条测试全绿，但设计 §3 的 C 档审批一次都没被接上**）——
+> 这一份只写「怎么起、施工时抓到了什么」，**别在这里找验收结论**。
+> 环境怎么起 → `08-machine-and-environment.md`
+> 设计依据 → `../syncopate-project-design-v0.1.md` §36–39
+
+---
+
+## 0.0 · K 线交接（2026-09-02，给训练机上的下一位 serving 负责人）
+
+**一句话现状**：serving 生产化（27 号 K0–K11）在本机（无 GPU、无 sudo）已全部落地并推送；
+**没有一行在训练机上跑过**。你的工作不是继续施工，是**把它在训练机上立起来，然后补本机做不了的五件事**。
+
+**读什么，按这个顺序，共约 40 分钟**：
+
+1. `00-START` §4 ④ 与守则⑫（交接双向核对）——先给本会话/上一位发一条消息核对现场，不许只读文档上手。
+2. `27` §14 收口 + §16 裁定——知道为什么是 Celery+Redis、为什么 Alembic 是唯一真相、为什么恢复走快照。**不要读 §3–§13 的步骤去重做**。
+3. `08` §1.2——搬家配置：落盘位置、环境变量表、恢复数据库三情形。训练机那一列写着"未装"，就是你要做的。
+4. `30`——上线清单（哪些挂账归你）+ 六张值班卡（告警响了翻这个）。
+5. `28` §0 收官快照——28 条未负向认证的坑 + 十条优化候选，这是 Chaoyu 要的"熟悉队列软件"的教材，不挡上线。
+6. `29`——只在你想知道"某个能力现在到底有没有"时查；证据列的 `schema.sql` 行号已过时，看头部说明。
+
+**在训练机上按顺序做**：
+
+```bash
+# ① 起底座（root 路数）：PG 照 08 §1.1；Redis 要新装——deb 解包到 /workspace/tools/redis，REDIS_HOME 指过去
+bash scripts/serving/pg_bootstrap.sh && bash scripts/serving/redis_bootstrap.sh
+# ② 依赖 + 回归：训练机用锁文件；期望 372 passed，skip 只能是"无 node"那几条（没有 PG/Redis 的 skip 不算通过）
+uv sync --frozen --all-extras && python -m pytest tests/runtime -q
+# ③ 灾备演练一次，末行 RTO；新暴露的隐形前提 = 0 才算搬完，>0 就回填 08 §1.2
+bash scripts/serving/dr_drill.sh
+# ④ 先用基座起端点（不需要候选）：验解析接缝 / 标定 visibility_timeout 与 lease / 算连接数账（28 P-07）
+bash logs/runtime/start_serving.sh && python scripts/serving/runtime_smoke.py
+# ⑤ 起生产栈（本节 §0 的命令序列），SYNCOPATE_WORKER_ORG_ID=org_demo 必设
+```
+
+**本机做不了、归你的五件**（都在 27 §14 与 30 §1 挂账，做完就地改状态）：
+
+| # | 事 | 需要 | 判据 |
+|---|---|---|---|
+| 1 | 压测重测（S-05） | 真端点 | goodput/queue lag 新数字替换 11 §5；不达标回 28 §5 取题 |
+| 2 | 前端 build + 三处改名 + 👍👎 入口 | node | `run.completed` 在浏览器时间线里出现；点踩落 `feedback_items` |
+| 3 | 停队列 / 回滚真演练 | 生产栈 | 09 §0 的两条命令各跑一次，记录进 30 §1.9 P2 |
+| 4 | 灾备的权重那半 | HF 仓库 | 从 HF 拉候选 + 起端点计时，RTO 记进 30 §4 |
+| 5 | 生产备份策略（D3） | 灰测放真人前 | `pg_dump -Fc` 周期 + 一次还原演练 |
+
+**四条别踩**：
+
+- ⛔ 状态只能经 `transition_run` 改；事件只能经 `append_event` 写。grep 判据会红，红了是你错不是判据错。
+- ⛔ `response_lost` 的写调用**禁止手动重发**，只能对账（30 卡 03）。这是全系统最贵的一条规矩。
+- ⛔ 改表结构走 Alembic 新脚本 + `schema_snapshot.py --write`，revision 名 ≤32 字符；不许手改库再改快照。
+- ⛔ 渲染/解析那层与训练侧共用（同形红线）；治理表要和工具注册表一致，训练侧加工具你这边导入会炸——那是故意的，去 `tool_governance.py` 登记，别把断言删了。
+
+**26 线交界（verl-22 会话）**：D26 拒绝轮进历史、D9 decider 超时改配置都归他们，你不动；
+你改 `syncopate/runtime/` 之外的任何共用件前先写 MAINLINE-INFRA 并发消息。
+
+---
+
+## 0 · 三十秒读懂
+
+M0–M8 造的是**训练用的东西**（数据、沙盒、判据、模型）。M9 是第一次造**真服务**：
+接真实请求、调广告平台 API、把钱花出去。几乎不复用前面的代码。
+
+```
+bash scripts/serving/pg_bootstrap.sh                            # 起库（幂等，一条命令重建）
+python -m pytest tests/runtime/ -q                      # 372 passed · 10 skipped（09-02）
+# B-5/E33（08-28）生产栈形态：API 多进程 + worker 多进程 + 池 env（单进程默认值未动，
+#   高并发三瓶颈=池 10 条/单进程 GIL/SSE 轮询已修——goodput 64→192 的来源，账在 E33）
+SYNCOPATE_API_DB_POOL=12 \
+uvicorn syncopate.runtime.api:app --port 8000 --workers 4          # 起 API（4 进程）
+# ★ K3（09-02）起，生产投递 = Outbox → dispatcher → Celery/Redis → worker（27 §5；坑表 28 §1/§2）：
+bash scripts/serving/redis_bootstrap.sh                          # 起 Redis（requirepass/AOF/noeviction 判据行）
+python -m syncopate.runtime.dispatcher &                  # outbox 搬运工（判据行 [dispatcher] listener 就位）
+python -m syncopate.runtime.sweeper &                     # K8：过期 lease 回收 + 对账（判据行 [sweeper] 就位 / [reconcile]）
+python scripts/serving/slo_readout.py --org org_demo --api http://127.0.0.1:8000   # K9：九条 SLO 一键打印 + 告警（带 runbook）
+# 发布五能力（K9-6）：开关 SYNCOPATE_RELEASE_HALTED=1 · 禁工具 SYNCOPATE_DISABLED_TOOLS=a,b ·
+#   停队列 celery -A syncopate.runtime.celery_app control cancel_consumer interactive · drain = SIGTERM（warm）· 回滚 = git checkout <sha> + 重启
+for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 SYNCOPATE_WORKER_DB_POOL=4 \
+  celery -A syncopate.runtime.celery_app worker -Q interactive -c 4 -n w$w@%h & done
+                                                          # 每子进程判据行 [worker-init] pid=… ；心跳 [lease-heartbeat]
+# 旧的轮询 worker 仍可用（测试/探针/考场链）：不走 Redis，直接抢 queued
+# for w in 1 2 3 4; do SYNCOPATE_DECIDER_URL=http://127.0.0.1:8100 SYNCOPATE_WORKER_DB_POOL=32 \
+#   python -m syncopate.runtime.worker --org-id org_demo --worker-id demo-$w --concurrency 16 & done
+python scripts/serving/runtime_smoke.py                         # 固定 query 冒烟：HTTP→SSE→审批→终态
+# 模型端点（★ 生产默认=四卡舰队，router 顶 :8100；单卡=让卡后备）：
+bash logs/runtime/start_serving.sh          # 4×引擎+router（fp8KV·ngram·priority 全默认）
+# bash logs/runtime/start_vllm.sh           # 让卡模式：单卡 GPU0（同旗子）
+```
+
+**怎么访问（08-20 起）**：**聊天前端在 `/app`**（F-2：assistant-ui + Vite，源码
+`frontend/`，构建产物 `frontend/dist` 由 API 条件挂载——不进 git，重建见下）；
+工程师控制台在 `GET /ui`（单文件 `syncopate/runtime/ui.html`，无构建步骤，留作备用面板）。
+对外同走 Caddy 认证边界（`/etc/portal.yaml`：外部 8265 → 内部 8000）：
+
+```bash
+echo "http://$PUBLIC_IPADDR:$VAST_TCP_PORT_8265/app/?token=$OPEN_BUTTON_TOKEN"  # 聊天界面
+# 前端重建（dist 是派生产物）：. /opt/nvm/nvm.sh && cd frontend && npm ci && npm run build
+# 或不暴露公网：本机 ssh -p <VAST_TCP_PORT_22> -L 8000:127.0.0.1:8000 root@<IP>
+#              然后开 http://localhost:8000/app/（免 Vast token）
+```
+
+⚠️ 两层鉴权是**两回事**：Caddy 的 token 管"谁能碰到这台机器的服务"；
+应用层 `Authorization: Bearer dev-token-*` 管"你是哪个 org"（页面右上角填）。
+浏览器打开 `?token=` 后 Caddy 下发 cookie，Authorization 头留给 org 鉴权用 ——
+这也是页面用 fetch 流而不用 EventSource 的原因（后者带不了自定义头）。
+
+⚠️ **worker 必须 `--org-id org_demo` 起常驻** —— 队列是全局的，且 `org_acme`/`globex`
+归测试套件：常驻 worker 消费它们会把测试的 run 抢走真跑（08-20 实测两次，C-1 同一课）。
+⚠️ 此前 worker **没有进程入口**（只在测试里被实例化过），「起服务」只写了 uvicorn ——
+队列等于永远没有消费者。08-20 补 `__main__` 入口时一并发现
+`agent_loop` 也从没接进 worker（B-4 接线时修）。
+
+| 步 | 内容 | 状态 |
+|---|---|---|
+| M9.1 | 8+1 张表 | ✅ |
+| M9.2 | 三层幂等 | ✅ 10 条测试**全是真的投两次** |
+| M9.3 | FastAPI + org_id 注入 | ✅ 12 条，主验收是越权打不穿 |
+| M9.4 | Tool Runtime + Worker | ✅ 含假平台与故障注入 |
+| M9.5 | 审批网关 + 六个降级触发器 | ✅ |
+| M9.6 | SSE + 观测 + 成本控制 | ✅ 9 条，主验收是断线补发 |
+| M9.8 🆕 | **Runtime 检索服务**（三态契约 + PG 语料） | ✅ 2026-08-17，入口 **`10-rag-retrieval.md` R 部分**（原 12 号已并入） |
+| **M9.7** | **压测五场景** | ⬜ **最终的考试**。⚠️ 场景②（模型服务挂掉）等训练跑完才有被测对象；场景④已就绪，见 `11 §5` |
+
+⚠️ **上表是"施工"状态，不是"验收"状态。** 2026-08-17 的符合性审计结论：
+40 条判据 **✅20 / 🟡7 / ⛔11 / ⬜2**，五个确认缺口 F1–F5 已变成
+`tests/runtime/test_design_conformance.py` 里 5 条 `xfail(strict=True)`。
+**全表见 `11-runtime-acceptance.md`。**
+
+---
+
+## 1 · 三条贯穿全局的纪律
+
+**① 永不信前端。** `org_id` 一律从鉴权注入（`Depends(current_org)`），
+请求模型里**根本没有这个字段**。越权在 **SQL 的 `WHERE org_id=$1`** 里挡，
+不是在应用层判断 —— 后者一次 typo 就穿了。
+
+**② 幂等是唯一一个"错了就是真金白银"的东西。** 其余组件出问题最多是服务不可用，
+重复扣款是**不可逆损失**。⇒ 判据必须是**实测重复投递**，不能是代码 review。
+
+**③ ★ 沙盒是 runtime 的子集，且契约由 runtime 定义。**
+沙盒（`syncopate/core`）可以简化实现，但**不能有 runtime 没有的行为**
+（比如"重试一定成功"）。同一个工具两边行为不一致，训出来的策略在线上就不成立。
+⇒ 新增工具行为时，**先在这边定契约，再让沙盒去满足它**。
+
+---
+
+## 2 · 三层幂等（§38）实现在哪
+
+| 层 | 谁重复 | 物理保证 |
+|---|---|---|
+| 请求级 | 用户点两次 | `agent_runs` 上 `UNIQUE(org_id, idempotency_key)`（PARTIAL：只对非空 key 生效） |
+| 任务级 | 队列重投 | `claim_run` 的原子 `UPDATE ... FOR UPDATE SKIP LOCKED` + lease |
+| **工具级** | 同一次预算变更被调两次 | `tool_calls` 上 `UNIQUE(org_id, external_idempotency_key)` |
+
+**只有第三层是外部系统认的。** 实查过：**Meta Marketing API 本身没有幂等机制** ——
+所以这层保证由我们兑现。
+
+**两个刻意的实现选择**：
+
+- **先占坑，再执行。** 反过来的话，进程在"执行完但还没记账"的窗口里崩掉，
+  重试就会**真的再扣一次钱**。
+- **占坑用独立事务提交。** 执行是外部副作用（HTTP 调用），事务回滚**撤销不了它**。
+
+### ★★★ 超时的两种形态
+
+```
+请求没发出去    重试是安全的
+到了但回包丢了  重试 = 重复扣款
+```
+
+⚠️ 现象**一模一样**，而且 `platform.TIMEOUT_MESSAGE` **只有一份**（错误文本逐字相同）。
+分得开的话 runtime 就会去读文本做决策，而那个信号在真平台上不存在 —— 上线即失效。
+⇒ **只能靠幂等键分辨**：重试带同一个键，平台/我们的库告诉你"这个键见过"。
+这就是第三层存在的全部理由。沙盒里 `EnvSnapshot.failures.side_effect_applied` 是同一条。
+
+---
+
+## 3 · 六个降级触发器（§39）
+
+**全部是外部信号，没有一个读模型置信度** —— 设计文档原话：
+「LLM 的 token 概率和"答案对不对"关系很弱（**编造时往往最自信**）」。
+
+```
+① tool_failed            工具重试用尽仍失败
+② validation_failed      参数校验不通过
+③ data_immature          数据未收敛（归因延迟是第一性约束）
+④ cap_hit                命中任一护栏
+⑤ amount_over_threshold  写动作金额超阈值
+⑥ retrieval_empty        RAG 检索为空   ← ★ 直接接上 M8 的 no_match
+```
+
+★ ⑥ 值得单说：**M8 之前"检索为空"在系统里没有表示**，所以它不可能成为降级条件。
+M8 把 `no_match` 做成明确的信号位之后，runtime 才拿得到它。
+**机制先要存在，才谈得上被接上。**
+
+★ 网关的输出**不是"拒绝"，是一张带证据的审批单**（`proposed_params` + `rationale`
++ `evidence`）。人看的是证据不是结论。而 `modified_params`（人改了什么）
+是**飞轮回路 2 的燃料**。
+
+★ 审批单和 run 状态**在同一个事务里**翻转。分开会留下
+「单开了但 run 还在跑」（重复执行）或「run 停了但没有单」（永久卡死）。
+
+---
+
+## 4 · 施工中抓到的十个真 bug（都有测试守着）
+
+**① 所有按 `run_id` 做键的表作用域都错了。** `run_id` 只在 org 内唯一
+（`agent_runs` 的 UNIQUE 是 `(org_id, run_id)`），而我给 `run_events` /
+`agent_steps` / `checkpoints` 的唯一约束只写了 `run_id`。
+后果：两个 org 用同名 run_id 时 seq 被对方顶高 ⇒ **SSE 断线补发定位到错的位置**。
+
+**② 模块常量被当默认参数值。** `DEFAULT_AMOUNT_THRESHOLD` 写成
+`def f(..., amount_threshold=DEFAULT_AMOUNT_THRESHOLD)`，绑定在**函数定义时** ⇒
+之后改模块属性（配置热更、测试调阈值）**一律不生效，而且悄无声息**。
+⇒ 阈值在函数体里解析，配置走 `WorkerConfig`。
+
+**③ `_shutdown` 关了池却没清引用。** 同一个 app 再次 startup 时判成"已有 db"，
+攥着一个**已关闭的池**继续跑。`uvicorn --reload` 也会踩。
+
+**④ `DB = Annotated[...]` 定义在函数内部会失效。** `from __future__ import annotations`
+让注解变成字符串，FastAPI 在**模块作用域**查名字 —— 查不到就退化成"这是查询参数"，
+表现是所有接口一律 422 `missing query param: db`，和依赖注入八竿子打不着。
+
+**⑤ asyncpg 的连接池绑定在创建它的事件循环上。** 报错是
+`InterfaceError: another operation is in progress`，**完全没提循环**，
+很容易误诊成并发 bug。⇒ 测试里一个 case = 一个循环 + 一份 lifespan。
+
+**⑥ `fastapi.testclient.TestClient` 在本环境挂死**（连最小 app 都卡在它的 portal 线程上）。
+⇒ 测试用 `httpx.ASGITransport` 直连，附带好处是 startup 和请求同循环。
+
+**⑦ cancelled 各退出路径不发终态事件 ⇒ SSE 客户端永远挂着**（2026-08-20，
+**首次真跑冒烟**抓到 —— 195 条进程内测试全绿它也在）。release_gate 拦下 / 成本闸
+before_write / refused / D 档这些路都只 `finish_run` 落库；终态事件此前由各调用方
+**自己记得补发**，谁忘了谁挂。⇒ 修法同「审批单和 run 状态同一事务」：终态事件并进
+`finish_run` 同一事务（结构保证），新增 `run.cancelled` 种类（取消 ≠ 失败，
+四种停法要能分辨），api.TERMINAL 与 `db._TERMINAL_EVENT` 两张表必须一致。
+
+**⑧ 模型传的数字参数常是字符串，SQL 直接拿去做日期运算就炸**（2026-08-20 压测，
+I11 8/8 全灭）。`calendar` 的 `CURRENT_DATE + $3` 收到 `"30"` ⇒ PG
+`operator is not unique: date + unknown`。⇒ 实现强转 int + SQL 侧 `::int` 双保险。
+**模型给的 arguments 是 JSON 值，每个数值参数都要按"可能是字符串"处理。**
+
+**⑨ 工具实现崩溃会带走整条 run**（同一轮压测）。异常穿过 ActionGate 直达
+run_once 兜底 ⇒ 「动作失败不终止循环、由模型决定下一步」在崩溃这条路上是空话。
+⇒ gate 捕获实现层异常 → 失败观测 `tool_crashed`（细节进审计，不喂给模型）。
+
+**⑩ `emit` 的 `max(seq)+1` 在并发写同一条 run 时撞唯一键，且把 worker 进程炸死**
+（lease 交接窗口：旧 worker 收尾 × 新 worker 已抢到）。⇒ 冲突瞬时 ⇒ 有界重试；
+`run.started` 的 emit 挪进 run_once 的兜底 try（事件写失败不该带走消费者）。
+
+## 4.5 · ★★★ M9.4 下半场：生产级 Agent Loop 的设计边界（B-0，2026-08-19）
+
+> **前提**（Chaoyu 2026-08-19，`22 §D-2`）：**不接真实广告平台**，但要写一个
+> **模拟真实 API 形状的沙盒**；而 runtime / agent loop **必须按可上线标准独立实现**，
+> **不许拿训练侧的 `run_rollout` 套一层薄膜**。设计思路可以复用，实现不行。
+
+### 4.5.1 为什么不能套薄膜（三条，都是训练侧的硬假设）
+
+```
+训练侧 run_rollout 假设            生产上不成立
+────────────────────────────────  ──────────────────────────
+单进程、单 run、无并发             worker 是多线并发抢 run，租户互相隔离
+工具是纯函数、确定性、无网络        要处理超时/重试/限流/部分失败
+没有"人"这一环                     C 档动作必须停下来开审批单，等人裁决后**恢复**执行
+不花钱                             成本闸要在**写之前**再查一次
+失败即结束                         失败要落审计、发事件、把 run 置成可恢复的状态
+```
+
+⇒ 把它包一层接口，等于把上面五条假设**一起带上生产**。
+
+### 4.5.2 ★★ 真正的设计问题：横切**绕不过去**，而不是"记得调用"
+
+`_execute` 现在是一段**写死的两步计划**（查政策 → 读 metrics → 决策+写），
+而所有生产级横切是**穿插在这段计划里**的：
+
+```
+D 档拒绝 · 审批恢复（用人裁决过的参数）· 成本闸（进门 + 写之前各一次）
+· 网关触发器 → 开审批单 · 幂等键 · 审计的 param_source · 事件的 seq · step 记录
+```
+
+⚠️⚠️ **一旦把写死的计划换成模型驱动的循环，这些横切就从"代码顺序保证"退化成
+"但愿那个循环记得调"** —— 而**「机制在，但没接上」是本项目记了十几次的第一失效形状**。
+
+⇒ **B-0 的结论：横切必须收口到模型碰不到的地方。**
+
+```
+模型能看到的         只有工具菜单 + observation
+模型能做的           提出一次工具调用
+模型**碰不到**的     权限 · 幂等键 · 重试 · 成本闸 · 审批触发 · 审计 · 事件 · 步数上限
+```
+
+`ToolRuntime.call` 已经是权限/幂等/重试的收口（`tools.py`），但**成本闸、网关触发、
+审计、事件仍然散在 `_execute` 里**。⇒ 第一件事是把它们一起收进同一个收口，
+让 agent loop **只能**通过它碰外部世界。
+
+⚠️ `ToolRuntime.call` 现在收 `invoke=<callable>` 由调用方传实现 ——
+**这是个洞**：循环可以绕过它直接调 platform。收口时要一并堵上。
+
+### 4.5.3 ✅ 已落地：`ActionGate`（B-3a，2026-08-19）
+
+```
+🆕 syncopate/runtime/action_gate.py
+   横切顺序**固定在收口里**，调用方改不了：
+     ① 步数上限（记在收口，不记在循环 —— 循环会被换，生产约束不能跟着换）
+     ② 工具存在吗（模型会编工具名 ⇒ **报"没有"，不模糊匹配**）
+     ③ 成本闸（**写之前**必查；读不查 —— 降级的意义是降级不是失明）
+     ④ 权限（ToolRuntime，API 与 worker 两条路共用同一道闸）
+     ⑤ 网关触发器（写动作命中 ⇒ 开带证据的审批单并停下，**停在执行之前**）
+     ⑥ 幂等 + 重试（ToolRuntime）
+     ⑦ 审计 + 事件（无论成败）
+   ★ 收口**自己持有** 工具名→实现 的绑定表 ⇒ 堵上 `invoke=` 那个洞
+   ★ `param_source` **没有默认值**，传错直接 ValueError
+   ★ observation 与内部字段切开：模型看不到 idempotency_key / attempts / 触发器细节
+     —— 它看到了就会绕着判据走，而判据一旦可被优化就不再是判据
+
+worker._execute 改走收口（行为不变，先证明收口能承载**现有全部横切**）
+🆕 tests/runtime/test_action_gate.py   13 条，钉的是「**能不能被绕过**」
+   含一条**签名判据**：ActionGate.invoke 不许有能传实现的形参
+   含一条**行为判据**：触发审批时，写动作**一次都没执行**
+```
+
+**验收**：runtime 74 passed（原 61）· 全量 **510 passed, 0 skipped**。
+
+### 4.5.5 ✅ 已落地：平台的两条硬机制（B-1a，2026-08-19）
+
+> 实查依据 `07 §2.1`。**数值全部来自官方文档，不是拍的。**
+
+```
+BUC 积分制限流   读 1 分 / 写 3 分 · 标准档 9000 / 开发档 60 · 衰减 300 秒
+                 **按账户共享**（不是按 campaign —— 否则多开几条就能绕过）
+                 耗尽 ⇒ 429 + retry_after，**可重试**
+改动频次上限     每 campaign 每小时 4 次 ⇒ 超了 613 / 子码 1487632，封禁一小时
+                 ⚠️ **不可重试** —— 它和限流长得像但性质相反
+PlatformError    加了 subcode / retry_after（真实 API 的形状）
+clock 可注入     测限流窗口不用真实 sleep（偶发红的测试 = 不可信的尺子）
+```
+
+★★ **最要命的那条组合**（`07 §2.1` 原话：M4 + M5）：平台**没有幂等机制**，
+而改动次数**有硬上限** ⇒ 一次超时后盲目重试，可能**同时**多改一次预算、又耗掉一格额度。
+
+⇒ 由此定了一条实现顺序，并用测试钉死：
+**幂等命中必须在扣分和频次检查之前** —— 重放是"什么都没发生"，不是"又发生了一次"。
+放错顺序的代价很具体：**额度只有 4 格，一次重试就白吃掉一格。**
+
+```
+🆕 tests/runtime/test_platform_real_shapes.py   10 条
+```
+
+**验收**：全量 **520 passed, 0 skipped**。
+
+### 4.5.6 ✅ 已落地：分页 · 显式字段 · 异步任务（B-1b，2026-08-19）
+
+```
+分页 cursor      要 1000 条只给 25 条，**而且不报错**（实查 P1-3）
+                 ⇒ 判据必须是**看 paging.has_next，不是看 len(data)**
+显式字段         fields 不给就报错，**不给"默认全给"**（实查 M3）
+                 要一个不存在的字段 ⇒ 报错，不静默返回 None
+                 —— 否则"字段名写错"和"这条真的没值"长得一模一样
+read-after-write 写过的值读得到（`07 §P0-1` 实测过的坑：改成 900，再读还是 500）
+异步任务         submit 立刻返回 change_id + pending，**不阻塞**
+                 get_job 没到点就如实报 pending，认不出 job_id 就**报错不装 pending**
+validate_only    真 API 提供的 dry-run（实查 M7）：不改世界、不吃改动额度
+```
+
+★★ `07 §P1-2` 原话：阻塞等待「**把"什么时候该查"这个决策从模型手里拿走了**」。
+⇒ 生产侧改成模型自己决定何时再查。
+⇒ 而**每次轮询都扣 BUC 积分** ⇒ 死循环狂查会自然把配额烧掉。
+  **代价内建，不靠"不许频繁轮询"这种规训** —— 规训要靠模型记得遵守，扣费不用。
+
+⚠️ 实现上只有**一处**改动世界的代码：`submit_budget_change` 走的是 `update_budget`
+同一条路，只是不等结果。**不是第二份实现。**
+
+**验收**：runtime **96 passed**（B-1a 前是 74）· 全量 **532 passed, 0 skipped**。
+
+### ⛔ 一条**不属于 runtime** 的差距（B-1c）
+
+`07 §P0-2`「单位改成最小货币单位 + 字段名带单位后缀」**不能在这里做**：
+`new_budget` 全仓库 **100 处**，散在**训练侧的沙盒、authoring、以及 v13 的 gold 数据**里
+⇒ 改名会**作废 v13 数据集**。
+⇒ 挪到 v14 重建时一起做。**这是数据契约的活，不是 runtime 的活。**
+
+### 4.5.7 ✅ 已落地：工具对齐账本 + 第一批工具（B-5a / B-2，2026-08-19）
+
+**账本先立，再补工具** —— 它一建好就抓到两件事：
+
+```
+① 我先前报的"runtime 实现了 8 个"是错的 —— **真正实现的只有 2 个**
+   WRITE_TOOLS 里登记了 8 个写工具的权限/幂等，**其中 7 个没有实现**
+   ⇒ **登记 ≠ 实现**。这正是第一失效形状，而此前没有任何东西在喊
+② campaign.update_budget 两侧不一致：沙盒把 client_request_id 列为**必填**，
+   而 runtime 平台不接它。两层后果：
+     · invoke(**arguments) 直接 TypeError —— 模型按训练学的方式调就炸
+     · 更隐蔽：derive_idempotency_key 对**全部参数**哈希 ⇒ 没有这个参数时，
+       「用户有意连续两次调成同一个值」推出**同一个键**
+       ⇒ 第二次被当成重放挡掉，**而且看起来像成功**
+   ⇒ 已修（平台接住它）。**这就是 B-5 的价值：它找的不是"没做"，
+     是"两边都能跑，但含义不同"。**
+```
+
+判据形状：`已实现 ∪ 已登记缺口 == 沙盒全部`（「某集合应当完整」型）。
+**缺口本身不红** —— 它是被承认的债，但**必须写下来才算被承认**，
+且每条要写清楚在等什么（这条判据当场判红了 13 条写得太薄的登记）。
+
+**🆕 第一批工具（B-2）**：`campaign.list` · `metrics.get_freshness` ·
+`policy.search` · `insight.search_claims` ⇒ 账本 **6 / 30**。
+
+★★ 顺带定下一条分层纪律（`tool_impls.py`）：
+
+```
+platform.py   **外部世界**的形状：Meta 的 paging.cursors.after、613、BUC、显式 fields
+tool_impls.py **我们给模型**的形状：沙盒 spec 那一份 —— 模型是照它训出来的
+```
+
+⇒ 反过来做（让模型吃平台原始形状）有两条都很贵的后果：
+① 模型读不懂 `paging.cursors.after`（它被训成读 `next_cursor`）；
+② 换平台时**模型要重训**。⇒ **适配层的价值是把"外部世界会变"挡在模型之外。**
+
+**验收**：runtime **124 passed** · 全量 **550 passed, 0 skipped**。
+
+### 4.5.8 ✅ 已落地：记忆库 + 安全线（B-2 第二批，2026-08-19）
+
+```
+🆕 schema.sql   memory_records · memory_proposals · safety_lines
+🆕 6 个工具     memory.{read,search,write_proposal,invalidate,conflict_resolve}
+                benchmark.get_safety_line
+⇒ 账本 **12 / 30**
+```
+
+**三条硬边界**，每条错了都不报错、只会悄悄错，各有一条测试钉住：
+
+```
+① episodic lane **agent 不可写**   沙盒里是"工具直接报错，等价于 403"
+   ⇒ 用**自己的异常类型**（MemoryWriteRefused），不复用 PlatformError ——
+     后者语义是"外部世界拒绝了"、可带 retriable；
+     这条是"我们自己的规则不允许"，**重试永远没用**。类型混了会去重试一件不可能成功的事
+② 写类工具**只提案，不入库**       memory_records **一行都不许写**
+   ⇒ 破了的话「需经审核」就只是一句话，审核环节成了装饰
+③ 安全线**不替模型判过期**         只如实返回 valid_to，不许有 expired/is_stale
+   ⇒ `axes.py` 原话：「真实世界里没人会在返回里塞一个 expired；模型必须自己拿它和今天比」
+     加这个字段 = 把判断从模型手里拿走，且与训练侧不一致
+```
+
+★ 另有一条**刻意的不对称**：`memory.search` 自动剔除已过 TTL 的，
+而 `memory.read` **不剔** —— 沙盒明写它「不校验这条记忆现在还成不成立」。
+「顺手统一」会让「我想看看那条过期的记忆当初写了什么」变成做不到。
+
+★ 查不到 ⇒ 明确报"没有"，**不返回一条空的线** ——
+空线会被读成"没有限制"，而真相是"我们不知道有没有限制"。同 `policy.search` 的三态。
+
+**验收**：全量 **559 passed, 0 skipped**。
+
+### 4.5.9 ✅ 已落地：素材库 + `system.wait`（B-2 第三批，2026-08-19）
+
+`creative.{upload,poll_review,get_asset_tags,get_metrics_by_asset,search_similar}`
+\+ `system.wait` ⇒ 账本 **18 / 30**。
+
+**`upload → poll_review` 是 B-1b 那套异步任务机制的第一个真实使用者**：
+上传只进审核队列、**不返回审核结论**；何时再查由模型自己决定，而**每次查都扣积分**。
+
+### ★★ 一个我自己制造、又被 spec 抓回来的坑：`system.wait`
+
+我原本把它登记成「⛔ 刻意不实现：生产侧的等待由异步任务表达」。**那是错的** ——
+`creative.poll_review` 的**描述里明写**「应当先用 `system.wait` 等够再查」，
+而那句话在**模型的 prompt 里**。
+⇒ runtime 没有它 ⇒ 模型调 → `unknown_tool` → 多半退化成立刻重查，而每次重查都扣积分。
+⇒ **"刻意不实现"变成了"制造一个坑"。**
+
+**但也不能照沙盒那样直接睡**：
+
+```
+system.wait 的 spec   单次上限 **600 秒**
+worker 的 lease       默认 **60 秒**
+⇒ 睡 600 秒 = 租约过期 = 另一个 worker 抢走这条 run = **重复执行**
+```
+
+沙盒里没有租约这回事，所以它可以随便睡 ——
+**这是「训练侧的实现不能套层薄膜就上生产」最具体的一个例子。**
+
+⇒ 修法：**等，但只等到租约安全线（一半）为止，并如实返回实际等了多久 +
+`truncated_by_lease`**。没等够必须**明说** —— 假装等够了，模型会以为审核该出结果，
+然后把一个 `pending` 当成"审核失败"。
+
+**验收**：全量 **571 passed, 0 skipped**。
+
+### 4.5.10 ✅ 已落地：写工具（B-2 第四批，2026-08-19）
+
+`approval.create_case` · `campaign.create` · `campaign.scale_budget` ⇒ 账本 **21 / 30**。
+
+★★★ **这一批的核心：沙盒用扣分教的约束，runtime 用硬闸兑现。**
+
+```
+campaign.create        「本轮还没有一次成功的 approval.create_case ⇒ 不要调用本工具」
+campaign.scale_budget  「幅度 ±20% 以内可直接执行；**超出必须先走 approval.create_case**」
+```
+
+⚠️ 为什么不能只靠模型记得：`campaign.create` **不可逆** —— 建出来就在花钱、删不掉。
+**「模型多数时候会遵守」对不可逆动作是不够的。**
+⇒ 做成**硬前置**：条件不满足就拒绝，**不进平台**。
+  测试的判据不只是"抛了异常"，还要**平台上一条 campaign 都没多** ——
+  抛异常但已经建出来了，那这道闸等于没有。
+
+★★ **`scale_budget` 的并发问题**（它特有，而且不做校验不报错、只会乘错基数）：
+
+```
+我读到 1000，打算提 20% → 1200
+在我算完之前，别人把它改成了 5000
+⇒ 不校验 ⇒ 我在 5000 上提 20% = 6000 —— **悄悄多花了 4 倍**
+```
+
+⇒ 把读到的值作为 `expected_current` 传给平台做**乐观并发校验**，对不上就 409 拒绝。
+⚠️ 且 `retriable=False` —— 基数已经变了，重试只会拿同一个过期期望值再撞一次，
+   **正确应对是重新读**。
+
+★ 异常分三族，**刻意不合并**：
+
+```
+PlatformError        外部世界拒绝了     可能可重试
+MemoryWriteRefused   我们的规则不允许   重试永远没用
+PreconditionNotMet   你还没做该做的那步  重试永远没用
+```
+⇒ 类型混了，`ToolRuntime` 会去重试一件不可能成功的事。
+
+★ `approval.create_case` 在 runtime 侧**就是** `open_approval_case` ——
+和网关自动触发时开的是同一张表、同一条路。另起一条的话，
+「人在哪儿看这些单子」就会有两个答案，而审批单的全部价值就是**有人真的会看到它**。
+
+**验收**：全量 **580 passed, 0 skipped**。
+
+### 4.5.11 ✅ B-2 收工：**账本 30 / 30，缺口 0**（2026-08-19）
+
+第五批（数据源类 9 个）：`analysis.{feature_lift,geo_breakdown}` ·
+`benchmark.get_industry_baseline` · `calendar.get_seasonal_context` ·
+`campaign.detect_anomalies` · `mmp.get_attribution` · `playbook.get_optimization` ·
+`policy.get_budget_rule` · `risk.check_account`。
+
+★ **这批的共同纪律**：沙盒描述里每个工具都写了它**不做什么**。
+那些"不做"不是省事，是**把某个判断留给模型** ——
+多做一步，就把对应的能力从训练目标里抹掉了。
+
+### ★★★ `mmp.get_attribution`：这一条**不能建成随机噪声**
+
+`07 §2.2` 的方法论原话（这次正面兑现了）：
+
+> 原计划是给两个源加一个**随机偏差**。**那是假的** ——
+> 真实的打架有**确定的成因和方向**：它来自归因窗口配置，且偏差方向可预测
+> （AF 少算、Meta 多算）。**模型该学的是识别成因并据此判断该信谁，不是识别噪声。**
+
+⇒ 实现上：差异由**窗口配置**推出（不是 random）· 方向**恒定**（短窗口 ⇒ MMP 少算）·
+返回**必须带两边的 attribution_window**（沙盒描述：「做判断前先看两边的窗口是不是一致」——
+不给窗口，那句话就没法执行）。
+⇒ 测试判据：**跑三次结果必须一样**（会抖就是噪声不是机制）；
+**窗口对齐时差异必须消失**（这证明差异来自窗口，而不是凭空加的）。
+
+### 三条复用了同一个形状的判据
+
+```
+risk.check_account 查不到 ⇒ **不能默认放行**（「没记录」≠「查过了没问题」）
+playbook 未知类型   ⇒ 报"没有"，**不猜相近的打法**（猜错的方案会被照着执行）
+feature_lift        ⇒ **必须逐地域**，实测同一 feature 在 US/JP 符号相反
+```
+
+**验收**：runtime **154 passed** · 全量 **590 passed, 0 skipped**。
+
+### 4.5.12 ✅ 已落地：模型驱动的循环（B-3b，2026-08-19）
+
+```
+🆕 syncopate/runtime/agent_loop.py
+   模型接口只有一个方法 `decide(user_message, history) -> Proposal`
+   Proposal 只有两种：再调一个工具 / 给终答
+   ⚠️ **刻意不提供"直接执行"这一档** —— 碰外部世界必须过收口
+```
+
+★★★ **循环里没有一行横切代码**，而且这条有**源码判据**守着：
+`_over_budget` / `open_approval_case` / `evaluate_triggers` / `WRITE_TOOLS` /
+`derive_idempotency_key` / `PermissionDenied` 一个都不许出现在循环里。
+横切一旦进了循环，就会随着「换模型 / 换 prompt / 换编排」一起被改掉。
+
+★★ **观测一律回到模型**（成功、失败、被拒都回）。
+动作失败**不终止循环** —— 由模型决定重试 / 换工具 / 说做不了。
+循环自己吞掉失败，等于把「失败之后怎么办」那段策略变成死代码，
+而沙盒里专门训过这一段。
+
+★ 四种停法**必须能分辨**：`finished` / `halted`（审批，**不是失败**）/
+`exhausted`（撞步数上限）/ `failed`。报成一样的话，「跑完了」和「被截断了」就长得一样。
+
+### ★★★ 顺带修掉一条已经过期的决定：恢复语义
+
+`db.resume_after_approval` 原本记着「从头重跑，不做断点续」，理由是
+「重跑一遍读操作 —— 读是便宜的那一侧，代价可以接受」，
+并特意写了一句「记在这里，因为"为什么不做断点续"以后一定会被再问一次」。
+
+**那个前提三条全变了**：
+
+```
+① 平台加了 BUC 积分制（B-1a）  ⇒ **读也扣配额**，不再免费
+② 编排改成模型驱动（B-3b）      ⇒ 重跑要**重新花模型调用的钱**
+③ 重跑会重新踩改动频次上限      ⇒ 一小时只有 4 格
+```
+
+⇒ 改成**从 transcript 续**，并给 `checkpoints` 补上了它一直缺的写入路径
+（原文明写"那张表现在没人写"）。
+⚠️ **幂等键那条兜底没有撤** —— transcript 只是省重复劳动，不是正确性的唯一依赖。
+
+★ 测试用**假模型**驱动：循环的正确性判据和模型好不好**无关**，
+用真模型测等于把两件事绑在一起。接真模型只是换一个 `decide` 实现（B-4）。
+
+**验收**：全量 **598 passed, 0 skipped**。
+
+### 4.5.13 ✅ B-5b 收工：对照台**一共抓到 6 个真分歧**（2026-08-19）
+
+```
+① observation 多包了一层        {"tool","ok","result"} vs 沙盒的**数据本身**
+② metrics.get_freshness         少 current_value / sample_size / min_sample_size
+                                  / expected_final_range
+③ campaign.get_metrics          **少 9 个**：ctr frequency game_genre impressions
+                                  installs_7d name platform spend_7d status
+④ campaign.detect_anomalies     少 severity（少了模型没法排优先级）
+⑤ campaign.list                 少 count / has_more
+⑥ mmp.get_attribution           **字段名整套不对**：我写的是 installs /
+                                  platform_installs_for_reference，
+                                  沙盒是 installs_7d / organic_installs_7d /
+                                  platform_attribution_window
+```
+
+★★★ **根因是同一个：我在 runtime 侧"按自己的想法起名"** ——
+而 `tool_impls.py` 模块开头那条纪律恰恰写着「**不许自己发明字段**」。
+⇒ 写的时候没有对照物，就必然会自己发明；**对照台就是那个对照物。**
+
+⚠️ 而这些分歧**没有一个会报错**：模型按名字取数，取不到就**自己编一个**。
+
+★ 判据是**单向**的：沙盒有的 runtime 一个不能少；runtime 多给是安全的
+（模型不认识就不看）。**少给才致命。**
+
+★ 覆盖**逐条登记**（同 `tool_parity` 的账本纪律）：5 个真跑对照，
+25 个写清楚为什么没跑 —— 而且有一条判据要求「理由不许太薄」，
+它当场判红了我写的 10 条「同上」。
+
+### 4.5.4 施工顺序（对应 `01 §1` 的 B-1…B-6）
+
+```
+B-1  模拟 API 沙盒        按真实 API 的形状写（分页/限流/部分失败/异步任务）
+B-2  22 个读工具          训练侧 30 个，runtime 只有 8 个且全是写工具
+B-3  Agent Loop 接进 worker，横切收口
+B-4  模型服务端点
+B-5  ★ 工具语义对齐判据    同名工具两侧行为必须相同
+B-6  M9.7 压测 + 11 §4 欠的 4 项
+```
+
+★ **B-5 是这条路上最容易跳过、后果最大的一条**：训练侧的 reward 是按沙盒工具语义写的，
+两侧不一致 ⇒ **训练时的最优策略到线上就不是最优**，而且不会报错。
+⇒ 判据形状照 `test_design_conformance.py` 那条（它已经在守写工具的登记一致性），
+扩成「同名工具的**参数 / 返回字段 / 失败语义**两侧相同」。
+
+---
+
+## 4.6 · ★★★ B-7 · 灰测口径（2026-08-19 设计并落地）
+
+### 4.6.1 三个设计判断，每个都换掉了一个"想当然"的做法
+
+**① 放量的维度不是"流量比例"，是 `automation_tier`。**
+
+```
+流量比例  控制**多少人碰到** agent
+tier      控制 **agent 能自己做多少**
+```
+
+⇒ **出事的严重度由后者决定**：10% 流量配 A 档（全自动改预算），
+比 100% 流量配 C 档（每个写动作都要人点头）危险得多。
+⇒ 而且 `automation_tier` **已经在 schema 里、已经有消费者**（D 拒绝、C 走审批）
+—— 不需要新造一套灰度机制。
+
+```
+灰度阶梯：**D（只看不做）→ C（都要审批）→ B → A**
+而不是：  10% → 50% → 100%
+```
+
+**② 开关 fail-closed。** 读不到 / 配错 ⇒ 按**关闭**处理。
+⚠️ 反过来意味着**配置服务一挂就全量放开** —— 那是最坏的时刻放最大的权。
+⚠️ 配错档位**不退回默认值**：退回默认值会让"配错了"看起来像"配对了"。
+
+**③ 闸门在 `ActionGate` 里，不在 API 层。** 同一个动作可能来自 API、也可能来自
+worker 自己的编排，两条路要过同一道闸（同权限闸那条）。
+⇒ 有一条测试直接断言 `api.py` 里不许出现 `SYNCOPATE_RELEASE`。
+
+### 4.6.2 ★★ 线上的尺子不是 reward，是**「人改了什么」**
+
+离线评测靠 **gold path + verifier**；**线上一条 gold 都没有**。
+
+```
+① 人工修正率   approval_cases.modified_params 非空的比例
+               ★★ 唯一「人主动给出正确答案」的信号，也是飞轮回路 2 的燃料（§37）
+② 审批率       高不一定坏（保守），但**趋势**要看
+③ 硬拒率       release_gate / 前置条件 / 权限
+④ D7 回收结果  outcome_result —— **唯一的真值**，但要等 7 天
+```
+
+⚠️⚠️ **④ 决定了灰度的节奏**：归因延迟是本项目的第一性约束（设计 §0.3），
+它在运营层的直接后果是 —— **每一档至少待满 7 天**，
+否则你是在用"还没收敛的数据"决定要不要放权。
+⇒ 想快只能靠 ①②③，而**它们都不是真值**，只是早期信号。
+
+★ 这一族**没有绝对阈值**（我们不知道"人工修正率 12%"是好是坏）。
+能立住的是**趋势**和**对照**：这一档比上一档更高还是更低。
+⇒ 读数：`python scripts/serving/canary_readout.py [--org <id>]`
+
+### 4.6.3 ⚠️ 关掉之后，在飞的 run 怎么办
+
+关掉**不能只是"新的不许起"** —— 已经停在 `waiting_for_user` 的 run
+没人去恢复的话会**永远卡在那里**。
+⇒ `halt_reason` 写进事件流（`run.degraded`），**关闭是一个可追溯的动作**，
+重新打开时能按它把受影响的 run 找出来。
+
+### 4.6.4 ✅ 已关闭（换了个解法）：`automation_tier` 不再需要任何人填
+
+**2026-08-20 关闭（Chaoyu 质疑「档位不该由人强制选」）**：解法不是"逼人填"，
+而是**让这个值有一个不依赖任何人填写的来源** —— `syncopate/runtime/tier_policy.py`
+从「**动作是什么**」推导（读免闸 · 写要人点头 · 大额永不自动 · 升级通道免闸）。
+
+```
+以前   建 run 时声明 A/B/C/D（没声明就按 C 算，前端一个下拉框）
+现在   derive_tier(工具, 参数) → 档位 + 判定理由（理由进审批单的 evidence）
+       声明值仍可给，但 more_cautious() 保证它**只能往严了拉**
+```
+
+⚠️ **模型不能自我授权**（§27.2「假设模型已被策反」）：刻意不给它"声明敏感度"
+的字段 —— 它的升级通道是调 `approval.create_case`（训过的），**降级通道结构上不存在**。
+⚠️ 为什么训练教过还要这层：六点曲线实测，同一模型多训 300 步
+`missing_safety_line_cap` 4→**60** 而总分还在涨 —— **reward 没罚到的地方 RL 就会去住**。
+训练给能力（统计），闸门给保证（绝对）；写动作不可逆，一次就够。全文见 `tier_policy` docstring。
+
+★ 顺带记一次自己的错：`allows(None)` 第一版映射到 `D`，而 D 是自主度**最低**的一档
+⇒ 判断恒为 True ⇒ **全部放行**，而文档串写着"按最严处理" ——
+**代码和文档说的是反的**，是自己写的测试当场炸出来的。
+
+---
+
+## 5 · 已知缺口与下一步
+
+| 缺口 | 说明 |
+|---|---|
+| **M9.7 压测五场景** | ①10× 流量 ②模型服务挂 ③工具超时 ④RAG 不可用 ⑤单 org 刷爆预算。**每个都要有明确降级路径** |
+| 编排是**最小可用** | 一次 metrics 读 + 一次预算写。真正的多轮 Agent Loop 是下一步；先把幂等/审批/事件/计费四条横切接通并测住，再变复杂 |
+| 鉴权是占位 | Bearer token → org 映射表。真上线换 OIDC/JWT —— **但注入的形状不变**，只改 `current_org` |
+| 【待定】指标 | 延迟 P50/P95/P99（按意图）、并发 run 数、QPS、SSE 断线补发成功率、单任务 token 成本。**M9.7 压测时用实测值反填**，别提前拍 |
+| 假平台 vs 真 API | 按 2026-08-14 的决定不接真 Meta（会真烧钱），真接入留到 M10 影子模式 |
+| `latency_ms` 列类型写成了 TEXT | `tool_calls.latency_ms` 应该是 INTEGER。现在没往里写值，改的时候一起修 |
+
+🔴 **2026-08-17 换机器后更正：PGDATA 现在就放在 `/workspace`。**
+`/workspace` 是本地 XFS，`chmod 700` 生效 ⇒ `PGDATA=/workspace/pgdata/16/syncopate`
+（已写进 `/workspace/.env`）。~~旧机器的 mfs 不支持权限位才放不进~~。
+⚠️ 但**数据库仍然是派生产物**，这条没变：工具在 `/workspace/tools/postgres`、
+schema 在仓库（`syncopate/runtime/migrations/` 迁移链是真相来源，2026-09-02 起；`schema.snapshot.txt` 为生成快照）、
+`bash scripts/serving/pg_bootstrap.sh` 一条命令重建。详见 `08-machine-and-environment.md` §1.1。
+⚠️ 干净机器上重建会撞两个坑（都已修进脚本）：`dpkg -x` **不跑 maintainer 脚本**
+⇒ 不建 `postgres` 用户；`libpq.so.5` 不进 ldconfig ⇒ 要 `LD_LIBRARY_PATH`。

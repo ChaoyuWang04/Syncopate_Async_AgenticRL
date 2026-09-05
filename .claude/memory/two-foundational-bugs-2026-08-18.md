@@ -1,6 +1,6 @@
 ---
 name: two-foundational-bugs-2026-08-18
-description: "2026-08-18 查出两个基石级 bug（梯度没跨 rank 同步 · 权重从没推给 rollout），把 08-14 至 08-18 所有 RL 实测污染了；作废登记在 docs/syncopate/21"
+description: "2026-08-18 查出两个基石级 bug（梯度没跨 rank 同步 · 权重从没推给 rollout），把 08-14 至 08-18 所有 RL 实测污染了；作废登记在主线历史归档 21"
 metadata:
   node_type: memory
   type: project
@@ -24,7 +24,7 @@ E22  trainer 的权重**从没推给 rollout engine** ⇒ π_rollout 全程钉�
 **「lr 被夹在两堵墙之间」「ESS 崩塌」「异步的代价」这一整套叙事，量的是这两个 bug。**
 那堵"异步的 ESS 墙"不是异步的代价 —— 陈旧度不是 1–2 个版本，是"从头到现在"。
 
-⇒ **作废登记的唯一来源：`docs/syncopate/21-invalidated-numbers.md`**
+⇒ **作废登记的历史来源：`docs/archive/syncopate/pre-consolidation-v16/21-invalidated-numbers.md`**
 （七个根因 B1–B7 · 22 条机器可读的作废清单 · **§3 仍然有效的部分**）。
 ⇒ 判据强制：`check_pipeline_invariants --only quarantine` ——
 含作废数字的文档顶部必须挂 ⛔ 横幅。**作废的数字不删**（删了就没人知道当初错在哪）。
@@ -40,7 +40,7 @@ E22  trainer 的权重**从没推给 rollout engine** ⇒ π_rollout 全程钉�
 没有一条在问「训练系统还活着吗」。**
 打个比方：仪表盘上全是车速油耗转速，没有一个灯告诉你方向盘和车轮之间的连杆断了。
 
-⇒ 已补上 A 族（`docs/syncopate/06-rl-run-protocol.md §2.A`），**全是「两个东西应当相同」型**：
+⇒ 已补上 A 族（历史见 `docs/archive/syncopate/pre-consolidation-v16/06-rl-run-protocol.md §2.A`；现行规则见 `docs/syncopate/04-TRAINING.md`），**全是「两个东西应当相同」型**：
 
 ```
 A1 每次权重同步后 `rollout_corr/kl` 必须回落到**首步那个数量级**（数值失配地板）
@@ -52,7 +52,7 @@ A4 **绝对有效条数** N × ESS/N ≥ 24（不是比例 —— 0.3 隐含大 
 ```
 
 ⚠️ 而**守卫此前不在仓库里**（跑时临时写的 shell，跑完就没，且只盯"模型学得怎么样"）
-⇒ 这是它们能漏过去的另一半原因。现在是 `scripts/rl_guard.sh`。
+⇒ 这是它们能漏过去的另一半原因。现在是 `scripts/tools/rl_guard.sh`。
 
 ## ⇒ 三条可迁移的纪律
 
@@ -62,7 +62,7 @@ A4 **绝对有效条数** N × ESS/N ≥ 24（不是比例 —— 0.3 隐含大 
 2. **凡是"我假设 X 成立"的地方，写成断言。** E21 就是被一句顺手写的
    「DDP 下各 rank 的 LoRA 应该相同」炸出来的 —— 而当时另外两个读 ckpt 的脚本**没有这句**。
    ⇒ 保护性逻辑必须**提成一份函数，所有路径共用**（`syncopate/train/ckpt_guards.py`）。
-3. **删证据之前先把它变成数**：`scripts/extract_ckpt_fingerprint.py` 把 27 GB 的
+3. **删证据之前先把它变成数**：`syncopate/train/ckpt_fingerprint.py` 把 27 GB 的
    跨 rank 证据提成 KB 级 json，检查器还能继续读它 ⇒
    「为了省空间把证据删了」这条路被堵上。
 

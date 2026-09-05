@@ -67,7 +67,7 @@ kl_loss_coef 0.001 × actor/kl_loss 0.0155 = 1.55e-5
 ⚠️ 但**通用能力的遗忘那一侧我们完全没测** —— 343 条冻结 EVAL 全是自家业务题。
 「位移 0.19% 是安全的」只在**我们能测到的范围内**成立。
 
-全文见 `docs/syncopate/22-decision-log.md §F`。
+全文见 `docs/archive/syncopate/pre-consolidation-v16/22-decision-log.md §F`。
 >
 > ✅ **但这条记忆的机制部分仍然成立**（它是数学，不是测量）：
 > `位移 ≈ lr × 更新次数`，advantage 组内归一化 + AdamW 每步位移 ≈ lr
@@ -76,7 +76,7 @@ kl_loss_coef 0.001 × actor/kl_loss 0.0155 = 1.55e-5
 > 拉 lr / 加次数**必然**得到更大位移，那是算术不是证据；
 > 判据必须是任务级尺子（`00-START` 守则⑥；原信已删）。
 >
-> 全表见 `docs/syncopate/21-invalidated-numbers.md`。
+> 全表见 `docs/archive/syncopate/pre-consolidation-v16/21-invalidated-numbers.md`。
 
 **2026-08-14 M7 实测：跑完 100 次更新后，`||ΔW||/||W|| = 0.0093%`**（万分之九）。
 正常 LoRA 微调是 0.5%–5%，**小了两三个数量级**。
@@ -135,7 +135,7 @@ grad_norm 整跑 0.011–0.06 稳得发闷，稳定性有余量。不稳就退�
 - **上线候选不用 lr 1e-4**（主线纪律①早已写死；defer 归零那条证据也已翻案为截断所致）
 - 新脚本已把 **400 步定为下限**、停机由「零梯度率不再创新高」判据定（守则⑩）
 - lr 1e-4 @5120 只是可选的"上限基线"，**不 gate 任何东西、不占队首**
-  （脚本备好 `scripts/run_e20h_lr1e4_5120.sh`，要测随时能跑）
+  （脚本备好 `scripts/infra/run_e20h_lr1e4_5120.sh`，要测随时能跑）
 - 正式验证走 E20 原因②：**固定 epoch 而非步数**（handoff §5.1-5）
 
 相关：[[syncopate-project-framing]] [[feedback-measure-dont-infer]] [[gate-the-promotion-not-the-run]]

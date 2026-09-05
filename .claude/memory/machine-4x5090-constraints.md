@@ -1,6 +1,6 @@
 ---
 name: machine-4x5090-constraints
-description: 4×5090 无 P2P 只能 DDP；2+2 跨 socket / PCIe Gen5 / 本地 XFS；带宽 组内28.8 跨22.2 四卡25.6 GB/s
+description: 4×5090 历史机器画像；现行机器只看 docs/syncopate/05-COMPUTE.md
 metadata:
   node_type: memory
   type: project
@@ -8,7 +8,10 @@ metadata:
   modified: 2026-08-17T07:10:00.000Z
 ---
 
-## 当前机器画像（2026-08-17 实测）
+> **历史机器记忆。** 当前主场已经迁到 Modal 2×B200；现行环境只看
+> `docs/syncopate/05-COMPUTE.md`，不要把下面的 5090 数字套到 B200。
+
+## 当时机器画像（2026-08-17 实测）
 
 - **P2P 全关**（`can_device_access_peer` 4×4 全 0）。GeForce 从 4090 起被驱动关掉，
   **所有 4×5090 都这样** ⇒ 卡间经主机内存中转，NCCL 走 `SHM/direct/direct`。
@@ -16,7 +19,7 @@ metadata:
 - **all-reduce busbw @256MB**：组内 **28.8** · 跨 socket **22.2** · **四卡 25.6** GB/s。
   跨 socket 掉 22%，**NUMA 绑定救不回来**（22.23→22.34，噪声内）＝ UPI 跳的物理代价。
   换算：DDP 梯度 260 MB ≈ 10.2 ms/步，跨 socket 净代价 **1.2 ms/步 ＝ 一步的 0.004%**。
-  尺子 `scripts/probe_allreduce_bw.py`，数据 `logs/e00_allreduce_*.json`。
+  尺子 `scripts/infra/probe_allreduce_bw.py`，数据 `logs/e00_allreduce_*.json`。
 - **`/workspace` = 本地 XFS 300 G 持久卷**，权限位生效（PGDATA 可放这里）、无隐形配额。
 - 🔴 **`/` 只有 16 G overlay**（`/root` `/tmp` `/var` 都在上面）。
 
@@ -45,9 +48,9 @@ metadata:
 计时/探针类短跑**跑完就删** `checkpoints/grpo/<exp>/global_step_*`
 （`dispatched.jsonl` 和 `rollout_dumps` 要留）。
 ⚠️ **flash-attn 必须用官方 cu13 轮子 + CUDA13 运行时**，换轮子先跑
-`scripts/check_flash_attn_backward.py` —— 见 [[clean-machine-only-gaps]]。
+`scripts/infra/check_flash_attn_backward.py` —— 见 [[clean-machine-only-gaps]]。
 
-细节见 `docs/syncopate/08-machine-and-environment.md`；焦点迁移见 `docs/focus-migration-2026-08.md`。
+历史细节见 `docs/archive/syncopate/pre-consolidation-v16/08-machine-and-environment.md`；现行机器看 `docs/syncopate/05-COMPUTE.md`，焦点迁移见 `docs/archive/infra_exp/legacy-4x5090/focus-migration-2026-08.md`。
 相关：[[feedback-measure-dont-infer]] [[infra-line-state]] [[clean-machine-only-gaps]]
 
 ---

@@ -34,7 +34,7 @@ entropy 就被乘 0 连进 policy_loss —— **每步 update_actor 都会对 en
 - 我们侧回归测试：tests/train/test_e31_step1.py::test_u3_zero_entropy_grad_is_legal
 - 配置：actor_rollout_ref.actor.entropy_coeff=0（launch_rl 默认，GRPO 常规）
 
-## 提交前待办（Claude 考据）
+## 提交前待办（负责该包的 Codex 考据）
 
 - [ ] 上游 main 分支该文件现状（我们看的是 0.8.0 快照）
 - [ ] 搜 verl issue 区有没有人报过 entropy 反向浪费

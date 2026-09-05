@@ -6,7 +6,7 @@ metadata:
   type: feedback
 ---
 
-**2026-08-18 的事故（完整记录：`docs/infra_exp/E21-ddp-not-syncing.md`）。**
+**2026-08-18 的旧栈事故（完整记录：`docs/archive/infra_exp/legacy-4x5090/E21-ddp-not-syncing.md`）。**
 
 ## 事故本身
 

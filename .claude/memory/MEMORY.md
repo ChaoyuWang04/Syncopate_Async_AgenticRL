@@ -1,20 +1,20 @@
-- [Modal+B200 新栈现场](modal-migration-state.md) — ★09-04 晚收口：run28 全绿训练集落地 1222 行 + 真数据 SFT 冒烟通过（单卡 208 tok/s）；管线逐段审查修完；下一步 SFT batch 标定改两卡 → 探针加通用步接 smoke 链；00/01 被另一会话重写中；入口 docs/syncopate/31
+- [Modal+B200 新栈现场](modal-migration-state.md) — v16 机械全链 smoke 已通、质量仍有 WARN；当前队首是质量收口与固定源码 B200 尺子；现行入口 docs/syncopate/00～07
 - [被调脚本也得是当前版本](pipeline-callees-must-be-current-too.md) — ★09-05 Chaoyu：runbook 固定"调谁"≠被调的是新版；一天查出 9 类旧东西还在起作用且不报错；旧版本号的名字本身就是线索
-- [v15 契约重构=唯一队首](v15-contract-refactor.md) — ★09-03：W0–W3 本机收官（九条裁定全落地）；下一步 Modal PRO 6000×2 做 W4/W5；B200 归 infra 探针
+- [v15 契约重构历史](v15-contract-refactor.md) — 行为进入 session.* 强通道的形成过程；当前协议看 docs/syncopate/02-SYSTEM.md 与 06-RUNTIME.md
 - [模型只装知识不装运行态身份](model-learns-knowledge-not-runtime-identity.md) — ★09-02 裁定⑨：account_id/清单一律 runtime 注入；数据要逐条渲染给人看（画廊抓到 4 条脚本没抓到的）
 - [Syncopate 项目定位](syncopate-project-framing.md) — 第一目标是业务闭环 agent，异步 RL 是第二目标；这个定位被搞反过
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么；★含「章节验收怎么做」的五步（M8 立、M9 照做）
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提
 - [集合通信的 16 字节对齐悬崖](collective-alignment-cliff.md) — 分块不被 16 整除，all_gather 掉 12×；「3 卡受诅咒」的真相
-- [4×5090 机器的硬约束](machine-4x5090-constraints.md) — 无 P2P、只能 DDP；2+2 跨 socket、Gen5、四卡 25.6 GB/s；A6 决定「模型内并行净亏损」还剩多少力气
-- [U 路统一训练=唯一队首](u-route-unified-training.md) — ★08-29 现场：P2 验收链在跑（u_p2_accept.sh），接手坑清单在内
-- [infra 线状态与决策](infra-line-state.md) — ★收尾期·单任务制（08-28）：训练线全闭环（E31 统一 FP8 定界·占空比 31→73.4%），★全线收官（08-28）：E32 serving 单日收官（四卡拓扑 3.86×·goodput 64·PD no-go·ngram 2.3× 进默认），B-5 调度层也单日收官（E33：goodput 64→192 3×·七翻案·膝点移交引擎），三案全收官；入口 docs/infra_exp/00-START.md
+- [4×5090 历史机器约束](machine-4x5090-constraints.md) — 旧机器的无 P2P、跨 socket 与带宽画像；现行机器只看 `docs/syncopate/05-COMPUTE.md`
+- [U 路统一训练历史](u-route-unified-training.md) — v14 的 OPD、多轮与 CoT 施工终态；不是当前队首
+- [infra 线当前入口](infra-line-state.md) — B01/B02 当前结论、B03 队首、7 份现行文档与旧 5090 归档边界
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错；★第八形态 = 测试全绿但服务**从没被真的起过**（入口/流关闭只在实跑存在）
 - [按旧单位标定的阈值](thresholds-calibrated-in-old-units.md) — ★换契约让「按旧口径标定」的数字同时失效；08-30 一天撞五次，一次都不报错
 - [空门槛不等于通过](blank-thresholds-are-not-passes.md) — ★判据太宽会**为错误的理由通过**；★★08-20 一天写空三次 ⇒ 固定动作：**撤掉修复确认判据会红**
 - [观察到问题≠有人在解决](observed-needs-an-owner.md) — 成因表要加「谁在打」一列，空白才显形
-- [两个基石级 bug（2026-08-18）](two-foundational-bugs-2026-08-18.md) — ★ 梯度没跨 rank 同步 · 权重从没推给 rollout；**所有 RL 结论作废**，登记在 docs/syncopate/21
+- [两个基石级 bug（2026-08-18）](two-foundational-bugs-2026-08-18.md) — ★ 梯度没跨 rank 同步 · 权重从没推给 rollout；相关旧 RL 结论作废，登记在主线历史归档 21
 - [RL 的位移 ∝ lr×√N，不是 reward](rl-step-size-is-lr-times-steps.md) — ~~两堵墙~~已翻案；★Chaoyu 08-19：解法是**加步数**（≤1 epoch 是主因），lr 1e-4 只是可选上限基线
 - [增量重建要冻结](incremental-rebuild-freeze.md) — 全局统计会顺手改掉不相关的部分，1030/1370 条被误动过
 - [沙盒是 runtime 的子集](sandbox-is-subset-of-runtime.md) — 契约由 runtime 定义；★2026-08-17 第一次正向兑现，逼出沙盒欠的两样（查不了 / 误召回）
@@ -34,4 +34,4 @@
 - [模型填的是我们给的那张表](contract-shapes-behavior.md) — answer_fields 一格 ⇒ 机器标签；改契约 5 分钟拿回一半人话；★但**只要人话会把办事能力换走**（实测）
 - [开训前逐通道体检](audit-every-channel-before-training.md) — ★数据的病不崩任何东西，只是让模型学到更省事的策略；同一个坑三次
 - [训练样例必须和线上同形](train-data-must-match-production-shape.md) — ★★守则⑮；08-31 通查出 7 处不同形，全是造数据时的临时办法
-- [K 线 serving 生产化 ✅收官](serving-harness-k-line.md) — ★09-02 K0–K11 单日落地；入口 27/28/29/30；挂账与下一轮的料在 27 §14 与本条
+- [K 线 serving 施工历史](serving-harness-k-line.md) — ★09-02 K0–K11 主体落地；现行入口 `docs/syncopate/07-SERVING.md`，正式验收仍看 `01-TASKS.md`

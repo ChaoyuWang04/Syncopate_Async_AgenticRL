@@ -82,7 +82,7 @@ pre-commit **14 个钩子全过**。
 *"base_sync_done is unused in merge-only mode but **kept for Phase 2 adapter path**"*
 —— 他们规划过这个第二阶段，只是没写。⇒ PR 的定位是**完成你们自己规划的 Phase 2**。
 
-发现来源 [`../../infra_exp/E22-lora-never-synced.md`](../../infra_exp/E22-lora-never-synced.md) ·
+发现来源 [`E22-lora-never-synced.md`](../../archive/infra_exp/legacy-4x5090/E22-lora-never-synced.md) ·
 提交件 [`3-submission.md`](3-submission.md) · 补丁与测试见本目录
 
 ---
@@ -213,7 +213,7 @@ for name, param in model.state_dict().items():
 
 ### 3.1 分支行为（离线，小模型，不依赖 Ray / 不起训练）
 
-`scripts/probe_weight_sync_payload.py`：构造一个 2 层的 Qwen3 + LoRA(r=32, 7 个 target module)，
+`scripts/infra/probe_weight_sync_payload.py`：构造一个 2 层的 Qwen3 + LoRA(r=32, 7 个 target module)，
 FSDP 包好，直接调 verl 自己的 `collect_lora_params`：
 
 | 分支 | 张量个数 | 总字节 | 含 `lora_` 的 |

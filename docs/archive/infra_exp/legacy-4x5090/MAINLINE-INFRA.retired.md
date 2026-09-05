@@ -1,0 +1,82 @@
+# MAINLINE ⇄ INFRA — 两条线的唯一交互文档
+
+> ## ⛔ 铁律（Chaoyu 2026-08-19 定）
+>
+> **两条线之间的一切往来只写在这一份文档里。禁止再写任何「信件」文档**
+> （此前的 MAINLINE-HANDOFF / INFRA-REPLY / INFRA-TO-MAINLINE 系列已全部删除，
+> 未闭合的事项都迁到了下面的表里）。
+>
+> 用法：
+> - **只登记「还开着的事」**：方向 · 一句话 · 谁在打 · 判据/去处。
+> - **办完就删行**：结论写进各自的权威文档（主线 `docs/syncopate/` · infra 的 E 报告），
+>   本文不留历史 —— 要历史去 git log。
+> - 长论证不进本文：写进权威文档，这里只留一行指针。
+> - infra 只在乎**速度和正确性**，模型性能类的事不必抄送。
+
+---
+
+## 开着的事（办完删行）
+
+| 方向 | 事项 | 谁在打 | 判据 / 去处 |
+|---|---|---|---|
+| 主线→infra | 🆕 **训练栈整体升级（Chaoyu 09-03 裁定⑪，26 §6）**：主线在 Modal 上改用 **vLLM 0.28 / torch 2.13 cu13 / verl 0.9（V1 统一 trainer·FSDP2·on-policy 蒸馏）/ transformers 5.10 / FLA 0.5.2**，学生 Qwen3.5-9B、教师 Qwen3.5-27B；flash-attn 官方轮子只到 torch2.10 ⇒ 源码编 sm_120。依赖表**独立**在 `modal_app/stack/`，根目录 uv.lock（旧栈）暂不动、本机 K 线照旧。infra 需知：① 四条 DDP 补丁 / E31 统一 FP8 补丁 / TRITON 注意力后端都对着 verl 0.8 内部写，新栈上要重对；② B200 探针若用新核（FA4/GDN）可直接复用 `modal_app/stack/` 这份表；③ 跨栈读数不可比 | 主线（对齐）· infra 知悉 | 探针 `modal_app/stack_probe.py` 六步全绿后，主线在 08 §Modal 记环境；补丁重对结果记 26 |
+| 主线→infra | 🆕 **算力搬家与 B200 探针立项（Chaoyu 09-03 裁定）**：训练/评测/重训/serving 实测一律搬到 Modal 的 **RTX PRO 6000×2**（sm_120，96 GB×2，与 4×5090 同指令集、零移植；约 $3.03/卡时）；**B200（sm_100）只做 infra 特性探针与 smoke test，不跑全量训练**（约 $6.25/卡时）。infra 认领 B200 探针清单（每项=一个 E 报告小节，判据跑前注册）：① tcgen05 + Tensor Memory 块缩放 MMA 峰值基准（MXFP8/NVFP4，对照 E30 sm120 的 543/627）② FlashAttention-4 vs FA2/Triton 的 TFLOPS 利用率（4B/9B 形状）③ NVLink 5 下 all_gather/all_reduce 带宽画像（对照 E21 16 字节悬崖是否仍在）④ Transformer Engine MXFP8 端到端 RL 冒烟（对照 LMSYS 07-29 recipe：两侧量化契约逐位一致、末 15% 层 bf16）⑤ NVFP4 选择性量化 rollout 冒烟 ⑥ colocate DP=2 vs 训推分离 1+1 单变量对照（NVLink 下 sleep/wake 成本）⑦ PD 分离在 NVLink 上重判（E32 曾 no-go 因无互联）。Modal 硬约束：GPU 函数默认可抢占且不能关（探针要幂等可重跑）· 单次 ≤24h · 多节点 beta 且须整 8 卡（不用）· 镜像用 nvidia/cuda devel 自带 nvcc（B300 需 CUDA 13.1）| **infra 认领**（B200）· 主线（PRO 6000 搬家，镜像/试点见 08 §Modal） | infra 01 队首登记 + 每项落 E 报告；主线 08 §Modal 记环境；两边读数不与 5090/4 卡混比 |
+| 双方 | 🆕 **U 路统一会话能力训练立项**（历史施工图：`docs/archive/syncopate/pre-consolidation-v16/24-unified-conversation-training.md`）：M+O+CoT 三合一进 v14。infra 认领三件：① P0-4 OPD 训练路径 spike（verl ref-swap vs 自建，判据=梯度只落 mask 段）② P3 显存/吞吐预案（think 4096→mb4 / 8192→mb2 降档表；rollout KV >50% 池时按 02 预留案重验训练侧 fp8 KV 三红线）③ CoT 后 rollout 变慢时重估三个停放复活项（陈旧度剂量/同步暂停/投机重估——infra 01 的长期停放注记从此有了触发器） | 主线+infra | 现行主线状态只看 `docs/syncopate/01-TASKS.md` |
+| infra→主线 | ✅ **B-4 压测收尾完毕（08-28 单日，E32 全档；infra 线全线收官）**，主线需知四件：① **端点默认已升级**（`start_vllm.sh`：+mnbt16384 +ngram 投机——单流 TPOT 8.3→2.94ms、无损性 50/50 逐字实证，已冒烟实跑；chatbox/decider 无感）；② 四卡高吞吐模式 `scripts/serving/b4_serve_4x.sh start 4 affinity`（router 顶 :8100，重生成负载 3.86×）；③ **candidate adapter 曾没随搬家回来**（端点在新机起不来过；已从 HF 拉回并校验 504 键）；④ after 已按约回填 `11 §5`（goodput@SLO=64 并发·膝点在编排层——单卡/四卡等值证明，**业务并发要再抬是 worker/API/PG 的活**，引擎不是约束）。压测已全部让卡 | 主线 | 阅后删行 |
+| infra→主线 | ✅ **B-5 调度层提升完毕（08-28 单日，E33 全档）**，主线需知五件：① **goodput@SLO 64→192（3×）**，膝点已移交引擎容量（C=256 时 llm 占 91%——再扩容量是加卡或降每单 LLM 用量，不是改 runtime）；② 生产栈形态变更（`09 §0` 已更新）：API `--workers 4` · worker ×4 进程 · 池走 env（单进程默认值未动）；③ **runtime 代码改动四处**（api.py SSE 门铃+池 env · worker.py 分账插桩+cost-cap/池 env · decider.py 按意图传 priority · schema.sql 事件通知触发器）——语义零改动，722 测试净值+杀进程零丢单+loadtest 22/22 背书；④ PG 实例已调 max_connections 300 / shared_buffers 2GB（重启过两次，数据无损）；⑤ ⛔ 一个对主线有教育意义的翻案：E32"膝点在编排层"强版结论被路由塌缩污染（E33 §6③），22/22 那行历史判据病也因延迟形状改善自愈 | 主线 | 阅后删行 |
+| infra→主线 | 🆕 **worker 加 `--daily-cost-cap-micros` CLI 透传**（B-4 压测需要：org_acme 日预算 10M 在 ~300 run 刷爆，其后全 run 秒失败把 goodput 阶梯变垃圾数据；默认值一分未动，只是把已有 WorkerConfig 字段暴露出来。压测 org 抬 1000× 的动作在 b4_stack.sh，不碰生产 org） | 主线知悉 | 无异议即删行 |
+| infra→主线 | 🆕 **CoT 训练支持 infra 侧退出**（Chaoyu 08-28 裁定，随之撤出 infra 简历）：主线带思考 SFT 数据线的节奏自定；将来若重启训练侧支持，从 infra 01 §1 的停放注记复活 | 主线知悉 | — |
+| 主线→infra | ⚠️ 采样器现在**排除上一批**（重复的根因是批边界错位，历史见 `docs/archive/syncopate/pre-consolidation-v16/18-pipeline-assumption-probes.md §6`）⇒ 新旧跑的采样序列**同 seed 也不再逐步可比**，严格重放对照别跨这条边 | 双方知悉 | — |
+| 主线→infra | ⚠️ v13 SFT 数据重建过（131/503 条此前缺终答，`18 §12`）⇒ 臂对臂比较不受影响，但**下次 SFT 重训后基线会动，跨代比较别混用** | 双方知悉 | — |
+| infra→主线 | P8 降级后的尾巴：`logprob_coverage` 有 ~0.1% 占位值（最低 0.9932），会污染那几条的 IS 权重 —— **归因无人认领** | **待认领**（引擎侧，建议 infra） | 找到占位值的来源并判定可否消除 |
+| 双方 | 🆕 **CoT（thinking）训练支持立项**（Chaoyu 2026-08-20）：主线产**带思考的 SFT 数据**（E27 红利路径：拨开关净 −0.057 但探索格子 170→233）；infra 解训练侧（`SYNCOPATE_THINK` 目前 launch_rl 拦训练 · think 预算 8192 契约联动 · CoT 后 rollout 变慢，异步配比/陈旧度条件那时才真正出现）。任务细分挂 infra 01 §1 | 双方 | 设计先行，动代码前对齐口径 |
+| 双方 | 🆕 **OPD 立项**（历史决策：`docs/archive/syncopate/pre-consolidation-v16/22-decision-log.md §J`）：把"说人话"的能力从**裸底座 Qwen3-4B**（与我们 SFT 同源）蒸回候选。O-1 探针已给绿灯：分歧集中在自然语言段（Δ=+1.91，58% 的 token \|Δ\|>3），**任务段几乎零漂（+0.01）**。主线出分布设计与 token 级 mask（分段器已写好），**训练侧实现可能要 infra**（on-policy：学生生成→老师在学生轨迹上给 token 级监督；只动 LoRA） | 双方 | 现行主线状态只看 `docs/syncopate/01-TASKS.md` |
+| infra→主线 | ✅ **GPU0/GPU1 两个端点已于 08-20 12:47 关闭让卡**（Chaoyu 当面指令：主线侧测试已完，infra 起 4 卡采集）。按你们记的运维坑连 EngineCore 一起杀，显存已全部归还。现行起停说明见 `docs/syncopate/07-SERVING.md` | 双方知悉 | 主线重起端点时删本行 |
+| infra→主线 | 🆕 **serving 端点默认已加 `--kv-cache-dtype fp8`**（Chaoyu 08-21 拍板，`logs/runtime/start_vllm.sh` 已改）：KV 池 ×2 ⇒ 并发 +50%；质量 −0.009 恰在 MDE 界（E19 §8 五臂+归因）。压测口径注意：重起端点后 TTFT/TPOT 基线要按 fp8 KV 重记 | 主线知悉 | 主线确认后删本行 |
+| infra→主线 | **「真压测」共建**（Chaoyu 08-20 JD 对齐，infra 01 §1-1）：infra 出压测框架与优化（SLO 画像/prefix cache/批调度/多 LoRA 热切换），主线出业务流量形状与验收口径。**主线侧历史交付（08-20）**：驱动器 `scripts/serving/runtime_loadtest.py` + 当时读数在 `docs/archive/syncopate/pre-consolidation-v16/11-runtime-acceptance.md §5`；现行验收边界只看 `docs/syncopate/07-SERVING.md` | 双方 | infra 侧接手框架后各自记账 |
+| 主线→infra | ⚠️ **评测单轮上限默认已改**：256 → `MAX_RESPONSE_LENGTH`（2048/think 8192，E23「评测跟训练」——256 会把崩塌型长轮截掉，评测在最需要诚实时不诚实）。你们注释里「off=256 逐字节不变」的冻结被此取代；**审计头部现在记录 `gen`（max_new_tokens/温度/组大小）与 `data_version`**（分片合并器此前把这些键丢了——e27 两臂 label 一模一样分不清的缺口已堵）。E27 若要续跑，跨代配对看 `gen` 字段 | infra 知悉 | — |
+
+---
+
+## ✅ infra 二次确认完毕（2026-08-19 晚）→ 可开 candidate 首跑
+
+**最终命令（在拟用命令上改三处，其余照旧）**：
+
+```
+SYNCOPATE_PREFIX_GROUPER=1 \
+launch_rl --model models/Qwen3-4B-sft-v13r2-e1 --lora-rank 32 \
+  --mode fully_async --trainer-gpus 3 --rollout-gpus 1 \
+  --micro-batch-size 8 --use-kl-loss False \
+  --steps 400 --purpose candidate --experiment cand_v13r2_e1 \
+  --save-path checkpoints/grpo/cand_v13r2_e1
+# ① PG 开（Chaoyu 拍板）⇒ 必须配 --micro-batch-size 8（拟用命令漏了；mb=1 会"无组可分"）
+# ② KL 关：--use-kl-loss False（E17 B 臂原样）
+# ③ 其余走默认（lr 3e-5 · mini 6 · seed 1234 · sequence IS · bucket 512）
+# 伴跑不变：rl_guard --kill · rl_ckpt_rolling_prune · SYNC_PAYLOAD/DDP_PROBE
+# 预计步速 ~13 s/gstep（14.94 − ref 2.0），400 步 ≈ 1.5–2 h 步进 + 收尾
+```
+
+五项确认（原节已删，全文见 git log）：
+
+| # | 结论 | 证据 |
+|---|---|---|
+| 1 | **PG 开 + mb=8**。B5 独立消融按 Chaoyu 裁定跳过，**由 candidate 晋级评测兜底**（若 candidate 不达标，PG-off 重跑是第一嫌疑，已登记 infra 02） | E26 §6.3–6.6（fp32 逐位等价 + 归约逐位同 + 四常驻判据） |
+| 2 | **KL 关（`--use-kl-loss False`）**。⚠️ 你们的担心不成立：**判据③ `rollout_corr/kl` 不吃 ref** —— 它来自 rollout-IS 诊断（rollout logprob vs trainer 重算）。E17 B 臂（KL off）实证该指标出现 15 次、值在地板（3.7e-4 / 2.3e-4）⇒ **A1 三条腿全保** | logs/e17b_kl_off.log |
+| 3 | **四个新默认值 infra 无暗依赖**：e26ab/e20h 显式钉了 mini/train-batch；吞吐脚本不吃 lr；max-turns 对自定义 loop 是 no-op（真上限 = per-case max_steps 经 extra_info 进 RolloutConfig，launch_rl:791 注释已核，verl 侧无消费路径） | grep 三个 run_*.sh |
+| 4 | **分池接线已核**（launch_rl:1068 → main_ppo_pool:215）；rollouter 侧无已知批宽假设。判据 = 开跑 ~30 min 后 infra 跑 `check_pipeline_invariants --only rollout` + P4 case_id 复查（infra 认领） | — |
+| 5 | **评测 256→2048 + gen 头：无异议**。E27 裸基座臂本来就 @2048 跑的，口径一致；gen 头正好堵了 label 撞名缺口 | — |
+
+⚠️ 两条口径提醒：E26 的 14.94 s/gstep 是 **KL-on** 量的，KL off 后步速会更快，别把差异读成漂移；
+PG/KL 的**库默认值今晚不动**（显式旗子跑）——candidate 过晋级评测后再切默认（"兜底必须是对的那个"要有这次的证据垫底）。
+
+## 双方现状一句话（过期就改，不追加）
+
+```
+主线   A 路候选 cand_v13r2_e1/RL-100（+0.186）待晋级确认（22 §G-10）；
+       B/F 路**已交付到人手上**：chatbox 在跑（会话+多轮+全量工具自选+档位推导），
+       B-4 端点 + §19 压测 24/25（11 §5）。队首转向 **M 路多轮数据**（22 §J-8 有实测形状）；
+       O 路 OPD 探针做完、范围缩一半，训练建议先观望（22 §J）
+infra  ★ **全线收官（08-28）**：训练线闭环（E31 FP8 定界·占空比 73.4%）+ serving 线
+       收官（E32：四卡拓扑 3.86×·goodput@SLO 64·PD no-go·ngram 投机 2.3× 进默认）；
+       队列为空，只剩行政等待（上游编号×2·DRAFT 两包等 Chaoyu）；入口 infra 00-START
+```

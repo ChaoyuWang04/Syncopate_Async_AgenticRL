@@ -45,7 +45,7 @@
 ```
 commit 062a5dbd8e6cb98decf170c70c652d1537fbdfb6  (main)
 docs: point links at renamed repo
-未提交改动：?? docs/learning-notes/  ?? docs/syncopate/
+未提交改动：当时新建的学习笔记与 `docs/syncopate/`（学习笔记现已按主线和 infra 分流归档）
 ```
 
 **verl 接入方式：vendored 源码快照**，不是 pip 也不是 fork——`REL/verl/upstream/` 随包固定（`REL/.gitignore:19` 把它排除出 git）。版本 `0.8.0.dev`。`REL/.venv-verl/` 存在但只是半成品（无 pandas/torch，安装被带宽掐断）。
@@ -214,7 +214,7 @@ max    13059        534         80
 ```
 - **assistant（≈有 loss 的 token）只占全序列 1.9%** —— 12k token 里 98% 是 system prompt + 31 个工具 schema + 工具返回
 - **★ 终答段 / 全部有 loss token = 16.6%**（逐条中位数 19.4%，P10 9.0%，P90 35.4%）⇒ **83% 的监督信号落在中间的 tool_call 上，只有 1/6 在最终答复上**
-- `assistant` 的 P50=222 与 `docs/learning-notes/05` 用同一 tokenizer 得到的 T(P50)=222 **完全吻合**，互为交叉验证
+- `assistant` 的 P50=222 与 `docs/archive/syncopate/legacy-notes/05-anatomy-of-a-trajectory.md` 用同一 tokenizer 得到的 T(P50)=222 **完全吻合**，互为交叉验证
 
 **置信度：高。**
 
@@ -558,7 +558,7 @@ train/verl_reward_adapter.py:89:  "max_step_hit": not bool((trajectory.get("fina
 agent/verifier.py:800:            hit_max_steps = actual >= spec.max_steps and not trajectory.get("final_text")
                                    ← 步数达上限 且 无终答
 ```
-（`docs/learning-notes/07` §1.2 已记录第三处 `spec.max_steps` 与 case/runtime 的 max_steps 也各自独立。）
+（`docs/archive/syncopate/legacy-notes/07-sandbox-environment.md` §1.2 已记录第三处 `spec.max_steps` 与 case/runtime 的 max_steps 也各自独立。）
 ⇒ **同名指标在 reward 侧和 verifier 侧统计口径不同，两条曲线不可直接对比。**
 
 **级别：升降 C / 口径不一致 A。**
@@ -570,7 +570,7 @@ agent/verifier.py:800:            hit_max_steps = actual >= spec.max_steps and n
 | 项 | 结论 | 证据 |
 |---|---|---|
 | `AgentLoopOutput` 完整字段 | `prompt_ids, response_ids, response_mask, response_logprobs, routed_experts, multi_modal_data, reward_score, num_turns, metrics(AgentLoopMetrics), extra_fields(dict={}), mm_processor_kwargs`。**`metrics` 和 `extra_fields` 都是现成的透传口** | `UP/verl/experimental/agent_loop/agent_loop.py:121-147` |
-| `fraction_high` 是否被记录 | 指标名 `rollout_corr/rollout_is_ratio_fraction_high`，由 `UP/verl/trainer/ppo/rollout_corr_helper.py` 计算并进 W&B。**代码里存在；末期值无产物可查（C 级）** | 见 `docs/learning-notes/02` §5 |
+| `fraction_high` 是否被记录 | 指标名 `rollout_corr/rollout_is_ratio_fraction_high`，由 `UP/verl/trainer/ppo/rollout_corr_helper.py` 计算并进 W&B。**代码里存在；末期值无产物可查（C 级）** | 见 `docs/archive/infra_exp/legacy-notes/02-train-inference-mismatch.md` §5 |
 | `norm_adv_by_std_in_grpo` | **存在，默认 `True`**；老师的 `train_grpo_verl.py` 未覆盖 ⇒ 生效为 True | `UP/verl/trainer/config/ppo_trainer.yaml:74`；`UP/verl/trainer/ppo/core_algos.py:273` |
 
 ---
@@ -585,7 +585,7 @@ agent/verifier.py:800:            hit_max_steps = actual >= spec.max_steps and n
 | T13③ max_step_hit 升降 | 同上 |
 | T2 中 185 池的直接证据 | 185 条的 SFT 池不在本包内；算术链（185→19 val+166 train）自洽，但无法出示那份 manifest |
 | T1 gold 生成器 | `data/authoring/`（`policy_eval.py:16` 提到的 `data/authoring/policy_kb.py`）**未随包发布**，无法看到 case/gold 模板的编排逻辑 |
-| loss_mask 的逐 token 直接验证 | 需要在装好 verl 的环境里实例化 `MultiTurnSFTDataset`；本机 `.venv-verl` 是半成品（无 torch），未做。T4 的 token 数用增量法近似，与 `docs/learning-notes/05` 的独立测量吻合（P50=222），但不是从 `loss_mask` 直读 |
+| loss_mask 的逐 token 直接验证 | 需要在装好 verl 的环境里实例化 `MultiTurnSFTDataset`；本机 `.venv-verl` 是半成品（无 torch），未做。T4 的 token 数用增量法近似，与 `docs/archive/syncopate/legacy-notes/05-anatomy-of-a-trajectory.md` 的独立测量吻合（P50=222），但不是从 `loss_mask` 直读 |
 
 ---
 

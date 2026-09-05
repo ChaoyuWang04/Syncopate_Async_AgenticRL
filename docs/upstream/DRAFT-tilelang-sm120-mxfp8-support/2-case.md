@@ -1,11 +1,11 @@
 # tilelang · sm120 块缩放 MMA 只接了 NVFP4：MXFP8（mxf8f6f4）支持缺位 + 可用原型
 
 ```
-状态     DRAFT —— 待上游考据（Claude：确认上游是否已有在飞 PR + 按贡献指南把原型改造成配置表扩展）
+状态     DRAFT —— 待上游考据（负责该包的 Codex：确认上游是否已有在飞 PR + 按贡献指南把原型改造成配置表扩展）
 目标仓库  tile-ai/tilelang（0.1.13）；关联 NVIDIA/cutlass#2867（同缺口）、triton#7550（同族已修）
 性质     feature（带可用原型与硬件实测依据，非 bug）
-原始发现  ../../infra_exp/E30-tilelang-nvfp4-gemm.md §1/§4
-原型      scripts/tl_mxfp8_gemm.py（8192³ 543 TFLOPS=sm120 峰值 52.9%，超 cuBLAS-cu13 523；对拍 2.9e-3）
+原始发现  ../../archive/infra_exp/legacy-4x5090/E30-tilelang-nvfp4-gemm.md §1/§4
+原型      syncopate/train/tilelang_mxfp8.py（8192³ 543 TFLOPS=sm120 峰值 52.9%，超 cuBLAS-cu13 523；对拍 2.9e-3）
 ```
 
 ## 缺口
@@ -16,7 +16,7 @@ MXFP8（m16n8k32 · kind::mxf8f6f4 · scale_vec::1X · e4m3 · ue8m0）完全没
 
 ## 我们手里可直接给上游的三样
 
-① **缩放因子 lane 映射（硬件反演，非文档抄录）**：scripts/probe_mxf8_scale_mapping.cu，
+① **缩放因子 lane 映射（硬件反演，非文档抄录）**：scripts/infra/probe_mxf8_scale_mapping.cu，
    A 行 r(<8)←lane(4r+tid·2)·byte(bid)，行 r+8←+1；B 列 n←lane(4n+tid)·byte(bid)；
    bid=字节窗 ⇒ uint32 一次装 4 个 k-block 缩放——这正是配置表扩展要填的 selector 逻辑；
 ② **工作原型**：import_source 逃生门版完整 kernel（对拍+性能双验），上游要做的是把它

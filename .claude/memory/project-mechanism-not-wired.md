@@ -123,7 +123,7 @@ colocate 一样走 NCCL checkpoint engine）⇒ 吃 verl 默认 2048 MB，第一
 
 ## ★★★ 2026-08-17 第六形态：**字段全程有效，只是没有消费者**
 
-M9 符合性审计（`docs/syncopate/11-runtime-acceptance.md`）：`automation_tier='C'`
+M9 符合性审计（历史见 `docs/archive/syncopate/pre-consolidation-v16/11-runtime-acceptance.md`；现行边界见 `docs/syncopate/06-RUNTIME.md` 与 `07-SERVING.md`）：`automation_tier='C'`
 的 run **不走审批，写动作直接执行、run succeeded**。而 §3 里 C 档 = 不可逆/代价高。
 
 链路是这样断的：
@@ -183,7 +183,7 @@ runtime 195 条测试全绿、40 条验收判据核过 —— 但**第一次真�
 
 ⇒ **进程内测试验的是函数，不是部署形状**：入口、进程边界、连接生命周期
 这些只在"真的把它起起来"时存在。⇒ 判据：每个服务组件问一句
-「它的 main 在哪、谁真的起过它」。冒烟驱动 `scripts/runtime_smoke.py` 就是这次补的
+「它的 main 在哪、谁真的起过它」。冒烟驱动 `scripts/serving/runtime_smoke.py` 就是这次补的
 （固定 query 集 + SSE 跟流带死线 —— 驱动器自己没有死线时，被它测的挂死 bug 会把它一起挂死）。
 
 相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]

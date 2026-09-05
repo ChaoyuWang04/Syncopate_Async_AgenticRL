@@ -47,7 +47,8 @@ rollout 引擎与训练后端即使共享同一份权重，logprob 也对不上�
   kl(fp8 KV)  ≈ 4.8–5.5e-3      ← 本底+量化项 ⇒ 量化项≈4.4e-3 = 本底的 ~11×
   IS 截断比例 0.07→0.47（破 H3 红线 0.40）· IS 均值 0.97→0.65-0.72（有偏）
   ESS/N 0.92→0.6 · 步速反慢 4.6%（训练 rollout KV 池仅用 16.7%，容量杠杆无着力点）
-原始日志 logs/smoke_newbox_0827*.log · 决策背景 infra_exp/02-DECISIONS「fp8 KV cache」行
+原始日志 `logs/smoke_newbox_0827*.log` · 历史决策背景
+`docs/archive/infra_exp/legacy-4x5090/02-DECISIONS.md` 的“fp8 KV cache”行
 ```
 
 ## 5 · 实验设计（建议形状，认领人可改）
@@ -65,8 +66,8 @@ bf16 → fp8 KV → fp8 W8A8 → 叠加；每臂 × {序列 IS 开/关}；
 度量仪器   verl rollout_correction 指标族（管线常驻）：rollout_corr/kl · ESS · fraction_low/high
 开关       launch_rl --kv-cache-dtype {auto,fp8} · vLLM W8A8（E19-c 跑过）· --rollout-is {sequence,token}
 跑法       infra 00-START §6 冒烟模板 + 06-rl-run-protocol 判据清单
-微观探针   scripts/probe_fp8_logprob_error.py（E19）
-远期借用   scripts/tl_mxfp8_gemm.py（sm120 MXFP8 kernel，E30）
+微观探针   scripts/infra/probe_fp8_logprob_error.py（E19）
+远期借用   syncopate/train/tilelang_mxfp8.py（sm120 MXFP8 kernel，E30）
 ```
 
 ## 7 · 判据与产出

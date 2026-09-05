@@ -23,7 +23,7 @@ metadata:
        —— **两端能力本来都在，断的只是中间没有传参那一栏**
 验证   list_loras() []→[123] · 载荷 8,414→252 MiB · kl 回地板 · param_sync 6.25→0.974 s
        数值：两侧 scaling 都是 2.0 · log_ppl_diff 落在同版本地板 ~3.4e-4
-⇒ **异步 RL 第一次真正跑通**（2026-08-18）。整条故事见 docs/infra_exp/STORY-async-lora-weight-sync.md
+⇒ **异步 RL 第一次真正跑通**（2026-08-18）。整条旧栈故事见 `docs/archive/infra_exp/legacy-4x5090/STORY-async-lora-weight-sync.md`。
 ```
 
 **Why**：这条比 [[silent-degradation-fsdp-nosync]] 影响更大，而且形状更毒 ——

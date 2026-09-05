@@ -65,7 +65,7 @@ v11 → v12（`--freeze-from data/batches/v11`）重跑一遍，
 
 ⇒ **「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
 ⇒ ⚠️ **返回 0 比 nan 更毒**：nan 至少让上游报警；恒 0 没有报错、指标好看、什么都没学到。
-   ⇒ 判据里**必须显式拦「梯度恒为 0」**，`scripts/check_flash_attn_backward.py` 就是这么写的。
+   ⇒ 判据里**必须显式拦「梯度恒为 0」**，`scripts/infra/check_flash_attn_backward.py` 就是这么写的。
 
 ★ 定位过程本身也是教训（三个假判据）：
 ① `/proc/<pid>/environ` 是 exec 时快照，读不到运行时的 `os.environ` 改动；
@@ -113,7 +113,7 @@ xlsx 重生成永远有字节差（zip 时间戳），内容逐单元格比对�
 
 ## 2026-09-02 追加：第三次重建（K 线灾备演练）——第一次「新暴露前提 = 0」
 
-`scripts/dr_drill.sh` 在干净目录从零重建 serving 数据层（conda 用户态 PG 16 + Redis 8 + alembic 0001→0008 +
+`scripts/serving/dr_drill.sh` 在干净目录从零重建 serving 数据层（conda 用户态 PG 16 + Redis 8 + alembic 0001→0008 +
 快照核对 + 建 run/领取/收尾冒烟），**RTO 1.5s，没有挖出新的隐形前提**。三条已知前提都已写进 08 §1.2：
 ① 本机无 sudo ⇒ PG/Redis 走 conda-forge 用户态，`pg_bootstrap.sh` 按 `id -u` 自动分支；
 ② 本机 `.venv` 必须 `uv sync --inexact --extra runtime --extra dev`（裸 `uv sync` 拆 torch/vllm，②的老病）；

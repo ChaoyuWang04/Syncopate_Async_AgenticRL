@@ -22,7 +22,7 @@ metadata:
 模块 ⇒ 归约的 final callback 没人排队 ⇒ 梯度在没人等的 stream 上竞态**——
 有时**静默不跨 rank 归约**（E21 形状），dtype 崩溃只是竞态偶尔露头。
 显形条件是**组合**（state_dict × ≥2 micro-batch），单因素全不复现
-⇒ 复现方法 = **全因素照抄真实跑求复现 + 留一法收敛**（`scripts/repro_pg_dtype.py`，
+⇒ 复现方法 = **全因素照抄真实跑求复现 + 留一法收敛**（`scripts/infra/repro_pg_dtype.py`，
 单轮 30 s，12 轮定案 —— 此前 16 轮起训练无果）。
 
 **Why**：我们改的是**两个系统之间的接口**，而接口错误的特征是

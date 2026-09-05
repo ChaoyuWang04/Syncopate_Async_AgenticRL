@@ -18,13 +18,13 @@ issue/PR 未提交
         ⇒ 本包刻意只提「护栏」不提「接线」；**E（后端支持列表）只进 issue 不进 PR**
 ```
 
-发现来源 [`../../infra_exp/E26-prefix-grouper.md`](../../infra_exp/E26-prefix-grouper.md) ·
+发现来源 [`E26-prefix-grouper.md`](../../archive/infra_exp/legacy-4x5090/E26-prefix-grouper.md) ·
 提交件 [`3-submission.md`](3-submission.md) · 零 GPU 复现 `repro_prefix_grouper_wiring.py`
 
 ---
 
 > 2026-08-19。英文提交正文 → [`3-submission.md`](3-submission.md)。
-> 实验背景 → [`../../infra_exp/E25-trainer-feed.md §5`](../../infra_exp/E25-trainer-feed.md)。
+> 实验背景 → [`E25-trainer-feed.md §5`](../../archive/infra_exp/legacy-4x5090/E25-trainer-feed.md)。
 
 > 🆕🆕 **2026-08-19 · 上游考古完成，七条 —— ⛔ 本包定位要整个换**：
 >

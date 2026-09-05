@@ -1,6 +1,6 @@
 # 提交包⑤ · verl：LoRA 训练的 checkpoint 无条件全量落盘（E29）
 
-> **状态：`DRAFT` —— 问题描述 + 修改范围已就位，等 Claude 做上游考据后成稿。**
+> **状态：`DRAFT` —— 问题描述 + 修改范围已就位，等负责该包的 Codex 做上游考据后成稿。**
 > ⛔ 未经考据不许提交（见 [`../README.md`](../README.md) §4-①）。原文如下：
 > 完整 PR 由 upstream 同事调研后成稿——
 > 提交前必查上游 main 是否已有同类功能/在途 PR（我们钉死的是 **verl 0.8.0**）。
@@ -49,7 +49,7 @@ ckpt 体积 12×**，断点续跑与下游链路无损。
 |---|---|
 | 补丁本体（save 过滤 + load 合成 + 逐位校验，~90 行） | `syncopate/train/verl_patches.py::_patch_lora_only_ckpt` 及 `filter_lora_state` / `merge_lora_into` / `assert_loaded_matches` |
 | 单测 6 条（过滤/合成/结构变更硬失败/逐位校验/幂等） | `tests/train/test_ckpt_lora_only.py` |
-| 实测报告（A/B 同尺子 + 续跑 + 下游链路） | `docs/infra_exp/E29-ckpt-lora-only.md` |
+| 实测报告（A/B 同尺子 + 续跑 + 下游链路） | `docs/archive/infra_exp/legacy-4x5090/E29-ckpt-lora-only.md` |
 | 实跑日志 | `logs/e29_ckpt_{off,on,resume}.log` · `logs/e29v_*.log` |
 
 **数字（Qwen3-4B + LoRA r32，fully_async 2 trainer + 1 rollout，仅差开关的同尺子 A/B）**：

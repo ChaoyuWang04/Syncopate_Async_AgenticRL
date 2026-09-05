@@ -11,14 +11,14 @@
 影响    ⚠️ 这条**不影响我们自己的训练**（生产路径已定 DDP 不分片）——纯社区贡献件，优先级最低
 ```
 
-发现来源 [`../../infra_exp/E18-rank3-allgather-collapse.md`](../../infra_exp/E18-rank3-allgather-collapse.md) ·
+发现来源 [`E18-rank3-allgather-collapse.md`](../../archive/infra_exp/legacy-4x5090/E18-rank3-allgather-collapse.md) ·
 提交件 [`3-submission.md`](3-submission.md)
 
 ---
 
 > 状态：**草稿完成，待 Chaoyu 决定是否提交**　建于 2026-08-18
 > 归属：这是一条**独立的线**（不属于 Track A/B 的兑现物，但由 E18 的调查产出）
-> 完整实验记录：[`../infra_exp/E18-rank3-allgather-collapse.md`](../../infra_exp/E18-rank3-allgather-collapse.md)
+> 完整实验记录：[`E18-rank3-allgather-collapse.md`](../../archive/infra_exp/legacy-4x5090/E18-rank3-allgather-collapse.md)
 
 > 🆕🆕 **2026-08-19 · 提交前核查完成，六条（定位要按它们重摆）**：
 >
@@ -101,9 +101,9 @@ NCCL       2.27.5（torch 自带）
 ## 3 · 最小复现（不需要训练框架，3 张卡 + PyTorch 即可）
 
 ```python
-# scripts/probe_alignment_cliff.py（本仓库内，已参数化）
+# scripts/infra/probe_alignment_cliff.py（本仓库内，已参数化）
 # 固定每 rank 分块 ≈ 24 MB，只改末尾几个字节，其余一切不变
-CLIFF_BASE=25165824 CLIFF_OFFS=0,4,8,12,16,32,64,128 python scripts/probe_alignment_cliff.py
+CLIFF_BASE=25165824 CLIFF_OFFS=0,4,8,12,16,32,64,128 python scripts/infra/probe_alignment_cliff.py
 ```
 
 核心循环就是标准的 `dist.all_gather_into_tensor`：
@@ -254,7 +254,7 @@ gen（无 FSDP）   16.4 → 18.5 s   ~1×        对照组自洽
 ## 8 · 提交清单（真要提的时候照做）
 
 - [ ] 决定仓库：`pytorch/pytorch`（FSDP padding）+ `NVIDIA/nccl`（kernel 整段退化）
-- [ ] 把 `scripts/probe_alignment_cliff.py` 精简成**不依赖本仓库**的单文件复现脚本
+- [ ] 把 `scripts/infra/probe_alignment_cliff.py` 精简成**不依赖本仓库**的单文件复现脚本
 - [ ] 复述 §2 环境指纹（尤其 **no-P2P + 3 rank** 这两个触发条件）
 - [ ] 附 §3 的悬崖表 + §4 的 Broadcast 对照组（**这两张表是说服力的核心**）
 - [ ] 若已完成 A17，补 §7 的端到端数字

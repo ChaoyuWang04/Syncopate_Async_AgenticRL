@@ -19,7 +19,7 @@ metadata:
 **错在：逐 case 存 ≠ 逐 case 算。**
 
 **How to apply**：
-1. 增量里程碑用 `scripts/set_tool_menus.py --freeze-from <上一版 batch>`：
+1. 增量里程碑用 `python -m syncopate.pipeline.tool_menus --freeze-from <上一版 batch>`：
    存量模板**逐字节沿用**旧菜单，只给新模板现算。
    修完实测 1370 条输入逐字节相同、0 条变化。
 2. **"哪些基线仍可比"要是构造保证的，不是事后 diff 出来的。**
