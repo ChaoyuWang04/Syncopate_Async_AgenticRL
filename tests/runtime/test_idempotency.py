@@ -6,7 +6,7 @@
 服务不可用，**重复扣款是不可逆损失**。所以每一层都真的投两次，看第二次有没有
 被挡住、以及**挡住之后返回的是不是原结果**。
 
-⚠️ 需要一个跑着的 PG：`bash scripts/pg_bootstrap.sh`。没有就跳过 ——
+⚠️ 需要一个跑着的 PG：`bash scripts/serving/pg_bootstrap.sh`。没有就跳过 ——
 但**不要把跳过当通过**：CI 上必须有 PG。
 """
 
@@ -36,7 +36,7 @@ def _pg_available() -> bool:
 
 pytestmark = pytest.mark.skipif(
     not _pg_available(),
-    reason="需要跑着的 PostgreSQL：bash scripts/pg_bootstrap.sh")
+    reason="需要跑着的 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

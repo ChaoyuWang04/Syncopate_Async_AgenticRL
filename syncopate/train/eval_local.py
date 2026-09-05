@@ -61,6 +61,21 @@ MAX_TURN_ACCUMULATION = MAX_RESPONSE_LENGTH + 2048
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def extract_thinking_texts(step_texts: list[str], *,
+                           implicit_open: bool | None = None) -> list[str]:
+    """Read thinking from the same explicit/implicit shape as the rollout parser."""
+    from syncopate.core.parsing_v15 import strip_thinking
+
+    if implicit_open is None:
+        implicit_open = THINK_ON
+    out: list[str] = []
+    for text in step_texts:
+        _, had_thinking, thinking = strip_thinking(text, implicit_open=implicit_open)
+        if had_thinking and thinking:
+            out.append(thinking)
+    return out
+
+
 class HFEngine:
     """把 transformers 的 generate 包成核心循环要的接口。
 
@@ -484,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split-dir", default=DEFAULT_SPLIT_DIR,
                         help="用冻结 EVAL 桶（推荐）；设为空字符串则退回旧的 per-class 取样")
     parser.add_argument("--limit", type=int, default=None)
-    # ★★ 按 case 分片，配合 `scripts/eval_parallel.sh` 做多卡并行。
+    # ★★ 按 case 分片，配合 `scripts/infra/eval_parallel.sh` 做多卡并行。
     #
     # 评测天生可分：每条 case 的 Sandbox 按 namespace **每次新建**（账本 / 失败计数器 /
     # BUC 积分全在它身上），共享的 `bundle.env` 只读、registry 只持只读工具规格。
@@ -582,7 +597,7 @@ def main(argv: list[str] | None = None) -> int:
         # ★ E-think（26 §W4′）：思考语言/长度与终答语言，读数不判分
         import re as _re
         _steps = output.metrics.get("step_texts", [])
-        _thinks = [m.group(1).strip() for t in _steps for m in [_re.search(r"<think>(.*?)</think>", t, _re.S)] if m and m.group(1).strip()]
+        _thinks = extract_thinking_texts(_steps)
         _cjk = lambda t: len(_re.findall(r"[一-鿿]", t)) / max(1, len(_re.findall(r"[一-鿿A-Za-z]", t)))
         _reply = _re.sub(r"<think>.*?</think>", "", output.trajectory.final_text or "", flags=_re.S)
         _reply = _re.sub(r"<tool_call>.*?</tool_call>", "", _reply, flags=_re.S).strip()

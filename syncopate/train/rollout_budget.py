@@ -33,10 +33,9 @@ import os
 # ★ 为什么开关放在**契约模块**：开 thinking 同时动两个契约量（模板 kwarg + response
 #   预算），按「这个值应该和那边一致 ⇒ 这里根本不该有第二份」的纪律，两处都从这里取。
 #
-# ★ 默认必须是 False（= 现行为，逐字节不变）：全管线共用同一份脚本，开关只给探针用。
-#   ⛔ 训练路径禁止开（launch_rl 启动即拦）：SFT 是 think-off 模板练的，
-#   开 think 会让「增量拼接 vs 整段渲染」逐 token 不相等（rollout_loop.py:50 有全文，
-#   tests/train 有测试守着）⇒ think-on 训练要等带思考的 SFT 数据，不是拨个开关的事。
+# ★ 当前 v16（v15 契约）默认必须是 True：SFT 数据已经带逐轮 think 形状，RL 也从
+#   同一契约模块取开关，并通过共享的增量 rollout 路径消费。显式关掉只用于旧 v14
+#   重放或预注册 A/B，不能静默改变正式训练形状。
 #
 # ★ 预算为什么是 8192：rollout 循环是**增量拼 token、从不重渲染**（rollout_loop.py:239）
 #   ⇒ 历史轮的 <think> 会留在上下文里并计入 response 预算。
@@ -83,11 +82,11 @@ ENABLE_THINKING = THINK_ON
 #   ★ 抬到 5760 的依据是**真实约束**：服务侧 max_model_len 14336。
 #     5760 + 8192 = 13952 ≤ 14336（余量 384）⇒ **服务侧不用改**。
 #   ⚠️ 余量仍然薄（数据侧 5760−5430=330）：R2 之后任何加长 system/工具描述的改动
-#     都必须重量一次 prompt max —— 判据见 scripts/v16_prompt_budget_gate.py 的 --prompt-budget。
+#     都必须重量一次 prompt max —— 判据见 syncopate/pipeline/prompt_budget_gate.py 的 --prompt-budget。
 # ★ 2026-09-02（Chaoyu 裁定：不爆显存就抬到线上真实形状）：5760 → **9216**。
 #   依据（26 §W2⑤ 实测）：全量 34 工具菜单 = 线上形状（守则⑮ #6），工具描述修剪后最长 prompt 仍 7167，
 #   多轮行再加最近 6 轮历史（每轮 ≤400 tok）⇒ 9216。9216 + 8192 = 17408 ⇒ 服务/RL max_model_len 18432
-#   （logs/runtime/start_vllm.sh · scripts/v16_exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
+#   （logs/runtime/start_vllm.sh · scripts/v16/exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
 #   显存：Qwen3-4B 每 token KV ≈144 KB ⇒ 18432 一条 ≈2.65 GB；R6 起跑前按 25 §R6 V0⒠ 重测并发。
 # ★ 2026-09-04（Chaoyu 裁定：上限是按 5090 显存定的数字，B200 上只要不爆显存就抬；教师 CoT 必须完整）：9216 → **12288**，
 #   think-on response 8192 → **12288** ⇒ max_model_len 24576（服务/RL/eval 全部派生；stack_probe.SERVE_MAX_MODEL_LEN 有相等断言）。
@@ -105,8 +104,8 @@ if THINK_ON:
           f"MAX_RESPONSE_LENGTH 2048→{MAX_RESPONSE_LENGTH}"
           f"（v15 训练路径放行；v14 仍拦，见 launch_rl）", flush=True)
 
-# ⇒ launch_rl 会算 max_model_len = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH = 7168
-#   （`launch_rl.py:31` 的注释里算过：7168 × 144 KB ≈ 0.98 GB KV cache，可接受）
+# ⇒ v16 think-on 下 max_model_len = 12288 + 12288 = 24576；训练、评测与服务均从
+#   这里派生，不能在入口另抄一份。
 
 # ── 采样参数 ───────────────────────────────────────────────────────────────
 #

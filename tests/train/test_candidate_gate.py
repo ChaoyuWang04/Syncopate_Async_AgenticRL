@@ -1,38 +1,26 @@
-"""上线候选的晋级闸：**约束加在晋级上，不加在起跑上**。
-
-★★★ 为什么这么设计（2026-08-19）
-
-infra 一直在用 RL 跑**短的精度/吞吐实验**（60 步就够）。
-把"必须跑到没梯度"加在起跑上，会**当场挡住他们** —— 而他们本来就不需要跑到没梯度。
-
-⇒ **任何跑都随便跑；只有"声称自己是上线候选"的跑才过闸。**
-⇒ 主线"忘了声明"的后果是**晋级时被拦下**，不是"悄悄拿一个 60 步的短跑当候选"。
-
-★★ 而真正的停止条件**不是步数**，是「零梯度率不再创新高」：
-   `[实测 e17a]` 60 步时零梯度率仍在创新高（15%→52%），RL 桶只覆盖 22.7%
-   ⇒ **跑到步数就停 = 在还有东西可学的时候停下。**
-"""
+"""v16 候选资格检查：smoke 不冒充 candidate，唯一常量不漂移。"""
 
 from __future__ import annotations
 
-import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _v16_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["SYNCOPATE_CONTRACT"] = "v15"
+    env["SYNCOPATE_THINK"] = "1"
+    return env
+
+
 def _gate():
-    spec = importlib.util.spec_from_file_location(
-        "_cand_gate", ROOT / "scripts" / "candidate_gate.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_cand_gate"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from syncopate.train import candidate_gate
+    return candidate_gate
 
 
 GROUPS_PER_STEP = 12
@@ -64,26 +52,26 @@ def _make_run(tmp: Path, *, purpose, steps, flat_per_window) -> Path:
 
 # ── 不挡 infra ──────────────────────────────────────────────────────────
 
-def test_launch_allows_short_probe_runs():
-    """★★ 默认 `probe`，短跑**不受任何约束** —— infra 的实验一点没被挡。"""
-    r = subprocess.run([sys.executable, "-m", "syncopate.train.launch_rl",
-                        "--dry-run", "--steps", "60"],
-                       cwd=ROOT, capture_output=True, text=True)
+def test_launch_allows_short_smoke_runs():
+    """默认 smoke，短跑不受 candidate 下限约束。"""
+    r = subprocess.run([sys.executable, "-m", "syncopate.train.launch_rl_v1",
+                        "--dry-run", "--profile", "smoke", "--steps", "60"],
+                       cwd=ROOT, env=_v16_env(), capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-400:]
 
 
 def test_launch_refuses_a_short_candidate_run():
     """声明 candidate 却只跑 60 步 ⇒ **起跑就硬失败**（这个便宜，先挡）。"""
-    r = subprocess.run([sys.executable, "-m", "syncopate.train.launch_rl",
-                        "--dry-run", "--steps", "60", "--purpose", "candidate"],
-                       cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-m", "syncopate.train.launch_rl_v1",
+                        "--dry-run", "--profile", "candidate", "--steps", "60"],
+                       cwd=ROOT, env=_v16_env(), capture_output=True, text=True)
     assert r.returncode != 0
     assert "至少" in (r.stdout + r.stderr)
 
 
 # ── 晋级闸的三条判据 ────────────────────────────────────────────────────
 
-def test_a_probe_run_never_qualifies_even_if_long_and_plateaued():
+def test_a_smoke_run_never_qualifies_even_if_long_and_plateaued():
     """★★ 用途是**当初声明**的，**不许事后追认**。
 
     允许追认的话，「这跑本来是实验，跑得还不错，就当候选吧」会变成常态 ——
@@ -91,7 +79,7 @@ def test_a_probe_run_never_qualifies_even_if_long_and_plateaued():
     """
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        run = _make_run(Path(d), purpose="probe", steps=420,
+        run = _make_run(Path(d), purpose="smoke", steps=420,
                         flat_per_window=[1, 4, 8] + [8] * 40)
         ok, reasons = _gate().evaluate(run)
         assert ok is False
@@ -136,18 +124,20 @@ def test_all_reasons_are_reported_not_just_the_first():
 
 # ── 两个数只能有一份 ────────────────────────────────────────────────────
 
-def test_the_minimum_comes_from_launch_rl_not_a_second_copy():
-    """★ 最少步数从 `launch_rl` 取 —— 闸里**不许再写一个数**。
+def test_the_minimum_comes_from_v16_launcher_not_a_second_copy():
+    """最少步数从 v16 启动器取，闸里不许再写一个数。
 
     两份会慢慢漂开，而它们都在判"够不够格"，漂开的后果是同一条跑两处结论不同。
     """
     g = _gate()
-    src = (ROOT / "syncopate" / "train" / "launch_rl.py").read_text(encoding="utf-8")
-    assert f"MIN_CANDIDATE_STEPS = {g.min_candidate_steps()}" in src
+    from syncopate.train.launch_rl_v1 import MIN_CANDIDATE_STEPS
+    assert g.min_candidate_steps() == MIN_CANDIDATE_STEPS
+    src = (ROOT / "syncopate" / "train" / "candidate_gate.py").read_text(encoding="utf-8")
+    assert "launch_rl.py" not in src
 
 
 def test_the_gate_reuses_the_readout_implementation():
     """完成判据也只有一份（`pool_readout.plateaued`），闸里不另抄。"""
-    src = (ROOT / "scripts" / "candidate_gate.py").read_text(encoding="utf-8")
+    src = (ROOT / "syncopate" / "train" / "candidate_gate.py").read_text(encoding="utf-8")
     assert "pool_readout" in src
     assert "def plateaued" not in src, "闸里又实现了一遍完成判据"

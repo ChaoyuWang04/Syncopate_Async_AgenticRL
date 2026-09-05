@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load_watch():
-    path = ROOT / "scripts" / "defer_watch.py"
+    path = ROOT / "scripts" / "tools" / "defer_watch.py"
     spec = importlib.util.spec_from_file_location("_defer_watch", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["_defer_watch"] = mod

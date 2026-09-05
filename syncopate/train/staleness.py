@@ -2,7 +2,7 @@
 
 ★★★ 为什么可以不跑真异步
 
-研究假设（docs/syncopate/23-research-question.md）的核心是
+历史研究假设（docs/archive/syncopate/pre-consolidation-v16/23-research-question.md）的核心是
 
     ESS/N ≈ exp(−T · σ²(k))
 

@@ -193,4 +193,4 @@ def test_missing_risk_record_does_not_mean_cleared():
     with_db(body)
 
 
-pytestmark = pytest.mark.skipif(not _pg(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")

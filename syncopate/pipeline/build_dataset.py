@@ -283,7 +283,7 @@ def write_split_checked(out_dir: Path, train_rows: list[dict[str, Any]], val_row
                         *, split_dir: Path, pool: str, manifest_extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """★ 唯一写盘函数（2026-09-04 守则⑱）：任何训练集（正规 `data build` 或专用建库脚本）都必须经这里落盘，
     出口先跑 `assert_split_isolation`（底题桶 == 产物桶），再写 train/val/manifest；manifest 记隔离读数。
-    绕过它直接 to_parquet = 没有隔离证据 ⇒ scripts/check_split_isolation.py 复核时按无证据处理。"""
+    绕过它直接 to_parquet = 没有隔离证据 ⇒ syncopate/pipeline/split_isolation.py 复核时按无证据处理。"""
     from syncopate.pipeline.split import assert_split_isolation
     rep_t = assert_split_isolation(train_rows, Path(split_dir), pool)
     rep_v = assert_split_isolation(val_rows, Path(split_dir), pool) if val_rows else {"counts": {}, "offenders": []}

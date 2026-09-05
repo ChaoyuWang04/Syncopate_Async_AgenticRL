@@ -67,7 +67,7 @@ def skeleton(bundle: CaseBundle) -> str:
     """抹掉实体和数值后的题面。
 
     ★ 用 case 自己的 `entities` / `context` 去抹，不猜正则 ——
-    模板往题面里填的东西本来就都在这两个字典里（同 `check_data_gates.py`）。
+    模板往题面里填的东西本来就都在这两个字典里（同 `syncopate.pipeline.data_gates`）。
     """
     text = bundle.case.user_message
     values: list[Any] = []

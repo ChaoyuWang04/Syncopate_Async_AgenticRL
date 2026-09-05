@@ -1,8 +1,9 @@
 """最小 LoRA SFT 训练器。
 
-**为什么不用 verl 的 SFT trainer**：它会自己对 messages 做 chat template 渲染，
-而整段渲染和我们 RL 侧的增量拼接**天生逐 token 不相等**（Qwen3 只给最后一个
-assistant 轮加空 `<think>` 块）。详见 `pipeline/sft_replay.py` 的模块 docstring。
+**为什么不用 verl 的 SFT trainer**：它会自己对 messages 做整段 chat template 渲染，
+而 v16 的 Qwen3.5/v15/think-on 会重处理历史 assistant 的 think 段，和 RL 侧真实的
+逐轮增量拼接不逐 token 相等。旧契约即使碰巧相等也不是稳定接口；详见
+`pipeline/sft_replay.py` 的模块 docstring。
 
 我们的数据已经是**预分词**的 `input_ids` + `loss_mask`，由同一个 rollout 循环
 回放 gold 产出——所以训练器只需要：喂 token、按 mask 算 loss。这一百来行比接
@@ -32,7 +33,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
-from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.core.model_paths import STUDENT_MODEL
 
 LORA_TARGETS_DEFAULT = "attn_shared"   # attn_shared | all-linear | 任意 peft target_modules 正则
 
@@ -122,30 +123,6 @@ def collate(batch: list[dict[str, Any]], pad_token_id: int) -> dict[str, torch.T
         "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
         "labels": torch.tensor(labels, dtype=torch.long),
     }
-
-
-def _free_gpus(threshold_mib: int = 2048) -> list[str]:
-    """空闲 GPU 的物理编号（nvidia-smi 口径：显存占用 < threshold 视为空闲）。
-
-    尊重已设的 CUDA_VISIBLE_DEVICES（只在可见集合内数）；查询失败返回 []（回退单卡）。
-    """
-    import subprocess
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,memory.used", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=10, check=True)
-    except Exception:
-        return []
-    free = []
-    for line in out.stdout.strip().splitlines():
-        parts = line.split(",")
-        if len(parts) == 2 and int(parts[1]) < threshold_mib:
-            free.append(parts[0].strip())
-    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if visible is not None:
-        vis = {x.strip() for x in visible.split(",")}
-        free = [i for i in free if i in vis]
-    return free
 
 
 def _unwrap(model) -> tuple[Any, Any]:
@@ -253,6 +230,23 @@ def trainable_summary(model) -> str:
     return f"可训练 {trainable/1e6:.1f}M / 总计 {total/1e6:.1f}M ({trainable/total:.2%})"
 
 
+def resolve_grad_accum(batch_size: int, gpus: int, effective_batch: int,
+                       grad_accum: int | None) -> int:
+    """求保持全局 batch 不变所需的累积步数；不整除或显式值漂移就拒绝。"""
+    if batch_size < 1 or gpus < 1 or effective_batch < 1:
+        raise ValueError("batch_size、gpus、effective_batch 都必须 >= 1")
+    denom = batch_size * gpus
+    if effective_batch % denom:
+        raise ValueError(
+            f"effective batch {effective_batch} 不能被 batch_size({batch_size}) × gpus({gpus}) 整除")
+    expected = effective_batch // denom
+    if grad_accum is not None and grad_accum != expected:
+        raise ValueError(
+            f"配方漂移：{batch_size}×{grad_accum}×{gpus}={batch_size * grad_accum * gpus}，"
+            f"但 effective_batch={effective_batch}；应使用 grad_accum={expected}")
+    return expected
+
+
 @torch.no_grad()
 def evaluate(model, dataset, device, pad_id: int, batch_size: int) -> dict[str, Any]:
     """按 token 加权的验证 loss，并**按组分别报**。
@@ -336,7 +330,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default=f"checkpoints/sft/{_DV}")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--grad-accum", type=int, default=8)
+    parser.add_argument("--gpus", type=int, default=1,
+                        help="显式的数据并行 GPU 数；默认单卡，双卡是否晋级由 B04 A/B 决定")
+    parser.add_argument("--effective-batch", type=int, default=16,
+                        help="全局有效 batch；用它自动派生 grad accumulation，保证 1/2 卡 A/B 同配方")
+    parser.add_argument("--grad-accum", type=int, default=None,
+                        help="默认由 --effective-batch / (--batch-size * --gpus) 派生；显式传入时必须完全相等")
     parser.add_argument("--lr", type=float, default=1e-4)      # LoRA 的 lr 比全参高一到两个量级
     parser.add_argument("--warmup-ratio", type=float, default=0.03)
     parser.add_argument("--lora-rank", type=int, default=32)
@@ -379,34 +378,33 @@ def main(argv: list[str] | None = None) -> int:
                         help="已完成的 epoch 数（配 --resume-adapter，从第 N+1 个 epoch 续到 --epochs）")
     args = parser.parse_args(argv)
 
-    # ---- 默认四卡（Chaoyu 08-29）：CLI 直跑且 ≥4 张空闲卡 ⇒ 自动升格 torchrun×4；
-    #      不足 4 张空闲 ⇒ 单卡回退。显式单卡：SYNCOPATE_SFT_SINGLE=1。
-    #      只在 CLI 路径（argv is None）触发——程序化调 main([...])（测试/负向认证）不升格。
-    if (argv is None and int(os.environ.get("WORLD_SIZE", "1")) == 1
-            and not os.environ.get("SYNCOPATE_SFT_SINGLE")
-            and torch.cuda.is_available()):
-        free = _free_gpus()
-        if len(free) >= 4:
-            new_argv = list(sys.argv[1:])
-            if not any(a == "--grad-accum" or a.startswith("--grad-accum=") for a in new_argv):
-                # 单卡配方 2×8=16 ⇒ 四卡等效 2×2×4；不自动降会静默变 64（连 lr 语义一起变）
-                new_argv += ["--grad-accum", str(max(1, args.grad_accum // 4))]
-            os.environ.setdefault("CUDA_VISIBLE_DEVICES", ",".join(free[:4]))
-            # ★ torchrun 从**当前解释器旁边**找，不假设它在 PATH 上。
-            #   ⛔ 2026-08-30：用 `nohup .venv/bin/python -m syncopate.train.sft` 起（没先
-            #     `source activate`）⇒ `FileNotFoundError: /bin/torchrun`，**起跑即挂**。
-            #     v14.5 的链路脚本恰好先激活了 venv，所以这个隐形前提两个月没暴露
-            #     （「干净机器才暴露的缺口」同族：手动装/手动激活过的东西 = 隐形前提）。
-            import shutil
-            tr = shutil.which("torchrun") or str(Path(sys.executable).parent / "torchrun")
-            if not Path(tr).exists():
-                raise SystemExit(f"🔴 找不到 torchrun（试过 PATH 与 {tr}）——"
-                                 f"用 .venv/bin/python 起就该在 .venv/bin 里找")
-            cmd = [tr, "--standalone", "--nproc_per_node=4",
-                   "-m", "syncopate.train.sft", *new_argv]
-            print(f"[DDP] {len(free)} 张空闲卡 ⇒ 默认四卡升格：{' '.join(cmd)}")
-            os.execvpe(tr, cmd, dict(os.environ))
-        print(f"[DDP] 空闲卡 {len(free)} 张 < 4 ⇒ 单卡回退（SYNCOPATE_SFT_SINGLE=1 可显式压单卡）")
+    try:
+        args.grad_accum = resolve_grad_accum(
+            args.batch_size, args.gpus, args.effective_batch, args.grad_accum)
+    except ValueError as exc:
+        raise SystemExit(f"🔴 {exc}") from exc
+
+    # GPU 数必须显式。这样同一条命令不会因为机器上“刚好多一张空卡”就静默换配方；
+    # B04 的 1×/2×B200 A/B 只改 --gpus，effective batch、数据和更新数保持不变。
+    current_world = int(os.environ.get("WORLD_SIZE", "1"))
+    if argv is None and current_world == 1 and args.gpus > 1:
+        if not torch.cuda.is_available():
+            raise SystemExit(f"🔴 请求 {args.gpus} 张 GPU，但 CUDA 不可用")
+        visible = torch.cuda.device_count()
+        if visible < args.gpus:
+            raise SystemExit(f"🔴 请求 {args.gpus} 张 GPU，但当前只看见 {visible} 张；不静默回退单卡")
+        import shutil
+        tr = shutil.which("torchrun") or str(Path(sys.executable).parent / "torchrun")
+        if not Path(tr).exists():
+            raise SystemExit(f"🔴 找不到 torchrun（试过 PATH 与 {tr}）")
+        cmd = [tr, "--standalone", f"--nproc_per_node={args.gpus}",
+               "-m", "syncopate.train.sft", *sys.argv[1:]]
+        print(f"[DDP] 显式启动 {args.gpus} 卡数据并行；有效 batch 固定为 {args.effective_batch}")
+        os.execvpe(tr, cmd, dict(os.environ))
+    if current_world != args.gpus:
+        raise SystemExit(
+            f"🔴 进程数 WORLD_SIZE={current_world} 与 --gpus={args.gpus} 不同；"
+            "请让 torchrun 与训练配方逐项一致")
 
     # ---- DDP 数据并行（torchrun 启动时自动生效；单进程跑 = 原语义分毫不动）----
     #
@@ -486,11 +484,8 @@ def main(argv: list[str] | None = None) -> int:
     eff_batch = args.batch_size * args.grad_accum * world
     print(f"[数据] train={len(train_set)} val={len(val_set)}  "
           f"有效 batch = {args.batch_size}×{args.grad_accum}×{world} = {eff_batch}")
-    if world > 1 and eff_batch != 16:
-        # 现行配方的有效 batch = 16（2×8 单卡）。torchrun 起多卡时忘了把 --grad-accum
-        # 降下来会静默改配方（16→64 连 lr 语义一起变）——必须喊出来
-        print(f"⚠️⚠️ 有效 batch {eff_batch} ≠ 现行配方 16 —— 多卡时请配 "
-              f"--grad-accum {max(1, 16 // (args.batch_size * world))}（除非有意改配方）")
+    assert eff_batch == args.effective_batch, (
+        f"有效 batch {eff_batch} != 注册值 {args.effective_batch}；并行配方发生静默漂移")
 
     steps_per_epoch = math.ceil(len(train_loader) / args.grad_accum)
     total_steps = steps_per_epoch * args.epochs
@@ -650,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
             # mean over 被监督 token —— 和 HF 的 `model(**batch).loss` 同口径
             loss = token_loss.mean() / args.grad_accum
             loss.backward()
-            running += float(loss) * args.grad_accum
+            running += float(loss.detach()) * args.grad_accum
             seen += 1
             if micro_step % args.grad_accum == 0 or micro_step == len(train_loader):
                 if world > 1:
@@ -663,7 +658,8 @@ def main(argv: list[str] | None = None) -> int:
                                 p.grad = torch.zeros_like(p)
                             dist.all_reduce(p.grad, op=dist.ReduceOp.AVG)
                 grad_norm = torch.nn.utils.clip_grad_norm_(
-                    [p for p in model.parameters() if p.requires_grad], 1.0)
+                    [p for p in model.parameters() if p.requires_grad], 1.0,
+                    error_if_nonfinite=True)
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
@@ -739,8 +735,6 @@ def main(argv: list[str] | None = None) -> int:
               f"（正常 LoRA 0.5%–5%；M7 那次只有 0.0093% ⇒ 白训）")
         log({"health/delta_w_ratio": ratio,
              "health/epoch_seconds": time.time() - epoch_started}, step=global_step)
-        if hit_max_steps:
-            break
         if device.type == "cuda":
             peak = torch.cuda.max_memory_allocated() / 1e9
             print(f"          显存峰值 {peak:.1f} GB")
@@ -756,6 +750,8 @@ def main(argv: list[str] | None = None) -> int:
             epoch_dir = ROOT / args.out / f"epoch{epoch}"
             epoch_dir.mkdir(parents=True, exist_ok=True)
             model.save_pretrained(epoch_dir)
+        if hit_max_steps:
+            break
 
     out_dir = ROOT / args.out
     if rank == 0:
@@ -772,7 +768,7 @@ def main(argv: list[str] | None = None) -> int:
         total_mb = sum(f.stat().st_size for d in sel_dirs for f in d.glob("*")) / 1048576
         print(f"\n[选点] {len(sel_dirs)} 个临时产物，共 {total_mb:.0f} MB")
         print(f"       选完之后删掉未选中的："
-              f"  python scripts/select_sft_ckpt.py {args.out} --keep <名字> --prune")
+              f"  python -m syncopate.train.select_sft_ckpt {args.out} --keep <名字> --prune")
         print("       ⚠️ 别手动删 —— 手动的步骤一定会被忘（本项目第一失效形状）")
     if run is not None:
         run.finish()

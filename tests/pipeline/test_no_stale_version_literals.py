@@ -11,15 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PAT = re.compile(r"data/(batches|splits|sft|rl)/v1[0-5]\b")
 LEGACY = {
-    "scripts/u_build_v14.py", "scripts/v15_r0_build.py", "scripts/v15_r0_eval.py", "scripts/v15_r1_score_crosscheck.py",
-    "scripts/v15_r2_shadow.py", "scripts/run_pipeline_shadow_rebuild.sh", "scripts/quantize_nvfp4.py", "scripts/runtime_loadtest.py",
-    "scripts/eval_parallel.sh", "scripts/calibrate_retrieval.py", "scripts/u_sft_ddp_negtest.py", "scripts/v15_r2_migrate.py",
+    "syncopate/train/quantize_nvfp4.py", "scripts/serving/runtime_loadtest.py",
+    "scripts/infra/eval_parallel.sh", "syncopate/authoring/calibrate_retrieval.py",
     "tests/pipeline/test_data_version_contract.py",   # 字面量对是 assert_same_data_version 的输入样例
     "syncopate/pipeline/split.py",                     # docstring 举例
     "tests/pipeline/test_no_stale_version_literals.py",
 }
 # infra 的 E 报告复现脚本（run_*.sh / 各阶段 chain）：改了就复现不了历史读数，整类按 legacy 处理
-LEGACY_GLOBS = ("scripts/run_*.sh", "scripts/u_p2_*.sh", "scripts/u_p3_*.sh", "scripts/u_p2_*.py")
+LEGACY_GLOBS = ("scripts/infra/run_*.sh",)
 COMMENT_PREFIXES = ("#", '"""', "'''")
 
 
@@ -48,6 +47,8 @@ def test_no_stale_data_version_literals_in_active_code():
             if p.suffix not in (".py", ".sh") or not p.is_file():
                 continue
             rel = str(p.relative_to(ROOT))
+            if rel.startswith("scripts/archive/"):
+                continue
             if rel in LEGACY or any(p.relative_to(ROOT).match(g) for g in LEGACY_GLOBS):
                 continue
             for i, line in _code_lines(p):

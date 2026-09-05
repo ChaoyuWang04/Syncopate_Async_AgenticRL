@@ -17,7 +17,7 @@ from syncopate.runtime.platform import FakeAdPlatform
 from syncopate.runtime.worker import Worker, WorkerConfig
 from tests.runtime.test_api import ACME, GLOBEX, Client, _key, _pg_available
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 TRACE = {"Authorization": "Bearer dev-token-acme-trace"}
 TERMINAL = ("succeeded", "failed", "cancelled")

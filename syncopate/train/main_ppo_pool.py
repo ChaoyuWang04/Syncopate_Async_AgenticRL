@@ -1,13 +1,16 @@
-"""verl 入口的薄壳：把训练集采样器换成动态分池。
+"""verl 的动态分池实验入口（默认训练不会走这里）。
 
 ★ 为什么要一层壳，不能直接配
 
 verl 的 `create_rl_sampler` 是**写死**的（`main_ppo.py:348`），没有配置挂点：
 shuffle=True 给 RandomSampler，否则 SequentialSampler。两个都是均匀采样。
 
-而均匀采样在我们这里是明确错的：GRPO 的梯度**完全来自组内 reward 的方差**，
-一条 8 次全对、方差为 0 的题贡献**精确地等于零**，却照样吃掉 8 次 rollout ——
-而 rollout 是整条链上最贵的一步。v11 实测饱和格子占三分之一。
+在标准 GRPO 相对优势口径下，一条 8 次全对、组内 reward 方差为 0 的题，
+本批优势为零，却照样吃掉 8 次 rollout。动态分池试图把更多预算给当前仍有方差的题。
+
+但这不自动等于“训练更好”：它会改变题目分布，也可能降低简单题的回归保护。
+旧 v11 读数又受旧权重同步问题污染。因此现行默认是官方均匀采样；本模块只有在
+`launch_rl_v1 --dynamic-pool` 的 B05 单因素 A/B 中才启用，必须用任务质量决定是否晋级。
 
 ⇒ 这层壳只做一件事：`monkeypatch create_rl_sampler`，其余原样交给 verl。
 不 fork、不改 verl 的文件，升级 verl 时这层壳大概率还能用。
@@ -226,7 +229,7 @@ def install_sampler_patch() -> None:
     original = _def_mod.create_rl_sampler
 
     def patched(data_config, dataset):
-        if os.environ.get("SYNCOPATE_POOL", "1") != "1":
+        if os.environ.get("SYNCOPATE_POOL", "0") != "1":
             return original(data_config, dataset)
         # ★ 批宽（= P4 去重窗口宽）优先读 launch_rl 传来的 fit 批宽。
         #   ⚠️ 2026-08-19 抓到：fully_async 下 verl 强制 data.train_batch_size=0

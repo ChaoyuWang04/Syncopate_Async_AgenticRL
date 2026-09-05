@@ -19,28 +19,8 @@ import json
 from syncopate.pipeline.split import DATA_VERSION
 from pathlib import Path
 
-import importlib.util
-import sys
-
 import pytest
-
-
-def _load(name: str, path: Path):
-    """按**文件路径**导入 scripts/ 下的脚本。
-
-    ⚠️ 不用 `importorskip("scripts.xxx")` —— `scripts/` 不是包，那样会**静默 skip**，
-    而「跳过不是通过」是这个项目记过的一条（45 条 runtime 测试曾经就这么静默过去）。
-    验收口径是 **0 skipped**，所以这里宁可 import 失败也不要 skip。
-    """
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-select = _load("select_sft_ckpt",
-               Path(__file__).resolve().parents[2] / "scripts" / "select_sft_ckpt.py")
+from syncopate.train import select_sft_ckpt as select
 
 
 def _write(tmp: Path, name: str, label: str, extra: dict) -> None:
@@ -87,6 +67,17 @@ def test_entropy_and_eval_audits_are_not_confused(fake_root):
     cand.mkdir(parents=True)
     assert "decision_mean_entropy" in select._metric("entropy", cand)
     assert "rows" in select._metric("eval", cand)
+
+
+def test_explicit_run_audit_dir_does_not_fall_back_to_global(fake_root):
+    """固定管线选点只认本轮目录；即使全局有同模型旧审计，也不能借来凑绿。"""
+    cand = fake_root / "checkpoints/sft/v16_smoke/epoch1"
+    cand.mkdir(parents=True)
+    _write(fake_root, "global.json", "models/student + checkpoints/sft/v16_smoke/epoch1",
+           {"decision_mean_entropy": 0.9})
+    this_run = fake_root / "_audit/v16/runs/now"
+    this_run.mkdir(parents=True)
+    assert select._metric("entropy", cand, this_run) is None
 
 
 def test_prune_refuses_without_keep(fake_root, capsys):

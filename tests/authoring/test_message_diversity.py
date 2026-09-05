@@ -1,7 +1,7 @@
 """题面改写的回归守卫。
 
-★ 分工：**批次级的多样性门禁**在 `scripts/check_data_gates.py`（D1–D11，
-  大版本重建前必跑，见 `docs/syncopate/13-diversity-gates.md`）；
+★ 分工：**批次级的多样性门禁**在 `syncopate/pipeline/data_gates.py`（D1–D11，
+  大版本重建前必跑，见 `docs/syncopate/03-DATA.md`）；
   **这一份**守的是「改写有没有破坏任务本身」—— 门禁看的是分布，这里看的是正确性。
 
 ★★★ 改写唯一不能碰的三样：**gold / env / verifier**
@@ -140,7 +140,7 @@ def test_pools_are_internally_diverse() -> None:
     ⚠️⚠️ **这条的阈值(0.40)比格子级指标(0.35)松，是有理由的，不是凑数据**：
     池子比的是**原始模板文本**，里面必须保留"这件事本身"的内容词
     （`reject.2` 的「诗」「夏天」，`reject.3` 的「股票」）—— 那些是**语义不是句式**，
-    换掉就不是同一个请求了。而 `scripts/check_data_gates.py` 比的是
+    换掉就不是同一个请求了。而 `syncopate/pipeline/data_gates.py` 比的是
     **渲染并归一后的句式**，才是模型真正看到的分布。
     ⇒ **权威指标是那个脚本**；这条测试只负责挡"有人往池子里塞 5 条几乎一样的变体"。
     """
@@ -162,16 +162,10 @@ def test_diversity_gate_script_is_the_source_of_truth() -> None:
 
     ⚠️ 这条不跑完整门禁（那要先生成批次，太慢），只保证脚本没烂掉、
     判据没被人悄悄删掉。**完整门禁在大版本重建前手动跑**：
-        python scripts/check_data_gates.py --batch data/batches/<版本>
-    见 `docs/syncopate/13-diversity-gates.md`。
+        python -m syncopate.pipeline.data_gates --batch data/batches/<版本>
+    见 `docs/syncopate/03-DATA.md`。
     """
-    import importlib.util
-    from pathlib import Path
-
-    path = Path(__file__).resolve().parents[2] / "scripts" / "check_data_gates.py"
-    spec = importlib.util.spec_from_file_location("check_data_gates", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from syncopate.pipeline import data_gates as module
     codes = [code for code, _, _ in module.CHECKS]
     assert codes == ["D1-D4", "D5", "D6", "D7", "D8", "D9-D10", "D11"], (
-        f"门禁清单变了：{codes} —— 加减判据要同步更新 13-diversity-gates.md")
+        f"门禁清单变了：{codes} —— 加减判据要同步更新 03-DATA.md")

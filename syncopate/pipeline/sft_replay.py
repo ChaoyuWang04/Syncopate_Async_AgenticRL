@@ -2,12 +2,10 @@
 
 ★ 为什么不用 `apply_chat_template(整段对话)` 构造 SFT 数据
 
-Qwen3 的 chat template 对 assistant 轮的处理是不对称的：**只给最后一个 assistant 轮
-加空的 `<think>\\n\\n</think>\\n\\n`，历史轮不加**（历史推理会被剥掉）。
-而增量拼接时每一轮都是「当前最后一轮」，所以每轮都会带上这个前缀。
-
-于是「整段渲染」和「增量拼接」**天生逐 token 不相等**，无论 enable_thinking 设什么。
-这不是参数问题，是结构问题。
+当前 v16 使用 Qwen3.5 + v15/think-on。它的 chat template 会重处理历史
+assistant 的 think 段，所以「整段重渲染」和线上真实的「逐轮增量拼接」并不逐 token
+相等。旧 v14/think-off 在当前 tokenizer 下可能恰好相等，但那只是模板实现细节，
+不能当作跨版本保证。
 
 老师包踩的就是这个坑的变体（sft-truth-report T10）：SFT 侧硬编码
 enable_thinking=False、RL 侧从不传，两阶段分布不一致且**没有任何报错**。
@@ -23,7 +21,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from syncopate.core.contract import IS_V15
 from syncopate.core.parsing import render_final_answer
 from syncopate.core.parsing import render_tool_call as _render_tool_call_v14
 from syncopate.core.parsing_v15 import render_report, render_signal

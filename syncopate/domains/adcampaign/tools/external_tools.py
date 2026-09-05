@@ -3,7 +3,7 @@
 这四个工具查的都是**离线预处理好的结构化数据**，在线一律不跑 Excel 解析、不跑视觉模型：
 
     运营改 Excel / 素材库进新图
-        → scripts/ingest_external.py（离线跑一次，含 VLM 打标）
+        → syncopate/domains/adcampaign/ingest_external.py（离线跑一次，含 VLM 打标）
         → data/external/ingested.json
         → WorldBuilder 注入 env 只读表
         → 这里的工具查

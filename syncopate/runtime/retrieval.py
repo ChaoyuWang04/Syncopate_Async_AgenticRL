@@ -52,7 +52,7 @@ from syncopate.runtime.db import Database
 # ⇒ **相同的打分函数 + 不同的候选集 = 操作点必然不同。** 不是调参，是结构性的：
 #   误召回概率随语料条数单调上升。
 #
-# 实测（`scripts/calibrate_runtime_retrieval.py`，种子语料 4 条）：
+# 实测（`syncopate/runtime/calibrate_retrieval.py`，种子语料 4 条）：
 #
 #     应命中 族内最低 0.667   应留空 最高 0.400（「量子计算加速广告投放」撞上
 #                                              东南亚博彩条款，共享 投/放/广/告）

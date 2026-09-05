@@ -27,7 +27,8 @@ if IS_V15:
 
 # ── session 信令工具族（spec 的唯一真相来源；ToolRegistry 与数据构建都从这里取）──
 #
-# ⚠️ 2026-08-29：本 spec 此前在 scripts/v15_r0_build.py 与 scripts/v15_probes.py
+# ⚠️ 2026-08-29：本 spec 此前在 scripts/archive/pre_v16_mainline/v15_r0_build.py
+# 与 scripts/archive/pre_v16_mainline/v15_probes.py
 # 各存了一份副本。三份"当时都是对的"，正是下一次漂移的来源（守则⑨的原案）。
 # ⇒ 收口到这里，副本改为 import。
 #
@@ -179,4 +180,3 @@ def visible_args(arguments):
 def visible_context(context):
     """渲染进题面的 context：剥掉运行态注入的键（account_id 等身份信息）。"""
     return {k: v for k, v in (context or {}).items() if k not in RUNTIME_INJECTED_PARAMS}
-

@@ -11,8 +11,8 @@
   U2  开 = 语义与 verl 融合算子同带、分块不变性逐位、temperature 生效
   U3  反向管路 = 与独立复算的解析公式逐位同；entropy 梯度必须炸；wgrad 拒绝
   U4  vLLM 补丁 = 换得上、有效果、与 trainer 路径逐位同源、bias 拒绝、幂等
-  A1  离线验收工件（scripts/e31_step1_offline.py 产）达标
-  A2  48 步冒烟验收工件（scripts/e31_step1_smoke_check.py 产）达标
+  A1  离线验收工件（scripts/infra/e31_step1_offline.py 产）达标
+  A2  48 步冒烟验收工件（scripts/infra/e31_step1_smoke_check.py 产）达标
 """
 
 from __future__ import annotations
@@ -184,7 +184,7 @@ def test_a1_offline_acceptance() -> None:
     ⛔ 原「序列 ΣΔ p95 < ln2」已判死：bf16 对照臂自己在长序列上 p95=2.54 ≫ ln2
     （引擎漂移本来就超 ln2）。阈值改锚对照臂；序列级最终裁决在冒烟（A2）。
     """
-    assert OFFLINE_JSON.exists(), "缺离线验收工件 —— 跑 scripts/e31_step1_offline.py"
+    assert OFFLINE_JSON.exists(), "缺离线验收工件 —— 跑 scripts/infra/e31_step1_offline.py"
     d = json.loads(OFFLINE_JSON.read_text())
     base, uni, one = d["baseline_bf16"], d["unified_fp8"], d["one_sided"]
     assert uni["token_abs_median"] <= 2 * base["token_abs_median"], "token |Δlp| 中位 > 2×本底"
@@ -205,7 +205,7 @@ def test_a1_offline_acceptance() -> None:
 
 def test_a2_smoke_acceptance() -> None:
     """48 步冒烟验收（E31 第 1 步② + 第 2 步序列 IS 活体）：产自 e31_step1_smoke_check.py。"""
-    assert SMOKE_JSON.exists(), "缺冒烟验收工件 —— 跑完 48 步后过 scripts/e31_step1_smoke_check.py"
+    assert SMOKE_JSON.exists(), "缺冒烟验收工件 —— 跑完 48 步后过 scripts/infra/e31_step1_smoke_check.py"
     d = json.loads(SMOKE_JSON.read_text())
     floor = json.loads((ROOT / "logs" / "e31" / "kl_floor_bf16.json").read_text())["median"]
     assert max(d["kl_values"]) <= 1.5 * floor, \
@@ -364,7 +364,7 @@ def test_a3_step3_boundary_artifact_consistent() -> None:
     复活条件（doc 同步）：token 级 IS 或同构引擎；届时重跑产新工件、判定表随之更新。
     """
     p = ROOT / "logs" / "e31" / "step3_offline.json"
-    assert p.exists(), "缺第 3 步定界工件 —— 跑 scripts/e31_step3_offline.py"
+    assert p.exists(), "缺第 3 步定界工件 —— 跑 scripts/infra/e31_step3_offline.py"
     d = json.loads(p.read_text())
     base = d["baseline_bf16_eager"]
     prev = None

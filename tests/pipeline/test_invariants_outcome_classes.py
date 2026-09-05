@@ -2,7 +2,7 @@
 
 ★ 起因（2026-08-18 晚，当场踩的）
 
-`check_pipeline_invariants.py` 原本把「检查抛异常」和「检查查出违反」写进同一个
+`syncopate.pipeline.invariants` 原本把「检查抛异常」和「检查查出违反」写进同一个
 `failed` 列表，汇总只打一句「🔴 N 条不通过」。
 用错解释器跑了一次（`/venv/main` 而不是项目 `.venv`），4 条检查因
 `ModuleNotFoundError: torch / safetensors / syncopate` 变成"不通过"，
@@ -22,8 +22,6 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -32,17 +30,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load():
-    """按**文件路径**导入 `scripts/` 下的脚本。
-
-    ⚠️ 不用 `importorskip("scripts.xxx")` —— `scripts/` 不是包，那样会**静默 skip**，
-    而「跳过不是通过」是记过的一条。验收口径是 **0 skipped**。
-    """
-    path = ROOT / "scripts" / "check_pipeline_invariants.py"
-    spec = importlib.util.spec_from_file_location("_cpi_under_test", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_cpi_under_test"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from syncopate.pipeline import invariants
+    return invariants
 
 
 @pytest.fixture()

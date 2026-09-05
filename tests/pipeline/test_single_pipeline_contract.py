@@ -19,8 +19,6 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -29,13 +27,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load():
-    """按**文件路径**导入（`scripts/` 不是包，`importorskip` 会静默 skip）。"""
-    path = ROOT / "scripts" / "check_pipeline_invariants.py"
-    spec = importlib.util.spec_from_file_location("_cpi_contract", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_cpi_contract"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from syncopate.pipeline import invariants
+    return invariants
 
 
 @pytest.fixture()

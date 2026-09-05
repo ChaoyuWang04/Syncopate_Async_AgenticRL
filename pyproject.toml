@@ -37,7 +37,7 @@ dev = ["pytest>=8.0"]
 # 之后，tests/runtime 的 4 个模块**收集阶段就 ImportError**（asyncpg / fastapi），
 # 305 条测试一条都跑不了。这和上面 openpyxl 那条是**同一个形状**：
 # 手动装出来的环境让「一条命令重建」变成假的，而且只有换机器才暴露。
-# uvicorn 不被测试 import，但 09-runtime-handoff.md §0 的起服务命令要它。
+# uvicorn 不被测试 import，但 docs/syncopate/07-SERVING.md 的服务入口需要它。
 # K2（2026-09-02，27 §16-2 裁定）：Alembic 是 schema 的唯一真相。alembic 依赖 SQLAlchemy 做引擎，
 # 迁移用同步驱动 psycopg（v3）；业务代码仍是 asyncpg 裸 SQL，不引 ORM。
 # K3（27 §16-1 裁定）：Celery + Redis。
@@ -79,7 +79,7 @@ override-dependencies = ["numpy>=2.2,<2.3"]
 #   （flash_attn_func 反向 dq/dk/dv 全 nan；varlen 反向有限但**恒为 0**）。
 #   后果：RL 每步 grad_norm=nan ⇒ verl `optimizer.zero_grad()` 跳过更新 ⇒ 训练完全空转。
 #   ⇒ **教训：「import 成功 ≠ 契约满足」的下一层是「前向对 ≠ 反向对」。**
-#     判据脚本 `scripts/check_flash_attn_backward.py`，换轮子/换机器后必跑。
+#     判据脚本 `scripts/infra/check_flash_attn_backward.py`，换轮子/换机器后必跑。
 #
 # ⇒ 现在用**官方 cu13torch2.9**（cxx11abiTRUE，和 torch 一致；含 sm_120 cubin），
 #   缺的 libcudart.so.13 由 `nvidia-cuda-runtime<=13.2` 提供（PyPI，装在 venv 内）。

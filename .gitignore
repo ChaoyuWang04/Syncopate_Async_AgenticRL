@@ -51,3 +51,27 @@ data/v15_r0/*.OLD_INJECTION/
 _audit/*_smoke.json
 # 判卷器输出（由 run_*.jsonl 一条命令重出，不是证据本体）
 logs/u_route/judged_*.jsonl
+
+# ── Mac 控制面迁移：服务器专属生成物（2026-09-05）────────────────────────
+# 这些内容继续留在 home-5090 / Modal；Git 只带代码、文档和精简报告。
+data/shadow_rebuild/
+data/u_route/v16_ballast_replies.json
+data/u_route/v16_cache_split.json
+data/u_route/v16_chat_mat.json
+data/u_route/v16_cot_rows.json
+data/u_route/v16_defs.json
+data/u_route/v16_fam_rows.json
+data/u_route/v16_l2l1_rows.json
+
+_audit/modal_probe/
+_audit/stack_probe/**
+!_audit/stack_probe/summary_2026-09-05_051523_pytest.json
+_audit/v16/_frozen_*.parquet
+_audit/v16/dry/
+_audit/v16/dry_rows.parquet
+_audit/v16/fam_preview.md
+_audit/v16/runs/
+
+# B 系列的 REPORT.md 是可迁移的小型结论；原始日志、轨迹和重跑证据留服务器。
+_audit/infra/B*/**
+!_audit/infra/B*/REPORT.md

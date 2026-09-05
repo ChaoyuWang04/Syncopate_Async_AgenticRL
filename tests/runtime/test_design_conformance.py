@@ -10,9 +10,10 @@
 ⚠️ **`xfail(strict=True)` 是刻意的。** 这些条目现在**不满足**，
 标 xfail 是为了让缺口**在测试输出里长期可见**而不是被忘掉；
 `strict=True` 意味着**哪天修好了会变成 XPASS = 失败**，逼下一个人回来把标记翻过去。
-⇒ 判据表在 `docs/syncopate/11-runtime-acceptance.md`，每条测试的名字与那份文档的任务标题一一对应。
+⇒ 现行判据边界在 `docs/syncopate/06-RUNTIME.md` 与
+`docs/syncopate/07-SERVING.md`；本文件保留机器可执行的设计符合性检查。
 
-⚠️ 需要跑着的 PG（`bash scripts/pg_bootstrap.sh`）。**跳过不是通过。**
+⚠️ 需要跑着的 PG（`bash scripts/serving/pg_bootstrap.sh`）。**跳过不是通过。**
 """
 
 from __future__ import annotations
@@ -46,7 +47,7 @@ def _pg_available() -> bool:
 
 pg_only = pytest.mark.skipif(
     not _pg_available(),
-    reason="需要跑着的 PostgreSQL：bash scripts/pg_bootstrap.sh")
+    reason="需要跑着的 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

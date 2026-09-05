@@ -1,17 +1,17 @@
-"""U 路 P1 · On-Policy Distillation 训练器（`docs/syncopate/24 §4-P1`，固定管线家族）。
+"""U 路 P1 · On-Policy Distillation 训练器（现行说明见
+`docs/syncopate/04-TRAINING.md`；历史方案见
+`docs/archive/syncopate/pre-consolidation-v16/24-unified-conversation-training.md`）。
 
-    torchrun --nproc_per_node=2 -m syncopate.train.opd \
-        --prompts data/u_route/p1_prompts.jsonl --epochs 3 --out checkpoints/opd/p1_r1
+    CUDA_VISIBLE_DEVICES=0,1 OPD_AUX_GPUS=1 python -m torch.distributed.run \
+        --nproc_per_node=1 -m syncopate.train.opd --base <本轮合并 SFT> \
+        --adapter <本轮 RL adapter> --out checkpoints/opd/<run>
 
-四卡布局（充分利用，零跨卡通信除 DDP 梯度）：
-    rank0: 学生 @cuda:0(物理GPU0) · 教师+锚 @物理GPU1
-    rank1: 学生 @cuda:1(物理GPU3) · 教师+锚 @物理GPU2
-  —— 每 rank 自带一对教师/锚（4B bf16 ×2 = 16GB/卡），无共享争抢。
-  启动令：CUDA_VISIBLE_DEVICES=0,3,1,2 torchrun ...（教师卡 OPD_AUX_GPUS=2,3=物理1,2）
+当前 B200×2 布局：学生在 GPU0；教师和冻结锚在 GPU1。旧 4×5090 双 rank
+布局已经归档，不能套到当前默认入口。
 
 机制（P0-4 spike 三判据的生产版，判据行全部常驻）：
   on-policy：学生自己 generate（契约渲染+契约采样参数，多轮取最后一轮回复）
-  掩码：segment_text 的 reply 值白名单（P0-3 修复版）——[opd-mask] 每批非零断言
+  掩码：v15 think / tool / 纯自然语言三分；只蒸纯自然语言——[opd-mask] 每批非零断言
   双教师路由：chat→底座 · task/task_neg→候选冻结锚——[opd-route] 计数入 wandb
   损失：逐 token 反向 KL(学生‖教师)，逐样本 backward + logits_to_keep（显存两课）
   零泄漏断言：每 --probe-every 步跑一次零掩码对照，LoRA 梯度必须逐位为零
@@ -29,6 +29,7 @@ import os
 import shutil
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import torch
@@ -46,15 +47,64 @@ def log(msg: str) -> None:
     print(f"[opd r{os.environ.get('RANK', '0')}] {msg}", flush=True)
 
 
-def build_prompt(tok, turns: list[str], replies: list[str]) -> str:
-    """契约渲染（复用 O-1 的 render_prompt_text）；多轮时把已完成轮以摘要形式垫底
-    （与 F-5 壳层同思路：历史进 prompt）。"""
+def training_completed(real_steps: int, target_real_steps: int) -> bool:
+    """候选/冒烟都至少要有一次真实更新；短跑还必须达到登记的真实更新数。"""
+    return real_steps > 0 and (target_real_steps <= 0 or real_steps >= target_real_steps)
+
+
+def prioritize_smoke_routes(rows: list[dict]) -> list[dict]:
+    """Put one task and one chat row first so a tiny smoke covers both routes.
+
+    Candidate ordering is untouched.  The previous one-step smoke happened to draw
+    four task-only batches before its first chat row, spending most of the run on
+    legal zero-mask skips and never exercising the chat/teacher route until attempt
+    five.  With a batch of two this deterministic prefix exercises anchor + teacher
+    immediately; remaining chat rows are tried before task-only rows so a short
+    smoke does not spend its whole attempt budget on valid zero-NL tool calls.
+    """
+    task_i = next((i for i, row in enumerate(rows) if row.get("family") == "task"), None)
+    chat_i = next((i for i, row in enumerate(rows) if row.get("family") == "chat"), None)
+    if task_i is None or chat_i is None:
+        raise ValueError("OPD smoke 需要至少一条 task 和一条 chat，才能覆盖双教师路由")
+    # First batch covers both route labels.  If that chat sample has no valid v15
+    # prose, subsequent batches draw chat rows first instead of burning attempts on
+    # task-only tool calls that correctly have a zero NL mask.
+    selected = [rows[task_i], rows[chat_i]]
+    chat_rest = [row for i, row in enumerate(rows)
+                 if i not in {task_i, chat_i} and row.get("family") == "chat"]
+    other_rest = [row for i, row in enumerate(rows)
+                  if i not in {task_i, chat_i} and row.get("family") != "chat"]
+    return selected + chat_rest + other_rest
+
+
+def prior_result(reply: str, *, thinking_enabled: bool | None = None) -> dict:
+    """Turn a generated terminal v15 response into Runtime's prior-result shape."""
+    from syncopate.core.parsing_v15 import parse_step_v15
+    from syncopate.train.opd_render import v15_char_labels
+    from syncopate.train.rollout_budget import ENABLE_THINKING
+
+    if thinking_enabled is None:
+        thinking_enabled = ENABLE_THINKING
+    parsed = parse_step_v15(reply, implicit_think_open=thinking_enabled)
+    if thinking_enabled and parsed.kind == "error" and parsed.error == "empty_final_text":
+        raise ValueError("上一轮思考段没有闭合，不能作为多轮历史回灌")
+    if parsed.kind == "final_text":
+        if not any(label == "text" for label in v15_char_labels(
+                reply, implicit_think_open=thinking_enabled)):
+            raise ValueError("上一轮没有合格的 v15 自然语言终答")
+        return {"text": parsed.text}
+    if parsed.kind == "signal":
+        return {"text": parsed.text, "signal": parsed.signal,
+                "arguments": dict(parsed.signal_args)}
+    raise ValueError(f"上一轮没有形成可回灌终态：{parsed.kind}")
+
+
+def build_prompt(tok, turns: list[str], replies: list[str], tools) -> str:
+    """Use the same user template, real message-pair history, and tool menu as Runtime."""
     from syncopate.train.opd_render import render_prompt_text
-    if len(turns) == 1:
-        return render_prompt_text(tok, turns[0], tools=None)
-    hist = "\n".join(f"[上一轮] 用户：{t}\n[上一轮] 助手：{r[:200]}"
-                     for t, r in zip(turns[:-1], replies))
-    return render_prompt_text(tok, f"{hist}\n\n{turns[-1]}", tools=None)
+    prior = [{"user_message": turn, "result": prior_result(reply)}
+             for turn, reply in zip(turns[:-1], replies)]
+    return render_prompt_text(tok, turns[-1], tools=tools, prior=prior)
 
 
 @torch.no_grad()
@@ -103,7 +153,7 @@ def kl_step(student, aux, tok, prompt: str, reply: str, aux_dev: str,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--prompts", default="data/u_route/v16_p1_prompts.jsonl")   # 裁定⑭：v16 产物（scripts/u_make_p1_prompts.py）
+    ap.add_argument("--prompts", default="data/u_route/v16_p1_prompts.jsonl")   # 裁定⑭：v16 产物（syncopate/pipeline/build_opd_prompts.py）
     ap.add_argument("--out", default="checkpoints/opd/p1_r1")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch", type=int, default=8, help="每 rank 每步样本数")
@@ -115,12 +165,37 @@ def main() -> int:
     ap.add_argument("--adapter", default="", help="学生起点 LoRA（v16 SFT/RL 产物）；空 = 底座上新建 r=32 LoRA（冒烟）")
     ap.add_argument("--base", default=STUDENT_BASE, help="学生底座；RL adapter 训在合并 SFT 模型之上时要传那个合并模型（评测同底）")
     ap.add_argument("--lora-targets", default=None, help="新建 LoRA 的 target_modules 正则；默认同 sft.py 的 attn_shared")
-    ap.add_argument("--max-steps", type=int, default=0, help="冒烟：跑满 N 步就停（0=不限）")
+    ap.add_argument("--max-steps", type=int, default=0,
+                    help="冒烟：跑满 N 次真实 optimizer update 才算完成（0=不限；跳步不计）")
+    ap.add_argument("--max-attempts", type=int, default=0,
+                    help="最多尝试多少个 batch；防止一直没有可蒸 token 时无限跑。"
+                         "max-steps>0 且未传时自动取 max(10N,N+4)")
+    ap.add_argument("--seed", type=int, default=100,
+                    help="采样与 smoke 排序的基础随机种子；每个 rank 使用 seed+rank")
     args = ap.parse_args()
+
+    from syncopate.core.contract import IS_V15
+    if not IS_V15:
+        raise SystemExit("🔴 当前 OPD 只支持 v15 纯自然语言契约；请显式设置 SYNCOPATE_CONTRACT=v15")
 
     dist.init_process_group("nccl")
     rank, world = dist.get_rank(), dist.get_world_size()
     torch.cuda.set_device(rank)
+    import random
+    effective_seed = args.seed + rank
+    random.seed(effective_seed)
+    torch.manual_seed(effective_seed)
+    torch.cuda.manual_seed_all(effective_seed)
+    log(f"[opd-seed] base={args.seed} rank={rank} effective={effective_seed}")
+    completion_marker = Path(args.out) / "completion.json"
+    run_token = uuid.uuid4().hex[:16] if rank == 0 else ""
+    if rank == 0:
+        # Clear only the success marker, before any expensive model load.  A crash
+        # in this invocation can therefore never make a previous final look current.
+        completion_marker.unlink(missing_ok=True)
+        log(f"[opd-run] token={run_token} base={args.base} adapter={args.adapter} "
+            f"out={args.out}")
+    dist.barrier()
     aux_gpus = os.environ.get("OPD_AUX_GPUS", "2,3").split(",")
     # ⚠️ 卡号是 CUDA_VISIBLE 重映射后的索引：启动令 CUDA_VISIBLE_DEVICES=0,3,1,2 下
     #   可见 0=物理0(rank0 学生) 1=物理3(rank1 学生) 2=物理1(rank0 教师) 3=物理2(rank1 教师)
@@ -136,13 +211,21 @@ def main() -> int:
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    from syncopate.train.rollout_budget import (SAMPLING_TEMPERATURE,
+    from syncopate.train.rollout_budget import (ENABLE_THINKING,
+                                                SAMPLING_TEMPERATURE,
                                                 SAMPLING_TOP_K, SAMPLING_TOP_P)
 
     STUDENT_BASE_ = args.base
     tok = AutoTokenizer.from_pretrained(STUDENT_BASE_)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
+    import syncopate.domains.adcampaign  # noqa: F401  注册与 Runtime 相同的工具
+    from syncopate.core.tool_registry import REGISTRY
+    from syncopate.prompts import load_system_prompt, prompt_hash
+    tools = REGISTRY.menu(None)
+    contract_hash = prompt_hash(load_system_prompt(), tools)
+    log(f"[opd-prompt] full_menu={len(tools)} answer_fields=0 "
+        f"history=message_pairs hash={contract_hash}")
     log("加载学生…")
     student = AutoModelForCausalLM.from_pretrained(
         STUDENT_BASE_, dtype=torch.bfloat16, device_map={"": rank})
@@ -187,46 +270,62 @@ def main() -> int:
         wb = wandb.init(project="syncopate", name=f"u_opd_{Path(args.out).name}",
                         config=vars(args))
 
-    step = 0
+    attempted_steps = 0
+    real_steps = 0
+    skipped_steps = 0
+    max_attempts = args.max_attempts
+    if args.max_steps and max_attempts <= 0:
+        max_attempts = max(args.max_steps * 10, args.max_steps + 4)
     saved: list[Path] = []
     _stop = False
     for ep in range(args.epochs):
         if _stop:
             break
-        import random
-        random.Random(100 + ep).shuffle(rows)
-        for i in range(0, len(rows), args.batch):
+        random.Random(args.seed + ep).shuffle(rows)
+        epoch_rows = prioritize_smoke_routes(rows) if args.max_steps else rows
+        if rank == 0 and args.max_steps:
+            log("[opd-smoke-order] 首批固定覆盖 task+chat 双路由")
+        for i in range(0, len(epoch_rows), args.batch):
             if _stop:
                 break
-            batch = rows[i: i + args.batch]
+            attempted_steps += 1
+            batch = epoch_rows[i: i + args.batch]
             t0 = time.time()
             # ① on-policy 采样（逐轮：多轮 prompt 先生成前轮回复垫底）
             samples = []                   # (prompt, reply, family)
+            invalid_history = 0
             for r in batch:
                 replies: list[str] = []
                 for tI in range(len(r["turns"])):
-                    prm = build_prompt(tok, r["turns"][: tI + 1], replies)
+                    try:
+                        prm = build_prompt(tok, r["turns"][: tI + 1], replies, tools)
+                    except ValueError:
+                        invalid_history += 1
+                        prm, replies = "", []
+                        break
                     rep = gen_batch(student, tok, [prm], args.max_new,
                                     SAMPLING_TEMPERATURE, SAMPLING_TOP_P,
                                     SAMPLING_TOP_K)[0]
                     replies.append(rep)
-                samples.append((prm, replies[-1], r["family"]))
+                samples.append((prm, replies[-1] if replies else "", r["family"]))
             # ② 掩码反 KL（双教师路由），逐样本 backward
             opt.zero_grad(set_to_none=True)
             kl_chat = kl_task = 0.0
             n_chat = n_task = tok_chat = tok_task = 0
-            chat_no_reply = 0
+            chat_no_nl = 0
             seg_sick = 0
             for prm, rep, fam in samples:
                 aux = teacher if fam == "chat" else anchor
                 s, m = kl_step(student, aux, tok, prm, rep, aux_dev)
                 if fam == "chat" and m == 0:
-                    # 区分：回复带 "reply" 键却蒸不到 = 分段器真病；没 reply 键 =
-                    # 学生老毛病本体（可蒸面之外，记 wandb 观察，考场终判）
-                    if '"reply"' in rep:
+                    # 字符层明明有 v15 自然语言、token mask 却为零才是分段器病。
+                    # 旧 JSON 壳、纯 think 或纯工具调用没有合格 NL，是模型现象，记数并跳步。
+                    from syncopate.train.opd_render import v15_char_labels
+                    if any(label == "text" for label in v15_char_labels(
+                            rep, implicit_think_open=ENABLE_THINKING)):
                         seg_sick += 1
                     else:
-                        chat_no_reply += 1
+                        chat_no_nl += 1
                 if fam == "chat":
                     kl_chat += s; tok_chat += m; n_chat += 1
                 else:
@@ -234,26 +333,29 @@ def main() -> int:
             total_masked = tok_chat + tok_task
             # ⚠️ 判据分两层（首跑 rank1 全 task 批被误杀的学费）：
             #   chat 样本有回复却零掩码 = 分段器病 ⇒ 停机；
-            #   全批只有 task 且回复=工具 JSON（无 reply 可蒸）= 合法 ⇒ 跳步记数
+            #   全批只有工具/思考而没有 v15 自然语言终答 = 合法 ⇒ 跳步记数
             if seg_sick > 0:
-                log(f"[opd-mask] 🔴 step {step} 有 {seg_sick} 条 chat 回复带 reply 键"
-                    f"却零掩码——分段器真病，停机自查")
+                log(f"[opd-mask] 🔴 attempt {attempted_steps} 有 {seg_sick} 条 chat 回复"
+                    f"字符层含 v15 NL、token 层却零掩码——分段器真病，停机自查")
                 raise RuntimeError("segmenter-sick batch")
             # 跳步必须集体决定（单 rank 跳而对端进 all_reduce = 死锁）
             gm = torch.tensor([float(total_masked)], device=f"cuda:{rank}")
             dist.all_reduce(gm)
             if gm.item() == 0:
-                _skipped_total = globals().setdefault("_OPD_SKIPPED", [0]); _skipped_total[0] += 1
+                skipped_steps += 1
                 if rank == 0:
-                    log(f"[opd-mask] step {step} 全局无可蒸 token（全 task 工具回复），集体跳步")
+                    log(f"[opd-route] chat={n_chat} task={n_task} chat_masked={tok_chat} "
+                        f"task_masked={tok_task} invalid_history={invalid_history}")
+                    log(f"[opd-mask] attempt {attempted_steps} 全局无 v15 自然语言 token，集体跳步")
                     if wb:
-                        wb.log({"opd/skipped_steps": 1}, step=step)
-                # 冒烟：跳步也计入 --max-steps（09-04 实测：底座无 adapter 时 92 步里只有 1 步可蒸，不计跳步就跑满 1 小时）
-                if args.max_steps and step + _skipped_total[0] >= args.max_steps:
-                    log(f"[max-steps] 到 {args.max_steps} 步（含跳步 {_skipped_total[0]}），停止（冒烟）")
+                        wb.log({"opd/skipped_steps": skipped_steps,
+                                "opd/attempted_steps": attempted_steps,
+                                "opd/real_steps": real_steps}, step=attempted_steps)
+                if max_attempts and attempted_steps >= max_attempts:
+                    log(f"[max-attempts] 已尝试 {attempted_steps} 个 batch，"
+                        f"只有 {real_steps} 次真实更新；停止并判失败")
                     _stop = True
                 opt.zero_grad(set_to_none=True)
-                step += 1
                 dist.barrier()
                 continue
             # DDP 梯度手动 allreduce（模型未包 DDP——逐样本 backward 与 PEFT 包装更省心）
@@ -261,28 +363,36 @@ def main() -> int:
                 g = p.grad if p.grad is not None else torch.zeros_like(p)
                 dist.all_reduce(g, op=dist.ReduceOp.AVG)
                 p.grad = g
-            torch.nn.utils.clip_grad_norm_(trainables, 1.0)
+            torch.nn.utils.clip_grad_norm_(trainables, 1.0, error_if_nonfinite=True)
             opt.step()
-            step += 1
-            if args.max_steps and step >= args.max_steps:
-                log(f"[max-steps] 到 {args.max_steps} 步，停止（冒烟）")
+            real_steps += 1
+            if args.max_steps and real_steps >= args.max_steps:
+                log(f"[max-steps] 已完成 {real_steps} 次真实更新，停止（冒烟）")
+                _stop = True
+            elif max_attempts and attempted_steps >= max_attempts:
+                log(f"[max-attempts] 已尝试 {attempted_steps} 个 batch，停止")
                 _stop = True
             dt = time.time() - t0
             if rank == 0:
                 m_chat = kl_chat / max(tok_chat, 1)
                 m_task = kl_task / max(tok_task, 1)
-                log(f"step {step} ep{ep} kl_chat/tok={m_chat:.4f} "
+                log(f"[opd-mask] attempt {attempted_steps} 全局可蒸 token={total_masked}")
+                log(f"step {real_steps} attempt={attempted_steps} ep{ep} kl_chat/tok={m_chat:.4f} "
                     f"kl_task/tok={m_task:.4f} masked={total_masked} "
-                    f"[opd-route] chat={n_chat} task={n_task} {dt:.1f}s")
+                    f"[opd-route] chat={n_chat} task={n_task} chat_masked={tok_chat} "
+                    f"task_masked={tok_task} invalid_history={invalid_history} {dt:.1f}s")
                 if wb:
                     wb.log({"opd/kl_chat_per_tok": m_chat,
                             "opd/kl_task_per_tok": m_task,
-                            "opd/chat_no_reply": chat_no_reply,
+                            "opd/chat_no_nl": chat_no_nl,
                             "opd/masked_tokens": total_masked,
                             "opd/route_chat": n_chat, "opd/route_task": n_task,
-                            "opd/step_time_s": dt, "opd/epoch": ep}, step=step)
+                            "opd/step_time_s": dt, "opd/epoch": ep,
+                            "opd/attempted_steps": attempted_steps,
+                            "opd/real_steps": real_steps,
+                            "opd/skipped_steps": skipped_steps}, step=attempted_steps)
             # ③ 零泄漏对照断言（守则②：假设写成断言）
-            if step % args.probe_every == 0:
+            if args.probe_every > 0 and real_steps % args.probe_every == 0:
                 opt.zero_grad(set_to_none=True)
                 kl_step(student, teacher, tok, samples[0][0], samples[0][1],
                         aux_dev, zero_mask=True)
@@ -290,11 +400,11 @@ def main() -> int:
                           for p in trainables)
                 assert bad == 0, f"[opd-zero] 零掩码对照有 {bad} 张量带梯度"
                 if rank == 0:
-                    log(f"[opd-zero] step {step} 对照通过（0/{len(trainables)}）")
+                    log(f"[opd-zero] step {real_steps} 对照通过（0/{len(trainables)}）")
                 opt.zero_grad(set_to_none=True)
             # ④ adapter-only 滚动存档
-            if rank == 0 and step % args.save_every == 0:
-                pth = Path(args.out) / f"step_{step}"
+            if rank == 0 and real_steps % args.save_every == 0:
+                pth = Path(args.out) / f"step_{real_steps}"
                 student.save_pretrained(pth)
                 saved.append(pth)
                 while len(saved) > 3:
@@ -314,15 +424,44 @@ def main() -> int:
             f"🔴 [opd-sync] rank 间权重发散 {vals} —— 梯度同步失效，停机"
         if rank == 0:
             log(f"[opd-sync] ep{ep} 权重一致性通过（fp={vals[0]:.4f}）")
+    completed = training_completed(real_steps, args.max_steps)
     if rank == 0:
-        pth = Path(args.out) / "final"
-        student.save_pretrained(pth)
-        log(f"[opd-ckpt] final → {pth}")
+        log(f"[opd-summary] attempted={attempted_steps} real={real_steps} "
+            f"skipped={skipped_steps} target_real={args.max_steps or 'all'} "
+            f"status={'pass' if completed else 'fail'}")
+        if completed:
+            pth = Path(args.out) / "final"
+            student.save_pretrained(pth)
+            completion = {
+                "schema_version": 1,
+                "status": "pass",
+                "run_token": run_token,
+                "base": args.base,
+                "adapter": args.adapter,
+                "prompts": args.prompts,
+                "seed": args.seed,
+                "prompt_hash": contract_hash,
+                "attempted_steps": attempted_steps,
+                "real_steps": real_steps,
+                "target_real_steps": args.max_steps or None,
+            }
+            completion_marker.parent.mkdir(parents=True, exist_ok=True)
+            marker_tmp = completion_marker.with_suffix(".json.tmp")
+            marker_tmp.write_text(
+                json.dumps(completion, ensure_ascii=False, indent=1) + "\n",
+                encoding="utf-8",
+            )
+            marker_tmp.replace(completion_marker)
+            log(f"[opd-ckpt] final → {pth}")
+        else:
+            log("🔴 没有完成要求的真实 optimizer update；不写 final，拒绝把空跑冒充成功")
         if wb:
             wb.finish()
     dist.barrier()
     dist.destroy_process_group()
-    return 0
+    # 0 real update / missing final is a health failure, not an observable quality
+    # warning.  Exit 3 so smoke/observe cannot continue into eval on a stale final.
+    return 0 if completed else 3
 
 
 if __name__ == "__main__":

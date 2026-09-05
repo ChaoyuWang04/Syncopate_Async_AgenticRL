@@ -258,7 +258,7 @@ RARE_BEHAVIOR_EVAL_QUOTA = {"clarify": 4, "reject": 4, "defer": 4, "answer": 3}
 # 取样写法是 `sorted(strata[key])[:take]`，**调大 take 只会在尾部追加**，
 # 已有成员一个都不动 ⇒ 冻结 EVAL 的老 case_id 全部保留，
 # `_audit/v11_sft_e1_m2.json` 这类历史基线对它们仍然逐条配对可比。
-# （同 `set_tool_menus.py --freeze-from` 那条纪律：「哪些基线仍可比」要由构造保证。）
+# （同 `python -m syncopate.pipeline.tool_menus --freeze-from` 那条纪律：「哪些基线仍可比」要由构造保证。）
 OUTCOME_EVAL_QUOTA = {
     # POL（政策演练）—— 半结构化侧
     "answered_v2_from_superseded": 6,   # 过期检出率
@@ -516,7 +516,7 @@ def assert_same_data_version(batch: str | Path, split_dir: str | Path) -> str:
 #   ① 源头：建库脚本只能拿到 `load_split_bundles(..., "sft")`——EVAL/RL 的题根本不进内存
 #   ② 每行带 `source_case_ids`（底题编号列表；派生行由 as_multiturn/建库时登记）
 #   ③ 出口：`assert_split_isolation(rows, split_dir, pool)` 在**唯一写盘函数**里跑，所有产物必须经它；
-#      独立检查器 scripts/check_split_isolation.py 对落盘 parquet 复核（探针/管线前提检查都调它）
+#      独立检查器 syncopate/pipeline/split_isolation.py 对落盘 parquet 复核（探针/管线前提检查都调它）
 
 _DERIVED_SUFFIX = re.compile(r"_(COT15|COT5|MT5|DEFF|REJF|CLAF|CLAFO|L2X|WIN|WINI)$")
 

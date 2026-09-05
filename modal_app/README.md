@@ -1,76 +1,107 @@
-# modal_app · 把家搬到 Modal（现为 B200；全貌见 `docs/syncopate/31-modal-and-new-stack.md`）
+# Modal / B200 运行入口
 
-> ★ 09-03 裁定⑪（26 §6）：**全新栈**。`stack/` = 新依赖表（vLLM 0.28 / torch 2.13 cu13 / verl 0.9 / transformers 5.10 / FLA 0.5.2），
-> `stack_probe.py` = 新栈探针（镜像 → verl 结构 → Qwen3.5 全家权重 → 单卡 flash-attn 反向 + FLA/GDN 对拍 → vLLM MTP 关/开）。
-> flash-attn 用 mjun0812 预编译轮子（cu130torch2.13，锁在 `stack/uv.lock`），社区轮子的闸 = 卡上反向判据。
-> 下面 `probe.py` 那套是**旧栈**（vLLM 0.12）的搬家探针，只作历史读数，Volume 上旧模型/旧数据已清。
->
-> ```bash
-> modal run --detach modal_app/stack_probe.py --steps image,verl # ① 镜像 + 导入判据 + verl 0.9 结构
-> modal run --detach modal_app/stack_probe.py --steps models     # ② Qwen3.5-9B/27B/4B/0.8B（~80 GiB）
-> modal run --detach modal_app/stack_probe.py --steps gpu,vllm   # ③④ 单卡判据 + 学习读数
-> ```
-> 判据在 `stack_probe.py` 顶部注释里先注册；读数落 `_audit/stack_probe/`（本机）与 Volume `/vol/_audit/stack_probe/`。
+> 当前机器、依赖、Volume 和安全规则见
+> [docs/syncopate/05-COMPUTE.md](../docs/syncopate/05-COMPUTE.md)。
+> 训练顺序见 [docs/syncopate/04-TRAINING.md](../docs/syncopate/04-TRAINING.md)，
+> 当前任务见 [docs/syncopate/01-TASKS.md](../docs/syncopate/01-TASKS.md)。
 
-> 为什么叫 `modal_app` 不叫 `modal`：仓库根目录下的 `modal/` 会遮住 `import modal` 本身。
+## 两个入口
 
-## 第一次（本机，一次性）
+- [stack_probe.py](stack_probe.py)：创建 Modal 环境、检查机器、执行探针，并把结果写入审计目录。
+- [scripts/v16_pipeline.sh](../scripts/v16_pipeline.sh)：数据、SFT、Exam、RL、OPD 的唯一业务管线。
+
+Modal 层只负责选机器、准备容器、挂载 Volume 和调用固定管线，不复制模型路径、预算或训练参数。
+
+## 当前环境
+
+- Volume：`syncopate-home`
+- GPU：B200 或 B200:2
+- 镜像与依赖：[stack/pyproject.toml](stack/pyproject.toml) 和 [stack/uv.lock](stack/uv.lock)
+- 容器 checkout：`/tmp/repo`
+- 持久数据、模型和审计：`/vol`
+
+精确布局和依赖版本只在 [05-COMPUTE.md](../docs/syncopate/05-COMPUTE.md) 维护。
+
+当前验证状态：B01 上云前认证已通过；B02 已把 2×B200 真实 v16 全链机械接通。
+详细读数和质量 WARN 见 [B02 报告](../_audit/infra/B02/REPORT.md)。这不是 candidate 或稳定性能 baseline。
+
+## 常用探针
 
 ```bash
-uv tool install modal                          # 隔离装 CLI，不碰项目 .venv（已装 1.5.5）
-modal token set --token-id ak-… --token-secret as-…   # 写到 ~/.modal.toml；无头机器也可 export MODAL_TOKEN_ID/MODAL_TOKEN_SECRET
+# 依赖和机器
+modal run modal_app/stack_probe.py --steps image,verl,versions
+modal run modal_app/stack_probe.py --steps gpu,fa4
+modal run modal_app/stack_probe.py --steps nccl
+modal run modal_app/stack_probe.py --steps vllm,vllm_ep
+
+# 仓库与数据
+modal run --detach modal_app/stack_probe.py --steps pytest
+modal run --detach modal_app/stack_probe.py --steps rebuild_v16
+modal run --detach modal_app/stack_probe.py --steps build_v16 --build-gates strict
+
+# 已有分段冒烟
+modal run --detach modal_app/stack_probe.py --steps sft_smoke --max-steps 30
+modal run --detach modal_app/stack_probe.py --steps exam_v4 --exam-passes 1
+modal run --detach modal_app/stack_probe.py --steps rl_cfg
+modal run --detach modal_app/stack_probe.py --steps rl_smoke
+modal run --detach modal_app/stack_probe.py --steps opd_smoke
+modal run --detach modal_app/stack_probe.py --steps pipeline --pipeline-stage all \
+  --pipeline-profile smoke --pipeline-gate-mode observe --pipeline-run-id <ID>
 ```
 
-token 在 modal.com → Settings → API Tokens 生成，由 Chaoyu 的账号出（Starter 档 $0/月含 $30 额度，GPU 并发上限 10）。
+`pipeline` 是全链唯一云上入口，只转调 runbook；不会在 Modal 层再复制一套训练参数。
+默认仍是 smoke/observe。判断时分开看：`manifest.pipeline_ok=true` 表示程序和产物链能继续；
+`manifest.all_passed=false` 表示仍有 WARN。Modal 汇总会把后一种显示为红色提醒，但 observe 不会在 WARN 出现时提前杀掉训练。
 
-## 探针（`probe.py`）
+## 固定业务管线
+
+在容器内只使用：
 
 ```bash
-modal run modal_app/probe.py                   # P1–P6：镜像 · git · Volume · GPU · 权重 · 数据重建
-modal run modal_app/probe.py --steps gpu       # 单跑一步
-modal run --detach modal_app/probe.py --steps rebuild,pytest   # 长步骤断网不中止
+bash scripts/v16_pipeline.sh [--dry-run] [--profile smoke|candidate] \
+  [--gate-mode observe|strict] [--run-id ID] <stage|all>
 ```
 
-退出码 0 全绿 · 1 有判红 · 2 有没跑成的。明细在 `_audit/modal_probe/summary_*.json`（本机）与 Volume `/vol/_audit/modal_probe/`。
+阶段以脚本里的 `ALL` 数组为准。当前共 19 段：
 
-| 步 | 回答的问题 | 判据（「两边相同」型） |
-|---|---|---|
-| image | 依赖表三件套能在 Modal 上 `uv sync --frozen --all-extras` 装出来 | torch/vllm/verl/flash_attn import 退出码 0 |
-| git | 代码能经 GitHub 到 Volume | `/vol/repo` HEAD == `git ls-remote origin main`；`check_pipeline_invariants` 在 Modal 上违反的判据集合 ⊆ 本机集合（本机读数由入口现算） |
-| volume | 网络盘跨容器可见 | 容器 A 写、容器 B reload 后读到的 == 写入的 |
-| gpu（单卡） | PRO 6000 是 sm_120；flash-attn 反向对 | capability == (12,0)；`check_flash_attn_backward` 退出码 0 |
-| nccl（双卡，按需） | 双卡 NCCL 通 | 四种 NCCL 环境变量组合各自「通/挂死/红」（120 s 超时抓挂死） |
-| model | 权重能从 HF 落 Volume 并在卡上跑 | safetensors 总字节 == HF 仓库声明；贪心生成两次逐 token 相同 |
-| rebuild | 数据能在 Modal 上从 git 里的外部数据重新生成 | 切分三份 SHA-256 == git 里 `data/splits/v13`（同 `run_pipeline_shadow_rebuild.sh` 0–4 步） |
-| pytest（按需） | 全量回归 | 本机基线 908 passed；无 PG/Redis 的 skip 不算通过 |
-
-## 家的形状
-
-```
-镜像      nvidia/cuda:12.8.1-devel + python 3.12 + uv + /env/.venv（只装依赖，不装项目）
-Volume    syncopate-home → /vol
-            /vol/repo      git clone，每次函数起跑先 reset --hard origin/main（幂等）
-            /vol/models    HF 权重（Qwen3-4B · Qwen3-0.6B）
-            /vol/data      在 Modal 上重新生成的批次/切分
-            /vol/_audit    每步判据 json
-运行       PYTHONPATH=/vol/repo · cwd=/vol/repo · /env/.venv/bin/python · SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1
+```text
+cases menus split gates supply rl-data teacher sft-data teacher-stop
+sft-train sft-eval sft-select merge exam
+rl-train rl-adapter rl-eval opd-train opd-eval
 ```
 
-## 运维坑（09-03 实测）
+`--dry-run` 只检查命令形状和静态前置，不能代替数据、教师文本、GPU 或候选门禁。
 
-- `modal app stop <id>` 在非交互终端会**静默不执行**（提示要 `--yes`），停错过一次让 B200 多跑了 40 分钟 ⇒ 一律 `modal app stop <id> --yes`，停完 `modal app list` 核对。
-- `modal volume delete` 同理要 `--yes`。
-- 本机拉 GitHub 大轮子 `uv lock` 会超时 ⇒ 用 `modal_app/lock_on_modal.py` 在容器里解锁并拉回 uv.lock。
-- FlashInfer 默认 JIT：sm_100 首启编 TRTLLM MoE/GEMM 核十几分钟、并发编译 gcc 段错误 ⇒ 装同版本 `flashinfer-jit-cache` + `flashinfer-cubin`（GitHub release 资产，不在 PyPI），并把 `FLASHINFER_WORKSPACE_BASE` / `VLLM_CACHE_ROOT` 指到 Volume。
-- ⛔ Modal 对象（Secret/Volume/Image）不许按环境变量条件定义，本机与容器求值不同 ⇒ hydrate 失败；可选的 secret 先建占位再无条件引用。
-- `modal volume cp` 要求目标父目录已存在，否则 "No such file or directory"；容器内 `shutil.move` 更省事。
-- vLLM 收尾必须杀全家（APIServer/EngineCore/Worker）并等显存归零，否则下一个实例启动报 free memory 不足。
+本机没有目标 CUDA/B200、完整 verl/vLLM 或 PG/Redis 权限时，不在本机重配；把失败缩成最小测试，
+用 `--steps pytest --pytest-args ...` 放到 Modal CPU 镜像，或用对应 pipeline stage 放到 B200。只跑需要的段，并保存 summary。
 
-## Modal 事实（官方文档 09-03 查证）
+## 证据
 
-- Volume 是持久网络盘，多容器共享；写后要 `commit()`，别的容器要 `reload()` 才看得到；v1 上限 50 万文件（建议 <5 万）。
-- 存储 $0.09/GiB·月，**每月前 1 TiB 免费**；GPU 按秒计费，PRO 6000 $3.03/卡时，CPU $0.047/核时，内存 $0.008/GiB·时。
-- GPU 函数默认可抢占且**不能设成不可抢占**；抢占后 Modal 用同一输入重跑 ⇒ 每步必须幂等。单次调用 ≤ 24 h。
-- `modal run` 是临时 App，客户端断开即停；`--detach` 后不随客户端停，`modal app stop` 才停。
-- 宿主驱动 580.95 / CUDA 13.0，`12.*` 与 `13.*` 镜像都兼容；nvcc 不预装，用 `nvidia/cuda:*-devel` 镜像自带。
-- `modal shell --gpu RTX-PRO-6000 --volume syncopate-home --image …` 可交互进容器排障。
+- 本机汇总：`_audit/stack_probe/summary_*.json`
+- Volume 汇总：`/vol/_audit/stack_probe/`
+- v16 数据与训练：`/vol/_audit/v16/`
+- 模型与训练产物：`/vol/models`、`/vol/checkpoints`
+
+每个实验臂使用独立审计目录；不能让两个任务同时写同一 parquet、checkpoint 或缓存。
+
+## 安全与收尾
+
+- 产生费用或改变云端状态前，必须得到用户针对该次运行的明确授权。
+- 密钥只放 Modal Secret 或本机受控配置。
+- 长步骤使用 `--detach`，并确保阶段幂等、过程持续落盘。
+- 新服务启动前先精确确认旧模型服务和子进程已经退出、显存回到底线。
+- 不使用会匹配当前命令自身的宽泛进程杀法。
+- 停 App：
+
+```bash
+modal app list
+modal app stop <app-id> --yes
+modal app list
+```
+
+- 删除 Volume 或大量产物前先核对精确目标；删除后再次列出确认。
+
+## 历史
+
+旧 `probe.py`、PRO 6000、4×5090 和旧依赖说明已经退出当前入口。整合前说明保存在
+[modal-app-README.md](../docs/archive/syncopate/pre-consolidation-v16/modal-app-README.md)。

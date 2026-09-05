@@ -23,7 +23,7 @@ quotas:
   # I02 data_freshness_check。90 条 = 3 档成熟度 × 2 entry_mode × 15，
   # 三档必须都有：只造 immature 会训出一个什么都不敢答的 agent。
   freshness_check:   90
-  # ---- F 类 · 工具失败时的应对（docs/syncopate/07 §4）----
+  # ---- F 类 · 工具失败时的应对（docs/syncopate/06-RUNTIME.md）----
   # 七个变体：timeout(生效/丢失) / 429 / 403 / 数值离谱 / 注入 / 持续故障
   # ★ 任务和 budget_change 完全相同，只有失败剧本不同 ——
   #   所以 140 条 BUD 天然构成对照档，模型不会学成"见到这类题就走恢复流程"

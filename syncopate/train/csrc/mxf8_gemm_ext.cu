@@ -1,5 +1,5 @@
 // A4 · MXFP8 lm_head GEMM 的 torch 扩展（生产 venv 用，零第三方依赖）
-// kernel 主体 = scripts/mxf8_gemm_limit_tma.cu 的 T1 冠军配置（627 TFLOPS，已对拍），
+// kernel 主体 = scripts/infra/mxf8_gemm_limit_tma.cu 的 T1 冠军配置（627 TFLOPS，已对拍），
 // 固定 BM=BN=128 · warp tile 64x64 · 2 级流水 · TMA+warp 特化（160 线程）。
 // 布局契约（与 python 侧量化器一致）：A[M,K]/B[N,K] u8 已做行内 XOR swizzle；
 // SFA[M,K/32]/SFB[N,K/32] u8 (ue8m0)；M/N/K 均为 128 倍数；C 为 bf16 [M,N]。

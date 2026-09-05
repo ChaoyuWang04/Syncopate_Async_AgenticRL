@@ -1,6 +1,6 @@
 """agent 主循环测试：真 tokenizer + 假引擎。
 
-用真的 Qwen3-0.6B tokenizer（token 对齐问题只有真 tokenizer 才暴露得出来），
+用当前测试 tokenizer（token 对齐问题只有真 tokenizer 才暴露得出来），
 生成侧用脚本化的假引擎——这样不需要 GPU、不需要 verl，秒级跑完，
 但 prompt 渲染 / 解析 / 工具执行 / mask 对齐全都是真的。
 """
@@ -59,7 +59,14 @@ class ScriptedEngine:
         self.prompt_lengths.append(len(prompt_ids))
         if not self.script:
             return []
-        return self.tokenizer.encode(self.script.pop(0), add_special_tokens=False)
+        text = self.script.pop(0)
+        # Qwen3.5 think-on 的 generation prompt 已经写入 ``<think>\n``；真实
+        # completion 即使不思考，也会从对应的 ``</think>`` 开始。旧假引擎直接
+        # 返回 tool/final 正文，造出了线上不会出现的「隐式 think 永不闭合」形状。
+        # 已显式带闭标签的剧本保持原样，方便测试非空思考内容。
+        if CHAT_TEMPLATE_KWARGS.get("enable_thinking") and "</think>" not in text:
+            text = "\n</think>\n\n" + text
+        return self.tokenizer.encode(text, add_special_tokens=False)
 
 
 def _gold_script(bundle) -> list[str]:
@@ -324,32 +331,38 @@ def test_prompt_includes_tools_and_required_fields(tokenizer):
 # --------------------------------------------------------------------------
 
 
-def test_full_render_differs_from_incremental_by_design(tokenizer):
-    """★ 记录一个反直觉的事实：整段渲染和增量拼接**天生不相等**。
+def test_full_render_relationship_is_explicit_for_each_contract(tokenizer):
+    """整段重渲染与真实增量序列的关系必须显式记录，不能靠旧模板印象。
 
-    Qwen3 模板只给最后一个 assistant 轮加空 `<think>` 块，历史轮不加；
-    而增量拼接时每一轮都是"当前最后一轮"。无论 enable_thinking 设什么都对不齐。
-
-    所以我们**从不**用整段渲染造 SFT 数据。这条测试守着这个前提——
-    哪天上游模板改了行为、两者真的相等了，它会失败，提醒我们重新评估。
+    当前 Qwen3.5 tokenizer 下，历史 v14/think-off 恰好相等；v16 的 v15/think-on
+    会因历史 assistant/think 处理而不同。两种结果都不能替代真正的硬保证：
+    SFT 与 RL 都走同一个增量循环（下一组测试逐 token 对拍）。
     """
     bundle = SEED_BUILDERS["SIG_GRADED_001"]()
     output, _ = asyncio.run(_run(bundle, tokenizer, _gold_script(bundle)))
 
-    messages = list(build_messages(bundle, bundle.case.tool_menu))
+    from syncopate.core.contract import IS_V15, effective_tool_menu
+    from syncopate.train.rollout_loop import chat_template_ids
+
+    menu = effective_tool_menu(bundle.case.tool_menu)
+    messages = list(build_messages(bundle, menu, tokenizer=tokenizer))
+    actions_by_step = {}
     for action in output.trajectory.actions:
-        obs = output.trajectory.observation_for(action.tool_call_id)
-        messages.append({"role": "assistant", "content": render_tool_call(action.name, action.arguments)})
-        messages.append(observation_message(action.name, obs.data if obs.ok else {"error": obs.error}))
-    messages.append({"role": "assistant",
-                     "content": render_final_answer(output.trajectory.behavior,
-                                                    output.trajectory.final_answer)})
-    full = tokenizer.apply_chat_template(
-        messages, tools=DOMAIN.registry.menu(bundle.case.tool_menu),
-        add_generation_prompt=False, tokenize=True, **CHAT_TEMPLATE_KWARGS,
-    )
+        actions_by_step.setdefault(action.step, []).append(action)
+    for step, text in enumerate(output.metrics["step_texts"], 1):
+        messages.append({"role": "assistant", "content": text})
+        for action in actions_by_step.get(step, []):
+            obs = output.trajectory.observation_for(action.tool_call_id)
+            messages.append(observation_message(
+                action.name, obs.data if obs.ok else {"error": obs.error}))
+    full = chat_template_ids(
+        tokenizer, messages, tools=DOMAIN.registry.menu(menu),
+        add_generation_prompt=False, **CHAT_TEMPLATE_KWARGS)
     incremental = output.prompt_ids + output.response_ids
-    assert incremental != full, "上游模板行为变了，重新评估 pipeline/sft_replay.py 的前提"
+    if IS_V15:
+        assert incremental != full, "v15 模板行为变了；重新审计历史 assistant/think 的处理"
+    else:
+        assert incremental == full, "v14 在当前 tokenizer 下的渲染关系变了；重新审计 legacy 重放"
 
 
 @pytest.mark.parametrize("case_id", sorted(SEED_BUILDERS))

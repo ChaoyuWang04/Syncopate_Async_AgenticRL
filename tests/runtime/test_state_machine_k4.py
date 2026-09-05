@@ -16,7 +16,7 @@ from syncopate.runtime.db import (ALLOWED_ACTORS, ALLOWED_RUN_TRANSITIONS, RUN_S
                                   create_run, event_type_for_transition, transition_run)
 from tests.runtime.test_api import ACME, Client, _pg_available
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 REPO = Path(__file__).resolve().parents[2]
 
 

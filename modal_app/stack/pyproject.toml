@@ -8,7 +8,7 @@
 #   torch 2.13.0     PyPI 默认就是 cu13（依赖 nvidia-*-cu13）⇒ 基础镜像用 nvidia/cuda:13.0.x-devel
 #   flash-attn       官方轮子最高 cu13torch2.10；用 mjun0812/flash-attention-prebuild-wheels v0.9.47 的
 #                    flash_attn-2.8.3+cu130torch2.13-cp312-linux_x86_64.whl（231 MB，与含 sm_120 的全架构轮子同大小）。
-#                    ★ 社区轮子必须过 scripts/check_flash_attn_backward.py（08 §2.2：前向对 ≠ 反向对），stack_probe gpu 步就是这道闸。
+#                    ★ 社区轮子必须过 scripts/infra/check_flash_attn_backward.py（08 §2.2：前向对 ≠ 反向对），stack_probe gpu 步就是这道闸。
 [project]
 name = "syncopate-stack2"
 version = "0.0.1"

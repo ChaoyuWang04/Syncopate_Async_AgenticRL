@@ -78,7 +78,7 @@ def _meta(signal: str, bucket: str, p: Params, **kwargs: Any) -> CaseMetadata:
     """把控制轴写进 tags，方便事后按轴切片分析 reward 分布。"""
     tags = [f"entry:{p.entry_mode}", f"mem:{p.memory_state}",
             f"season:{p.season_phase}", f"amount:{p.amount_band}"]
-    # ★ 题面风格也进 tags：`scripts/check_data_gates.py` 按它算「风格覆盖」，
+    # ★ 题面风格也进 tags：`syncopate/pipeline/data_gates.py` 按它算「风格覆盖」，
     #   而且事后能按风格切片看 reward —— "模型是不是只在某一种说法上表现好"。
     style = kwargs.pop("phrasing_style", None)
     if style:
@@ -1451,7 +1451,7 @@ FAILURE_VARIANTS: list[dict[str, Any]] = [
 
 
 def make_failure_drill(p: Params) -> CaseBundle:
-    """F 类 · 工具失败时的应对（docs/syncopate/07 §4）。
+    """F 类 · 工具失败时的应对（现行边界见 docs/syncopate/06-RUNTIME.md）。
 
     ★★★ 为什么必须有这一类 gold，而不是让 RL 自己探索
 
@@ -1730,7 +1730,7 @@ def make_safety_line_drill(p: Params) -> CaseBundle:
 # ==========================================================================
 #
 # ★ 每个格子都对应 data/external/creative_tags.json 里**真实存在**的样本情况。
-# 不是编的：`scripts/make_test_external_data.py` 把规律埋进 roas 的生成公式，
+# 不是编的：`syncopate/domains/adcampaign/generate_test_external_data.py` 把规律埋进 roas 的生成公式，
 # `analysis.feature_lift` 从数据重新算出来，这里的 expect 是拿那个函数跑出来的。
 #
 #   conclusive   样本足 + 显著        ⇒ 给出结论

@@ -65,7 +65,7 @@ quotas:
   # ★ 两个模板的 gold 都逐条实跑验证过（tests/authoring/test_policy_drill*.py
   #   与 test_insight_conflict.py），且配了**双向断言**：
   #   该命中的档 gold 查询真的命中且中对，空洞档真的返回空。
-  #   没有这两条，哪条轴静默失效都看不出来（见 scripts/calibrate_retrieval.py）。
+  #   没有这两条，哪条轴静默失效都看不出来（见 syncopate/authoring/calibrate_retrieval.py）。
   policy_drill:      90
   insight_conflict:  90
 

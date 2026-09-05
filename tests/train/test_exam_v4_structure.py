@@ -49,9 +49,8 @@ def test_every_new_tier_is_resolvable_and_diverse():
 
 def test_generator_assertions_can_fail():
     """撤掉一条多样性（只留一个对象）⇒ 生成器的结构断言必须红。"""
-    sys.path.insert(0, str(ROOT / "scripts"))
     import importlib
-    import u_make_exams_v4 as g
+    from syncopate.evaluation import build_exams as g
     rows = [dict(r) for r in _rows(V4)]
     for r in rows:
         if r["level"] == "DEF":
@@ -63,7 +62,7 @@ def test_generator_assertions_can_fail():
 
 def test_judge_v4_negative_certification():
     env = {**os.environ, "SYNCOPATE_CONTRACT": "v15"}
-    p = subprocess.run([sys.executable, str(ROOT / "scripts/v16_exam_certify.py")],
+    p = subprocess.run([sys.executable, "-m", "syncopate.evaluation.exam_certify"],
                        cwd=ROOT, capture_output=True, text=True, env=env)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "负向认证通过" in p.stdout

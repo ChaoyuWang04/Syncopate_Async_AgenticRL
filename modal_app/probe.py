@@ -168,7 +168,7 @@ def p_git(expected_sha: str, local_violations: list[str]) -> dict:
     但 Modal 上**多出来**的违反一定是环境问题）。"""
     sha = _sync_repo()
     r = _sh(f"{PY} -m syncopate --help", cwd=REPO, timeout=300)
-    inv = _sh(f"{PY} scripts/check_pipeline_invariants.py", cwd=REPO, timeout=600)
+    inv = _sh(f"{PY} -m syncopate.pipeline.invariants", cwd=REPO, timeout=600)
     remote_v = _violations(inv["out"])
     extra = sorted(set(remote_v) - set(local_violations))
     ok = sha == expected_sha and r["rc"] == 0 and not extra
@@ -233,7 +233,7 @@ def p_gpu() -> dict:
         timeout=300,
     )
     sm120 = tor["rc"] == 0 and tor["out"].strip().startswith("1 [(12, 0)]")
-    fa = _sh(f"{PY} scripts/check_flash_attn_backward.py", cwd=REPO, timeout=600)
+    fa = _sh(f"{PY} scripts/infra/check_flash_attn_backward.py", cwd=REPO, timeout=600)
     ok = sm120 and fa["rc"] == 0
     return _record("gpu", ok, {"nvidia_smi": smi["out"].strip(), "torch": tor, "flash_attn_backward": fa, "topology": _topology()})
 
@@ -319,15 +319,15 @@ def p_rebuild_v13() -> dict:
     _sync_repo()
     sh = f"{VOL}/data/shadow_rebuild"
     steps = [
-        ("0a external", f"{PY} scripts/make_test_external_data.py"),
-        ("0b ingest", f"{PY} scripts/ingest_external.py"),
+        ("0a external", f"{PY} -m syncopate.domains.adcampaign.generate_test_external_data"),
+        ("0b ingest", f"{PY} -m syncopate.domains.adcampaign.ingest_external"),
         ("0c git-diff", "git diff --quiet -- data/external ':(exclude)*.xlsx'"),
         ("1 v11", f"{PY} -m syncopate cases generate --spec configs/buckets/v11.yaml --out {sh}/batches/v11 && "
-                  f"{PY} scripts/set_tool_menus.py --batch {sh}/batches/v11 --sft-audit _audit/v8_sft_epoch1.json"),
+                  f"{PY} -m syncopate.pipeline.tool_menus --batch {sh}/batches/v11 --sft-audit _audit/v8_sft_epoch1.json"),
         ("2 v12", f"{PY} -m syncopate cases generate --spec configs/buckets/v12.yaml --out {sh}/batches/v12 && "
-                  f"{PY} scripts/set_tool_menus.py --batch {sh}/batches/v12 --sft-audit _audit/v8_sft_epoch1.json --freeze-from {sh}/batches/v11"),
+                  f"{PY} -m syncopate.pipeline.tool_menus --batch {sh}/batches/v12 --sft-audit _audit/v8_sft_epoch1.json --freeze-from {sh}/batches/v11"),
         ("3 v13", f"{PY} -m syncopate cases generate --spec configs/buckets/v13.yaml --out {sh}/batches/v13 && "
-                  f"{PY} scripts/set_tool_menus.py --batch {sh}/batches/v13 --sft-audit _audit/v8_sft_epoch1.json --freeze-from {sh}/batches/v12"),
+                  f"{PY} -m syncopate.pipeline.tool_menus --batch {sh}/batches/v13 --sft-audit _audit/v8_sft_epoch1.json --freeze-from {sh}/batches/v12"),
         ("4 split", f"{PY} -m syncopate data split --batch {sh}/batches/v13 --out {sh}/splits/v13"),
     ]
     log = {}
@@ -394,7 +394,7 @@ def main(steps: str = ",".join(ALL_STEPS)):
     if "git" in want:
         sha = subprocess.run(["git", "ls-remote", REPO_URL, f"refs/heads/{REPO_BRANCH}"], capture_output=True, text=True).stdout.split()[0]
         # 本机对照读数现算（不写死）：本机 .venv 跑同一条 invariants，取违反名单
-        loc = subprocess.run([str(LOCAL_ROOT / ".venv/bin/python"), "scripts/check_pipeline_invariants.py"], cwd=LOCAL_ROOT,
+        loc = subprocess.run([str(LOCAL_ROOT / ".venv/bin/python"), "-m", "syncopate.pipeline.invariants"], cwd=LOCAL_ROOT,
                              capture_output=True, text=True, env={**os.environ, "SYNCOPATE_CONTRACT": "v15", "SYNCOPATE_THINK": "1"})
         local_v = _violations(loc.stdout + loc.stderr)
         print(f"[git] 本机 invariants 违反 {len(local_v)} 条（作为对照集合）")

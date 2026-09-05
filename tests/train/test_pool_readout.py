@@ -15,20 +15,14 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load():
-    path = ROOT / "scripts" / "pool_readout.py"
-    spec = importlib.util.spec_from_file_location("_pool_readout", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_pool_readout"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from syncopate.train import pool_readout
+    return pool_readout
 
 
 def test_a_rising_rate_means_still_learning():
@@ -69,7 +63,7 @@ def test_completion_is_not_a_kill_signal():
 
     ⇒ 混在一起的话，"跑完了"和"崩了"会长得一样（同 agent_loop 那四种停法）。
     """
-    guard = (ROOT / "scripts" / "rl_guard.sh").read_text(encoding="utf-8")
+    guard = (ROOT / "scripts" / "tools" / "rl_guard.sh").read_text(encoding="utf-8")
     assert "pool_readout" not in guard, (
         "把完成判据接进了停机守卫 ⇒ 会把'学完了'报成'挂了'")
 
@@ -112,6 +106,6 @@ def test_the_flat_threshold_matches_the_other_tools():
     而那种"两份实现慢慢漂开"正是本项目付过多次钱的东西。
     """
     m = _load()
-    sel = (ROOT / "scripts" / "select_sft_ckpt.py").read_text(encoding="utf-8")
+    sel = (ROOT / "syncopate" / "train" / "select_sft_ckpt.py").read_text(encoding="utf-8")
     assert f"> {m.FLAT_STD}" in sel or f"<= {m.FLAT_STD}" in sel
     assert m.SATURATED_REWARD == 0.9 and m.DEAD_REWARD == 0.15

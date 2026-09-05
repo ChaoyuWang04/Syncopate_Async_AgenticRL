@@ -9,7 +9,7 @@ RL 搜不出来，而 SFT 一个 epoch 就解决。
 抗风险能力完全同构：**沙盒里没出现过的失败模式，模型上线时的正确处理概率 ≈ 0**。
 所以失败不是"额外的鲁棒性测试"，它就是训练数据本身的一部分。
 
-★★ 分类学（docs/syncopate/07 §4.1），每一类的**正确行为**都不一样
+★★ 分类学（历史见 docs/archive/syncopate/pre-consolidation-v16/07-toolbox-and-runtime-design.md §4.1），每一类的**正确行为**都不一样
 
     timeout            状态未知 → **禁止盲目重试**，先查证
     rate_limited       429     → 按 retry_after 退避，有次数上限

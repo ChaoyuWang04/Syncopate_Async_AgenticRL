@@ -20,7 +20,7 @@ from syncopate.runtime.tools import WRITE_TOOLS, PermissionDenied, ToolRuntime
 from syncopate.runtime.worker import audit as w_audit, emit as w_emit
 from tests.runtime.test_api import _pg_available
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

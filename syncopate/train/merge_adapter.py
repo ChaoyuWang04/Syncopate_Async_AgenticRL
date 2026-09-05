@@ -37,6 +37,68 @@ from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MO
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _resolve_weight_name(adapter_stem: str, available_names: set[str]) -> str:
+    """把 PEFT 的 adapter 名字唯一映射到一套真实权重名。
+
+    PEFT 会隐藏某些模型包装层。例如 Qwen3.5 的 adapter 使用
+    ``model.layers.*``，而下载到磁盘的基座 shard 使用
+    ``model.language_model.layers.*``。内存模型和磁盘基座要分别调用本函数；
+    这里只接受唯一的精确后缀匹配；
+    匹配不到或命中多个都硬报错，不能猜。
+    """
+    name = adapter_stem
+    for prefix in ("base_model.model.", "base_model."):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    expected = name + ".weight"
+    if expected in available_names:
+        return expected
+
+    parts = expected.split(".")
+    # 至少保留「层号/模块/weight」三个片段，避免用过短后缀误配。
+    for drop in range(1, max(1, len(parts) - 2)):
+        suffix = ".".join(parts[drop:])
+        matches = sorted(
+            candidate for candidate in available_names
+            if candidate == suffix or candidate.endswith("." + suffix)
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise SystemExit(
+                f"🔴 adapter 权重 {adapter_stem} 的后缀 {suffix!r} "
+                f"匹配到 {len(matches)} 个基座权重，拒绝猜测: {matches[:5]}"
+            )
+    raise SystemExit(
+        f"🔴 adapter 权重 {adapter_stem} 在合并模型与基座中找不到唯一对应项"
+    )
+
+
+def _converted_base_key_map(
+    base_names: set[str], model_names: set[str], conversions: list[object]
+) -> dict[str, list[str]]:
+    """按 Transformers 加载器同一条转换链建立「内存 key → 磁盘 key」表。"""
+    result: dict[str, list[str]] = {}
+    for source_name in sorted(base_names):
+        target_name = source_name
+        for conversion in conversions:
+            target_name, _ = conversion.rename_source_key(target_name)
+        if target_name in model_names:
+            result.setdefault(target_name, []).append(source_name)
+    return result
+
+
+def _official_base_key_map(merged_model, base_names: set[str]) -> dict[str, list[str]] | None:
+    """Transformers 5 有官方 checkpoint 转换链；旧本地栈没有时返回 None。"""
+    try:
+        from transformers.conversion_mapping import get_model_conversion_mapping
+    except ImportError:
+        return None
+    conversions = get_model_conversion_mapping(merged_model)
+    return _converted_base_key_map(base_names, set(merged_model.state_dict()), conversions)
+
+
 
 def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_resid: float = 0.5) -> None:
     """判据：合并后的权重 − 基座权重 ≈ adapter 的 ΔW_eff，**按全部被适配层加权**。
@@ -79,31 +141,73 @@ def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_re
             for k in fh.keys():
                 base_idx[k] = f
 
+    merged_names = set(sd)
+    base_names = set(base_idx)
+    official_base_map = _official_base_key_map(merged_model, base_names)
     per_layer: list[tuple[float, float, str]] = []   # (resid, ‖Δ‖, name)
+    mapped_names: set[tuple[str, str]] = set()
+    used_merged: set[str] = set()
+    used_base: set[str] = set()
+    zero_delta = 0
     err2 = d2 = kept2 = 0.0
     for stem in stems:
-        name = stem.replace("base_model.model.", "") + ".weight"
-        if name not in sd or name not in base_idx:
-            continue
-        A = ab[stem + ".lora_A.weight"].float()
-        B = ab[stem + ".lora_B.weight"].float()
+        a_key = stem + ".lora_A.weight"
+        b_key = stem + ".lora_B.weight"
+        if a_key not in ab or b_key not in ab:
+            raise SystemExit(f"🔴 adapter 的 A/B 权重不成对: {stem}")
+        merged_name = _resolve_weight_name(stem, merged_names)
+        if official_base_map is None:
+            # 本机旧 Transformers 只用于便宜单测；生产新栈必须走上面的官方转换链。
+            base_name = _resolve_weight_name(stem, base_names)
+        else:
+            base_candidates = official_base_map.get(merged_name, [])
+            if len(base_candidates) != 1:
+                raise SystemExit(
+                    f"🔴 Transformers 官方映射对 {merged_name} 得到 "
+                    f"{len(base_candidates)} 个磁盘权重，拒绝猜测: {base_candidates[:5]}"
+                )
+            base_name = base_candidates[0]
+        if merged_name in used_merged or base_name in used_base:
+            raise SystemExit(
+                f"🔴 多个 adapter 层映射到同一权重: merged={merged_name}, base={base_name}"
+            )
+        used_merged.add(merged_name)
+        used_base.add(base_name)
+        mapped_names.add((merged_name, base_name))
+        A = ab[a_key].float()
+        B = ab[b_key].float()
         delta = scale * (B @ A)
-        with safe_open(base_idx[name], framework="pt") as fh:
-            base_w = fh.get_tensor(name).float()
-        kept = sd[name].float().cpu() - base_w
-        if kept.norm().item() == 0.0:
-            raise SystemExit(f"🔴 合并后 {name} 与基座**逐位相同** ⇒ 增量根本没进权重。")
         dn = delta.norm().item()
-        resid = ((kept - delta).norm() / delta.norm()).item()
-        per_layer.append((resid, dn, name))
+        if dn == 0.0:
+            zero_delta += 1
+            continue
+        with safe_open(base_idx[base_name], framework="pt") as fh:
+            base_w = fh.get_tensor(base_name).float()
+        merged_w = sd[merged_name].float().cpu()
+        if merged_w.shape != base_w.shape or merged_w.shape != delta.shape:
+            raise SystemExit(
+                f"🔴 合并校验形状不一致: adapter={tuple(delta.shape)}, "
+                f"merged[{merged_name}]={tuple(merged_w.shape)}, "
+                f"base[{base_name}]={tuple(base_w.shape)}"
+            )
+        kept = merged_w - base_w
+        resid = ((kept - delta).norm() / dn).item()
+        per_layer.append((resid, dn, merged_name))
         err2 += (resid ** 2) * (dn ** 2)
         d2 += dn ** 2
         kept2 += kept.norm().item() ** 2
 
+    if not per_layer or d2 == 0.0:
+        raise SystemExit(
+            "🔴 adapter 没有任何非零的有效 ΔW，无法证明合并落地"
+        )
     global_resid = (err2 / d2) ** 0.5
     mag = (kept2 / d2) ** 0.5
     worst = sorted(per_layer, reverse=True)[:5]
-    print(f"[合并] 校验 {len(per_layer)} 个被适配层: 全局加权残差 {global_resid:.3f} · "
+    mapping_source = "Transformers 官方 checkpoint 映射" if official_base_map is not None else "唯一后缀回退"
+    print(f"[合并] {mapping_source}：唯一映射 {len(mapped_names)}/{len(stems)} 层；"
+          f"校验 {len(per_layer)} 个非零 ΔW（零 ΔW {zero_delta}）: "
+          f"全局加权残差 {global_resid:.3f} · "
           f"幅度比 {mag:.2f} · 超 {max_resid} 的层 {sum(1 for r, _, _ in per_layer if r > max_resid)} 个")
     print("       最差 5 层: " + " · ".join(f"{n.split('.weight')[0].split('model.')[-1]} {r:.2f}"
                                             for r, _, n in worst))
@@ -112,7 +216,8 @@ def _assert_merge_landed(base_path: str, adapter_path: str, merged_model, max_re
             f"🔴 全局加权保真残差 {global_resid:.3f} > {max_resid} ⇒ 增量太小，"
             "被 bf16 存储的舍入噪声淹没了。\n"
             "   **不要合并这一级的增量**，保持 adapter 形态；\n"
-            "   （RL 一轮的增量典型是 0.05% 量级，残差 ~0.87 —— 见 docs/syncopate/18 §3.3）"
+            "   （这一历史量级只用于解释保护逻辑，见 "
+            "docs/archive/syncopate/pre-consolidation-v16/18-pipeline-assumption-probes.md §3.3）"
         )
 
 

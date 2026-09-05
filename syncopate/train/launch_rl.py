@@ -82,7 +82,8 @@ from syncopate.train.rollout_budget import (  # noqa: E402
 
 
 def _assert_model_is_merged(model_path: str) -> None:
-    """★ 2026-08-18（E21 同族排查，见 docs/syncopate/18 §3）：给错宁可报错。
+    """★ 2026-08-18（E21 同族排查，历史见
+    docs/archive/syncopate/pre-consolidation-v16/18-pipeline-assumption-probes.md §3）：给错宁可报错。
 
     verl 的 LoRA merger 产出的是「**未改的**基座 + 独立的 `lora_adapter/`」——
     主权重里**不含**上一轮 RL 学到的东西。而本入口没有加载 adapter 的路径
@@ -92,7 +93,7 @@ def _assert_model_is_merged(model_path: str) -> None:
     if (_P(model_path) / "lora_adapter").exists():
         raise SystemExit(
             f"🔴 {model_path} 里有 lora_adapter/ ⇒ 它不是合并后的模型，主权重不含增量。\n"
-            "   拿它当 RL 起点会静默丢掉上一轮 RL —— 见 docs/syncopate/18 §3。\n"
+            "   拿它当 RL 起点会静默丢掉上一轮 RL —— 见 docs/syncopate/04-TRAINING.md。\n"
             "   ⚠️ 且 RL 那一级的增量合并进 bf16 保真残差 0.87（同文 §3.3），"
             "先决定接续方案，别直接合并。"
         )
@@ -495,7 +496,7 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
             #    超界比例）根本不产出**。2026-08-13 实测：one_step_off 跑完三步，
             #    把整个 step 的指标键全列出来核对，一个 rollout_corr 都没有。
             #
-            # 而 `06-rl-run-protocol.md` 的停止条件 P6 是「**ESS/N 跌破 0.3 立即停**」。
+            # 当前停止与晋级纪律见 `docs/syncopate/04-TRAINING.md`；具体阈值必须在运行前注册。
             # 没有这个数 = 没有刹车，而 fully_async 的 staleness 比 one_step_off 大得多，
             # 正是最需要刹车的场景。
             # ⇒ 代价：每步多一次 actor 前向算 old_log_prob。
@@ -775,7 +776,7 @@ def main(argv: list[str] | None = None) -> int:
     #   默认成 candidate 会**当场挡住他们**，而他们本来就不需要跑到没梯度。
     #
     # ⚠️⚠️ 那"主线忘了声明 candidate"怎么办？——**不靠记性**：
-    #   约束不加在**起跑**上，加在**晋级**上（`scripts/candidate_gate.py`）：
+    #   约束不加在**起跑**上，加在**晋级**上（`syncopate.train.candidate_gate`）：
     #   任何跑都随便跑，但**声称自己是上线候选**的跑必须过闸。
     #   ⇒ 忘了声明的后果是"晋级时被拦下"，不是"悄悄用了一个短跑当候选"。
     parser.add_argument("--purpose", default="probe", choices=["probe", "candidate"],
@@ -917,7 +918,7 @@ def main(argv: list[str] | None = None) -> int:
     # 对到 4–5 位有效数字，真实 RL 里 grad_norm 0.0147/0.0224（M7 整跑是 0.011–0.06，同区间）。
     # 实测 update_actor 16.78 s vs sdpa 26.01 s ⇒ **1.55×**，所以默认仍是 FA2。
     #
-    # ⚠️ 换轮子/换机器后**先跑 `scripts/check_flash_attn_backward.py`**，它专门拦
+    # ⚠️ 换轮子/换机器后**先跑 `scripts/infra/check_flash_attn_backward.py`**，它专门拦
     #    「反向恒为 0」这种没有 nan、没有报错、训练照常跑完的静默失败。
     #    判据不过就显式传 `--attn-implementation sdpa`（正确但慢 ~1.55×）。
     parser.add_argument("--attn-implementation", default="flash_attention_2",
@@ -984,7 +985,7 @@ def main(argv: list[str] | None = None) -> int:
                              "checkpoint manager 存的是**全量** state_dict，LoRA 训练下 "
                              "97.1%% 是和基座逐字节相同的冻结权重 —— 一个 ckpt 8.5GB，"
                              "其中只有 252MB 是训练产物。12 个 ckpt 吃掉 98GB 才发现。\n"
-                             "跑完用 scripts/prune_rl_ckpts.py 瘦身（只留 LoRA 权重）。")
+                             "跑完用 python -m syncopate.train.prune_ckpts 瘦身（只留 LoRA 权重）。")
 
     parser.add_argument("--rollout-correction", action="store_true", default=True)
     # ══════════════════════════════════════════════════════════════════════
@@ -1059,7 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
     if THINK_ON and not IS_V15:
         raise SystemExit(
             "🔴 v14 契约下 SYNCOPATE_THINK=1 只允许用于评测探针（E27，"
-            "scripts/run_e27_think_probe.sh）。\n"
+            "scripts/infra/run_e27_think_probe.sh）。\n"
             "   训练路径禁止开 thinking：v14 的 SFT 是 think-off 模板练的，开了两阶段分布\n"
             "   对不齐（rollout_loop.py:50 有全文与测试）。要 think-on 训练请走 v15 契约。")
     if THINK_ON:
@@ -1068,7 +1069,7 @@ def main(argv: list[str] | None = None) -> int:
               f" ⚠️ 跑完必查 truncation_reason='tokens' 比例", flush=True)
 
     # ★ 候选跑的**最少**步数。⚠️ 它是**下限不是目标** ——
-    #   真正的停止条件是「零梯度率不再创新高」（scripts/pool_readout.py）。
+    #   真正的停止条件是「零梯度率不再创新高」（syncopate.train.pool_readout）。
     #   [依据] e17a 跑 60 步时零梯度率仍在创新高（15%→52%），且 RL 桶只覆盖 22.7%；
     #   一个 epoch = 824/6 ≈ 137 步只让每条题被看**一次**，
     #   而分池的 WEIGHT_FLOOR=0.05 本身就预设了几十轮往返。
@@ -1077,7 +1078,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             f"🔴 --purpose candidate 要求至少 {MIN_CANDIDATE_STEPS} 步（本次 {args.steps}）。\n"
             f"   ⚠️ 而且步数是**下限不是目标**：真正该停的时候是"
-            f"「零梯度率不再创新高」（scripts/pool_readout.py）。\n"
+            f"「零梯度率不再创新高」（python -m syncopate.train.pool_readout）。\n"
             f"   ⇒ 只是做实验的话用 --purpose probe（默认），不受任何约束。")
     _assert_model_is_merged(str((ROOT / args.model).resolve()))
     _resolve_topology(args)

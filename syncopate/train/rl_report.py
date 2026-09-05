@@ -33,7 +33,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 
 # 终答行为。⚠️ 取**最后一个**匹配：一条轨迹多步，终答那步才是它的行为
-# （与 scripts/defer_watch.py 同一条口径 —— 两处都改时要一起改）。
+# （与 scripts/tools/defer_watch.py 同一条口径 —— 两处都改时要一起改）。
 _BEHAVIOR = re.compile(r'"behavior"\s*:\s*"(\w+)"')
 
 

@@ -10,7 +10,7 @@
 合并的话，**一次故障看起来就是放行信号** —— 那正是压测场景④要抓的灾难。
 
 ⚠️ 需要跑着的 PG + 已入库的种子语料：
-`bash scripts/pg_bootstrap.sh && python scripts/ingest_corpus.py`。**跳过不是通过。**
+`bash scripts/serving/pg_bootstrap.sh && python -m syncopate.runtime.ingest_corpus`。**跳过不是通过。**
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _pg_available() -> bool:
 
 pytestmark = pytest.mark.skipif(
     not _pg_available(),
-    reason="需要跑着的 PostgreSQL：bash scripts/pg_bootstrap.sh")
+    reason="需要跑着的 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_svc(body):
@@ -241,7 +241,7 @@ def test_runtime_threshold_is_deliberately_not_the_sandbox_one() -> None:
     打分函数一样、候选集不一样：沙盒每条 case 只有 1–2 篇手写语料，构造上不会互撞；
     runtime 是整个语料库一起打分，误召回概率随条数单调上升。
     ⇒ 这条测试守的不是"0.53 这个数"，是**"有人把 runtime 阈值改回沙盒那个数"这件事会被发现**。
-    重标定：`python scripts/calibrate_runtime_retrieval.py`。
+    重标定：`python -m syncopate.runtime.calibrate_retrieval`。
     """
     assert rt.RUNTIME_MATCH_THRESHOLD > sandbox_corpus.MATCH_THRESHOLD
 

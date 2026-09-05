@@ -2,9 +2,9 @@
 
 ★ 为什么要单独一个模块（2026-08-18）
 
-E21 是被 `rl_ckpt_to_adapter.py` 里一句顺手写的断言炸出来的：
+E21 是被 `syncopate.train.ckpt_to_adapter` 里一句顺手写的断言炸出来的：
 「DDP 下各 rank 的 LoRA 应该相同」。而当时**另外两个读 ckpt 的脚本没有这句话** ——
-`rl_ckpt_drift.py` 和 `prune_rl_ckpts.py` 都在静默地只取一个 rank。
+`scripts/tools/rl_ckpt_drift.py` 和 `syncopate.train.prune_ckpts` 都在静默地只取一个 rank。
 
 ⇒ 这正是本项目记过的形状：**保护性逻辑写在了其中一条代码路径上**
    （见 .claude/memory/project-mechanism-not-wired.md 第四形态）。

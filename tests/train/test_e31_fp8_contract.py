@@ -165,12 +165,12 @@ def test_t02_gemm_deterministic(gemm_ext) -> None:
 def test_t03_kl_floor_bf16_calibrated() -> None:
     """kl_floor_bf16 必须存在、可溯源、且落在新机 bf16 实测带内。
 
-    产生它：`python scripts/e31_kl_floor.py <bf16 臂训练日志>`。
+    产生它：`python scripts/infra/e31_kl_floor.py <bf16 臂训练日志>`。
     这个数是第 1/2 步验收（kl ≤ 1.5×floor）的分母；分母丢了或漂了，
     后面的"通过"全部作废 —— 所以它的存在性与带宽本身是契约。
     """
     assert KL_FLOOR_JSON.exists(), (
-        f"缺 {KL_FLOOR_JSON} —— 跑 scripts/e31_kl_floor.py 标定（bf16 臂日志，"
+        f"缺 {KL_FLOOR_JSON} —— 跑 scripts/infra/e31_kl_floor.py 标定（bf16 臂日志，"
         "如 logs/smoke_newbox_0827_kvauto.log）")
     d = json.loads(KL_FLOOR_JSON.read_text())
     for key in ("kl_values", "median", "max", "source_log", "date"):

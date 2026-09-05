@@ -33,7 +33,7 @@ def _ext():
 
 
 def quantize_mxfp8(x: torch.Tensor):
-    """[R, K] → (u8 e4m3, ue8m0 缩放)。与 scripts/tl_mxfp8_gemm.py 同一实现。"""
+    """[R, K] → (u8 e4m3, ue8m0 缩放)。与 syncopate/train/tilelang_mxfp8.py 同一实现。"""
     R, K = x.shape
     assert K % 32 == 0
     xb = x.float().view(R, K // 32, 32)

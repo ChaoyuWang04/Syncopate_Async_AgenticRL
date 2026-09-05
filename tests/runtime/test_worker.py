@@ -34,7 +34,7 @@ def _pg_available() -> bool:
 
 
 pytestmark = pytest.mark.skipif(
-    not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+    not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

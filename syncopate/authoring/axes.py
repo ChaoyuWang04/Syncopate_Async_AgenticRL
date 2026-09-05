@@ -60,7 +60,7 @@ DATA_MATURITIES = ["mature", "partial", "immature"]
 #
 # ⚠️ 两条设计纪律，缺一条这条轴就是摆设：
 #
-# 1. **旧线和新线的数值必须真的不同**（`scripts/make_test_external_data.py` 的
+# 1. **旧线和新线的数值必须真的不同**（`syncopate/domains/adcampaign/generate_test_external_data.py` 的
 #    `_WEEK_DRIFT`）。数值一样的话，用旧线和用新线得出同一个结论，判据分辨不出
 #    模型有没有真的看有效期 —— 那就成了"能被什么都不做骗过"的指标。
 # 2. **工具不替模型判断过没过期**，只如实返回 `valid_to`。真实世界里没人会在

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import uuid
 from pathlib import Path
 
@@ -16,7 +15,6 @@ from syncopate.core.contract import IS_V15
 from syncopate.runtime.db import DSN, Database, create_conversation, prior_turns
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def _pg_available() -> bool:
@@ -36,7 +34,7 @@ pytestmark = [pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL"
 
 
 def test_scripted_prior_round_trips_through_prior_turns_with_window():
-    from v16_exam_run import seed_prior
+    from syncopate.evaluation.exam_run import seed_prior
 
     prior = [{"user": "CMP_4 日预算定 35000", "status": "succeeded", "result": {"text": "好的，已记下 35000。"}}]
     prior += [{"user": f"填充 {i}", "status": "succeeded", "result": {"text": f"回答 {i}"}} for i in range(7)]

@@ -534,7 +534,7 @@ def wrong_object(bundle: CaseBundle, trajectory: Trajectory, sandbox: Sandbox) -
 
 
 # --------------------------------------------------------------------------
-# F 类 · 工具失败时的应对（docs/syncopate/07 §4.1）
+# F 类 · 工具失败时的应对（docs/syncopate/06-RUNTIME.md）
 #
 # 三条都**自动闭合**：判据都要求"本 case 声明了对应的失败剧本"，
 # 存量 case 的 env.failures 是空的，规则对它们恒为 None。

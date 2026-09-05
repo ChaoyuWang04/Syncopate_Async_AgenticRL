@@ -19,7 +19,7 @@ from syncopate.runtime.worker import emit
 from tests.runtime.test_api import ACME, GLOBEX, _pg_available
 from tests.runtime.test_sse import parse_sse, run_case
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 REPO = Path(__file__).resolve().parents[2]
 TRACE = {"Authorization": "Bearer dev-token-acme-trace"}
 

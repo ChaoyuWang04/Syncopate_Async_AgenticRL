@@ -185,7 +185,7 @@ def feature_lift(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     """★ **真算，不读预置答案**。
 
     和同文件的 `detect_anomalies` 是同一条纪律：规律埋在素材表现的生成方式里
-    （`scripts/make_test_external_data.py` 的 `_roas_for`），这里从数据重新算出来。
+    （`syncopate/domains/adcampaign/generate_test_external_data.py` 的 `_roas_for`），这里从数据重新算出来。
     于是改一条素材的数值，归因结论就自然跟着变，不用手工维护一张"正确答案表"。
 
     统计口径刻意用最朴素的一种（两独立样本均值差 + 正态近似的 95% CI）：

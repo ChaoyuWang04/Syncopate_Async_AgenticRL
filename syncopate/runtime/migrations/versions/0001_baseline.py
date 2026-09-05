@@ -1,7 +1,7 @@
 """0001 · baseline：M9 时代的 schema.sql 原样收编（2026-09-02，K2）。
 
 这份 SQL 曾是 `syncopate/runtime/schema.sql`（IF NOT EXISTS 幂等）。从本迁移起，
-**迁移链是 schema 的唯一真相**；schema.sql 退役为由 `scripts/schema_snapshot.py`
+**迁移链是 schema 的唯一真相**；schema.sql 退役为由 `syncopate/runtime/schema_snapshot.py`
 生成的只读快照 `schema.snapshot.txt`（判据：干净库 upgrade head 后快照逐字节一致）。
 存量库（训练机）：`alembic stamp 0001_baseline` 再 `upgrade head`。
 """
@@ -17,7 +17,7 @@ depends_on = None
 SCHEMA = r"""
 -- M9 · Runtime 的 8+1 张表（设计文档 §37）
 --
--- ★ 这个文件是**真相来源**。数据库本身是派生产物 —— `scripts/pg_bootstrap.sh`
+-- ★ 这个文件是**真相来源**。数据库本身是派生产物 —— `scripts/serving/pg_bootstrap.sh`
 --   一条命令从这里重建。PGDATA 在 `/workspace/pgdata/16/syncopate`
 --   （2026-08-17 换机器后：/workspace 是本地 XFS、权限位生效；旧机器的 mfs 才放不进）。
 --

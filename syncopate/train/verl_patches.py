@@ -338,7 +338,7 @@ def setup_worker() -> None:
     #    **那句话是错的**，它把"其实能行、只是没接上"整个盖住了，而且长得像个合格判据。
     #    真因一直是**作用域**：补丁只打在 driver。
     #    ⇒ 教训：判据行只许写观测，不许写断言（00-START §6 变种②）。
-    if os.environ.get("SYNCOPATE_POOL", "1") == "1":
+    if os.environ.get("SYNCOPATE_POOL", "0") == "1":
         # verl 0.9：V1 trainer 在 TaskRunnerV1（Ray actor）里 import trainer_base ⇒ 钩在定义处 utils 与 trainer_base 两个模块上
         for _m in ("verl.trainer.main_ppo", "verl.trainer.ppo.utils", "verl.trainer.ppo.v1.trainer_base"):
             _defer_until_imported(_m, _patch_pool_sampler)
@@ -607,7 +607,7 @@ def _patch_ddp_sync_probe() -> None:
 #            ⇒ 而梯度归约走的是**那个大小为 1 的组** ⇒ 空操作
 #   ⇒ 三个 rank 各训各的 LoRA，训练照常跑完、所有指标正常。**静默失效。**
 #
-# 修法（脱离 verl 的最小复现已验证，见 scripts/repro_fsdp_hybrid_nosync.py）：
+# 修法（脱离 verl 的最小复现已验证，见 scripts/infra/repro_fsdp_hybrid_nosync.py）：
 #   退化网格下改用 `NO_SHARD` + **默认进程组**（不传 device_mesh）
 #   ⇒ 实测与纯 DDP 打出**逐位相同**的梯度。
 #
@@ -667,7 +667,7 @@ def _patch_fsdp_degenerate_mesh() -> None:
 # **显式跳过所有含 `lora_` 的张量**（`fsdp_utils.py:705`）。
 # 而 colocate（naive）那条路**调了两次**：先基座、再 adapter。
 #   ⇒ [推断] fully_async 可能每次只推基座、从不推 LoRA。
-#   ⇒ 离线已验证该分支的行为（`scripts/probe_weight_sync_payload.py`：0 个 lora_ 张量），
+#   ⇒ 离线已验证该分支的行为（`scripts/infra/probe_weight_sync_payload.py`：0 个 lora_ 张量），
 #      **但"分支这样"不等于"真实跑就这样"** —— 本探针就是把它变成实测。
 #
 # 判据行（"某集合应当完整"型，不设阈值）：每次同步打一行
@@ -1637,7 +1637,7 @@ def _patch_prefix_grouper() -> None:
     def _pg_forward(model, prefix_grouper, concat_input_ids, attention_mask, position_ids,
                     completion_ids, completion_mask, *, temperature=1.0, padding_mode="right",
                     include_prefix_last=1, calculate_entropy=False, entropy_fn=None):
-        # ★★★ 2026-08-19 修（E26 §6.3 的真正根因，脱 Ray 复现 scripts/repro_pg_dtype.py）：
+        # ★★★ 2026-08-19 修（E26 §6.3 的真正根因，脱 Ray 复现 scripts/infra/repro_pg_dtype.py）：
         #   前向必须走**根 FSDP 模块**、且损失必须流经**根 forward 的输出**。
         #
         #   此前这里直接调 `_base_model(model)(...)` 绕过根 ⇒ FSDP1 的 pre-backward hook
@@ -1805,7 +1805,7 @@ def _patch_prefix_grouper() -> None:
             # ✅ 2026-08-19 已解：那个 Adam `expected BFloat16 for 'end' got float` 的根因
             #    **不是 dtype 转换**，是 `_pg_forward` 绕过了根 FSDP forward ⇒ 归约与
             #    cast-back 挂在没人等的 post-backward stream 上（竞态，见 _pg_forward 顶部
-            #    注释与 scripts/repro_pg_dtype.py）。dtype 报错只是竞态的一种表现；
+            #    注释与 scripts/infra/repro_pg_dtype.py）。dtype 报错只是竞态的一种表现；
             #    更危险的表现是**梯度静默不跨 rank 归约**（E21 形状）且不报错。
             # ⛔ 历史弯路留档：曾把 log_probs 转 bf16（方向反了，FusedLinearForPPO 契约就是
             #    fp32）、曾 patch AdamW 扫 dtype（verl 用的类经 lr_scheduler 包装，且问题
@@ -1875,5 +1875,4 @@ def _patch_prefix_grouper() -> None:
         _ti.FSDPEngineWithLMHead.forward_step = _forward_step
     print("[verl-patch] PrefixGrouper 已接线（SYNCOPATE_PREFIX_GROUPER=1，对齐 #7202 + 掩码/因果两处修复）"
           " —— ★ 没看到 [prefix-grouper] 打包前向已生效 就是没走到", flush=True)
-
 

@@ -34,7 +34,7 @@ def _pg() -> bool:
     return asyncio.run(probe())
 
 
-pytestmark = pytest.mark.skipif(not _pg(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

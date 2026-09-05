@@ -86,6 +86,21 @@ def test_thinking_is_surfaced(v15):
     assert p.thinking == "先想想"
 
 
+def test_qwen_prompt_side_think_open_does_not_leak_into_final(v15):
+    p = v15.VllmDecider._to_proposal(
+        "先想想</think>好的。", implicit_think_open=True)
+    assert p.kind == "final"
+    assert p.thinking == "先想想"
+    assert p.final_answer["text"] == "好的。"
+
+
+def test_unclosed_prompt_side_think_is_a_parse_error(v15):
+    p = v15.VllmDecider._to_proposal(
+        "还在内部分析", implicit_think_open=True)
+    assert p.kind == "tool_call" and p.tool is None
+    assert "empty_final_text" in p.rationale
+
+
 def test_multi_tool_still_blocked(v15):
     p = v15.VllmDecider._to_proposal(
         TC.format(n="a.b", a="{}") + TC.format(n="c.d", a="{}"))

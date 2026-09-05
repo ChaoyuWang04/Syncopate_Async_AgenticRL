@@ -2,7 +2,7 @@
 
 SYNCOPATE_STAGE_TIMING=1 时启用；默认关（所有热路径先查 ENABLED，零行为变化）。
 观测原则：只计时不改逻辑；每单收尾由 worker 打一行机读 JSON（[stage-timing]），
-分账表由 scripts/b5_ledger.py 事后拼装。
+分账表由 scripts/serving/b5_ledger.py 事后拼装。
 
 桶的定义（同一 asyncio task 内串行，靠 contextvars 归属到当前 run）：
     llm        decider.decide 的墙钟

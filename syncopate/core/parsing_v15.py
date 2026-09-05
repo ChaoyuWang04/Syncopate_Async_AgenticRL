@@ -66,15 +66,35 @@ class ParsedStepV15:
         return self.kind != "error"
 
 
-def strip_thinking(text: str) -> tuple[str, bool, str]:
+def strip_thinking(text: str, *, implicit_open: bool = False) -> tuple[str, bool, str]:
     """剥掉 <think> 块，返回 (剩余文本, 是否出现过, 思考内容)。
 
     思考内容要**留下来**：N3「按需思考」的触发率就是数它非空的比例。
+
+    ``implicit_open`` 用于解析模型刚生成的 token：Qwen think-on 模板把
+    ``<think>`` 放在 prompt 尾部，completion 通常只含思考正文和 ``</think>``。
+    不把这个上下文显式传进来，就会把整段思考误当成给用户的终答。
     """
-    blocks = _THINK_RE.findall(text)
-    stripped = _THINK_RE.sub("", text)
-    inner = "\n".join(re.sub(r"^<think>|</think>$", "", b) for b in blocks)
-    return stripped, bool(blocks), inner.strip()
+    body = text
+    implicit_inner = ""
+    implicit_had = False
+    if implicit_open:
+        close = body.find("</think>")
+        implicit_had = True
+        if close < 0:
+            # The prompt opened a reasoning block and generation never closed it.
+            # There is no terminal channel to parse, even if the prose looks fluent.
+            return "", True, body.removeprefix("<think>").strip()
+        implicit_inner = body[:close].removeprefix("<think>").strip()
+        body = body[close + len("</think>"):]
+
+    blocks = _THINK_RE.findall(body)
+    stripped = _THINK_RE.sub("", body)
+    explicit_inner = "\n".join(
+        re.sub(r"^<think>|</think>$", "", block) for block in blocks
+    ).strip()
+    inner = "\n".join(x for x in (implicit_inner, explicit_inner) if x).strip()
+    return stripped, implicit_had or bool(blocks), inner
 
 
 def _loads_tolerant(payload: str) -> Any:
@@ -190,9 +210,10 @@ def parse_tool_calls(text: str) -> tuple[list[dict[str, Any]], int]:
     return calls, malformed
 
 
-def parse_step_v15(text: str) -> ParsedStepV15:
+def parse_step_v15(text: str, *, implicit_think_open: bool = False) -> ParsedStepV15:
     """单步解析。工具调用优先于纯文本；终止性信令优先于业务工具。"""
-    body, had_thinking, thinking = strip_thinking(text)
+    body, had_thinking, thinking = strip_thinking(
+        text, implicit_open=implicit_think_open)
     calls, malformed = parse_tool_calls(body)
     residue = bool(_SHELL_RE.search(body))
     leftover = _TOOL_CALL_RE.sub("", body).strip()

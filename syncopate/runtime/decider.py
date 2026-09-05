@@ -76,7 +76,7 @@ DEFAULT_ANSWER_FIELDS = [
 # 14336 顶格一条 ≈2 GB，KV 池 ~20 GB ⇒ 并发 8 条顶格也放得下。
 # 且 prompt 里 ~4.2k 的 system+工具 schema 是**所有会话共享的 prefix**（cache 命中）。
 # ⚠️ 改这个数必须同时改 vLLM 起服务的 `--max-model-len`（两边必须一致，
-#   起服务命令在 `docs/syncopate/09 §0`）—— 服务端小于这里 = 400 报错。
+#   起服务顺序在 `docs/syncopate/07-SERVING.md`）—— 服务端小于这里 = 400 报错。
 RUNTIME_MAX_MODEL_LEN = int(os.environ.get("SYNCOPATE_RUNTIME_MAX_LEN", "24576"))   # 09-04：12288+12288 → 24576（rollout_budget 派生值）
 
 # 一轮历史最多渲染多少 token 的结论（超了截断并计数——静默砍是禁的）
@@ -264,14 +264,16 @@ class VllmDecider:
             usage["tokens_in"] = usage.get("tokens_in", 0) + data["usage"]["prompt_tokens"]
             usage["tokens_out"] = usage.get("tokens_out", 0) + data["usage"]["completion_tokens"]
             usage["calls"] = usage.get("calls", 0) + 1
-        return self._to_proposal(text)
+        return self._to_proposal(
+            text, implicit_think_open=bool(_kw.get("enable_thinking")))
 
     @staticmethod
-    def _to_proposal(text: str) -> Proposal:
+    def _to_proposal(text: str, *, implicit_think_open: bool = False) -> Proposal:
+        if IS_V15:
+            return VllmDecider._to_proposal_v15(
+                text, implicit_think_open=implicit_think_open)
         m = _THINK_RE.search(text)
         think = (m.group(1).strip() if m else "")
-        if IS_V15:
-            return VllmDecider._to_proposal_v15(text, think)
         parsed = parse_step(text)
         if parsed.kind == "final":
             return Proposal(kind="final",
@@ -293,14 +295,15 @@ class VllmDecider:
 
 
     @staticmethod
-    def _to_proposal_v15(text: str, think: str) -> Proposal:
+    def _to_proposal_v15(text: str, *, implicit_think_open: bool = False) -> Proposal:
         """v15：行为是**显式动作**，runtime 直接拿信令去驱动状态机（N4）。
 
         ⚠️ 这里刻意**不复制**一份解析逻辑 —— 用的就是训练/评测那一份
         `parse_step_v15`（N5 一份契约）。runtime 另抄一份是本项目的老病
         （decider.py 抬头那段注释记的就是这件事）。
         """
-        p = parse_step_v15(text)
+        p = parse_step_v15(text, implicit_think_open=implicit_think_open)
+        think = p.thinking_text
         if p.kind == "signal":
             # 终止性信令 → 状态机触发器（defer 挂起复查 / clarify 等补充 / reject 终止）
             return Proposal(kind="final",

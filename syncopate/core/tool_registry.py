@@ -124,7 +124,7 @@ class ToolSpec:
     latency_seconds: float = 0.0         # 真实等待时长
     requires: list[str] = field(default_factory=list)  # 前置工具，做依赖检查用
 
-    # ---- 真实性声明（docs/syncopate/07 §6）----
+    # ---- 真实性声明（docs/syncopate/06-RUNTIME.md）----
     api_ref: str | None = None           # 对应的真实 endpoint，如 "meta:POST /{campaign_id}"
     # ★ 幂等：写工具必须收 client_request_id。
     # Meta Marketing API **没有**幂等机制（实查文档确认），所以现实中重试一次

@@ -241,7 +241,8 @@ class WorldBuilder:
             if old is None:
                 raise KeyError(
                     f"{STALE_SAFETY_WEEK} 的快照里没有 {key} —— 先跑 "
-                    "scripts/make_test_external_data.py && scripts/ingest_external.py")
+                    "python -m syncopate.domains.adcampaign.generate_test_external_data && "
+                    "python -m syncopate.domains.adcampaign.ingest_external")
             row = dict(old)
             row.update(valid_from=(today - timedelta(days=17)).isoformat(),
                        valid_to=(today - timedelta(days=10)).isoformat())

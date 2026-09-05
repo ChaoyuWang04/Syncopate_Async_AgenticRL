@@ -46,6 +46,27 @@ def test_multiple_think_blocks_concatenated():
     assert had is True and "A" in inner and "B" in inner
 
 
+def test_qwen_implicit_open_is_stripped_from_generated_completion():
+    body, had, inner = strip_thinking(
+        "先在内部分析</think>给用户的终答", implicit_open=True)
+    assert body == "给用户的终答"
+    assert had is True and inner == "先在内部分析"
+
+
+def test_qwen_unclosed_implicit_think_is_not_accepted_as_final_text():
+    p = parse_step_v15("还在内部分析", implicit_think_open=True)
+    assert p.kind == "error" and p.error == "empty_final_text"
+    assert p.had_thinking is True and p.thinking_text == "还在内部分析"
+
+
+def test_qwen_implicit_think_can_end_in_a_tool_call():
+    p = parse_step_v15(
+        "先查数据</think>" + BIZ, implicit_think_open=True)
+    assert p.kind == "tool_calls"
+    assert p.tool_calls[0]["name"] == "campaign.get_metrics"
+    assert p.thinking_text == "先查数据"
+
+
 def test_think_does_not_swallow_tool_call():
     p = parse_step_v15("<think>先查一下</think>" + BIZ)
     assert p.kind == "tool_calls" and p.had_thinking is True

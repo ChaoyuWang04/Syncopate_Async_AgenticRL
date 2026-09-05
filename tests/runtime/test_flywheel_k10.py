@@ -15,7 +15,7 @@ from syncopate.runtime.api import create_app
 from syncopate.runtime.db import Database, claim_run, create_run, finish_run
 from tests.runtime.test_api import ACME, Client, _pg_available
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 TRACE = {"Authorization": "Bearer dev-token-acme-trace"}
 
 

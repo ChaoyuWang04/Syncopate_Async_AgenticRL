@@ -1,6 +1,6 @@
 """沙盒保真度：写完之后读得到，但世界本身不变。
 
-★ 这条是实测出来的缺口（docs/syncopate/07 §3 P0-1）：
+★ 这条是实测出来的缺口（历史见 docs/archive/syncopate/pre-consolidation-v16/07-toolbox-and-runtime-design.md §3 P0-1）：
   改预算 500 → 900 之后再查 campaign.get_metrics，读到的还是 500。
   因为 env 只读、写只进账本，而读工具**根本不看账本**。
 

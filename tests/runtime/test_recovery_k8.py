@@ -20,7 +20,7 @@ from syncopate.runtime.tools import derive_idempotency_key
 from syncopate.runtime.worker import LeaseHeartbeat, Worker, WorkerConfig
 from tests.runtime.test_api import ACME, Client, _pg_available
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def with_db(body):

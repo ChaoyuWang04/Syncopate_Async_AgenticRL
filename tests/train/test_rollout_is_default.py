@@ -90,7 +90,7 @@ def test_guard_advice_stays_consistent_with_the_default():
       ⇒ 守则③：判据太宽会制造假警报，而假警报会训练人忽略这条判据。
         黑名单型判据落地前必须先确认它只命中你想要的那处 —— 我这次是跑了才发现。
     """
-    guard = (ROOT / "scripts" / "rl_guard.sh").read_text(encoding="utf-8")
+    guard = (ROOT / "scripts" / "tools" / "rl_guard.sh").read_text(encoding="utf-8")
     default = _default_of("--rollout-is")
     other = "token" if default == "sequence" else "sequence"
     hint = [l for l in guard.splitlines() if "0.3" in l and "rollout-is" in l]

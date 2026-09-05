@@ -26,7 +26,7 @@ import pytest
 from syncopate.authoring.seed_cases import SEED_BUILDERS
 from syncopate.core.parsing import render_tool_call
 from syncopate.domains.adcampaign import build_domain, rules
-from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.train.rollout_loop import CHAT_TEMPLATE_KWARGS, RolloutConfig, run_rollout
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 MODEL_DIR = Path(TEST_TOKENIZER)
@@ -57,7 +57,12 @@ class _Scripted:
     async def __call__(self, prompt_ids, sampling_params):
         if not self.script:
             return []
-        return self.tokenizer.encode(self.script.pop(0), add_special_tokens=False)
+        text = self.script.pop(0)
+        # Qwen3.5 think-on 的 generation prompt 已经写入开标签；真实 completion
+        # 会先闭合它。测试剧本只写可见正文时也必须模拟这个线上形状。
+        if CHAT_TEMPLATE_KWARGS.get("enable_thinking") and "</think>" not in text:
+            text = "\n</think>\n\n" + text
+        return self.tokenizer.encode(text, add_special_tokens=False)
 
 
 def _two_calls(bundle) -> str:

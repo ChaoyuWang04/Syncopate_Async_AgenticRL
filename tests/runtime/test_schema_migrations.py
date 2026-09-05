@@ -7,7 +7,6 @@ updated_at 触发器（含负向认证）· id 不可枚举 · 干净库 upgrade
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import os
 import re
 import uuid
@@ -31,15 +30,12 @@ def _pg_available() -> bool:
     return asyncio.run(probe())
 
 
-pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/pg_bootstrap.sh")
+pytestmark = pytest.mark.skipif(not _pg_available(), reason="需要 PostgreSQL：bash scripts/serving/pg_bootstrap.sh")
 
 
 def _snapshot_module():
-    spec = importlib.util.spec_from_file_location("schema_snapshot", REPO / "scripts" / "schema_snapshot.py")
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
+    from syncopate.runtime import schema_snapshot
+    return schema_snapshot
 
 
 async def _admin(sql: str) -> None:

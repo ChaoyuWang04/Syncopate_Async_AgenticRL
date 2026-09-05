@@ -1,6 +1,6 @@
 """M8 · `policy_drill` 模板的验收测试。
 
-★ 这一份的核心是**双向断言**（`scripts/calibrate_retrieval.py` 那条警告要求的）：
+★ 这一份的核心是**双向断言**（`syncopate/authoring/calibrate_retrieval.py` 那条警告要求的）：
 
     应命中的档  →  gold 的自然查询确实命中，且拿到的是**对的那条**
     空洞的档    →  该查询确实返回空，且 no_match 置位

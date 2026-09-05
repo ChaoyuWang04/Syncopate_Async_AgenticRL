@@ -5,7 +5,8 @@
 ★ 为什么另起一个薄壳而不是改 `launch_rl.py`：那份是 4×5090 / verl 0.8 的产物（DDP·无 P2P·offload 账本·
   20 处补丁），1200 行里大半前提在 B200+0.9 上都不成立（26 §W4′ S1-4 分诊：删 6 停 4 改 1 留 3）。
   这份只放 V1 trainer 真会读的键；契约参数（长度/采样）仍**只**从 `rollout_budget` 取（守则⑨），
-  数据集采样器仍走 `main_ppo_pool`（动态分池；0.9 下补丁改挂 `trainer.ppo.utils`）。
+  默认走 verl 官方均匀采样；动态分池是尚待 B05 重测的算法开关，只有显式
+  `--dynamic-pool` 才走 `main_ppo_pool`。
 
 verl 0.9 事实（09-04 容器 dump `/vol/_audit/v16/verl09_dump{,2}.json`）：
   · `trainer.use_v1=true`，`trainer.v1.trainer_mode ∈ {sync, colocate_async, separate_async}`；入口 `main_ppo.TaskRunnerV1`（Ray actor）
@@ -13,8 +14,9 @@ verl 0.9 事实（09-04 容器 dump `/vol/_audit/v16/verl09_dump{,2}.json`）：
   · LoRA：`model.lora_rank/lora_alpha/target_modules(str|list)/exclude_modules(str 正则)`；rollout `load_format=safetensors`
   · reward：`reward.reward_model.enable`；AgentLoopOutput.reward_score 非空时直接当 rm_scores（agent_loop.py:142）
   · agent loop：`rollout.agent.{default_agent_loop, agent_loop_config_path, num_workers}` 与 0.8 同名，`_target_` 注册照旧
-判据（S6 冒烟，跑前注册）：每步退出码 0 · `[pool] 动态分池启用` 行在 worker 侧出现 · actor loss/grad_norm 有限 ·
-  reward 非全 0 · vLLM 权重同步行出现（checkpoint engine）· LoRA-only ckpt 落盘且能被 peft 读。
+判据（S6 冒烟，跑前注册）：每步退出码 0 · actor loss/grad_norm 有限 · reward 非全 0 ·
+  vLLM 权重同步行出现（checkpoint engine）· LoRA-only ckpt 落盘且能被 peft 读。
+  仅动态分池实验臂额外要求 `[pool] 动态分池启用`。
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ from syncopate.core.model_paths import STUDENT_MODEL
 from syncopate.pipeline.split import DEFAULT_RL_DIR
 
 ROOT = Path(__file__).resolve().parents[2]
+MIN_CANDIDATE_STEPS = 400
 
 
 def build_overrides(a: argparse.Namespace) -> list[str]:
@@ -106,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     # ★ 2026-09-04（Chaoyu：默认值必须是"直接跑就健康"的正式值）：两套注册档位，smoke 只验机制、candidate 才是训练。
     #   candidate 的数字来源：步数下限 400（守则⑩，真正该停看 pool_readout 的零梯度率平台）· save-freq 25（E29 口径）·
     #   组大小 8（GRPO 默认）· 模型 = 合并后的 SFT 模型（RL 起点不许是裸底座，launch_rl_v1 断言 lora_adapter 不在目录里）。
-    p.add_argument("--profile", default="candidate", choices=["smoke", "candidate"])
-    p.add_argument("--model", default=None, help="candidate 默认 models/<学生名>-sft-<DATA_VERSION>（合并后）；smoke 默认学生底座")
+    p.add_argument("--profile", default="smoke", choices=["smoke", "candidate"])
+    p.add_argument("--model", default=None, help="两档都默认读取本档刚合并的 SFT 模型；裸底座只用于另开的诊断命令")
     p.add_argument("--train-file", default=f"{DEFAULT_RL_DIR}/train.parquet")
     p.add_argument("--val-file", default=f"{DEFAULT_RL_DIR}/val.parquet")
     p.add_argument("--save-path", default=None)
@@ -141,7 +144,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--save-lora-only", default="True", choices=["True", "False"])
     p.add_argument("--vllm-log-level", default="INFO")
     p.add_argument("--latency-scale", type=float, default=0.0, help="冒烟 0；正式异步对照实验用 0.01/1.0")
-    p.add_argument("--no-pool", action="store_true")
+    pool = p.add_mutually_exclusive_group()
+    pool.add_argument("--dynamic-pool", action="store_true",
+                      help="实验开关：按组内 reward 方差动态采样；B05 验收前不进入默认基线")
+    pool.add_argument("--no-pool", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--wandb-mode", default="online", choices=["online", "offline"])
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--cfg-only", action="store_true", help="只让 Hydra 合成配置（--cfg job），不起 Ray/GPU：键名判据")
@@ -150,23 +156,29 @@ def main(argv: list[str] | None = None) -> int:
     a.prefix_grouper = a.prefix_grouper == "True"; a.save_lora_only = a.save_lora_only == "True"
     from syncopate.pipeline.split import DATA_VERSION as _DV
     _student = Path(STUDENT_MODEL).name
-    _prof = {"smoke": dict(model=STUDENT_MODEL, steps=2, rollout_n=4, save_freq=2, save_path=f"checkpoints/grpo/{_DV}_smoke", experiment=f"rl_{_DV}_smoke"),
+    _prof = {"smoke": dict(model=f"models/{_student}-sft-{_DV}_smoke", steps=2, rollout_n=4, save_freq=2, save_path=f"checkpoints/grpo/{_DV}_smoke", experiment=f"rl_{_DV}_smoke"),
              "candidate": dict(model=f"models/{_student}-sft-{_DV}", steps=400, rollout_n=8, save_freq=25, save_path=f"checkpoints/grpo/{_DV}_cand", experiment=f"rl_{_DV}_cand")}[a.profile]
     for k, v in _prof.items():
         if getattr(a, k) is None:
             setattr(a, k, v)
-    if a.profile == "candidate" and not Path(a.model).exists():
-        raise SystemExit(f"🔴 candidate 档要的 RL 起点 {a.model} 不存在：先跑 sft-train → sft-select → merge（scripts/v16_pipeline.sh）")
+    if a.profile == "candidate" and a.steps < MIN_CANDIDATE_STEPS:
+        raise SystemExit(
+            f"🔴 candidate 至少 {MIN_CANDIDATE_STEPS} 步；短跑请明确使用 --profile smoke，不能冒充候选")
+    if not (a.dry_run or a.cfg_only) and not Path(a.model).exists():
+        raise SystemExit(
+            f"🔴 {a.profile} 档要的 RL 起点 {a.model} 不存在："
+            "先跑同一 profile 的 sft-train → sft-select → merge")
     print(f"[rl-v1] profile={a.profile} model={a.model} steps={a.steps} n={a.rollout_n} save_freq={a.save_freq} save_path={a.save_path}", flush=True)
 
     from syncopate.train.rollout_budget import MAX_RESPONSE_LENGTH, THINK_ON
     from syncopate.core.contract import IS_V15
     assert IS_V15 and THINK_ON, "v16 训练路径要求 SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1"
     print(f"[think-train] 契约=v15 · think-on · MAX_RESPONSE_LENGTH={MAX_RESPONSE_LENGTH}", flush=True)
-    if (Path(a.model) / "lora_adapter").exists():
-        raise SystemExit(f"🔴 {a.model} 里有 lora_adapter/ ⇒ 不是合并后的模型（docs/syncopate/18 §3）")
+    if Path(a.model).exists() and (Path(a.model) / "lora_adapter").exists():
+        raise SystemExit(f"🔴 {a.model} 里有 lora_adapter/ ⇒ 不是合并后的模型（docs/syncopate/04-TRAINING.md）")
 
-    entry = "verl.trainer.main_ppo" if a.no_pool else "syncopate.train.main_ppo_pool"
+    pool_enabled = bool(a.dynamic_pool and not a.no_pool)
+    entry = "syncopate.train.main_ppo_pool" if pool_enabled else "verl.trainer.main_ppo"
     cmd = [sys.executable, "-m", entry, *build_overrides(a)]
     if a.cfg_only:
         cmd += ["--cfg", "job"]
@@ -178,10 +190,17 @@ def main(argv: list[str] | None = None) -> int:
     env["SYNCOPATE_LATENCY_SCALE"] = str(a.latency_scale)
     env["SYNCOPATE_ASYNC_VERIFIER"] = "1"
     save = ROOT / a.save_path; save.mkdir(parents=True, exist_ok=True)
-    (save / "run_purpose.json").write_text(json.dumps({"purpose": "probe", "steps_requested": a.steps, "stack": "verl0.9-v1"}, ensure_ascii=False))
+    (save / "run_purpose.json").write_text(json.dumps({
+        "purpose": a.profile,
+        "profile": a.profile,
+        "steps_requested": a.steps,
+        "stack": "verl0.9-v1",
+        "model": str(a.model),
+        "dynamic_pool": pool_enabled,
+    }, ensure_ascii=False, indent=1), encoding="utf-8")
     env["SYNCOPATE_DISPATCH_LOG"] = str(save / "dispatched.jsonl")
     env["SYNCOPATE_POOL_STATE"] = str(save / "pool_state.json")
-    env["SYNCOPATE_POOL"] = "0" if a.no_pool else "1"
+    env["SYNCOPATE_POOL"] = "1" if pool_enabled else "0"
     env["SYNCOPATE_POOL_BATCH"] = str(a.ppo_mini_batch_size)
     env["SYNCOPATE_RL_MODE"] = "colocate"          # main_ppo_pool 的分发键：V1 三种 trainer_mode 都走 main_ppo 入口
     env["SYNCOPATE_PREFIX_GROUPER"] = "1" if a.prefix_grouper else "0"
@@ -192,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
     env.setdefault("VLLM_USE_V1", "1")
     print(f"[rl-v1] mode={a.mode} gpus={a.gpus} steps={a.steps} n={a.rollout_n} lora r={a.lora_rank} exclude={a.exclude_modules!r} "
-          f"pool={'关' if a.no_pool else '开'} save_lora_only={a.save_lora_only}", flush=True)
+          f"pool={'动态实验臂' if pool_enabled else '官方均匀基线'} save_lora_only={a.save_lora_only}", flush=True)
     return subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode
 
 

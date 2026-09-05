@@ -358,7 +358,7 @@ async def run_rollout(
         step_texts.append(text)
         # ---- 2. 解析（契约二选一；v14 分支逐字节不变）----
         if IS_V15:
-            p15 = parse_step_v15(text)
+            p15 = parse_step_v15(text, implicit_think_open=ENABLE_THINKING)
             # 终止性信令 / 纯文本终答 ⇒ 收工。行为在**轨迹级**推导：
             # 「调过业务工具 + 纯文本收尾 → tool_call」光看这一步是判不出来的。
             if p15.kind in ("signal", "final_text"):

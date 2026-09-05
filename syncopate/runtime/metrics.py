@@ -4,7 +4,8 @@
 
 设计文档 §19 的门槛是「端到端 **P95，按意图分**」「工具调用 P95（排除 480s 慢工具）」。
 在这之前 runtime 里没有任何东西能算出这两个数 —— 门槛写着，尺子不存在。
-这正是 M7 那六条毕业条件废掉的方式（`11-runtime-acceptance.md` §0）。
+这正是旧验收条件曾失效的方式（历史见
+`docs/archive/syncopate/pre-consolidation-v16/11-runtime-acceptance.md`）。
 
 ★ 三个口径上的选择，都会影响结论：
 

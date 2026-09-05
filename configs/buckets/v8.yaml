@@ -23,7 +23,7 @@ quotas:
   # I02 data_freshness_check。90 条 = 3 档成熟度 × 2 entry_mode × 15，
   # 三档必须都有：只造 immature 会训出一个什么都不敢答的 agent。
   freshness_check:   90
-  # ---- F 类 · 工具失败时的应对（docs/syncopate/07 §4）----
+  # ---- F 类 · 工具失败时的应对（docs/syncopate/06-RUNTIME.md）----
   # 十个变体：timeout(生效/丢失) / 429 / 403 / 数值离谱 / 注入 / 源打架
   #           / 分页 / 配额耗尽 / 持续故障
   # ★ 任务和 budget_change 完全相同，只有失败剧本不同 ——

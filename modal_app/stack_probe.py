@@ -26,9 +26,11 @@ flash-attn 用社区预编译轮子（mjun0812 v0.9.47 cu130torch2.13，写在 s
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import pathlib
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -60,6 +62,38 @@ STUDENT = f"{MODELS}/Qwen3.6-35B-A3B"
 
 LOCAL_ROOT = pathlib.Path(__file__).resolve().parents[1]
 STACK = LOCAL_ROOT / "modal_app" / "stack"
+CURRENT_OVERLAY = "/opt/syncopate-current"
+OVERLAY_DIRS = ("syncopate", "scripts", "configs", "tests", "docs", "modal_app")
+OVERLAY_FILES = ("pyproject.toml", "alembic.ini")
+
+
+def _local_source_digest() -> str:
+    """给未推送工作树一个可复查身份；不把本机 `.git`、数据、模型或密钥上传。"""
+    # Modal 会在容器里再次 import 本模块；那里没有客户端工作树，只读镜像已注入的值。
+    if not (LOCAL_ROOT / "pyproject.toml").is_file():
+        value = os.environ.get("SYNCOPATE_LOCAL_SOURCE_SHA")
+        if not value:
+            raise RuntimeError("容器缺 SYNCOPATE_LOCAL_SOURCE_SHA，无法确认当前源码身份")
+        return value
+    digest = hashlib.sha256()
+    for name in OVERLAY_DIRS:
+        root = LOCAL_ROOT / name
+        for path in sorted(p for p in root.rglob("*") if p.is_file()
+                           and "__pycache__" not in p.parts and path_suffix_ok(p)):
+            digest.update(str(path.relative_to(LOCAL_ROOT)).encode())
+            digest.update(path.read_bytes())
+    for name in OVERLAY_FILES:
+        path = LOCAL_ROOT / name
+        digest.update(name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def path_suffix_ok(path: pathlib.Path) -> bool:
+    return path.suffix not in {".pyc", ".pyo"}
+
+
+LOCAL_SOURCE_SHA = _local_source_digest()
 
 app = modal.App(APP_NAME)
 vol = modal.Volume.from_name(VOL_NAME, create_if_missing=True)
@@ -95,6 +129,17 @@ image = (
         "uv pip install --python .venv-fa4/bin/python 'torch==2.13.0' 'flash-attn-4[cu13]==4.0.0b29' einops "
         "'https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn-2.8.3%2Bcu130torch2.13-cp312-cp312-linux_x86_64.whl'"
     )
+    # 当前改动尚未推送也能在目标栈验证：只上传源码/配置/测试，不上传 .git、数据、模型、审计或密钥。
+    .add_local_dir(LOCAL_ROOT / "syncopate", f"{CURRENT_OVERLAY}/syncopate", copy=True)
+    .add_local_dir(LOCAL_ROOT / "scripts", f"{CURRENT_OVERLAY}/scripts", copy=True)
+    .add_local_dir(LOCAL_ROOT / "configs", f"{CURRENT_OVERLAY}/configs", copy=True)
+    .add_local_dir(LOCAL_ROOT / "tests", f"{CURRENT_OVERLAY}/tests", copy=True)
+    .add_local_dir(LOCAL_ROOT / "docs", f"{CURRENT_OVERLAY}/docs", copy=True)
+    .add_local_dir(LOCAL_ROOT / "modal_app", f"{CURRENT_OVERLAY}/modal_app", copy=True)
+    .add_local_file(LOCAL_ROOT / "pyproject.toml", f"{CURRENT_OVERLAY}/pyproject.toml", copy=True)
+    .add_local_file(LOCAL_ROOT / "alembic.ini", f"{CURRENT_OVERLAY}/alembic.ini", copy=True)
+    # 必须放在依赖安装之后：源码哈希会随每次编辑改变，不能因此让 uv/FA4 重装。
+    .env({"SYNCOPATE_LOCAL_SOURCE_SHA": LOCAL_SOURCE_SHA})
 )
 PY_FA4 = "/env/.venv-fa4/bin/python"
 
@@ -132,8 +177,8 @@ DATA_DIRS = ("batches", "sft", "rl")   # gitignored 的数据目录整体指回 
                                         # data/splits 在 git 里（v16 切分 4 个 json 已入库，确定性判据过后即"源码"），不软链
 
 
-def _sync_repo() -> str:
-    """更新 Volume 上的 bare 镜像（flock + 重试），再在本容器 /tmp 里 clone 出工作树；models/data 指回 Volume。返回 HEAD sha。"""
+def _sync_repo() -> dict:
+    """克隆远端底座，再用本次调用随镜像上传的工作树源码覆盖；返回两层代码身份。"""
     if not os.path.isdir(REPO_MIRROR):
         r = _sh(f"flock -w 600 {VOL}/.repo.lock git clone --bare --branch {REPO_BRANCH} {REPO_URL} {REPO_MIRROR}", timeout=900)
         if r["rc"] != 0 and not os.path.isdir(REPO_MIRROR): raise RuntimeError("bare clone 失败：" + r["out"])
@@ -145,6 +190,16 @@ def _sync_repo() -> str:
         if r["rc"] != 0: raise RuntimeError("worktree clone 失败：" + r["out"])
     else:
         _sh(f"git fetch -q origin {REPO_BRANCH} && git reset -q --hard origin/{REPO_BRANCH}", cwd=REPO, timeout=300)
+    remote_head = _sh("git rev-parse HEAD", cwd=REPO)["out"].strip()
+    # 只替换明确上传的源码树。远端仓库提供受版本控制的数据切分等其余文件；当前改动无需 push 即可上云验证。
+    for name in OVERLAY_DIRS:
+        r = _sh(f"rm -rf {REPO}/{name} && cp -a {CURRENT_OVERLAY}/{name} {REPO}/{name}")
+        if r["rc"] != 0:
+            raise RuntimeError(f"覆盖当前源码目录 {name} 失败：" + r["out"])
+    for name in OVERLAY_FILES:
+        r = _sh(f"cp -a {CURRENT_OVERLAY}/{name} {REPO}/{name}")
+        if r["rc"] != 0:
+            raise RuntimeError(f"覆盖当前源码文件 {name} 失败：" + r["out"])
     # 模型/数据指回 Volume（只读共享；数据按版本分目录，写者是各自的建库步）
     os.makedirs(f"{VOL}/data", exist_ok=True)
     for d in DATA_DIRS:
@@ -153,10 +208,13 @@ def _sync_repo() -> str:
     _sh(f"rm -rf {REPO}/models && ln -sfn {MODELS} {REPO}/models")
     os.makedirs(f"{VOL}/checkpoints", exist_ok=True); os.makedirs(f"{MODELS}/adapters", exist_ok=True)
     _sh(f"rm -rf {REPO}/checkpoints && ln -sfn {VOL}/checkpoints {REPO}/checkpoints")   # runbook 产物跨 run 留存
+    # 固定管线逐 run 账本必须抗容器退出；不能软链整个 _audit（仓库里还有受版本控制的历史夹具）。
+    os.makedirs(f"{VOL}/_audit/v16/runs", exist_ok=True)
+    _sh(f"mkdir -p {REPO}/_audit/v16 && rm -rf {REPO}/_audit/v16/runs && ln -sfn {VOL}/_audit/v16/runs {REPO}/_audit/v16/runs")
     # 项目以可编辑方式装进 venv（vLLM 插件入口点需要"装过"；--no-deps 不动锁）
     r = _sh(f"uv pip install --python {PY} --no-deps -e {REPO}", timeout=300)
     if r["rc"] != 0: raise RuntimeError("editable install 失败：" + r["out"][-600:])
-    return _sh("git rev-parse HEAD", cwd=REPO)["out"].strip()
+    return {"remote_git_head": remote_head, "local_overlay_sha256": LOCAL_SOURCE_SHA}
 
 
 def _topology() -> dict:
@@ -293,7 +351,7 @@ def p_gpu() -> dict:
     _sync_repo()
     tor = _sh(f"{PY} -c \"import torch; print(torch.cuda.device_count(), [torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())], torch.version.cuda)\"", timeout=300)
     cap_ok = tor["rc"] == 0 and tor["out"].strip().startswith("1 [(10, 0)]")   # B200 = sm_100；换卡改这里
-    fa = _sh(f"{PY} scripts/check_flash_attn_backward.py", cwd=REPO, timeout=600)
+    fa = _sh(f"{PY} scripts/infra/check_flash_attn_backward.py", cwd=REPO, timeout=600)
     open("/tmp/fla_parity.py", "w").write(_FLA_PARITY)
     fl = _sh(f"{PY} /tmp/fla_parity.py", timeout=900)
     fla_res = {}
@@ -308,13 +366,26 @@ def p_gpu() -> dict:
 
 
 
-def _teardown(proc) -> None:
-    """杀干净 vLLM 全家（APIServer/EngineCore/Worker 都是独立进程），并等到显存真的归零——
-    09-03 实测：只杀入口进程，下一个变体起来时显存还被占着 111/178 GiB ⇒ 启动直接报错。"""
-    proc.terminate()
-    try: proc.wait(60)
-    except Exception: proc.kill()
-    _sh("pkill -9 -f 'vllm' ; pkill -9 -f 'EngineCore' ; pkill -9 -f 'multiproc_executor' ; sleep 3")
+def _teardown(proc, *, wait_for_gpu: bool = True) -> None:
+    """精确停止该 ``Popen`` 的进程组；调用方必须用 ``start_new_session=True`` 启动。
+
+    vLLM 会派生 EngineCore/Worker，只杀入口会残留；按命令名 ``pkill -f`` 又可能误伤别的臂
+    或匹配自己，所以用创建时保存的 process-group id。
+    """
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        proc.wait(30)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait(10)
+    if not wait_for_gpu:
+        return
     for _ in range(40):
         used = _sh("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits")["out"].strip().splitlines()
         if used and all(int(u) < 2048 for u in used): return
@@ -348,7 +419,8 @@ def p_vllm() -> dict:
     out = {}
     for name, cmd in variants.items():
         log = f"/tmp/vllm_{name}.log"
-        proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+        proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True,
+                                env={**os.environ, **RUN_ENV}, start_new_session=True)
         up = False; t0 = time.time()
         while time.time() - t0 < 2400 and proc.poll() is None:
             if _sh("curl -sf http://127.0.0.1:8300/health")["rc"] == 0: up = True; break
@@ -529,7 +601,8 @@ def p_vllm_ep() -> dict:
            f"--gpu-memory-utilization 0.85 --port 8300 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' "
            f"--data-parallel-size 2 --enable-expert-parallel")
     log = "/tmp/vllm_ep.log"
-    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True,
+                            env={**os.environ, **RUN_ENV}, start_new_session=True)
     up = False; t0 = time.time()
     while time.time() - t0 < 2400 and proc.poll() is None:
         if _sh("curl -sf http://127.0.0.1:8300/health")["rc"] == 0: up = True; break
@@ -560,9 +633,9 @@ SERVICE_ENV = {"PG_HOME": "/usr/lib/postgresql/16", "PG_SHARE": "/usr/share/post
 
 def _start_services() -> dict:
     """容器内起 PG + Redis（都是派生产物，容器重启即丢；schema 由仓库 alembic 重建）并灌语料。判据 = 两个 bootstrap 退出码 0。"""
-    pg = _sh("bash scripts/pg_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=600)
-    rd = _sh("bash scripts/redis_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=300)
-    corpus = _sh(f"{PY} scripts/ingest_corpus.py", cwd=REPO, env=SERVICE_ENV, timeout=600) if pg["rc"] == 0 else {"rc": -1, "out": "skipped"}
+    pg = _sh("bash scripts/serving/pg_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=600)
+    rd = _sh("bash scripts/serving/redis_bootstrap.sh", cwd=REPO, env=SERVICE_ENV, timeout=300)
+    corpus = _sh(f"{PY} -m syncopate.runtime.ingest_corpus", cwd=REPO, env=SERVICE_ENV, timeout=600) if pg["rc"] == 0 else {"rc": -1, "out": "skipped"}
     return {"pg": {"rc": pg["rc"], "tail": pg["out"][-600:]}, "redis": {"rc": rd["rc"], "tail": rd["out"][-400:]}, "corpus": {"rc": corpus["rc"], "tail": corpus["out"][-300:]}}
 
 # ─────────────────────────── 仓库测试在新栈上跑（对齐地图） ───────────────────────────
@@ -571,7 +644,7 @@ def p_pytest(args: str = "tests -q -rfE -p no:cacheprovider", with_services: boo
     """我们自己的代码在 verl 0.9 / transformers 5.10 / vllm 0.28 下还能不能 import 与通过测试。
     本机旧栈基线 908 passed（09-02）。无 PG/Redis 的 runtime 测试会 skip/红，先只看**收集错误与失败清单**=对齐工作量地图。"""
     _sync_repo()
-    r0 = _sh(f"{PY} scripts/ingest_external.py", cwd=REPO, timeout=600)      # 派生数据（27 个测试要）
+    r0 = _sh(f"{PY} -m syncopate.domains.adcampaign.ingest_external", cwd=REPO, timeout=600)      # 派生数据（27 个测试要）
     services = _start_services() if with_services else {}
     # ⚠️ 管道接 tail 会吞掉 pytest 的退出码（09-03 第一版就此误判 ✅）⇒ 输出落文件、退出码单独取
     r = _sh(f"{PY} -m pytest {args} > /tmp/pytest_out.txt 2>&1; echo PYTEST_RC=$?", cwd=REPO, env=SERVICE_ENV, timeout=3300)
@@ -628,9 +701,9 @@ def p_rebuild_v16(expected_sha: str = "") -> dict:
     _sync_repo()
     out = f"{REPO}/data"
     steps = [
-        ("0 external", f"{PY} scripts/make_test_external_data.py && {PY} scripts/ingest_external.py"),
+        ("0 external", f"{PY} -m syncopate.domains.adcampaign.generate_test_external_data && {PY} -m syncopate.domains.adcampaign.ingest_external"),
         ("1 generate", f"{PY} -m syncopate cases generate --spec configs/buckets/v16.yaml --out {out}/batches/v16"),
-        ("2 menus", f"{PY} scripts/set_tool_menus.py --batch {out}/batches/v16"),   # 09-05：不再并入 v8 时代模型的评测审计（与 runbook menus 段同一命令）
+        ("2 menus", f"{PY} -m syncopate.pipeline.tool_menus --batch {out}/batches/v16"),   # 09-05：不再并入 v8 时代模型的评测审计（与 runbook menus 段同一命令）
         ("3 split", f"{PY} -m syncopate data split --batch {out}/batches/v16 --out {out}/splits/v16"),
     ]
     log = {}
@@ -653,8 +726,10 @@ TEACHER_ENV = {**RUN_ENV, "SYNCOPATE_TEACHER_LANG_URL": "http://127.0.0.1:8210/v
 
 def _assert_serve_len() -> None:
     """服务侧 max_model_len 必须 == rollout_budget 派生值（在容器里 import 仓库代码核）。"""
-    r = _sh(f"{PY} -c \"from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH as p, MAX_RESPONSE_LENGTH as r; print(p+r)\"", cwd=REPO, env=RUN_ENV)
-    got = (r["out"].strip().splitlines() or ["?"])[-1]
+    r = _sh(f"{PY} -c \"from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH as p, MAX_RESPONSE_LENGTH as r; print('__SYNCOPATE_SERVE_LEN__=' + str(p+r))\"", cwd=REPO, env=RUN_ENV)
+    matches = re.findall(r"^__SYNCOPATE_SERVE_LEN__=(\d+)$", r["out"], flags=re.M)
+    assert len(matches) == 1, f"🔴 无法唯一读取 rollout_budget 派生长度: {r['out'][-500:]}"
+    got = matches[0]
     assert got == str(SERVE_MAX_MODEL_LEN), f"🔴 服务侧 max_model_len {SERVE_MAX_MODEL_LEN} != rollout_budget 派生 {got}（两处漂了）"
 
 
@@ -663,7 +738,8 @@ def _start_teacher(log: str = "/tmp/vllm_teacher.log", wait_s: int = 1500):
     """Qwen3.8-27B 教师 @8210（两角色同端点）。返回 (proc, up, secs)。build_v16 与 teacher_diag 共用。"""
     cmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {TEACHER} --served-model-name t --max-model-len {SERVE_MAX_MODEL_LEN} "
            f"--gpu-memory-utilization 0.90 --port 8210 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}' --max-num-seqs 64")
-    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    proc = subprocess.Popen(f"exec {cmd} > {log} 2>&1", shell=True,
+                            env={**os.environ, **RUN_ENV}, start_new_session=True)
     up = False; t0 = time.time()
     while time.time() - t0 < wait_s and proc.poll() is None:
         if _sh("curl -sf http://127.0.0.1:8210/health")["rc"] == 0: up = True; break
@@ -674,7 +750,7 @@ def _start_teacher(log: str = "/tmp/vllm_teacher.log", wait_s: int = 1500):
 # ─────────────────────────── S3-diag · 27B 教师原始思考画像（先量后动，Chaoyu 09-04 放行） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=65536, timeout=2 * 3600, secrets=SECRETS)
 def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096, arm: str = "base", with_behavior: bool = True) -> dict:
-    """判据（预注册，见 scripts/v16_teacher_think_diag.py 顶部）：这是**测量**不是门槛——产出 closed_within_900_rate /
+    """判据（预注册，见 scripts/v16/teacher_think_diag.py 顶部）：这是**测量**不是门槛——产出 closed_within_900_rate /
     cjk_below_0.5_rate / action_match_rate 三个数与预注册判读；同容器再跑一遍行为类探针（现在带丢弃原因计数）。
     ok = 两个脚本退出码 0 且 diag.json 落盘（读数本身不判红绿）。"""
     _sync_repo()
@@ -685,18 +761,17 @@ def p_teacher_diag(n: int = 20, samples: int = 4, max_tokens: int = 4096, arm: s
         _teardown(proc); return _record("teacher_diag", False, {**rec, "log_tail": open("/tmp/vllm_teacher.log", errors="replace").read()[-2000:]})
     try:
         sfx = "" if arm == "base" else f"_{arm}"
-        r = _sh(f"{PY} scripts/v16_teacher_think_diag.py --teacher http://127.0.0.1:8210/v1 --n {n} --samples {samples} --max-tokens {max_tokens} --out {aud} --arm {arm} "
+        r = _sh(f"{PY} scripts/v16/teacher_think_diag.py --teacher http://127.0.0.1:8210/v1 --n {n} --samples {samples} --max-tokens {max_tokens} --out {aud} --arm {arm} "
                 f"> {aud}/teacher_think_diag{sfx}.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=3600)
         rec["diag_rc"] = int(re.search(r"RC=(\d+)", r["out"]).group(1))
         rec["diag_tail"] = open(f"{aud}/teacher_think_diag{sfx}.log", errors="replace").read()[-2500:]
         try: rec["agg"] = json.load(open(f"{aud}/teacher_think_diag{sfx}.json"))["agg"]
         except Exception as ex: rec["agg_err"] = repr(ex)[:200]
         rec["behavior_rc"] = 0
-        b = None if not with_behavior else _sh(f"{PY} scripts/v16_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
+        b = None if not with_behavior else _sh(f"{PY} -m syncopate.pipeline.behavior_think_probe --n 20 --teacher http://127.0.0.1:8210/v1 --out {aud}/behavior_think_probe.json > {aud}/behavior_think_probe.log 2>&1; echo RC=$?", cwd=REPO, env=TEACHER_ENV, timeout=1800)
         if b is not None:
             rec["behavior_rc"] = int(re.search(r"RC=(\d+)", b["out"]).group(1))
             rec["behavior_tail"] = open(f"{aud}/behavior_think_probe.log", errors="replace").read()[-1500:]
-            _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
     finally:
         _teardown(proc); open(f"{aud}/teacher_diag_vllm.log", "w").write(open("/tmp/vllm_teacher.log", errors="replace").read()[-20000:]); vol.commit()
     ok = rec.get("diag_rc") == 0 and rec.get("behavior_rc") == 0 and "agg" in rec
@@ -726,17 +801,17 @@ def p_build_v16(skip_probe: bool = False, gates: str = "strict") -> dict:
         _sh(f"mv {cache_dir}/v15_*.json {cache_dir}/pre_v16_run16/ 2>/dev/null; true")
         _sh(f"cp -n {cache_dir}/v16_*.json data/u_route/ 2>/dev/null; true", cwd=REPO)
         if not skip_probe:
-            r = _sh(f"{PY} scripts/v16_behavior_think_probe.py --n 20 --teacher http://127.0.0.1:8210/v1 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
+            r = _sh(f"{PY} -m syncopate.pipeline.behavior_think_probe --n 20 --teacher http://127.0.0.1:8210/v1 --out {aud}/behavior_think_probe.json 2>&1 | tee {aud}/behavior_think_probe.log | tail -20", cwd=REPO, env=env, timeout=1800)
             rec["behavior_probe"] = {"rc": r["rc"], "tail": r["out"][-1200:]}
-            _sh(f"cp _audit/v15_w3/behavior_think_probe.json {aud}/ 2>/dev/null; true", cwd=REPO)
         # 旧物料不许命中（裁定⑭）：判据 = 建库脚本源码里不再出现任何旧缓存/物料文件名（前任 09-04 核对：原判据数的是取回的新缓存，第二次起必红）
         # 只数代码行（注释里提到旧名不算——run17 实测 3 条注释把判据判红）
         # 09-05：判据改为"v16 建库两个脚本的代码行里不许出现任何旧版本物料名/旧脚本名"（此前的 open( 前缀正则匹不到 ternary 里的 v145_*，判据空绿）
-        stale = _sh("cat scripts/v16_build_sft.py scripts/v16_multiturn.py | grep -vE '^\\s*#' | grep -cE 'v145_|v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|cand_v13r2|u_build_v14|pre_v16' || true", cwd=REPO)["out"].strip()
+        stale = _sh("cat syncopate/pipeline/build_sft.py syncopate/pipeline/multiturn.py | grep -vE '^\\s*#' | grep -cE 'v145_|v15_(cot_rows|l2l1_rows|ballast_replies|fam_rows|materials)|cand_v13r2|u_build_v14|pre_v16' || true", cwd=REPO)["out"].strip()
         rec["stale_caches_present"] = int(stale or 0)
         # ★ 09-04 固定管线：探针不再自己拼命令，只调 runbook 的 stage（本机 == 云上）；教师由本函数起（进程管理），runbook 检测到已在线会跳过
         # gates=report：闸观察模式（所有闸都算不中断、产物落 _audit/v16/report、末尾汇总）——一次看全貌，不再红一道停一道
-        b = _sh(f"bash scripts/v16_pipeline.sh sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY, "U_BUILD_GATES": gates}, timeout=2 * 3600)
+        gate_mode = "observe" if gates == "report" else "strict"
+        b = _sh(f"bash scripts/v16_pipeline.sh --gate-mode {gate_mode} sft-data > {aud}/sft_data_stage.log 2>&1; echo BUILD_RC=$?", cwd=REPO, env={**env, "PY": PY, "U_BUILD_GATES": gates, "SKIP_BEHAVIOR_PROBE": "1"}, timeout=2 * 3600)
         _sh(f"cp _audit/v16/build.log {aud}/build.log 2>/dev/null; cp _audit/v16/gallery.md {aud}/gallery.md 2>/dev/null; true", cwd=REPO)
         # 09-05（前任补坑）：strict 的 staging / report 模式的产物在容器本地 ⇒ 一并拷进 Volume（先清旧的，cp -r 进已存在目录会套一层）
         _sh(f"rm -rf {aud}/staging {aud}/report; for d in staging report; do [ -d _audit/v16/$d ] && cp -r _audit/v16/$d {aud}/; done; true", cwd=REPO)
@@ -751,13 +826,14 @@ def p_build_v16(skip_probe: bool = False, gates: str = "strict") -> dict:
             rec["prompt_budget"] = {"rc": 0 if "零截断" in slog or "over=0" in slog or "✅" in slog else 1, "tail": slog[-800:]}
             rec["isolation"] = {"rc": 0 if "越桶 0" in slog and "🔴" not in slog.split("[隔离]")[-1][:200] else 1, "tail": slog[-600:]}
             rec["gallery"] = {"tail": "", "dry_hits": int(_sh(f"grep -c '\\[DRY' {aud}/gallery.md || true")["out"].strip() or 0)}
-            bt = _sh(f"{PY} scripts/v16_budget_table.py 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
+            bt = _sh(f"{PY} -m syncopate.pipeline.budget_table 2>&1 | tail -12", cwd=REPO, env=env, timeout=1200)
             rec["budget_table"] = bt["out"][-1200:]
             rec["parquet"] = _sh("ls -la data/sft/v16/ && ls -la data/u_route/ | grep -E 'v15_(cot|l2l1|ballast)'", cwd=REPO)["out"][-800:]
     finally:
         _sh(f"cp data/u_route/v16_*.json {aud}/cache/ 2>/dev/null; true", cwd=REPO)
         _teardown(proc); open(f"{aud}/teacher.log", "w").write(open(log, errors="replace").read()[-20000:]); vol.commit()
-    ok = (rec.get("build_rc") == 0 and rec.get("stale_caches_present", 1) == 0
+    ok = (rec.get("build_rc") == 0 and (skip_probe or rec.get("behavior_probe", {}).get("rc") == 0)
+          and rec.get("stale_caches_present", 1) == 0
           and any("不同形 0" in l or "不同形: 0" in l for l in rec.get("judge_lines", []))
           and rec.get("prompt_budget", {}).get("rc") == 0 and rec.get("gallery", {}).get("dry_hits", 1) == 0
           and rec.get("isolation", {}).get("rc") == 0)
@@ -776,7 +852,7 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
     out = f"{VOL}/checkpoints/sft/{arm}"; _sh(f"rm -rf {out}")
     rec: dict = {"arm": arm}
     if arm == "mech_dry" and not train_file:
-        d = _sh(f"U_BUILD_DRY=6 {PY} scripts/v16_build_sft.py > {aud}/dry_build.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1800)
+        d = _sh(f"U_BUILD_DRY=6 {PY} -m syncopate.pipeline.build_sft > {aud}/dry_build.log 2>&1; echo RC=$?", cwd=REPO, env=RUN_ENV, timeout=1800)
         rec["dry_build_rc"] = int(re.search(r"RC=(\d+)", d["out"]).group(1)); rec["dry_build_tail"] = open(f"{aud}/dry_build.log", errors="replace").read()[-1500:]
         if rec["dry_build_rc"] != 0 or not os.path.exists(f"{REPO}/_audit/v16/dry_rows.parquet"):
             vol.commit(); return _record("sft_smoke", False, rec)
@@ -786,7 +862,7 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
     wandb_flag = "" if use_wandb else "--no-wandb"
     if arm == "mech_dry":   # 机制冒烟：占位数据，仍走 sft.py 本体（runbook 的 smoke 档要真 parquet）
         cmd = (f"{PY} -m syncopate.train.sft --model {STUDENT} --train-file {train_file} --val-file {val_file} "
-               f"--out {out} --epochs {epochs} --batch-size 1 --grad-accum 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_{arm} "
+               f"--out {out} --epochs {epochs} --batch-size 1 --gpus 1 --effective-batch 8 --max-steps {max_steps} {wandb_flag} --wandb-run sft_{arm} "
                f"> {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?")
     else:                   # 09-04 固定管线：runbook 的 sft-train（smoke 档 = 30 步冒烟；candidate 档 = 正式）
         cmd = f"bash scripts/v16_pipeline.sh --profile {'smoke' if arm == 'v16_smoke' else 'candidate'} sft-train > {aud}/sft_smoke.log 2>&1; echo SFT_RC=$?"
@@ -816,7 +892,7 @@ def p_sft_smoke(max_steps: int = 30, use_wandb: bool = False, arm: str = "v16_sm
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=98304, timeout=4 * 3600, secrets=SECRETS)
 def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes: int = 1, concurrency: int = 4, limit: int = 0) -> dict:
     """26 §W5 起链五步的容器版：0 seed_demo --check（7 条 campaign）1 无陈旧 worker 2 起端点(:8100)+API(:8000)+worker
-    3 v16_exam_run 四遍（每遍落 jsonl，可重入）4 v16_exam_judge 5 v16_gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
+    3 syncopate.evaluation.exam_run 四遍（每遍落 jsonl，可重入）4 syncopate.evaluation.exam_judge 5 syncopate.evaluation.gate_triage。判据 = 每遍 rc 0 · 判卷器 rc 0 · triage 出表。
     model 默认学生底座；adapter 给 LoRA 目录则 vLLM --enable-lora（served 名仍为 model）。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/exam_{arm}"; os.makedirs(aud, exist_ok=True)
@@ -828,14 +904,15 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
     if sv["pg"]["rc"] != 0: return _record("exam_v4", False, rec)
     env = {**RUN_ENV, **SERVICE_ENV, "SYNCOPATE_DECIDER_URL": "http://127.0.0.1:8100", "SYNCOPATE_DECIDER_TOKENIZER": model,
            "SYNCOPATE_DECIDER_MODEL": served, "SYNCOPATE_API_DB_POOL": "12"}
-    rs = _sh(f"{PY} scripts/seed_demo_data.py", cwd=REPO, env=env, timeout=600); rec["seed"] = {"rc": rs["rc"], "tail": rs["out"][-300:]}
-    r0 = _sh(f"{PY} scripts/seed_demo_data.py --check", cwd=REPO, env=env, timeout=600); rec["seed_check"] = {"rc": r0["rc"], "tail": r0["out"][-300:]}
+    rs = _sh(f"{PY} -m syncopate.runtime.seed_demo_data", cwd=REPO, env=env, timeout=600); rec["seed"] = {"rc": rs["rc"], "tail": rs["out"][-300:]}
+    r0 = _sh(f"{PY} -m syncopate.runtime.seed_demo_data --check", cwd=REPO, env=env, timeout=600); rec["seed_check"] = {"rc": r0["rc"], "tail": r0["out"][-300:]}
     lora = f" --enable-lora --max-lora-rank 64 --lora-modules {served}={adapter}" if adapter else ""
     vcmd = (f"{PY} -m vllm.entrypoints.openai.api_server --model {model} --served-model-name {model} --max-model-len {SERVE_MAX_MODEL_LEN} "
             f"--gpu-memory-utilization 0.85 --port 8100 --limit-mm-per-prompt '{{\"image\": 0, \"video\": 0}}'{lora}")
     vlog = "/tmp/vllm_exam.log"
     _assert_serve_len()
-    vproc = subprocess.Popen(f"exec {vcmd} > {vlog} 2>&1", shell=True, env={**os.environ, **RUN_ENV})
+    vproc = subprocess.Popen(f"exec {vcmd} > {vlog} 2>&1", shell=True,
+                             env={**os.environ, **RUN_ENV}, start_new_session=True)
     up = False; t0 = time.time()
     while time.time() - t0 < 1500 and vproc.poll() is None:
         if _sh("curl -sf http://127.0.0.1:8100/health")["rc"] == 0: up = True; break
@@ -844,29 +921,31 @@ def p_exam_v4(model: str = "", adapter: str = "", arm: str = "v16_smoke", passes
     if not up:
         open(f"{aud}/vllm.log", "w").write(open(vlog, errors="replace").read()[-20000:]); _teardown(vproc); vol.commit()
         return _record("exam_v4", False, rec)
-    api = subprocess.Popen(f"exec {PY} -m uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 --workers 2 > {aud}/api.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env})
-    wrk = subprocess.Popen(f"exec {PY} -m syncopate.runtime.worker --org-id org_demo --worker-id v16-exam --daily-cost-cap-micros 10000000000 > {aud}/worker.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env})
+    api = subprocess.Popen(f"exec {PY} -m uvicorn syncopate.runtime.api:app --host 127.0.0.1 --port 8000 --workers 2 > {aud}/api.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env}, start_new_session=True)
+    wrk = subprocess.Popen(f"exec {PY} -m syncopate.runtime.worker --org-id org_demo --worker-id v16-exam --daily-cost-cap-micros 10000000000 > {aud}/worker.log 2>&1", shell=True, cwd=REPO, env={**os.environ, **env}, start_new_session=True)
     time.sleep(20)
     try:
         runs = []
         for i in range(1, passes + 1):
             lim = f" --limit {limit}" if limit else ""
-            r = _sh(f"{PY} scripts/v16_exam_run.py --exam context_v4 --arm {arm}_r{i} --concurrency {concurrency}{lim} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
+            r = _sh(f"{PY} -m syncopate.evaluation.exam_run --exam context_v4 --arm {arm}_r{i} --concurrency {concurrency}{lim} > {aud}/exam_r{i}.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=3 * 3600)
             rc = int(re.search(r"RC=(\d+)", r["out"]).group(1)); runs.append({"pass": i, "rc": rc, "secs": r["secs"]})
             _sh(f"cp logs/u_route/run_{arm}_r{i}_*.jsonl {aud}/ 2>/dev/null; true", cwd=REPO)
         rec["runs"] = runs
         jl = " ".join(f"logs/u_route/run_{arm}_r{i}_context_v4.jsonl" for i in range(1, passes + 1))
-        j = _sh(f"{PY} scripts/v16_exam_judge.py --context {jl} > {aud}/judge.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=1800)
+        j = _sh(f"{PY} -m syncopate.evaluation.exam_judge --context {jl} > {aud}/judge.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=1800)
         rec["judge_rc"] = int(re.search(r"RC=(\d+)", j["out"]).group(1)); rec["judge_tail"] = open(f"{aud}/judge.log", errors="replace").read()[-2500:]
         _sh(f"cp logs/u_route/judged_*{arm}* {aud}/ 2>/dev/null; true", cwd=REPO)
-        t = _sh(f"{PY} scripts/v16_gate_triage.py --judged 'logs/u_route/judged_{arm}_r*_context_v4.jsonl' --out _audit/v16/gate_triage_{arm}.json > {aud}/triage.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=600)
+        t = _sh(f"{PY} -m syncopate.evaluation.gate_triage --judged 'logs/u_route/judged_{arm}_r*_context_v4.jsonl' --out _audit/v16/gate_triage_{arm}.json > {aud}/triage.log 2>&1; echo RC=$?", cwd=REPO, env=env, timeout=600)
         rec["triage_rc"] = int(re.search(r"RC=(\d+)", t["out"]).group(1)); rec["triage_tail"] = open(f"{aud}/triage.log", errors="replace").read()[-1500:]
         _sh(f"cp _audit/v16/gate_triage_{arm}.json {aud}/ 2>/dev/null; true", cwd=REPO)
     finally:
         for pr in (wrk, api):
-            pr.terminate()
+            _teardown(pr, wait_for_gpu=False)
         _teardown(vproc); open(f"{aud}/vllm.log", "w").write(open(vlog, errors="replace").read()[-20000:]); vol.commit()
-    ok = up and rec["seed_check"]["rc"] == 0 and all(x["rc"] == 0 for x in rec.get("runs", [])) and rec.get("judge_rc") == 0
+    ok = (up and rec["seed_check"]["rc"] == 0
+          and all(x["rc"] == 0 for x in rec.get("runs", []))
+          and rec.get("judge_rc") == 0 and rec.get("triage_rc") == 0)
     return _record(f"exam_v4_{arm}" if arm != "v16_smoke" else "exam_v4", ok, rec)
 
 # ─────────────────────────── S6 · RL（verl 0.9 V1）：键名判据（CPU）+ 冒烟（B200×2） ───────────────────────────
@@ -895,8 +974,8 @@ def p_rl_cfg(extra: str = "") -> dict:
 
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=32, memory=262144, timeout=3 * 3600, secrets=SECRETS)
 def p_rl_smoke(steps: int = 2, gpus: int = 2, extra: str = "", arm: str = "v16_smoke") -> dict:
-    """S6 冒烟（判据在 launch_rl_v1 顶部注册）：每步退出码 0 · `[pool] 动态分池启用` 在 worker 侧 · loss/grad 有限 · reward 非全 0 ·
-    权重同步行 · LoRA-only ckpt 落盘。产物 /vol/checkpoints/grpo/<arm>（一个写者）；日志 /vol/_audit/v16/rl/<arm>.log。"""
+    """S6 冒烟：默认是 verl 官方均匀采样；只有 extra 含 ``--dynamic-pool`` 才要求池判据行。
+    必须同时看到有限 loss/grad、非零 reward、真实权重同步、checkpoint、成功转换且可读的 PEFT adapter。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/rl"; os.makedirs(aud, exist_ok=True)
     save = f"{VOL}/checkpoints/grpo/{arm}"; _sh(f"rm -rf {save}")
@@ -906,7 +985,7 @@ def p_rl_smoke(steps: int = 2, gpus: int = 2, extra: str = "", arm: str = "v16_s
     if arm == "v16_smoke" and not extra:
         cmd = f"bash scripts/v16_pipeline.sh --profile smoke rl-train > {aud}/{arm}.log 2>&1; echo RL_RC=$?"
     else:
-        cmd = (f"{PY} -m syncopate.train.launch_rl_v1 --profile smoke --steps {steps} --gpus {gpus} --experiment rl_{arm} --save-path {save} --logger console,wandb {extra} "
+        cmd = (f"{PY} -m syncopate.train.launch_rl_v1 --profile smoke --steps {steps} --gpus {gpus} --experiment rl_{arm} --save-path {save} --logger console {extra} "
                f"> {aud}/{arm}.log 2>&1; echo RL_RC=$?")
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=3 * 3600 - 600)
     log = open(f"{aud}/{arm}.log", errors="replace").read()
@@ -915,39 +994,82 @@ def p_rl_smoke(steps: int = 2, gpus: int = 2, extra: str = "", arm: str = "v16_s
     losses = [float(x) for x in re.findall(r"actor/pg_loss[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
     gn = [float(x) for x in re.findall(r"actor/grad_norm[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
     rew = [float(x) for x in re.findall(r"critic/score/mean[\'\"]?[:=]\s*([-0-9.eE+]+)", log)]
-    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "steps": steps, "pool_line": "[pool] 动态分池启用" in log, "n_loss": len(losses), "losses": losses[:6],
+    expect_pool = "--dynamic-pool" in extra.split()
+    ckpt_dirs = _sh(f"find {save} -maxdepth 1 -type d -name 'global_step_*' | sort -V")["out"].strip().splitlines()
+    adapter_target = f"{VOL}/models/adapters/rl_{arm}"
+    merge_rc = adapter_rc = -1
+    adapter_files = ""
+    if ckpt_dirs:
+        latest = ckpt_dirs[-1]
+        merged = _sh(f"{PY} -m verl.model_merger merge --backend fsdp --local_dir {latest}/actor --target_dir {adapter_target} > {aud}/{arm}_merge.log 2>&1", cwd=REPO, env=RUN_ENV, timeout=1800)
+        merge_rc = merged["rc"]
+        checked = _sh(f"{PY} -m syncopate.train.lora_adapter_check {adapter_target}/lora_adapter > {aud}/{arm}_adapter_check.log 2>&1", cwd=REPO, env=RUN_ENV, timeout=600)
+        adapter_rc = checked["rc"]
+        adapter_files = _sh(f"find {adapter_target}/lora_adapter -name 'adapter_model*' -type f | head")["out"]
+    known_wandb_exit = "Exception ignored in atexit callback" in log and "BrokenPipeError" in log
+    purpose = {}
+    try: purpose = json.load(open(f"{save}/run_purpose.json"))
+    except Exception: pass
+    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "steps": steps, "expect_pool": expect_pool,
+           "pool_line": "[pool] 动态分池启用" in log, "n_loss": len(losses), "losses": losses[:6],
            "grad_norms": gn[:6], "score_mean": rew[:6], "weight_sync_lines": len(re.findall(r"update_weights|checkpoint_engine|weights synced", log, flags=re.I)),
-           "ckpt_dirs": _sh(f"find {save} -maxdepth 3 -type d | head -20")["out"], "lora_files": _sh(f"find {save} -name 'adapter_model*' -o -name 'lora*' | head")["out"],
-           "traceback": ("Traceback" in log), "tail": log[-4000:], "topology": _topology()}
-    # 收尾杀全家（Ray/vLLM）等显存归零
-    _sh("ray stop --force >/dev/null 2>&1; pkill -9 -f 'vllm' ; pkill -9 -f EngineCore ; pkill -9 -f ray:: ; sleep 5; true")
+           "ckpt_dirs": ckpt_dirs, "merge_rc": merge_rc, "adapter_check_rc": adapter_rc,
+           "adapter_files": adapter_files, "purpose": purpose,
+           "traceback": ("Traceback" in log), "known_wandb_exit": known_wandb_exit,
+           "tail": log[-4000:], "topology": _topology()}
+    # 本函数使用独占 Modal 容器；只让 Ray 清理它自己登记的进程，不用会误伤/匹配自身的 pkill -f。
+    _sh("ray stop --force >/dev/null 2>&1; sleep 5; true")
     vol.commit()
-    ok = rc == 0 and rec["pool_line"] and bool(losses) and all(math.isfinite(x) for x in losses) and all(math.isfinite(x) for x in gn) and (not rew or any(x != 0 for x in rew))
+    ok = (rc == 0 and (not expect_pool or rec["pool_line"])
+          and bool(losses) and all(math.isfinite(x) for x in losses)
+          and bool(gn) and all(math.isfinite(x) for x in gn)
+          and bool(rew) and any(x != 0 for x in rew)
+          and rec["weight_sync_lines"] > 0 and bool(ckpt_dirs)
+          and merge_rc == 0 and adapter_rc == 0 and bool(adapter_files.strip())
+          and purpose.get("purpose") == "smoke"
+          and ("Traceback" not in log or known_wandb_exit))
     return _record(f"rl_smoke_{arm}", ok, rec)
 
 
 # ─────────────────────────── S7 · OPD 冒烟（B200×2：学生@0 · 教师+锚@1；逐 token 反 KL） ───────────────────────────
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=16, memory=196608, timeout=2 * 3600, secrets=SECRETS)
-def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", batch: int = 4) -> dict:
-    """S7 冒烟：opd.py（v16 版：--adapter 可空=底座新建 LoRA；教师 27B；vocab 断言）跑 --max-steps N。
-    判据：rc 0 · `[opd-vocab] ✓` · `[opd-mask]` 非零 · 每步 KL 有限 · 零掩码对照断言过（--probe-every 命中一次）· adapter 落盘。"""
+def p_opd_smoke(max_steps: int = 1, adapter: str = "", arm: str = "v16_smoke", batch: int = 1) -> dict:
+    """S7 全链冒烟：必须读取本轮 RL adapter，且 ``--max-steps`` 只数真实 optimizer update。
+    判据：rc 0、vocab 相同、至少一次非零 mask/真实更新、KL 有限、零掩码正对照通过、final adapter 落盘。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/opd"; os.makedirs(aud, exist_ok=True)
     out = f"{VOL}/checkpoints/opd/{arm}"; _sh(f"rm -rf {out}")
-    ad = f" --adapter {adapter}" if adapter else ""
-    # 09-04 固定管线：smoke 档走 runbook；给了 adapter 则 candidate 档
-    cmd = f"bash scripts/v16_pipeline.sh --profile {'candidate' if adapter else 'smoke'} opd-train > {aud}/{arm}.log 2>&1; echo OPD_RC=$?"
+    # 固定 smoke 只走 runbook；adapter 参数不再把它偷偷切成 candidate。自定义 adapter 属于另开的诊断/实验臂。
+    if adapter:
+        vol.commit()
+        return _record(f"opd_smoke_{arm}", False, {
+            "arm": arm,
+            "error": "自定义 adapter 必须在 B06 预注册 base/adapter 同源关系；固定 smoke 不允许静默改档",
+        })
+    cmd = (f"OPD_SMOKE_REAL_STEPS={max_steps} OPD_SMOKE_BATCH={batch} "
+           f"bash scripts/v16_pipeline.sh --profile smoke opd-train > {aud}/{arm}.log 2>&1; echo OPD_RC=$?")
     r = _sh(cmd, cwd=REPO, env=RUN_ENV, timeout=2 * 3600 - 300)
     log = open(f"{aud}/{arm}.log", errors="replace").read()
     rc = int(re.search(r"OPD_RC=(\d+)", r["out"]).group(1)) if re.search(r"OPD_RC=(\d+)", r["out"]) else -1
     import math
     kls = [float(x) for x in re.findall(r"kl_(?:chat|task)/tok=([-0-9.eE+]+)", log)][:20]   # opd.py 的 step 行格式（首跑正则量错对象）
-    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "vocab_ok": "[opd-vocab]" in log, "mask_lines": len(re.findall(r"\[opd-mask\]", log)),
-           "probe_lines": len(re.findall(r"零掩码|zero-mask|\[opd-probe\]", log)), "kls": kls, "trainable": re.findall(r"可训练 ([0-9.]+)M", log)[:1],
+    summary = re.search(r"\[opd-summary\] attempted=(\d+) real=(\d+) skipped=(\d+).*status=(\w+)", log)
+    attempted = int(summary.group(1)) if summary else 0
+    real_steps = int(summary.group(2)) if summary else 0
+    skipped = int(summary.group(3)) if summary else 0
+    status = summary.group(4) if summary else "missing"
+    rec = {"arm": arm, "rc": rc, "secs": r["secs"], "vocab_ok": "[opd-vocab]" in log,
+           "mask_lines": len(re.findall(r"\[opd-mask\].*全局可蒸 token=[1-9]", log)),
+           "probe_lines": len(re.findall(r"\[opd-zero\].*对照通过", log)), "kls": kls,
+           "attempted_steps": attempted, "real_steps": real_steps, "skipped_steps": skipped,
+           "summary_status": status, "trainable": re.findall(r"可训练 ([0-9.]+)M", log)[:1],
            "adapter_files": _sh(f"find {out} -name 'adapter_model*' | head")["out"], "traceback": "Traceback" in log, "tail": log[-4000:], "topology": _topology()}
     vol.commit()
-    rec["skipped_steps"] = len(re.findall(r"集体跳步", log)); rec["real_steps"] = len(re.findall(r"\] step \d+ ep\d+ kl_chat", log))
-    ok = rc == 0 and rec["vocab_ok"] and all(math.isfinite(x) for x in kls) and bool(rec["adapter_files"].strip())
+    ok = (rc == 0 and rec["vocab_ok"] and rec["mask_lines"] > 0
+          and real_steps >= max_steps and status == "pass"
+          and bool(kls) and all(math.isfinite(x) for x in kls)
+          and rec["probe_lines"] > 0 and not rec["traceback"]
+          and bool(rec["adapter_files"].strip()))
     return _record(f"opd_smoke_{arm}", ok, rec)
 
 
@@ -955,7 +1077,7 @@ def p_opd_smoke(max_steps: int = 5, adapter: str = "", arm: str = "v16_smoke", b
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=16, memory=131072, timeout=5 * 3600, secrets=SECRETS)
 def p_eval_ab(think: int = 0, arm: str = "", model: str = "", adapter: str = "", samples: int = 8, limit: int = 0, families: str = "", gpu_util: float = 0.85) -> dict:
     """26 §W4′ E-think：同一份 eval_local（冻结 EVAL 342 题 × samples），只变 SYNCOPATE_THINK。判据 J1–J6 在 26 里预注册，
-    本步只产读数（/vol/_audit/v16/eval/<arm>.json）+ 有效性（rc 0 · 行数 == 题数）。分析在本机 scripts/v16_think_ab_report.py。"""
+    本步只产读数（/vol/_audit/v16/eval/<arm>.json）+ 有效性（rc 0 · 行数 == 题数）。分析在本机 syncopate.evaluation.think_ab_report。"""
     _sync_repo()
     aud = f"{VOL}/_audit/v16/eval"; os.makedirs(aud, exist_ok=True)
     model = model or STUDENT; arm = arm or f"think_{'on' if think else 'off'}"
@@ -980,12 +1102,65 @@ def p_eval_ab(think: int = 0, arm: str = "", model: str = "", adapter: str = "",
     return _record(f"eval_ab_{arm}", ok, rec)
 
 
+# ─────────────────────────── 固定管线统一入口（B01/B02） ───────────────────────────
+@app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=32, memory=262144,
+              timeout=12 * 3600, secrets=SECRETS)
+def p_pipeline(stage: str = "train-all", profile: str = "smoke", gate_mode: str = "",
+               run_id: str = "", resume: bool = False) -> dict:
+    """只调用固定 runbook，不在 Modal 层复制训练参数。默认用现成数据跑 smoke/observe 训练链。"""
+    if profile not in {"smoke", "candidate"}:
+        raise ValueError(f"unknown profile: {profile}")
+    gate_mode = gate_mode or ("observe" if profile == "smoke" else "strict")
+    if gate_mode not in {"observe", "strict"}:
+        raise ValueError(f"unknown gate mode: {gate_mode}")
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", stage):
+        raise ValueError(f"unsafe stage: {stage!r}")
+    run_id = run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", run_id):
+        raise ValueError(f"unsafe run id: {run_id!r}")
+
+    source = _sync_repo()
+    services = _start_services() if stage in {"all", "train-all", "exam"} else {}
+    if services and any(services[name]["rc"] != 0 for name in ("pg", "redis")):
+        return _record(f"pipeline_{run_id}", False, {
+            "run_id": run_id, "profile": profile, "gate_mode": gate_mode,
+            "stage_requested": stage, "source": source, "services": services,
+            "error": "PostgreSQL/Redis bootstrap failed",
+        })
+
+    aud = f"{VOL}/_audit/v16/runs/{run_id}"
+    os.makedirs(aud, exist_ok=True)
+    resume_flag = " --resume" if resume else ""
+    redirect = ">>" if resume else ">"
+    command = (f"bash scripts/v16_pipeline.sh{resume_flag} --profile {profile} --gate-mode {gate_mode} "
+               f"--run-id {run_id} {stage} {redirect} {aud}/pipeline.log 2>&1")
+    result = _sh(command, cwd=REPO, env={**SERVICE_ENV, "PY": PY},
+                 timeout=12 * 3600 - 600)
+    try:
+        manifest = json.load(open(f"{aud}/manifest.json"))
+    except Exception as exc:
+        manifest = {"read_error": repr(exc)[:300]}
+    try:
+        log_tail = open(f"{aud}/pipeline.log", errors="replace").read()[-6000:]
+    except OSError:
+        log_tail = ""
+    vol.commit()
+    # observe 只表示“继续把诊断跑完”；任一 WARN 仍要让总结果非绿，不能冒充 B02 全链通过。
+    ok = result["rc"] == 0 and manifest.get("all_passed") is True
+    return _record(f"pipeline_{run_id}", ok, {
+        "run_id": run_id, "profile": profile, "gate_mode": gate_mode, "resume": resume,
+        "stage_requested": stage, "source": source, "services": services,
+        "returncode": result["rc"], "secs": result["secs"],
+        "manifest": manifest, "log_tail": log_tail, "topology": _topology(),
+    })
+
+
 # ─────────────────────────── 本机入口 ───────────────────────────
 ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 5, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = "", build_gates: str = "strict"):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 1, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = "", build_gates: str = "strict", pipeline_stage: str = "train-all", pipeline_profile: str = "smoke", pipeline_gate_mode: str = "", pipeline_run_id: str = "", pipeline_resume: bool = False):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
@@ -1018,6 +1193,7 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "rl_smoke" in want: run("rl_smoke", p_rl_smoke, rl_steps, rl_gpus, rl_extra, rl_arm)
     if "opd_smoke" in want: run("opd_smoke", p_opd_smoke, opd_steps, opd_adapter, opd_arm)
     if "eval_ab" in want: run("eval_ab", p_eval_ab, ab_think, ab_arm, "", ab_adapter, ab_samples, ab_limit, ab_families)
+    if "pipeline" in want: run("pipeline", p_pipeline, pipeline_stage, pipeline_profile, pipeline_gate_mode, pipeline_run_id, pipeline_resume)
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     # 09-04：并行多臂时两个 run 同一分钟收尾会互相覆盖（exam_plumb 被 rl_cfg 盖掉过）⇒ 文件名带秒 + 步名
