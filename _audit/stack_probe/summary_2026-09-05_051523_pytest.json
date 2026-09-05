@@ -1,0 +1,26 @@
+{
+ "pytest": {
+  "step": "pytest",
+  "ok": true,
+  "ts": "2026-09-04 21:15:22",
+  "pytest_rc": 0,
+  "summary": "warnings summary",
+  "errors_failed": [],
+  "ingest_rc": 0,
+  "services": {
+   "pg": {
+    "rc": 0,
+    "tail": "\n=== initdb -> /tmp/pgdata/16 ===\n\n=== 启动 PostgreSQL ===\n127.0.0.1:5432 - accepting connections\n\n=== 建角色 syncopate ===\n\n=== 建库 syncopate ===\n\n=== 应用 schema：alembic upgrade head ===\n    public schema 下 29 张表 · 版本 0008_k10_ann_reason\n[schema-snapshot] ✅ live schema == snapshot\n\n✅ PostgreSQL 就绪  postgresql://syncopate:syncopate@127.0.0.1:5432/syncopate\n"
+   },
+   "redis": {
+    "rc": 0,
+    "tail": "\n=== 启动 Redis ===\n[redis-config] appendonly=yes maxmemory-policy=noeviction protected-mode=yes  ✅\n✅ Redis 就绪  redis://:<REDIS_PASS>@127.0.0.1:6379/0   (db0 broker · db1 ratelimit · db2 semaphore · db3 cache)\n"
+   },
+   "corpus": {
+    "rc": 0,
+    "tail": "[contract] SYNCOPATE_CONTRACT=v15 ⇒ 行为走 session.* 信令工具、终答纯自然语言\n[ingest-corpus] scope=global 政策条款 4 条 · 复盘结论 3 条 ← data/external/policy_corpus.seed.json\n"
+   }
+  },
+  "tail": ".....                                                                    [100%]\n=============================== warnings summary ===============================\n../../env/.venv/lib/python3.12/site-packages/ray/util/state/util.py:55\n  /env/.venv/lib/python3.12/site-packages/ray/util/state/util.py:55: DeprecationWarning: Ray state API is no longer experimental. Please import from `ray.util.state`. instead. Importing from `ray.experimental` will be deprecated in future releases. \n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 22.85s\n"
+ }
+}
