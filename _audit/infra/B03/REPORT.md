@@ -215,7 +215,7 @@ CPU 前置已通过 204 passed、1 skipped（v15 不适用的旧契约测试）�
 
 GPU 结果为 `_audit/stack_probe/summary_2026-09-05_232418_pipeline_e49a80c0.json`。独立 CPU 回读前的 27/27 正负例通过、0 skipped；随后 10 项内容检查全部通过，JSON 摘要与原始 `.pt` 复算相等。结果为本目录 `d_identity_summary.json`、`_audit/stack_probe/summary_2026-09-05_232742_exec_2b7d9ae0.json` 和 `/vol/_audit/infra/B03/identity_readback_20260905d/`。派生回读代码 overlay 为 `57ae1bf34e5c0eb706a3ef5d9082db7c67329b5c8e9a2469285c44aba96e6c6c`，不是训练 overlay；未改原训练结果。CPU 只读 DTensor checkpoint 时有未初始化进程组的 DeviceMesh 警告；没有在此进程做分布式计算或恢复，不能把读取成功说成恢复通过。
 
-本地归档及清单已上传到 `/vol/_audit/infra/B03/source_d_ccee2f6c.tar.gz`；从 Volume 流式回读的 SHA256 仍为 `7e453c950ec4c034d4d67fa40a9389398d3b0c96b754d92cfb37a04a74b18822`。本机当前相关回归 191 passed、16 skipped，见 `identity_local_final_20260905.xml`；缺 Torch/verl/vLLM 的模块由对应 CPU 批次补验，唯一旧 v15 不适用项仍保留跳过，不能把不同测试集合相加成“全库通过”。收尾的 Shell 语法、`git diff --check`、12 份本次文档的 144 个本地链接检查通过；没有提交或推送 Git。
+本地归档及清单已上传到 `/vol/_audit/infra/B03/source_d_ccee2f6c.tar.gz`；从 Volume 流式回读的 SHA256 仍为 `7e453c950ec4c034d4d67fa40a9389398d3b0c96b754d92cfb37a04a74b18822`。本机当前相关回归 191 passed、16 skipped，见 `identity_local_final_20260905.xml`；缺 Torch/verl/vLLM 的模块由对应 CPU 批次补验，唯一旧 v15 不适用项仍保留跳过，不能把不同测试集合相加成“全库通过”。收尾的 Shell 语法、`git diff --check`、12 份本次文档的 144 个本地链接检查通过。本段源码和报告现已进入 `main`；实验实际运行身份仍以上文 Git 底座、overlay、调度器和镜像为准，不能倒写成由收尾提交直接运行。
 
 GPU App、OPD CPU App、d 批回读 App 均已确认 stopped、tasks=0。含并行 B06 的 CPU 任务，本批组累计保守预留 $83；这是资源预算账，不是实际账单。
 

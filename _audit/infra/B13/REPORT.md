@@ -56,7 +56,7 @@ GPU 前另登记 `launcher_cpu_20260906a`：4 CPU / 16 GiB、脚本最多 5 分�
 
 单元测试先于实现，覆盖字节映射、单位/系数、非有限值、错数值、错形状、零参考、最慢 rank 汇总、目录防覆盖、CPU 导入安全、CPU 真公式和实际 torchrun 参数。CPU 真张量测试还刻意置换元素与注入 NaN，必须拒绝。目标云 CPU 测试要求零跳过。
 
-本机首版空模块红测为 **32 failed / 4 skipped**；GPU 汇总与 kernel 解析后续红测为 2 failed，随后“缺 dB 证据但总标志为真”的负例也红测复现。首版定向测试为 39 passed / 5 skipped；后续汇总复核与退出等待补齐后，连同父入口为 **73 passed / 5 skipped**。5 个跳过都依赖 PyTorch，不代替目标 CPU 的实际结果。语法、CLI help 和禁用 torch 导入检查通过；独立规格和代码质量审查通过，没有提交或推送。
+本机首版空模块红测为 **32 failed / 4 skipped**；GPU 汇总与 kernel 解析后续红测为 2 failed，随后“缺 dB 证据但总标志为真”的负例也红测复现。首版定向测试为 39 passed / 5 skipped；后续汇总复核与退出等待补齐后，连同父入口为 **73 passed / 5 skipped**。5 个跳过都依赖 PyTorch，不代替目标 CPU 的实际结果。语法、CLI help 和禁用 torch 导入检查通过；独立规格和代码质量审查通过。本段源码和报告现已进入 `main`。
 
 ## 6. 性能、质量和成本
 
