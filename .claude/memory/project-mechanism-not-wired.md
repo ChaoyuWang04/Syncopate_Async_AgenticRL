@@ -186,7 +186,7 @@ runtime 195 条测试全绿、40 条验收判据核过 —— 但**第一次真�
 「它的 main 在哪、谁真的起过它」。冒烟驱动 `scripts/serving/runtime_smoke.py` 就是这次补的
 （固定 query 集 + SSE 跟流带死线 —— 驱动器自己没有死线时，被它测的挂死 bug 会把它一起挂死）。
 
-相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[rl-step-size-is-lr-times-steps]]
+相关：[[feedback-measure-dont-infer]] [[rl-step-size-is-lr-times-steps]]
 [[blank-thresholds-are-not-passes]] [[clean-machine-only-gaps]] [[observed-needs-an-owner]]
 [[sandbox-is-subset-of-runtime]]
 

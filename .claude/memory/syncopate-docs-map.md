@@ -31,7 +31,7 @@ docs/infra_exp/01-TASKS.md                 唯一当前 B 系列队列
 docs/infra_exp/02-SYSTEM.md                边界、研究层次和证据流
 docs/infra_exp/03-TRAINING.md              分布式训练、异步 RL、训推一致性
 docs/infra_exp/04-SERVING.md               引擎拓扑、调度、缓存、解码与 SLO
-docs/infra_exp/05-COMPUTE-AND-KERNELS.md   B200/B300、通信、精度与 kernel
+docs/infra_exp/05-COMPUTE-AND-KERNELS.md   B200、通信、精度与 kernel
 docs/infra_exp/06-EXPERIMENTS.md           B 编号、预注册、证据与报告生命周期
 ```
 

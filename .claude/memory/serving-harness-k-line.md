@@ -33,11 +33,7 @@ Chaoyu 09-02 追加四裁：K1/K2 交错 · Alembic 唯一真相 · 终态事件
 
 **How to apply**：
 - 每阶段开工前对 28 该阶段的行；每条坑要负向认证（人为制造 → 判据必红）才算 ✅。
-- 本机（samwang-X870I，单 5090，**无 sudo**）：PG 16 + Redis 8 装在 conda env
-  `syncopate-infra`（conda-forge）；`scripts/serving/pg_bootstrap.sh` 已加非 root 分支
-  （`PG_HOME/PG_SHARE/PG_LIB` 指向 conda env，PGDATA 在 `~/.local/share/syncopate/pgdata/16`）；
-  `scripts/serving/redis_bootstrap.sh` 新建（requirepass/AOF/noeviction，判据行 `[redis-config]`）。
-  runtime 依赖用 `uv sync --inexact --extra runtime --extra dev`（⛔ 不带 `--inexact` 会拆掉 torch/vllm）。
+- 旧本机部署命令已退役。当前 PG/Redis 集成检查放在 Modal CPU；GPU 依赖只使用云端冻结锁，Mac 不安装训练环境。
 - 与 26 线（verl-22 会话）并行：K 线只动 runtime 目录与 27/28；不碰 tool_registry、
   decider.build_messages、contract.py、scripts/u_*（26 的 W2 目标）；当前若要动共用件，先通过 Codex 独立任务消息工具和唯一负责人核对，并登记到负责方 TASKS。
 - 已知会撞的第一个坑：asyncio worker × Celery prefork（28 C-09）；B-5 goodput 数字 Celery 化后作废（S-05）。

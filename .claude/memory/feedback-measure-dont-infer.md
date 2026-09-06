@@ -12,8 +12,8 @@ metadata:
 
 | 正确的观察 | 我推出的修法 | 实测 |
 |---|---|---|
-| 5090 的 P2P 全关 | 设 `NCCL_P2P_DISABLE=1` | ❌ 完全无效。真根因是 P2P 缺失 **×** Ray 只给每个 worker 开一张卡 |
-| 序列才 4k token 喂不饱 5090 | 开 `use_dynamic_bsz` 打包成 16k | ❌ 慢 2.2×。因为 flash-attn 是垫片，打包后注意力退化成 O(总长²) |
+| 旧机器的 P2P 全关 | 设 `NCCL_P2P_DISABLE=1` | ❌ 完全无效。真根因是 P2P 缺失 **×** Ray 只给每个 worker 开一张卡 |
+| 旧负载序列才 4k token，似乎喂不饱 GPU | 开 `use_dynamic_bsz` 打包成 16k | ❌ 慢 2.2×。因为 flash-attn 是垫片，打包后注意力退化成 O(总长²) |
 
 **Why**：这个项目的历史教训里，"用推理代替测量"已经反复出现（交接文档记着
 "看到 bf16 让内存降一半就推断可以开 param_offload —— 没测，爆了"）。
@@ -38,7 +38,7 @@ metadata:
 ⇒ **量之前先问：这个数字量的是不是掐死我的那个东西？** 判断磁盘要用**写入探针**
 （真写几百 MB 再删），不能信 `df`。同理：判断补丁生效要看**哪个 pid** 打的日志。
 
-相关：[[machine-4x5090-constraints]] [[project-mechanism-not-wired]] [[rl-step-size-is-lr-times-steps]]
+相关：[[project-mechanism-not-wired]] [[rl-step-size-is-lr-times-steps]]
 
 
 ---

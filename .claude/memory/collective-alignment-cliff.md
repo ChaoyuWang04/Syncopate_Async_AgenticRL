@@ -7,7 +7,7 @@ metadata:
   modified: 2026-08-17T12:00:00.000Z
 ---
 
-**2026-08-17 在 4×5090 上刨到底的一条**（完整叙事见 `docs/archive/infra_exp/legacy-4x5090/E18-rank3-allgather-collapse.md`）。
+**2026-08-17 的历史通信问题**（完整叙事见归档中的 `E18-rank3-allgather-collapse.md`，不能当作当前 B200 的带宽结论）。
 
 ## 结论
 
@@ -51,4 +51,4 @@ metadata:
 ⇒ ★★ **停在③就会得到一个「看起来完整、实际是错的」根因，而且导出错误建议（换协议）。
 多问一句「那它为什么选错」，才碰到真正的地板。**
 
-相关：[[feedback-measure-dont-infer]] [[machine-4x5090-constraints]] [[infra-line-state]]
+相关：[[feedback-measure-dont-infer]] [[infra-line-state]]

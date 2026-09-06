@@ -24,7 +24,7 @@ metadata:
 保留资产：S1–S3 库、OOV held-out、盲评口径、OPD prompts、pool/守卫、四卡 DDP、dev mode 栈。[[u-route-unified-training]] 的 P3/P4 并入 R6/R5；[[train-data-must-match-production-shape]] 是本轮总根因。
 
 **★09-02 接手核对（⚠️ 未经前任确认：ListAgents 只有 oasis-dit-37 在线，回信"不是"；前任会话已下线）**
-本机实况（samwang-X870I，单张 5090，**不是** 4×5090 训练机）：无 /workspace/.env；**09-02 起 K 线常驻了本机 PG 5432 + Redis 6379**（DSN postgresql://syncopate:syncopate@127.0.0.1:5432/syncopate，别 --reset；.venv 有 asyncpg）、
+以下只是当时的本机记录，部署命令和连接信息已退役：
 data/sft/v15 只有 manifest.json（无 parquet）、checkpoints 无 v15；本机有 v15_cot_rows.json(114) /
 v15_l2l1_rows.json / _audit/v15_r2/gates.json / logs/u_route/run_v15r3c_r1..4 + judged。
 本机查实的四个文档外要点：① 考场原始记录 run_*.jsonl 的 turns **不含 events**（只有 behavior/reply/tools…），
@@ -59,5 +59,5 @@ K 线通报：v15 契约下 runtime 导入触发治理表断言（session.* 未�
 **★09-03 接手核对（已经前任 -22 确认）**：本机 Modal 零基础（无 SDK/token/镜像脚本，从零写 `modal/image.py`，可与 infra 会话 -77 共用基础层；账号找 Chaoyu）。
 **教师与学生都没裁定**：教师候选 Qwen3.5-27B/3.8-27B，先在 sm_120 量 GDN/MTP，量不过沿用 8B@8211；W3③ ≥70% 探针对真正采 CoT 的那个教师跑。学生**试点②可比性必须用 Qwen3-4B**（与 v15_r3 同模型），换 8B/9B 是之后另开一臂、要 Chaoyu 拍板。
 对照读数本机够用：`_audit/v15_r5/r3_*.json` 五点谱 + `logs/u_route/run_v15r3c_r1..4_context_v3.jsonl`+judged；v4 L1–L4 按层可比、REJ 分列。Modal 上缺 data/sft/v13 parquet 与 v13 批次（上传或按 run_pipeline_shadow_rebuild 0–4 步重建，切分 SHA 对齐 data/splits/v13；migrate 先 `--scope all`）。
-带宽探针 = `scripts/infra/probe_alignment_cliff.py` + `analyze_allgather_alignment.py`（run_batch3_gpu.sh 有示例）；⚠️ 08 §5 记着 4×5090 上 NCCL_P2P_DISABLE=1 实测无效、真解是 NCCL_CUMEM_ENABLE=0，两条都试。
+旧机器通信开关不再作为操作指令；B200 的通信设置必须在当前真实路径重测。
 文档外八坑：建库产物 grep "[DRY" 必须 0 · 两份旧缓存改名（W4③）· seed_demo_data --check 7 条 · v16_exam_run.seed_prior 直接 INSERT 别改走 create_run · 考场链 logs/v15_r5/ 目录名写死自己 mkdir · DATA_VERSION 仍 v13 别改 split.py · 起任何东西前 SYNCOPATE_CONTRACT=v15 SYNCOPATE_THINK=1 · Modal 先跑 pytest 对 908 基线。`_audit/v15_w2/*_dry*.parquet` 可删。

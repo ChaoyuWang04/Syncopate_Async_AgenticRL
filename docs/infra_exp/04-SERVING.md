@@ -10,7 +10,6 @@
 - B02 的真实 SFT/RL/OPD 评测已在 vLLM 上运行，暴露了 FlashInfer tuning bucket 未覆盖、推理期 Triton JIT 和 raw prompt API 弃用警告；这些是待测线索，不是性能结论。
 - 主线 Serving 主体代码已经施工完成，但当前部署环境的正式验收尚未结束。
 - 还没有 B 系列的吞吐、goodput、TTFT、TPOT、cache 或容量曲线。
-- 旧 E32/E33 的 4×5090、vLLM 0.12 和自研亲和路由结果只属于历史。
 
 因此当前不能把“四引擎默认”“PD no-go”“FP8 KV 默认”或旧并发数字直接搬到 B200。
 
@@ -36,6 +35,8 @@ Infra 必须分开报告：
 - 失败和降级行为也被计入，而不是只统计成功快请求。
 
 ## 4. 指标
+
+B11 增加 continuous batching（请求不断加入、退出同一计算批次）的训推一致性检查：固定请求 token 和权重，只改变到达顺序、相邻请求和批内位置，追踪“调度器下发了什么 → 实际在哪个 batch/位置计算 → 命中了哪个算子”。分别比较同引擎重复、批次变化及 trainer 的 logprob，确认差异从哪里出现；不能把调度编号当作实际计算位置，也不预先认定算子不同就是 bug。
 
 每次 Serving 实验至少报告：
 
@@ -72,4 +73,3 @@ Infra 可以产出引擎选型、容量曲线和候选默认值；是否进入�
 - 当前环境和已有探针：[主线 Compute](../syncopate/05-COMPUTE.md)、[Modal README](../../modal_app/README.md)
 - B 系列原始证据：`_audit/infra/Bxx/`
 - B 系列报告生命周期：[06-EXPERIMENTS.md](06-EXPERIMENTS.md)
-- 旧 5090 Serving 报告：[历史归档](../archive/infra_exp/legacy-4x5090/README.md)

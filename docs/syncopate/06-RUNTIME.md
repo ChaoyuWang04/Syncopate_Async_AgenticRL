@@ -34,7 +34,7 @@ system prompt + 会话历史 + 当前用户请求 + 工具菜单
 | RAG | [retrieval.py](../../syncopate/runtime/retrieval.py) | 多租户政策与经验检索 |
 | 回流 | [flywheel.py](../../syncopate/runtime/flywheel.py) | 从线上 run 提取、脱敏、标注并导出训练候选 |
 
-Runtime 主体能力已经实现并有测试保护；它在目标部署环境中的正式验收属于 Serving 的 T3。
+Runtime 主体能力已经实现并有测试保护；它在目标部署环境中的正式验收属于 Serving 的 T2。
 
 ## 3. v15 交互协议
 
@@ -139,6 +139,7 @@ Runtime 使用 PostgreSQL 保存：
 
 - 训练、评测和线上使用同一协议、预算和渲染规则。
 - 模型不能直接触碰平台；所有副作用经过 ActionGate。
+- 模型接口返回 `finish_reason=length` 时，即使文本看起来是完整工具调用或终答，也按未完成处理，不执行该动作；与训练、评测共用同一个判断函数。
 - 每个写动作都有权限、幂等、审批、意图记录和审计。
 - “失败”“没有结果”“服务不可用”“结果未知”是四种不同状态。
 - 会话恢复不重复已完成副作用。

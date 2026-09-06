@@ -5,6 +5,8 @@
 
 ## 1. 当前状态
 
+下表是最后验收的 B02 训练结果；当前 T1 修复进度只看 TASKS，不把新诊断混成一次新的全链通过。
+
 | 环节 | 状态 | 结论边界 |
 |---|---|---|
 | SFT | 本轮 v16 30-step smoke 健康通过 | adapter、选点和 310/310 层合并均已验；不是候选模型 |
@@ -13,6 +15,8 @@
 | OPD | 本轮 1-update smoke 健康通过、质量待解 | 84 个有效蒸馏 token、有限 KL、final 和 completion marker 通过；短评测工具错误多且多样性 5/8 |
 | 全链 smoke | 机械链路通过 | `pipeline_ok=true`、`all_passed=false`；B02 是分段修复证据链，不是固定源码性能 baseline |
 | candidate | 未开始 | 只能在全链 smoke 和候选门槛冻结后开始 |
+
+后续局部复验：[B03 的 35B c/d 批](../../_audit/infra/B03/REPORT.md) 已验 RL 真实更新、adapter、同步载荷及原始 token/mask/采样概率；小模型另验过独立梯度、同状态 AdamW 和正常恢复。d 批仍有长度/轮数 WARN，35B 跨引擎 logprob 与 GDN/MoE 路由差尚未解释，不证明历史退化已根治。SFT 与 OPD 的 token 均值修复分别过了 [B04](../../_audit/infra/B04/REPORT.md)、[B06](../../_audit/infra/B06/REPORT.md) 的 CPU 对拍；OPD 原始 token 和真实更新审计虽已接线，目标 CPU/B200 仍未验。没有新的完整全链结果。
 
 ## 2. 正式训练链
 
@@ -62,7 +66,19 @@ Smoke 不回答“模型质量是否足够”。短步数或小样本分数只�
 
 固定入口默认 `smoke/observe`：质量或暂未冻结的读数缺口记 WARN 后可以继续收集后段证据；
 模型/数据身份错误、越桶、NaN、程序异常、坏 checkpoint、OPD 0 次真实更新属于 FATAL，立即停止。
-当前代码已强制 RL 读取本轮合并 SFT，OPD 读取本轮 RL adapter；B02 已在 B200 证明该产物关系真实成立。现在 T1 负责质量收口与固定源码 clean smoke。
+当前代码已强制 RL 读取本轮合并 SFT，OPD 读取本轮 RL adapter；B02 已在 B200 证明该产物关系真实成立。T1 现在负责工程接线、固定评测和完整学习运行，不再把行为质量修复作为 B03 前置。
+
+### 完整学习运行（已批准计划，入口待实现）
+
+`research/observe` 用于看清各段训练的作用，不是 candidate。初始观察预算是 SFT 完整 1 epoch、RL 100 次和 OPD 50 次真实 optimizer update；实施时核对 dataloader 循环、保存/评测频率和费用，不能因 `total_epochs=1` 提前结束却宣称步数跑满。预算不足时在开跑前缩小整批并重新登记，不在结果出来后换标准。
+
+沿用现有冻结数据，只做读取、身份、切分和张量检查，不重造数据。关键边界比较 base/SFT/RL/OPD 的相同冻结题目，Exam 40 条作运行诊断，完整 EVAL 用于阶段配对。目标是观察 SFT 新行为、RL 探索后的变化和 OPD 对教师分布的接近；没有改善就报告“本预算没有证明改善”。
+
+当前 OPD 只蒸馏 `text`，不监督 `think` 或工具协议；学生生成轨迹，教师/anchor 给同一轨迹打概率。不能把现状写成已完成 CoT 蒸馏。B06 已把原始采样 token、实际 mask/position 和每次 optimizer 更新的内容证据接入，下一步先完成目标 CPU 与两次真实 B200 更新，再把 `text+think` 作为明确改变目标的独立实验。
+
+OPD 的更新目标与日志都使用全局有效 token 的平均 KL：先累积每个 token 的 KL，再通过与 SFT 共用的 token 窗口函数归约、除以有效 token 数，最后 clip 和更新。全局零有效 token 仍集体跳步，不计真实更新。训练结束核对完整可训练参数的字节指纹，不再只比范数。当前 CPU/B200 验证边界见 [B06 记录](../../_audit/infra/B06/REPORT.md)，不能把施工完成写成 GPU 验收通过。
+
+顺序：B03 → 可并行的训练/推理/kernel 单因素 → B07 采用项组合 smoke → 全链学习运行。PR、论文、正式 candidate 和业务上线不属于本轮完成条件。
 
 ### Candidate
 
@@ -83,7 +99,7 @@ Candidate 用来回答模型能否晋级。开始前必须冻结：
 - SFT parquet 已经预分词，`input_ids` 和 `loss_mask` 来自与 RL 相同的 gold 回放路径。
 - prompt、会话历史、全量工具菜单、工具观测、session 信令和终答必须与 Runtime 同形。
 - 工具返回不参与语言模型 loss；只有模型自己产生的监督 token 参与。
-- 超过统一长度预算时硬报错，不允许静默截断。
+- 数据或张量超出约定预算时硬报错。模型生成碰到长度上限必须明确记为不完整；observe 收齐质量读数，不能把半个动作执行出去或当成完成任务。
 - v15 默认 think-on；每个 assistant 轮都使用共享模板形状。
 - Qwen think-on 的 `<think>` 开标签由 generation prompt 写入，completion 常从思考正文开始再输出 `</think>`；共享解析器必须以 `implicit_think_open=True` 处理。没有闭标签时整段仍是未完成思考，不能当可见终答。Runtime、Exam、RL、OPD 和 eval 不得各写一份解析规则。
 
@@ -104,6 +120,7 @@ Candidate 用来回答模型能否晋级。开始前必须冻结：
 - 数据没有零监督行或超预算行。
 - 可训练参数只落在登记的 LoRA 目标上。
 - loss 和 grad norm 有限，adapter 权重确实变化。
+- 一次更新按全部 DP rank、整个累积窗口的实际监督 token 求均值；短尾窗口也使用实际分母。归约、归一化在 clip 前完成，完整参数指纹用于副本一致性，机制边界见 [infra 训练](../infra_exp/03-TRAINING.md)。
 - 评测、选点与合并读取本轮相同输出目录。
 - 合并模型相对底座确实包含增量。
 - GPU 数必须显式；当前固定 runbook 仍是 1×B200，目标默认形态是 `DP=2`。用户已免除 1 卡与 2 卡 DP 的速度 A/B，但改默认前仍要用当前源码通过双卡梯度/权重一致性 smoke。B04 改为在同样 2×B200、相同有效 batch 和每次更新 token 下比较 `DP=2` 与 `TP=2`；当前 TP 尚未实现，不能把文档计划当成已接通能力。
@@ -130,7 +147,13 @@ Candidate 用来回答模型能否晋级。开始前必须冻结：
 - 多轮 agent loop、梯度、权重同步和保存路径都有判据行；动态分池臂另要求池判据行。
 - RL checkpoint 转出的 adapter 必须能加载，并在相同底座上评测。
 - 更新次数、数据量和训练完成条件是不同概念；停止与晋级按预注册规则。
-- 响应上限必须单独量。B02 两个 step 都有 2/8 rollout 达到 12,288 token；原始轨迹显示未闭合或重复思考。这是质量 WARN，不是程序健康失败，但 candidate 必须阻止。
+- 响应上限必须从真实结束原因与轨迹预算单独量。`rl_run_gate` 保留 verl 的原始 `clip_ratio`，但不用动态 padding 的宽度判生成截断；token、轮数、观测用尽分开记，质量问题在 observe 下为 WARN。覆盖不完整不能报零截断 PASS，坏 token/mask/logprob 仍为硬失败。B02 原始轨迹确实达到预算的事实不因这次指标修复而作废。
+
+完整 artifact 的 `token_trace.schema_version=3` 保存首轮 `prompt_ids`、拼接后的 `response_ids`、RL 的 `response_mask` 和 logprob、每轮原始生成 token、实际采样参数、结束原因和解析结果。`generations[].response_offset` 指出每轮看到的历史位置。真实生成段为 `assistant/mask=1`；补入的模板结束部分为 `assistant_template/mask=0`。有无返回 EOS，都补齐同一轮次边界，不能漏掉换行。`logprob_coverage` 只计算真实采样 token，不把模板占位计入。SFT 仍监督 gold 的结束符，并排除空 think；它不能直接照抄 RL mask。原始业务文本只留审计存储，不进入 Git。
+
+Python 推理入口要求 vLLM 子进程使用 `spawn`，且模型 EOS 清单有效；缺失停止标记不能静默继续。启动方式与真实 EOS 参数纳入 CPU 前置，GPU 再验真正启动和生成。生成诊断和本地推理评测都必须在事件循环关闭前显式调用引擎 shutdown；生成异常也走相同回收路径，不能只等解释器退出。
+
+verl 的 `completed` 只表示请求结束，不等于答案完整。`generation_observer.py` 在上游转换之前保存原始 `stop/length`，不改 token、logprob 或调度返回值。RL、评测和 Runtime 共用 `generation_is_incomplete` 拒绝明确的 `length` 或丢 token；RL 的 trace gate 还会拒绝缺失的原始结束元数据。当前 Runtime/本地评测若收到 `finish_reason=None`，仍会按普通完成继续，这一缺口登记在 T1-2，不能写成三个入口都已拒绝。修复与实测边界见 [T1-1 记录](../../_audit/mainline/T1-1/REPORT.md)。
 
 ### OPD
 
@@ -172,6 +195,8 @@ Candidate 用来回答模型能否晋级。开始前必须冻结：
 
 - 数据和确定性：`_audit/v16/` 与 Modal `/vol/_audit/v16/`
 - 当前完整 smoke 报告：`_audit/infra/B02/REPORT.md`
+- 修复后局部 RL 健康复验与源码归档：`_audit/infra/B03/REPORT.md`
+- SFT token 归一化的 CPU 正负对照：`_audit/infra/B04/REPORT.md`
 - 本轮逐 run 证据：`_audit/v16/runs/b02_20260905a/` 与 Modal 同路径
 - SFT：`checkpoints/sft/v16_smoke_b02_20260905a`
 - 合并模型：`models/Qwen3.6-35B-A3B-sft-v16_smoke_b02_20260905a`

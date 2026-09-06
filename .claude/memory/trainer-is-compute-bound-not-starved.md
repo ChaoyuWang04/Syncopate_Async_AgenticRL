@@ -28,7 +28,7 @@ metadata:
 - ★ 教训：我把「峰值 15.55/32 GB ⇒ 还剩 16 GB」当成余量，而那 15.55 **正是 GC 省出来的**
   ⇒ [[feedback-measure-dont-infer]] 第三次兑现：**一个指标换个前提就不是同一件事**。
 
-相关：[[machine-4x5090-constraints]] [[infra-line-state]] [[project-mechanism-not-wired]]
+相关：[[infra-line-state]] [[project-mechanism-not-wired]]
 
 ## 🆕 2026-08-19 续：prefix grouper 兑现了（E26）
 

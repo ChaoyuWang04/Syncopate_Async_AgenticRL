@@ -1,5 +1,7 @@
 # SFT 数据/训练/评估 真实情况核查报告
 
+> 历史参考包审计，不是本项目当前数据状态。下列路径与命令属于旧调查环境，不可用作现在的运行指南；当前入口是 `docs/syncopate/00-START.md`。
+
 > 调查日期：2026-08-05
 > 调查对象：`reference/industrial_posttrain_training_release/`（下简称 `REL/`），verl 快照简称 `UP/`
 > 纪律：只读 + 分析脚本（`_audit/`）；未训练、未修改任何原文件

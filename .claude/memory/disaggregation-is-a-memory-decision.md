@@ -8,8 +8,10 @@ metadata:
   modified: 2026-08-19T13:33:43.206Z
 ---
 
-**我们的 3 trainer + 1 rollout 不是「为了异步」，是显存逼出来的**：
-一张 32 GB 的 5090 上 trainer 峰值就 15.55 GB，vLLM 还要 KV cache ⇒ colocate 时
+> 以下是旧模型、旧机器的历史分析，不决定当前 B200 的分卡方式；现行设置看 Compute 与 B05。
+
+**当时 3 trainer + 1 rollout 不是「为了异步」，是显存逼出来的**：
+当时单卡 32 GB，trainer 峰值就 15.55 GB，vLLM 还要 KV cache ⇒ colocate 时
 `gpu_memory_utilization` 只能给 0.5，四卡全 colocate 会更挤。
 
 **而这个配比与业界完全相反**（2026-08-19 检索）：
@@ -56,5 +58,5 @@ E25 GPU 算力已饱和;TP=2 rollout 净负 20%（E04）;ZeRO-3 慢 6×（E18）
 加速 trainer 不只是省时间，是「异步的代价」这个研究问题的**前置条件**。
 ⇒ 上面那条「rollout 干完就在等」的旧图景已开始失效，B11 配比实验要按新形状重想。
 
-相关：[[infra-line-state]] [[machine-4x5090-constraints]] [[blank-thresholds-are-not-passes]]
+相关：[[infra-line-state]] [[blank-thresholds-are-not-passes]]
 [[trainer-is-compute-bound-not-starved]]

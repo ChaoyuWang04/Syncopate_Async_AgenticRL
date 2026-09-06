@@ -11,7 +11,7 @@
 | 三桶切分 | EVAL 401 / SFT 597 / RL 1032 | 同上；本机与 Modal 三份 SHA-256 逐一相同 |
 | SFT 数据 | train 1222 行、18 桶 | Modal `/vol/data/sft/v16`；run28 建库审计 |
 | 数据质量 | 现行题库门禁、出厂体检、prompt 预算和三桶隔离全绿 | Modal `/vol/_audit/v16/` |
-| 人工检查 | 六族样本已经抽看；正式 candidate 前仍按 TASKS 冻结最终带宽和新增门禁 | [01-TASKS.md](01-TASKS.md#t2--candidate-训练与质量验收) |
+| 人工检查 | 六族样本已经抽看；candidate 不在当前队列，将来获批后再在 TASKS 登记最终带宽和新增门禁 | [01-TASKS.md](01-TASKS.md) |
 
 run28 的“全绿”指当次预注册的 report 模式全部通过。六桶份额带宽仍是报告项，
 不能把“报告出来”误写成“严格阈值已经最终批准”。

@@ -46,7 +46,7 @@ v11 → v12（`--freeze-from data/batches/v11`）重跑一遍，
 `data/splits/v12` 的四个文件和 git 里的 **SHA-256 逐字节一致**。
 ⇒ [[incremental-rebuild-freeze]] 那条纪律的构造保证是成立的，不只是当时对。
 
-相关：[[project-mechanism-not-wired]] [[machine-4x5090-constraints]]
+相关：[[project-mechanism-not-wired]]
 [[blank-thresholds-are-not-passes]] [[incremental-rebuild-freeze]] [[feedback-measure-dont-infer]]
 
 ---
