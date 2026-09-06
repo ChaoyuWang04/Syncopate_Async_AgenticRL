@@ -45,9 +45,10 @@ from syncopate.pipeline.split import (
 )
 from syncopate.train.rollout_budget import (
     MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH, THINK_ON,
-    SAMPLING_TOP_K, SAMPLING_TOP_P,
+    SAMPLING_TOP_K, SAMPLING_TOP_P, assistant_turn_budget,
 )
-from syncopate.train.rollout_loop import RolloutConfig, run_rollout
+from syncopate.train.rollout_loop import Generation, RolloutConfig, run_rollout
+from syncopate.train.vllm_process import VLLMEngineLifecycle, run_with_engine
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
 
 # 多轮累积的预算：最长的模板（GEO）max_steps=14，实测每步约 140 token
@@ -89,23 +90,24 @@ class HFEngine:
         self.temperature = temperature
         self.device = next(model.parameters()).device
 
-    async def __call__(self, prompt_ids: list[int], sampling_params: dict[str, Any]) -> list[int]:
+    async def __call__(self, prompt_ids: list[int], sampling_params: dict[str, Any]) -> Generation:
         input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
         with torch.no_grad():
             out = self.model.generate(
                 input_ids=input_ids,
                 attention_mask=torch.ones_like(input_ids),
-                max_new_tokens=self.max_new_tokens,
+                max_new_tokens=min(self.max_new_tokens, sampling_params.get("max_tokens", self.max_new_tokens)),
                 do_sample=self.temperature > 0,
                 temperature=self.temperature if self.temperature > 0 else None,
                 top_p=SAMPLING_TOP_P if self.temperature > 0 else None,
                 top_k=SAMPLING_TOP_K if self.temperature > 0 else None,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
-        return out[0][len(prompt_ids):].tolist()
+        ids = out[0][len(prompt_ids):].tolist()
+        return Generation(token_ids=ids)  # HF 没有提供实际 stop_reason，保留缺失读数。
 
 
-class VLLMEngine:
+class VLLMEngine(VLLMEngineLifecycle):
     """评测的唯一引擎（vLLM AsyncLLMEngine）。接口与 HFEngine 相同。
 
     为什么值得有第二个后端：HF 路径每一轮都把整条历史重新 prefill——
@@ -116,9 +118,8 @@ class VLLMEngine:
 
     ⚠️ 换后端 = 换采样内核。**配对比较必须两边同后端**（和「改 system.txt
     基线作废」同一条纪律）；跨后端只能看聚合趋势，不能逐 case 配对。
-    采样参数逐项对齐 HF 路径：temperature/top_p 显式，top_k=20 ——
-    HF 是从 generation_config.json **隐式**继承的，这里必须显式写出来，
-    否则两个后端跑的根本不是同一个采样分布。
+    正式采样参数从 rollout_budget 读取，与 RL 对齐，不隐式继承模型的截尾采样。
+    预注册生成探针可以逐请求覆盖参数，并把实际参数一起记录；不改变正式默认值。
     """
 
     def __init__(self, model_path: str, adapter: str | None,
@@ -126,39 +127,32 @@ class VLLMEngine:
         import itertools
         import logging
         import os
+        from syncopate.train.vllm_process import prepare_vllm_process, redirect_stdout_logging
 
-        # ★★★ 必须在 import vllm 之前设（2026-08-13 在 4×5090 / 驱动 570.195.03 上实测）
-        #
-        # vLLM 自带的 FlashAttention-2（`_vllm_fa2_C.varlen_fwd`）在 sm_120 上走 PTX JIT，
-        # 而那份 PTX 是用比本机驱动更新的工具链编译的：
-        #     CUDA error: the provided PTX was compiled with an unsupported toolchain
-        # ⇒ **模型能加载、引擎能起、一开始生成就炸**（最难查的那种时序）。
-        #
-        # 四个后端的实测：
-        #     默认(FA2)      ❌ unsupported toolchain
-        #     FLASHINFER     ❌
-        #     TRITON_ATTN    ✅   ← 本地 JIT 编译，用的就是本机 CUDA 12.8，不存在错配
-        #     FLEX_ATTENTION ✅
-        #
-        # ⚠️ 用 setdefault：换一台驱动够新的机器时，`export VLLM_ATTENTION_BACKEND=` 之外
-        # 什么都不用改；而且**别把它写死** —— FA2 在能用的机器上更快。
-        os.environ.setdefault("VLLM_ATTENTION_BACKEND", "TRITON_ATTN")
+        method = prepare_vllm_process()
+
+        # B200 使用当前 vLLM 的官方后端选择，不继承旧机器的强制后端。
+        # 实验臂若显式指定后端，应另存命中读数与对拍结果。
 
         from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
+        from vllm.utils.system_utils import get_mp_context
+
+        self.process_start_method = get_mp_context().get_start_method()
+        if self.process_start_method != method:
+            raise RuntimeError("vLLM 实际进程启动方式与登记的 spawn 不相等")
+        print(f"[vllm-process] expected={method} actual={self.process_start_method}",
+              file=sys.stderr, flush=True)
 
         # vLLM 的日志默认打 stdout，而我们的 stdout 是要被解析的报告 —— 挪去 stderr
-        for handler in logging.getLogger("vllm").handlers:
-            if hasattr(handler, "stream"):
-                handler.stream = sys.stderr
+        redirect_stdout_logging(logging.getLogger("vllm"))
 
         # eos 按 generation_config 的完整清单（Qwen3 是 [im_end, endoftext]），
         # 与 HF generate 的停机条件一致
-        try:
-            from transformers import GenerationConfig
-            eos = GenerationConfig.from_pretrained(model_path).eos_token_id
-            eos_ids = list(eos) if isinstance(eos, (list, tuple)) else [eos]
-        except Exception:
-            eos_ids = []
+        from transformers import GenerationConfig
+        eos = GenerationConfig.from_pretrained(model_path, local_files_only=True).eos_token_id
+        eos_ids = list(eos) if isinstance(eos, (list, tuple)) else [eos]
+        if not eos_ids or any(not isinstance(value, int) or value < 0 for value in eos_ids):
+            raise ValueError("模型没有有效的 EOS token 清单，拒绝无停止标记启动")
 
         # ★ async 引擎而不是同步 LLM：同步版每次 generate 都独占引擎，
         # 组内 k 份采样只能排队——continuous batching 整个空转。
@@ -203,7 +197,7 @@ class VLLMEngine:
             self.lora = LoRARequest("eval_adapter", 1, adapter)
         # ★ 2026-08-18：top_p / top_k 改从 `rollout_budget` 取 —— **和训练同一份**。
         # 此前是 0.95 / 20（对齐的是 eval-HF），而训练是 1.0 / -1 ⇒ 两边采的不是同一个分布。
-        self.params = SamplingParams(
+        self.sampling_defaults = dict(
             temperature=temperature,
             top_p=SAMPLING_TOP_P if temperature > 0 else 1.0,
             top_k=SAMPLING_TOP_K if temperature > 0 else -1,
@@ -212,14 +206,25 @@ class VLLMEngine:
             detokenize=False,       # 核心循环自己管 token，不需要引擎反解文本
         )
 
-    async def __call__(self, prompt_ids: list[int], sampling_params: dict[str, Any]) -> list[int]:
+    async def __call__(self, prompt_ids: list[int], sampling_params: dict[str, Any]) -> Generation:
         request_id = f"eval-{next(self._request_counter)}"
+        from vllm import SamplingParams
+        from syncopate.train.generation_observer import sampling_snapshot
+        requested = dict(sampling_params)
+        requested["max_tokens"] = min(self.sampling_defaults["max_tokens"],
+                                      int(requested.get("max_tokens", self.sampling_defaults["max_tokens"])))
+        params = SamplingParams(**{**self.sampling_defaults, **requested})
         final = None
         async for out in self.engine.generate(
-                {"prompt_token_ids": prompt_ids}, self.params, request_id,
+                {"prompt_token_ids": prompt_ids}, params, request_id,
                 lora_request=self.lora):
             final = out
-        return list(final.outputs[0].token_ids)
+        if final is None or not final.outputs:
+            raise RuntimeError("vLLM 没有返回生成结果")
+        result = final.outputs[0]
+        return Generation(token_ids=list(result.token_ids),
+                          finish_reason=result.finish_reason, stop_reason=result.stop_reason,
+                          sampling_params=sampling_snapshot(params))
 
 
 def load_model(model_path: str, adapter: str | None):
@@ -503,9 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     #
     # 评测天生可分：每条 case 的 Sandbox 按 namespace **每次新建**（账本 / 失败计数器 /
     # BUC 积分全在它身上），共享的 `bundle.env` 只读、registry 只持只读工具规格。
-    # 这是当年修「rollout_id 固定导致 artifact 互相覆盖」时立下的设计，
-    # 现在直接成了分片的通行证 —— **不需要 tensor parallel**（4B 单卡装得下，
-    # 而这台机器 P2P 全关，TP 只会让通信变瓶颈）。
+    # 分片用于独立题目的吞吐；TP 是否值得使用，另按 B200 拓扑实测。
     parser.add_argument("--shard", default=None, metavar="I/N",
                         help="只跑第 I 片（0-indexed）共 N 片，如 --shard 0/4")
     parser.add_argument("--per-class", type=int, default=4, help="每个 signal_class 取几条")
@@ -518,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
     #   ⚠️ 旧默认 256 的历史审计仍可比（它们的截断率 ≤0.9%），但**跨代配对要看
     #   审计头部的 max_new_tokens 字段**（本次起记录，e27 双胞胎 label 分不清的教训）。
     parser.add_argument("--max-new-tokens", type=int, default=None,
-                        help="单轮生成上限；不传则按 SYNCOPATE_THINK 取 256/2048")
+                        help="单轮生成上限；不传则使用共享 MAX_RESPONSE_LENGTH")
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="测组内方差必须 >0；要看确定性行为才设 0")
     parser.add_argument("--samples-per-case", type=int, default=4,
@@ -535,7 +538,7 @@ def main(argv: list[str] | None = None) -> int:
                              "不必为了一个新指标重跑几小时 GPU")
     args = parser.parse_args(argv)
     if args.max_new_tokens is None:
-        args.max_new_tokens = MAX_RESPONSE_LENGTH   # 预算本身已随 THINK_ON 切换（2048/8192）
+        args.max_new_tokens = MAX_RESPONSE_LENGTH
     if args.out is None and not args.from_audit:
         _tag = Path(args.adapter).name if args.adapter else Path(args.model).name
         _dv = data_version_of(args.split_dir) if args.split_dir else "nosplit"
@@ -552,7 +555,6 @@ def main(argv: list[str] | None = None) -> int:
 
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     adapter = str((ROOT / args.adapter).resolve()) if args.adapter else None
-    engine = VLLMEngine(model_path, adapter, args.max_new_tokens, args.temperature, args.gpu_util)
     if args.split_dir:
         # ★ 「两个东西应当相同」型判据：只改一个参数会静默评另一个 case 集（见 split.py 那一节）。
         # ⚠️ 只在用冻结桶时查 —— `--split-dir ""` 是**合法**的退回路径，那时没有版本可比。
@@ -587,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
         「rollout_id 固定导致 artifact 互相覆盖」时立下的设计，现在成了并发的通行证。"""
         output = await run_rollout(
             bundle, registry=domain.registry, tokenizer=tokenizer, generate=engine,
-            config=RolloutConfig(max_assistant_turns=bundle.case.max_steps,
+            config=RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps),
                                  max_prompt_length=MAX_PROMPT_LENGTH, max_response_length=MAX_RESPONSE_LENGTH),
             rollout_id=f"eval{k}",
         )
@@ -677,7 +679,9 @@ def main(argv: list[str] | None = None) -> int:
               f"已用 {elapsed/60:.0f}m 剩约 {eta/60:.0f}m",
               file=sys.stderr, flush=True)
 
-    asyncio.run(_eval_all())
+    # 先完成数据和分片检查再占显卡。成功、异常都显式关闭同一个引擎。
+    engine = VLLMEngine(model_path, adapter, args.max_new_tokens, args.temperature, args.gpu_util)
+    asyncio.run(run_with_engine(engine, _eval_all))
 
     rewards = [r["reward"] for r in rows]
     print(f"\n{'指标':<26}{'值'}")

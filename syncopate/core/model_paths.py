@@ -1,7 +1,7 @@
 """模型/分词器路径的**唯一来源**（2026-09-03，裁定⑫⑬）。
 
 以前 `models/Qwen3-0.6B` / `models/Qwen3-4B` 散在 30 个文件里当默认值；换代 = 30 处改。现在换代只改这里或设环境变量。
-Modal 上 `/vol/repo/models -> /vol/models`（stack_probe._sync_repo 建软链），本机 `models/` 里放分词器即可。
+Modal 上 `/tmp/repo/models -> /vol/models`（stack_probe._sync_repo 建软链），本机 `models/` 里放分词器即可。
 """
 from __future__ import annotations
 

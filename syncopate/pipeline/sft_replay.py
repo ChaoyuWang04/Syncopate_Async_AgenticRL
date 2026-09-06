@@ -305,8 +305,8 @@ class _ScriptedEngine:
 class SFTSample:
     """一条预分词的 SFT 样本。
 
-    loss_mask 直接复用 rollout 的 response_mask：1=模型该学会生成的 token，
-    0=环境插入的工具返回。prompt 段全部为 0（不监督 system/user）。
+    loss_mask 监督 gold 正文和 assistant 模板结束符，工具返回与 prompt 不监督。
+    RL 的 mask 则只覆盖真实采样 token；不能让模板补入 token 冒充有采样概率。
     """
 
     case_id: str
@@ -365,7 +365,15 @@ async def build_sft_sample(
     #   根因在此。空块留在序列里（结构在场），loss_mask 置 0（不从空块学任何东西）；
     #   非空 think（教师选中 gold 动作的那些）照常监督。简单题该不该想，交给模型自己/RL 的 reward。
     ids = output.prompt_ids + output.response_ids
-    mask = [0] * len(output.prompt_ids) + output.response_mask
+    # RL 不训练模板补入 token；SFT 仍要学习 gold 的 EOS，保留已有监督形状。
+    response_supervision = []
+    for segment in output.token_trace["segments"]:
+        if segment["type"] not in {"assistant", "assistant_template", "user", "tool"}:
+            raise ValueError("未知 token 段，不能猜测 SFT 监督范围")
+        supervised = int(segment["type"] in {"assistant", "assistant_template"})
+        response_supervision.extend([supervised] * segment["token_count"])
+    assert len(response_supervision) == len(output.response_ids), "SFT 监督和 token 不等长"
+    mask = [0] * len(output.prompt_ids) + response_supervision
     n_masked = _mask_empty_think(tokenizer, ids, mask, start=len(output.prompt_ids))
     return SFTSample(
         case_id=bundle.case_id,

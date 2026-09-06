@@ -3,6 +3,7 @@
 #
 #   bash scripts/v16_pipeline.sh [--dry-run] [--resume] [--profile smoke|candidate]
 #        [--gate-mode observe|strict] [--run-id ID] <stage|train-all|all>
+#   --check-inputs rl-train|opd-train：走真实路径解析与存在检查，但不启动训练、不写阶段账本。
 #
 # 每个 stage 只做一件事，输入/输出路径全部从仓库常量派生（DATA_VERSION · model_paths · rollout_budget），
 # 这里**不写任何数字**；要改数字去改那份常量并重新注册（守则⑨⑬）。stage 之间用文件交接，任何一段都可单独重跑（幂等）。
@@ -31,17 +32,25 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export SYNCOPATE_CONTRACT="${SYNCOPATE_CONTRACT:-v15}" SYNCOPATE_THINK="${SYNCOPATE_THINK:-1}"
 PY="${PY:-$( [ -x /env/.venv/bin/python ] && echo /env/.venv/bin/python || echo .venv/bin/python )}"
-DRY=0; RESUME=0; PROFILE="${PROFILE:-smoke}"; GATE_MODE="${GATE_MODE:-}"; RUN_ID="${RUN_ID:-}"; RUN_SCOPED=0
+DRY=0; CHECK_INPUTS=0; RESUME=0; PROFILE="${PROFILE:-smoke}"; GATE_MODE="${GATE_MODE:-}"; RUN_ID="${RUN_ID:-}"; RUN_SCOPED=0; RL_INPUT_RUN=""; OPD_INPUT_RUN=""
 [ -n "$RUN_ID" ] && RUN_SCOPED=1
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run) DRY=1; shift;;
+  --check-inputs) CHECK_INPUTS=1; shift;;
   --resume) RESUME=1; shift;;
   --profile) PROFILE="${2:?--profile 缺值}"; shift 2;;
   --gate-mode) GATE_MODE="${2:?--gate-mode 缺值}"; shift 2;;
   --run-id) RUN_ID="${2:?--run-id 缺值}"; RUN_SCOPED=1; shift 2;;
+  --rl-input-run) RL_INPUT_RUN="${2:?--rl-input-run 缺值}"; shift 2;;
+  --opd-input-run) OPD_INPUT_RUN="${2:?--opd-input-run 缺值}"; shift 2;;
   *) break;;
 esac; done
 STAGE="${1:?用法: v16_pipeline.sh [--dry-run] [--resume] [--profile smoke|candidate] [--gate-mode observe|strict] [--run-id ID] <stage|train-all|all>}"
+[ "$#" = 1 ] || { echo "🔴 stage 后有未识别参数；所有选项须放在唯一 stage 之前"; exit 2; }
+if [ "$CHECK_INPUTS" = 1 ]; then
+  { [ "$STAGE" = rl-train ] || [ "$STAGE" = opd-train ]; } && [ "$DRY" = 0 ] || { echo "🔴 --check-inputs 只支持真实输入的 rl-train/opd-train，不能与 --dry-run 合用"; exit 2; }
+fi
+[ -z "$RL_INPUT_RUN" ] || [ -z "$OPD_INPUT_RUN" ] || { echo "🔴 --rl-input-run 和 --opd-input-run 不能合用"; exit 2; }
 [ "$PROFILE" = smoke ] || [ "$PROFILE" = candidate ] || { echo "🔴 未知 profile：$PROFILE"; exit 2; }
 if [ -z "$GATE_MODE" ]; then [ "$PROFILE" = smoke ] && GATE_MODE=observe || GATE_MODE=strict; fi
 [ "$GATE_MODE" = observe ] || [ "$GATE_MODE" = strict ] || { echo "🔴 未知 gate mode：$GATE_MODE"; exit 2; }
@@ -49,16 +58,16 @@ if [ -z "$RUN_ID" ]; then
   if [ "$STAGE" = all ] || [ "$STAGE" = train-all ]; then RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"; RUN_SCOPED=1
   else RUN_ID="${PROFILE}_manual"; fi
 fi
-[[ "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "🔴 run-id 只能含字母、数字、点、下划线和短横线"; exit 2; }
+"$PY" -m syncopate.pipeline.cloud_execution --validate-run-id "$RUN_ID" || exit 2
 
 # ── 常量只从代码取（不在这里写第二份）──
 eval "$($PY - 2>/dev/null <<'PYEOF' | grep -E '^(DV|STUDENT)='
 import sys; sys.path.insert(0, ".")
-from syncopate.pipeline.split import DATA_VERSION, DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR
+from syncopate.pipeline.split import DATA_VERSION, DEFAULT_BATCH_DIR, DEFAULT_SPLIT_DIR, DEFAULT_SFT_DIR, DEFAULT_RL_DIR, DEFAULT_OPD_PROMPTS
 from syncopate.core.model_paths import STUDENT_MODEL, TEACHER_MODEL
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
 from pathlib import Path
-print(f'DV="{DATA_VERSION}"; BATCH="{DEFAULT_BATCH_DIR}"; SPLIT="{DEFAULT_SPLIT_DIR}"; SFT_DIR="{DEFAULT_SFT_DIR}"; RL_DIR="{DEFAULT_RL_DIR}"')
+print(f'DV="{DATA_VERSION}"; BATCH="{DEFAULT_BATCH_DIR}"; SPLIT="{DEFAULT_SPLIT_DIR}"; SFT_DIR="{DEFAULT_SFT_DIR}"; RL_DIR="{DEFAULT_RL_DIR}"; OPD_PROMPTS="{DEFAULT_OPD_PROMPTS}"')
 print(f'STUDENT="{STUDENT_MODEL}"; TEACHER="{TEACHER_MODEL}"; STUDENT_NAME="{Path(STUDENT_MODEL).name}"; MAX_MODEL_LEN={MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH}')
 PYEOF
 )"
@@ -75,6 +84,32 @@ if [ "$RUN_SCOPED" = 1 ]; then
 fi
 AUD="_audit"; RUN_AUD="$AUD/$DV/runs/$RUN_ID"; RUN_MANIFEST="$RUN_AUD/manifest.json"
 EXAM_ARM="${DV}_${PROFILE}_${RUN_ID}"
+if [ -n "$RL_INPUT_RUN" ]; then
+  [ "$PROFILE" = smoke ] && [ "$RUN_SCOPED" = 1 ] || { echo "🔴 外部 SFT 输入仅用于有独立 run-id 的 smoke 对照"; exit 2; }
+  case "$STAGE" in rl-train|rl-adapter|rl-eval|opd-train|opd-eval) ;; *) echo "🔴 外部 SFT 输入不能冒充本轮完整训练链"; exit 2;; esac
+  "$PY" -m syncopate.pipeline.cloud_execution --validate-run-id "$RL_INPUT_RUN" || exit 2
+  [ "$RL_INPUT_RUN" != "$RUN_ID" ] || { echo "🔴 输入和输出 run-id 必须不同"; exit 2; }
+  if [ "$DRY" = 1 ]; then
+    MERGED="models/${STUDENT_NAME}-sft-${DV}_smoke_${RL_INPUT_RUN}"
+    echo "  ○ dry-run：真实运行要求 CPU 内容校验与 rl_input.json；上游 ${RL_INPUT_RUN}，不代表本轮做过 SFT"
+  else
+    MERGED="$("$PY" -m syncopate.pipeline.rl_input --input-run "$RL_INPUT_RUN" --run-id "$RUN_ID" --model-only)" || exit 3
+  fi
+fi
+if [ -n "$OPD_INPUT_RUN" ]; then
+  [ "$PROFILE" = smoke ] && [ "$RUN_SCOPED" = 1 ] || { echo "🔴 外部 RL 输入仅用于有独立 run-id 的 smoke OPD 对照"; exit 2; }
+  case "$STAGE" in opd-train|opd-eval) ;; *) echo "🔴 外部 RL 输入不能冒充本轮完整训练链"; exit 2;; esac
+  "$PY" -m syncopate.pipeline.cloud_execution --validate-run-id "$OPD_INPUT_RUN" || exit 2
+  [ "$OPD_INPUT_RUN" != "$RUN_ID" ] || { echo "🔴 输入和输出 run-id 必须不同"; exit 2; }
+  if [ "$DRY" = 1 ]; then
+    MERGED="CPU_BOUND_OPD_BASE_${OPD_INPUT_RUN}"
+    RL_ADAPTER="models/adapters/rl_${DV}_smoke_${OPD_INPUT_RUN}"
+    echo "  ○ dry-run：底座必须沿源 RL 输入绑定解析，CPU_BOUND_OPD_BASE 只是占位；不代表本轮做过 SFT/RL"
+  else
+    input_vars="$("$PY" -m syncopate.pipeline.opd_input --input-run "$OPD_INPUT_RUN" --run-id "$RUN_ID" --shell-vars)" || exit 3
+    eval "$input_vars"
+  fi
+fi
 TEACHER_URL="${SYNCOPATE_TEACHER_LANG_URL:-http://127.0.0.1:8210/v1}"
 TEACHER_STARTED_PID=""
 say(){ echo "[v16-pipeline $(date +%H:%M:%S)] $*"; }
@@ -90,6 +125,18 @@ need(){
     fi
   done
 }
+rl_inputs(){ need "$MERGED" "$RL_DIR/train.parquet" "$RL_DIR/val.parquet"; }
+opd_inputs(){ need "$MERGED" "$RL_ADAPTER/lora_adapter" "$OPD_PROMPTS"; }
+if [ "$CHECK_INPUTS" = 1 ]; then
+  if [ "$STAGE" = rl-train ]; then
+    rl_inputs || exit $?
+    say "[inputs] RL 输入可读；未启动训练"
+  else
+    opd_inputs || exit $?
+    say "[inputs] OPD 输入可读；未启动训练"
+  fi
+  exit 0
+fi
 record_stage(){ [ "$DRY" = 1 ] || "$PY" -m syncopate.pipeline.run_state \
   --manifest "$RUN_MANIFEST" --run-id "$RUN_ID" --profile "$PROFILE" --gate-mode "$GATE_MODE" \
   --stage "$1" --status "$2" --returncode "$3"; }
@@ -166,7 +213,7 @@ stage_sft_data_offline(){ say "[stage sft-data-offline] 拉云盘缓存 → 离�
   run "SYNCOPATE_TEACHER_OFFLINE=1 $PY -m syncopate.pipeline.build_sft 2>&1 | tee $RUN_AUD/build_offline.log" || return
   run "$PY -m syncopate.pipeline.prompt_budget_gate --prompt-budget $SFT_DIR/train.parquet" || return
   run "$PY -m syncopate.pipeline.split_isolation $SFT_DIR/train.parquet $SFT_DIR/val.parquet --pool sft" || return; }
-stage_sft_train(){ say "[stage sft-train] $PROFILE（默认单卡；B04 验明双卡更快后才改默认）"; need "$SFT_DIR/train.parquet" || return
+stage_sft_train(){ say "[stage sft-train] ${PROFILE}（当前单卡；DP=2 正确性 smoke 通过后再改默认）"; need "$SFT_DIR/train.parquet" || return
   [ "$DRY" = 1 ] || mkdir -p "$RUN_AUD"
   if [ "$PROFILE" = smoke ]; then
     run "$PY -m syncopate.train.sft --out $SFT_OUT --epochs 1 --batch-size 1 --gpus 1 --effective-batch 8 --max-steps 30 --no-wandb --wandb-run sft_${DV}_smoke 2>&1 | tee $RUN_AUD/sft_train.log" || return
@@ -200,7 +247,7 @@ stage_exam(){ say "[stage exam] 考场 v4 → 判卷 → 本轮门禁（PG/Redis
   else
     run "EXAM_PROFILE=$PROFILE EXAM_GATE_MODE=$GATE_MODE EXAM_AUDIT_DIR=$RUN_AUD/exam EXAM_PASSES=4 bash scripts/v16/exam_chain.sh $MERGED $EXAM_ARM context_v4" || return $?
   fi; }
-stage_rl_train(){ say "[stage rl-train] $PROFILE（官方均匀采样基线；动态分池只在 B05 显式 A/B）"; need "$MERGED" "$RL_DIR/train.parquet" || return
+stage_rl_train(){ say "[stage rl-train] ${PROFILE}（官方均匀采样基线；动态分池只在 B05 显式 A/B）"; rl_inputs || return
   [ "$DRY" = 1 ] || mkdir -p "$RUN_AUD"
   if [ "$PROFILE" = smoke ]; then logger=console; else logger=console,wandb; fi
   run "$PY -m syncopate.train.launch_rl_v1 --profile $PROFILE --model $MERGED --save-path $RL_OUT --logger $logger 2>&1 | tee $RUN_AUD/rl_train.log" || return
@@ -217,7 +264,7 @@ stage_rl_eval(){ say "[stage rl-eval]"; need "$MERGED" "$RL_ADAPTER/lora_adapter
     run "$PY -m syncopate.train.eval_local --model $MERGED --adapter $RL_ADAPTER/lora_adapter --samples-per-case 8 --out $RUN_AUD/eval_rl.json" || return
   fi; }
 stage_opd_train(){ say "[stage opd-train] 必须读取本轮 RL adapter；学生@GPU0 · 教师+锚@GPU1"
-  need "$MERGED" "$RL_ADAPTER/lora_adapter" || return
+  opd_inputs || return
   [ "$DRY" = 1 ] || mkdir -p "$RUN_AUD"
   if [ "$PROFILE" = smoke ]; then
     local real_steps="${OPD_SMOKE_REAL_STEPS:-1}" batch="${OPD_SMOKE_BATCH:-2}"
@@ -226,7 +273,7 @@ stage_opd_train(){ say "[stage opd-train] 必须读取本轮 RL adapter；学生
   else extra=""; fi
   quality_run "CUDA_VISIBLE_DEVICES=0,1 OPD_AUX_GPUS=1 $PY -m torch.distributed.run --nproc_per_node=1 --master_port 29517 -m syncopate.train.opd --base $MERGED --adapter $RL_ADAPTER/lora_adapter --out $OPD_OUT $extra 2>&1 | tee $RUN_AUD/opd_train.log" || return
   if [ "$PROFILE" = smoke ]; then expected_steps="$real_steps"; else expected_steps=1; fi
-  quality_run "$PY -m syncopate.train.opd_run_gate --log $RUN_AUD/opd_train.log --out-dir $OPD_OUT --expected-real-steps $expected_steps --out $RUN_AUD/opd_run_gate.json" || return
+  quality_run "$PY -m syncopate.train.opd_run_gate --log $RUN_AUD/opd_train.log --out-dir $OPD_OUT --tokenizer $MERGED --expected-real-steps $expected_steps --out $RUN_AUD/opd_run_gate.json" || return
   [ "$DRY" = 1 ] || [ -d "$OPD_OUT/final" ] || return 10; }
 stage_opd_eval(){ say "[stage opd-eval]"; need "$MERGED" "$OPD_OUT/final" "$OPD_OUT/completion.json" || return
   if [ "$PROFILE" = smoke ]; then
@@ -235,11 +282,10 @@ stage_opd_eval(){ say "[stage opd-eval]"; need "$MERGED" "$OPD_OUT/final" "$OPD_
     run "$PY -m syncopate.train.eval_local --model $MERGED --adapter $OPD_OUT/final --samples-per-case 8 --out $RUN_AUD/eval_opd.json" || return
   fi; }
 
-ALL=(cases menus split gates supply rl-data teacher sft-data teacher-stop sft-train sft-eval sft-select merge exam rl-train rl-adapter rl-eval opd-train opd-eval)
-TRAIN_ALL=(sft-train sft-eval sft-select merge exam rl-train rl-adapter rl-eval opd-train opd-eval)
+eval "$("$PY" -m syncopate.pipeline.stages)"
 run_stage(){
   local s="$1"; local fn="stage_${s//-/_}"; local rc=0 status=pass
-  declare -F "$fn" >/dev/null || { echo "🔴 未知 stage：$s（可选：${ALL[*]} train-all all）"; return 2; }
+  declare -F "$fn" >/dev/null || { echo "🔴 未知 stage：${s}（可选：${ALL[*]} train-all all）"; return 2; }
   if [ "$RESUME" = 1 ] && [ "$DRY" = 0 ]; then
     if "$PY" -m syncopate.pipeline.run_state --manifest "$RUN_MANIFEST" \
          --run-id "$RUN_ID" --profile "$PROFILE" --gate-mode "$GATE_MODE" \
@@ -266,6 +312,11 @@ if [ "$STAGE" = all ]; then
   for s in "${ALL[@]}"; do run_stage "$s" || exit $?; done
 elif [ "$STAGE" = train-all ]; then
   for s in "${TRAIN_ALL[@]}"; do run_stage "$s" || exit $?; done
+elif [ "$STAGE" = data-prepare ]; then
+  for s in "${DATA_PREPARE[@]}"; do run_stage "$s" || exit $?; done
+elif [ "$STAGE" = sft-data-group ]; then
+  trap cleanup_teacher EXIT
+  for s in "${TEACHER_GROUP[@]}"; do run_stage "$s" || exit $?; done
 else
   run_stage "$STAGE" || exit $?
 fi

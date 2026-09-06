@@ -20,6 +20,19 @@ def test_single_tool_call_maps_to_proposal():
     assert p.param_source == "model"
 
 
+def test_length_limited_response_never_becomes_an_action():
+    p = VllmDecider._to_proposal(
+        '<tool_call>\n{"name":"campaign.update_budget","arguments":{"campaign_id":"CMP_1","daily_budget":100}}\n</tool_call>',
+        finish_reason="length")
+    assert p.kind == "tool_call" and p.tool is None and not p.arguments
+    assert "不完整" in p.rationale
+
+
+def test_length_limited_response_never_becomes_a_final():
+    p = VllmDecider._to_proposal("已经处理完毕。", finish_reason="length")
+    assert p.kind != "final" and p.final_answer is None
+
+
 # ★ 下面两条**只对 v14 契约成立** —— 它们断言的正是被 v15 换掉的那两件事：
 #   ① 壳 JSON 是终答（v15 里壳是残留，终答是纯文本 + session.report）
 #   ② 一段没有结构的自然语言 = 解析错误（v15 里它就是**合法终答**）

@@ -258,6 +258,7 @@ class VllmDecider:
         resp.raise_for_status()
         data = resp.json()
         text = data["choices"][0]["text"]
+        finish_reason = data["choices"][0].get("finish_reason")
         # token 用量回传（§19 成本指标的生产者）：worker set 的 contextvar，逐调用累加
         usage = MODEL_USAGE.get()
         if usage is not None and "usage" in data:
@@ -265,10 +266,15 @@ class VllmDecider:
             usage["tokens_out"] = usage.get("tokens_out", 0) + data["usage"]["completion_tokens"]
             usage["calls"] = usage.get("calls", 0) + 1
         return self._to_proposal(
-            text, implicit_think_open=bool(_kw.get("enable_thinking")))
+            text, implicit_think_open=bool(_kw.get("enable_thinking")), finish_reason=finish_reason)
 
     @staticmethod
-    def _to_proposal(text: str, *, implicit_think_open: bool = False) -> Proposal:
+    def _to_proposal(text: str, *, implicit_think_open: bool = False,
+                     finish_reason: str | None = None) -> Proposal:
+        from syncopate.train.generation_audit import generation_is_incomplete
+        if generation_is_incomplete(finish_reason=finish_reason):
+            return Proposal(kind="tool_call", tool=None, arguments={},
+                            rationale="生成达到长度上限，输出不完整；未执行其中的动作。")
         if IS_V15:
             return VllmDecider._to_proposal_v15(
                 text, implicit_think_open=implicit_think_open)

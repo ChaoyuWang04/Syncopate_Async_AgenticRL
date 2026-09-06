@@ -34,11 +34,19 @@ from syncopate.core.tool_registry import ToolContext, ToolRegistry
 from syncopate.core.trajectory import Action, Observation, Trajectory
 from syncopate.prompts import (load_prompt, load_system_prompt, prompt_hash,
                                render_prompt)
+from syncopate.train.generation_audit import generation_shape, generation_is_incomplete
 
 
-# Qwen3 的轮次结束符。模型通常自己会生成它并被 vLLM 当停止符吞掉，
-# 所以增量拼接时要显式补回来（见 run_rollout 里的说明）。
+# Qwen 轮次结束符。引擎可能返回或省去它；共享拼接函数都补成同一边界。
 ASSISTANT_TURN_END = "<|im_end|>"
+
+
+def assistant_template_suffix(tokenizer: Any, token_ids: list[int]) -> list[int]:
+    """只补缺失部分，保留模型实际返回的 EOS；结束符后的换行也不能漏。"""
+    text = tokenizer.decode(token_ids, skip_special_tokens=False)
+    if text.rstrip().endswith(ASSISTANT_TURN_END):
+        return [] if text.endswith("\n") else tokenizer.encode("\n", add_special_tokens=False)
+    return tokenizer.encode(ASSISTANT_TURN_END + "\n", add_special_tokens=False)
 
 # ★★★ prompt 预算的**唯一来源**。训练侧和评测侧必须用同一个值。
 #
@@ -54,22 +62,8 @@ from syncopate.train.rollout_budget import (  # noqa: E402,F401
     ENABLE_THINKING, MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
 )
 
-# ★ 默认显式关掉 thinking，SFT / RL / gold 回放三处必须完全一致。
-#
-# 老师包里 SFT 侧硬编码 enable_thinking=False，RL 侧**从不传**（走模板默认 = 允许
-# thinking），两阶段不一致（sft-truth-report T10）。这不只是"浪费 token"的问题：
-#
-#   enable_thinking=False —— 空的 `<think>\n\n</think>\n\n` 出现在**生成提示里**
-#                            （模型看到的前缀），和整段渲染的 assistant 段对得上
-#   enable_thinking=True  —— 生成提示里没有，但整段渲染会给最后一个 assistant 轮
-#                            补一个，于是增量拼接和整段渲染**逐 token 不相等**
-#
-# 也就是说，开着 thinking 的话 SFT 学到的序列和 RL 跑出来的序列天生对不齐，
-# 而且不会有任何报错。tests/train 里有一条测试专门守着这件事。
-#
-# ★ 2026-08-19（E27）：值改从契约模块取 —— `SYNCOPATE_THINK=1` 时为 True，
-#   **仅供评测探针**（预算随之 2048→8192，见 rollout_budget.py 的开关注释）；
-#   默认（不设环境变量）与旧行为逐字节相同；训练路径由 launch_rl 启动即拦。
+# v16 默认 think-on。SFT、RL、评测从同一契约取值；生成提示已含 `<think>\n`。
+# 整段 SFT 与逐轮 RL 是否同形，由真实 tokenizer 的逐 token 对拍验证。
 CHAT_TEMPLATE_KWARGS: dict[str, Any] = {"enable_thinking": ENABLE_THINKING}
 
 
@@ -79,6 +73,10 @@ class Generation:
 
     token_ids: list[int]
     log_probs: list[float] | None = None
+    finish_reason: str | None = None
+    stop_reason: str | int | None = None
+    sampling_params: dict | None = None
+    engine_metadata: dict | None = None
 
 
 def _as_generation(result: Any) -> Generation:
@@ -282,6 +280,7 @@ async def run_rollout(
     response_logprobs: list[float] = []
     segments: list[dict[str, Any]] = []
     step_texts: list[str] = []          # 每步模型原文（含 <think>）：E-think 语言/长度读数用，不进训练张量
+    generations: list[dict[str, Any]] = []
     # 我们自己补的轮次结束符没有 rollout logprob，只能填占位值。
     # 这会给 TIS 带来一点系统性偏差，所以把数量记下来让它可量化。
     placeholder_logprobs = 0
@@ -319,46 +318,87 @@ async def run_rollout(
         step += 1
 
         # ---- 1. 生成 ----
+        response_offset = len(response_ids)
+        params = dict(sampling_params)
+        # 只约束真实剩余预算，不另设单轮上限。给模板结束符预留空间，避免
+        # 引擎生成完才裁掉动作，却用裁剪前的动作执行和判分。
+        turn_end_reserve = len(tokenizer.encode(ASSISTANT_TURN_END + "\n", add_special_tokens=False))
+        remaining = config.max_response_length - response_offset
+        params["max_tokens"] = min(int(params.get("max_tokens", remaining)),
+                                   remaining - turn_end_reserve)
+        if params["max_tokens"] < 1:
+            raise ValueError("生成预算必须大于零")
         gen_start = time.monotonic()
-        generation = _as_generation(await generate(prompt_ids + response_ids, sampling_params))
+        generation = _as_generation(await generate(prompt_ids + response_ids, params))
         generate_seconds += time.monotonic() - gen_start
         new_ids = generation.token_ids
         new_logprobs = list(generation.log_probs or [])
 
         text = tokenizer.decode(new_ids, skip_special_tokens=False)
+        generations.append({
+            "step": step,
+            "response_offset": response_offset,
+            "input_tokens": len(prompt_ids) + response_offset,
+            "remaining_response_budget": config.max_response_length - response_offset,
+            "sampling_params": dict(params),
+            "engine_sampling_params": generation.sampling_params,
+            "engine_metadata": generation.engine_metadata,
+            "finish_reason": generation.finish_reason,
+            "stop_reason": generation.stop_reason,
+            "raw_token_ids": list(new_ids),
+            **generation_shape(text, new_ids, implicit_think_open=ENABLE_THINKING),
+        })
 
-        # ★ 补齐 assistant 轮的结束符。
-        # 这是增量拼 token 的经典坑：整段 apply_chat_template 会在 assistant 内容后面
-        # 加 `<|im_end|>\n` 再接下一轮，而 vLLM 通常把停止符吞掉不返回。不补的话
-        # SFT（整段渲染）和 RL（增量拼接）看到的 token 序列会差一小段，
-        # 两阶段分布不一致——而且不会有任何报错，只会让指标莫名其妙地差。
-        suffix_ids: list[int] = []
-        if not text.rstrip().endswith(ASSISTANT_TURN_END):
-            suffix_ids = tokenizer.encode(ASSISTANT_TURN_END + "\n", add_special_tokens=False)
+        # 原始 token 保留不动；EOS 已返回时只补换行，省去 EOS 时补完整边界。
+        suffix_ids = assistant_template_suffix(tokenizer, new_ids)
 
         # ⚠️ 截断必须给结束符预留位置，否则补完会顶出预算。
         # 之前就是先截断再补，长度变成 max_response_length + 2，
         # verl 的 _postprocess 在 torch.cat 时直接报 size mismatch。
         budget = config.max_response_length - len(response_ids)
         kept = max(0, budget - len(suffix_ids))
-        new_logprobs = new_logprobs[:kept]
-        new_ids = new_ids[:kept] + suffix_ids
+        retained_ids = new_ids[:kept]
+        suffix_ids = assistant_template_suffix(tokenizer, retained_ids)
+        if len(retained_ids) + len(suffix_ids) > budget:
+            # 引擎违反 max_tokens 时可能连 EOS 一起被裁掉；按裁剪后的序列重算。
+            retained_ids = new_ids[:max(0, budget - turn_end_reserve)]
+            suffix_ids = assistant_template_suffix(tokenizer, retained_ids)
+        new_logprobs = new_logprobs[:len(retained_ids)]
+        dropped = len(new_ids) - len(retained_ids)
+        new_ids = retained_ids + suffix_ids
+        generations[-1]["discarded_model_tokens"] = dropped
+        generations[-1]["retained_model_tokens"] = len(retained_ids)
+        generations[-1]["inserted_template_tokens"] = len(suffix_ids)
         if not new_ids:
             trajectory.truncated = True
             trajectory.truncation_reason = "tokens"      # 截到只剩结束符都放不下
             break
 
         response_ids.extend(new_ids)
-        response_mask.extend([1] * len(new_ids))     # 1 = 模型生成，算梯度
-        # logprob 必须和 ids 等长：引擎没给的部分（含我们补的结束符）填 0.0 占位
-        missing = len(new_ids) - len(new_logprobs)
+        response_mask.extend([1] * len(retained_ids) + [0] * len(suffix_ids))
+        # 模板补入部分没有采样概率，mask=0；coverage 只问真实模型 token 有没有 logprob。
+        missing = len(retained_ids) - len(new_logprobs)
         placeholder_logprobs += missing
-        response_logprobs.extend(new_logprobs + [0.0] * missing)
-        segments.append({"type": "assistant", "step": step, "token_count": len(new_ids), "mask": 1})
+        response_logprobs.extend(new_logprobs + [0.0] * (missing + len(suffix_ids)))
+        segments.append({"type": "assistant", "step": step, "token_count": len(retained_ids), "mask": 1})
+        if suffix_ids:
+            segments.append({"type": "assistant_template", "step": step, "token_count": len(suffix_ids), "mask": 0})
         step_texts.append(text)
+        if generation_is_incomplete(finish_reason=generation.finish_reason,
+                                    stop_reason=generation.stop_reason, discarded_tokens=dropped):
+            # 不执行被预算截断的半个动作，也不把未进入训练序列的尾巴拿来判分。
+            trajectory.truncated = True
+            trajectory.truncation_reason = "tokens"
+            trajectory.parse_ok = False
+            trajectory.final_text = tokenizer.decode(retained_ids, skip_special_tokens=False)
+            generations[-1]["parsed_kind"] = "incomplete"
+            generations[-1]["parse_error"] = "generation_length_limit"
+            break
         # ---- 2. 解析（契约二选一；v14 分支逐字节不变）----
         if IS_V15:
             p15 = parse_step_v15(text, implicit_think_open=ENABLE_THINKING)
+            generations[-1]["parsed_kind"] = p15.kind
+            generations[-1]["parse_error"] = p15.error
             # 终止性信令 / 纯文本终答 ⇒ 收工。行为在**轨迹级**推导：
             # 「调过业务工具 + 纯文本收尾 → tool_call」光看这一步是判不出来的。
             if p15.kind in ("signal", "final_text"):
@@ -494,6 +534,12 @@ async def run_rollout(
         response_logprobs=response_logprobs,
         num_turns=step,
         token_trace={
+            "schema_version": 3,
+            "prompt_ids": prompt_ids,
+            "response_ids": response_ids,
+            "response_mask": response_mask,
+            "response_logprobs": response_logprobs,
+            "generations": generations,
             "segments": segments,
             "response_token_count": len(response_ids),
             "prompt_token_count": len(prompt_ids),
@@ -504,6 +550,11 @@ async def run_rollout(
             "step_texts": step_texts,
             "tool_errors": tool_errors,
             "parse_errors": parse_errors,
+            "unclosed_think_turns": sum(g["think_unclosed"] for g in generations),
+            "max_generation_tokens": max((g["generated_tokens"] for g in generations), default=0),
+            "max_repeat_span_tokens": max((g["repeat"]["span_tokens"] for g in generations), default=0),
+            "generation_stop_reason_missing": sum(
+                g["finish_reason"] is None and g["stop_reason"] is None for g in generations),
             "truncated": trajectory.truncated,
             "truncation_reason": trajectory.truncation_reason,
             # >0 就是事故：system 规则书的开头被砍掉了
@@ -515,6 +566,7 @@ async def run_rollout(
             "wall_seconds": round(time.monotonic() - started, 4),
             # TIS 偏差的可量化指标：占位 logprob 越多，重要性采样权重越不可信
             "placeholder_logprobs": placeholder_logprobs,
+            "inserted_template_tokens": sum(g["inserted_template_tokens"] for g in generations),
             "logprob_coverage": round(
                 1.0 - placeholder_logprobs / max(1, sum(response_mask)), 4),
         },

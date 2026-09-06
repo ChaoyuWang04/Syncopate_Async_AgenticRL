@@ -32,7 +32,7 @@ PG_LIB="${PG_LIB:-/workspace/tools/postgres/root/usr/lib/x86_64-linux-gnu}"
 # `dpkg -x` 解出来的 libpq.so.5 不在 ldconfig 的搜索路径里（旧机器上 libpq5 是
 # apt 装进系统的，所以一直没暴露）。⇒ 所有 PG 二进制都要自带库路径。
 export LD_LIBRARY_PATH="$PG_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# ---- 用户态运行（2026-09-02 补，本机 5090 工作站无 root）----
+# ---- 无 root 权限时的用户态运行 ----
 # 非 root 时：PG 来自 conda-forge（PG_HOME 指到 conda env），PGDATA 放 $HOME，
 # 不建 postgres 系统用户、不 su、不 chown。训练机（root + /workspace 那套）行为不变。
 if [[ "$(id -u)" -ne 0 ]]; then PG_USER_MODE=1; else PG_USER_MODE=0; fi

@@ -7,16 +7,16 @@ flash-attn 用社区预编译轮子（mjun0812 v0.9.47 cu130torch2.13，写在 s
     modal run --detach modal_app/stack_probe.py --steps models         # ② Qwen3.5 全家权重落 Volume（CPU，~80 GiB）
     modal run --detach modal_app/stack_probe.py --steps gpu            # ③ 单卡：flash-attn 反向（社区轮子的闸）· FLA GDN 三实现对拍 · 拓扑
     modal run --detach modal_app/stack_probe.py --steps vllm           # ④ 单卡：vLLM 起 9B，MTP 关/开各测 TPOT，抓核选择日志
-    modal run --detach modal_app/stack_probe.py                        # 默认 = image,verl,models,gpu,vllm 顺序全跑
+    modal run --detach modal_app/stack_probe.py                        # 默认只检查 CPU 依赖导入
 
-依赖表 = modal_app/stack/（与根目录旧栈分家）。旧栈探针 modal_app/probe.py 保留只作历史读数。
+依赖表 = modal_app/stack/；根目录仅维护 Mac 的 CPU 开发环境。
 
 ★ 判据先注册（守则⑬）
   image   torch/vllm/verl/transformers/fla/flash_attn/peft 全部 import 退出码 0；torch.version.cuda 以 "13" 开头；
           transformers CONFIG_MAPPING 含 "qwen3_5"
   verl    import 退出码 0；trainer 入口 --help 能打；记录 V1 trainer 三种模式的模块名（学习项）
   models  每个模型 safetensors 总字节 == HF 仓库声明
-  gpu     capability == (12,0)；check_flash_attn_backward 退出码 0；
+  gpu     capability == (10,0)；check_flash_attn_backward 退出码 0；
           FLA：chunk（训练核）前向+反向 vs naive fp32 参考：前向相对误差 ≤ 5e-2（bf16 噪声地板）、梯度有限非零且相对差 ≤ 5e-2；
           fused_recurrent（解码核，FLA 不实现反向）只测前向 ≤ 5e-2
   vllm    MTP 关/开两种配置都能起服务并给出非空回答；TPOT 比值只记录（08 §Modal 先验：27B 上 MTP 反慢 3.6×）；
@@ -34,6 +34,7 @@ import signal
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 import modal
 
@@ -45,7 +46,7 @@ VOL = "/vol"
 REPO = "/tmp/repo"                    # ★ 每个容器自己的 checkout（守则⑰ 一个写者）；bare 镜像在 /vol/repo.git
 MODELS = f"{VOL}/models"
 AUDIT = f"{VOL}/_audit/stack_probe"
-GPU_ONE = "B200"          # Chaoyu 09-03 晚裁定⑫：一切在 B200（sm_100）上配；B300 待 B200 全链通后重跑
+GPU_ONE = "B200"          # 唯一 GPU 型号；按任务选择单卡或双卡，CPU 步骤不申请 GPU。
 GPU_PAIR = "B200:2"
 BASE_IMAGE = "nvidia/cuda:13.0.2-devel-ubuntu24.04"   # torch 2.13 PyPI 默认 cu13；docker hub 实核存在（09-03）
 PY = "/env/.venv/bin/python"
@@ -67,36 +68,24 @@ OVERLAY_DIRS = ("syncopate", "scripts", "configs", "tests", "docs", "modal_app")
 OVERLAY_FILES = ("pyproject.toml", "alembic.ini")
 
 
-def _local_source_digest() -> str:
-    """给未推送工作树一个可复查身份；不把本机 `.git`、数据、模型或密钥上传。"""
-    # Modal 会在容器里再次 import 本模块；那里没有客户端工作树，只读镜像已注入的值。
-    if not (LOCAL_ROOT / "pyproject.toml").is_file():
-        value = os.environ.get("SYNCOPATE_LOCAL_SOURCE_SHA")
-        if not value:
-            raise RuntimeError("容器缺 SYNCOPATE_LOCAL_SOURCE_SHA，无法确认当前源码身份")
-        return value
-    digest = hashlib.sha256()
-    for name in OVERLAY_DIRS:
-        root = LOCAL_ROOT / name
-        for path in sorted(p for p in root.rglob("*") if p.is_file()
-                           and "__pycache__" not in p.parts and path_suffix_ok(p)):
-            digest.update(str(path.relative_to(LOCAL_ROOT)).encode())
-            digest.update(path.read_bytes())
-    for name in OVERLAY_FILES:
-        path = LOCAL_ROOT / name
-        digest.update(name.encode())
-        digest.update(path.read_bytes())
-    return digest.hexdigest()[:16]
-
-
-def path_suffix_ok(path: pathlib.Path) -> bool:
-    return path.suffix not in {".pyc", ".pyo"}
-
-
-LOCAL_SOURCE_SHA = _local_source_digest()
+if modal.is_local():
+    from syncopate.train.source_snapshot import snapshot_source
+    _snapshot_owner, SOURCE_ROOT, LOCAL_SOURCE_SHA = snapshot_source(
+        LOCAL_ROOT, OVERLAY_DIRS, OVERLAY_FILES)
+    LOCAL_GIT_SHA = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=LOCAL_ROOT, text=True).strip()
+else:
+    SOURCE_ROOT = pathlib.Path(CURRENT_OVERLAY)
+    LOCAL_SOURCE_SHA = os.environ["SYNCOPATE_LOCAL_SOURCE_SHA"]
+    LOCAL_GIT_SHA = os.environ["SYNCOPATE_GIT_SHA"]
+    # Modal 调度 Python 与 /env 训练 venv 是两个环境。这里只导入标准库组件；
+    # torch/模型/数据模块仍通过 PY 子进程在冻结 venv 中运行。
+    sys.path.insert(0, CURRENT_OVERLAY)
+STACK = SOURCE_ROOT / "modal_app" / "stack"
 
 app = modal.App(APP_NAME)
 vol = modal.Volume.from_name(VOL_NAME, create_if_missing=True)
+writers = modal.Dict.from_name("syncopate-run-writers", create_if_missing=True)
 # wandb：secret `wandb-secret` 由 Chaoyu 在控制台建（09-03）；p_wandb 是接线判据（key 在容器里 + 在线写 3 点读回 3 点）。
 # ⛔ 不许按环境变量条件定义 Modal 对象：本机与容器里求值不同 ⇒ "Function has 3 dependencies but container got 2"
 #   （09-03 run13 就是这么在 hydrate 阶段直接死的）。
@@ -107,7 +96,7 @@ _ENV = {
     "CUDA_HOME": "/usr/local/cuda",
     "UV_PYTHON": "3.12",
     "UV_LINK_MODE": "copy",
-    "TORCH_CUDA_ARCH_LIST": "12.0",
+    "TORCH_CUDA_ARCH_LIST": "10.0",
     "HF_HUB_ENABLE_HF_TRANSFER": "0",
     "PYTHONUNBUFFERED": "1",
 }
@@ -130,16 +119,10 @@ image = (
         "'https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn-2.8.3%2Bcu130torch2.13-cp312-cp312-linux_x86_64.whl'"
     )
     # 当前改动尚未推送也能在目标栈验证：只上传源码/配置/测试，不上传 .git、数据、模型、审计或密钥。
-    .add_local_dir(LOCAL_ROOT / "syncopate", f"{CURRENT_OVERLAY}/syncopate", copy=True)
-    .add_local_dir(LOCAL_ROOT / "scripts", f"{CURRENT_OVERLAY}/scripts", copy=True)
-    .add_local_dir(LOCAL_ROOT / "configs", f"{CURRENT_OVERLAY}/configs", copy=True)
-    .add_local_dir(LOCAL_ROOT / "tests", f"{CURRENT_OVERLAY}/tests", copy=True)
-    .add_local_dir(LOCAL_ROOT / "docs", f"{CURRENT_OVERLAY}/docs", copy=True)
-    .add_local_dir(LOCAL_ROOT / "modal_app", f"{CURRENT_OVERLAY}/modal_app", copy=True)
-    .add_local_file(LOCAL_ROOT / "pyproject.toml", f"{CURRENT_OVERLAY}/pyproject.toml", copy=True)
-    .add_local_file(LOCAL_ROOT / "alembic.ini", f"{CURRENT_OVERLAY}/alembic.ini", copy=True)
+    # SOURCE_ROOT 只含 OVERLAY_DIRS/FILES 的冻结副本，不是整个工作树；合成一层减少打包往返。
+    .add_local_dir(SOURCE_ROOT, CURRENT_OVERLAY, copy=True)
     # 必须放在依赖安装之后：源码哈希会随每次编辑改变，不能因此让 uv/FA4 重装。
-    .env({"SYNCOPATE_LOCAL_SOURCE_SHA": LOCAL_SOURCE_SHA})
+    .env({"SYNCOPATE_LOCAL_SOURCE_SHA": LOCAL_SOURCE_SHA, "SYNCOPATE_GIT_SHA": LOCAL_GIT_SHA})
 )
 PY_FA4 = "/env/.venv-fa4/bin/python"
 
@@ -149,28 +132,26 @@ RUN_ENV = {"PYTHONPATH": REPO, "SYNCOPATE_CONTRACT": "v15", "SYNCOPATE_THINK": "
            "FLASHINFER_WORKSPACE_BASE": f"{VOL}/flashinfer_cache", "VLLM_CACHE_ROOT": f"{VOL}/vllm_cache"}
 
 
-def _sh(cmd: str, *, cwd: str | None = None, env: dict | None = None, timeout: int | None = None) -> dict:
+def _sh(cmd: str, *, cwd: str | None = None, env: dict | None = None, timeout: int | None = None,
+        completed_path: pathlib.Path | None = None, stop_grace: float = 10) -> dict:
+    from syncopate.pipeline.process_guard import run_guarded
     e = dict(os.environ); e.update(RUN_ENV)
     if env: e.update(env)
-    t0 = time.time()
-    try:
-        p = subprocess.run(cmd, shell=True, cwd=cwd, env=e, capture_output=True, text=True, timeout=timeout)
-        return {"rc": p.returncode, "out": (p.stdout + p.stderr)[-8000:], "secs": round(time.time() - t0, 1), "timed_out": False}
-    except subprocess.TimeoutExpired as ex:
-        out = ((ex.stdout or b"").decode(errors="replace") + (ex.stderr or b"").decode(errors="replace"))[-8000:]
-        return {"rc": -1, "out": out, "secs": round(time.time() - t0, 1), "timed_out": True}
+    return run_guarded(cmd, cwd=cwd, env=e, timeout=timeout, completed_path=completed_path, stop_grace=stop_grace)
 
 
 def _record(step: str, ok: bool, details: dict) -> dict:
     rec = {"step": step, "ok": bool(ok), "ts": time.strftime("%Y-%m-%d %H:%M:%S"), **details}
     os.makedirs(AUDIT, exist_ok=True)
-    json.dump(rec, open(f"{AUDIT}/{step}.json", "w"), ensure_ascii=False, indent=1)
+    record_path = f"{AUDIT}/{step}_{uuid4().hex}.json"
+    rec["record_path"] = record_path
+    json.dump(rec, open(record_path, "w"), ensure_ascii=False, indent=1)
     vol.commit()
     print(f"[{step}] {'✅' if ok else '🔴'}")
     return rec
 
 
-REPO_MIRROR = f"{VOL}/repo.git"      # 共享的 bare 镜像（Volume 上，只有 fetch 写它，带锁）
+REPO_MIRROR = f"{VOL}/repo.git"      # 实验臂只读；镜像更新由单独的同步操作负责。
 # ⚠️ REPO 常量必须在文件顶部定义：RUN_ENV 在定义时就把 PYTHONPATH 固化了，09-04 曾因在这里重赋值导致容器里
 #   cwd=/tmp/repo 而 PYTHONPATH=/vol/repo ⇒ 跑的是旧代码（探针回溯里的 BatchEncoding 错就是这么来的）
 DATA_DIRS = ("batches", "sft", "rl")   # gitignored 的数据目录整体指回 Volume（跨 run 共享、按版本分目录）；
@@ -178,19 +159,25 @@ DATA_DIRS = ("batches", "sft", "rl")   # gitignored 的数据目录整体指回 
 
 
 def _sync_repo() -> dict:
-    """克隆远端底座，再用本次调用随镜像上传的工作树源码覆盖；返回两层代码身份。"""
+    """只读固定 Git 底座，叠加已冻结的源码快照；容器不写共享 Git 镜像。"""
+    from syncopate.train.source_snapshot import verify_orchestrator
+    orchestrator_sha = verify_orchestrator(pathlib.Path(__file__),
+        pathlib.Path(CURRENT_OVERLAY) / "modal_app/stack_probe.py")
     if not os.path.isdir(REPO_MIRROR):
-        r = _sh(f"flock -w 600 {VOL}/.repo.lock git clone --bare --branch {REPO_BRANCH} {REPO_URL} {REPO_MIRROR}", timeout=900)
-        if r["rc"] != 0 and not os.path.isdir(REPO_MIRROR): raise RuntimeError("bare clone 失败：" + r["out"])
-    r = _sh(f"flock -w 600 {VOL}/.repo.lock git --git-dir {REPO_MIRROR} fetch -q origin +{REPO_BRANCH}:{REPO_BRANCH}", timeout=900)
-    if r["rc"] != 0: raise RuntimeError("git fetch 失败：" + r["out"])
-    vol.commit()
+        raise RuntimeError("Volume 缺少 repo.git；需要单独准备镜像，不在实验臂中创建")
+    found = _sh(f"git --git-dir {REPO_MIRROR} cat-file -e {LOCAL_GIT_SHA}^{{commit}}", timeout=60)
+    if found["rc"] != 0:
+        raise RuntimeError(f"Volume 镜像没有固定提交 {LOCAL_GIT_SHA}；先同步一次再启动实验")
     if not os.path.isdir(f"{REPO}/.git"):
-        r = _sh(f"git clone -q --shared --branch {REPO_BRANCH} {REPO_MIRROR} {REPO}", timeout=600)
-        if r["rc"] != 0: raise RuntimeError("worktree clone 失败：" + r["out"])
-    else:
-        _sh(f"git fetch -q origin {REPO_BRANCH} && git reset -q --hard origin/{REPO_BRANCH}", cwd=REPO, timeout=300)
+        r = _sh(f"git clone -q --shared --no-checkout {REPO_MIRROR} {REPO}", timeout=600)
+        if r["rc"] != 0:
+            raise RuntimeError("本容器 checkout 创建失败：" + r["out"])
+    r = _sh(f"git checkout -q --detach {LOCAL_GIT_SHA}", cwd=REPO, timeout=300)
+    if r["rc"] != 0:
+        raise RuntimeError("固定提交 checkout 失败：" + r["out"])
     remote_head = _sh("git rev-parse HEAD", cwd=REPO)["out"].strip()
+    if remote_head != LOCAL_GIT_SHA:
+        raise RuntimeError("Git 底座身份不一致")
     # 只替换明确上传的源码树。远端仓库提供受版本控制的数据切分等其余文件；当前改动无需 push 即可上云验证。
     for name in OVERLAY_DIRS:
         r = _sh(f"rm -rf {REPO}/{name} && cp -a {CURRENT_OVERLAY}/{name} {REPO}/{name}")
@@ -214,15 +201,17 @@ def _sync_repo() -> dict:
     # 项目以可编辑方式装进 venv（vLLM 插件入口点需要"装过"；--no-deps 不动锁）
     r = _sh(f"uv pip install --python {PY} --no-deps -e {REPO}", timeout=300)
     if r["rc"] != 0: raise RuntimeError("editable install 失败：" + r["out"][-600:])
-    return {"remote_git_head": remote_head, "local_overlay_sha256": LOCAL_SOURCE_SHA}
+    return {"remote_git_head": remote_head, "local_overlay_sha256": LOCAL_SOURCE_SHA,
+            "orchestrator_sha256": orchestrator_sha}
 
 
 def _topology() -> dict:
     return {
-        "modal_env": {k: v for k, v in os.environ.items() if k.startswith("MODAL_") and "TOKEN" not in k and "PATH" not in k},
+        "modal_env": {k: os.environ[k] for k in ("MODAL_TASK_ID", "MODAL_FUNCTION_ID", "MODAL_IMAGE_ID",
+                      "MODAL_REGION", "MODAL_CLOUD_PROVIDER") if k in os.environ},
         "cpu": _sh("lscpu | grep -E 'Model name|^NUMA|Socket|^CPU\\(s\\)'")["out"].strip(),
         "mem_gb": _sh("free -g | awk '/Mem:/{print $2}'")["out"].strip(),
-        "nvidia_smi": _sh("nvidia-smi --query-gpu=name,memory.total,driver_version,compute_cap --format=csv,noheader")["out"].strip(),
+        "nvidia_smi": _sh("nvidia-smi --query-gpu=uuid,pci.bus_id,name,memory.total,driver_version,compute_cap --format=csv,noheader")["out"].strip(),
         "topo": _sh("nvidia-smi topo -m 2>&1 | head -12")["out"].strip(),
         "nvlink": _sh("nvidia-smi nvlink -s 2>&1 | head -24")["out"].strip(),
     }
@@ -347,10 +336,11 @@ print("FLA_RESULT " + json.dumps(out))
 
 
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_ONE, cpu=8, memory=32768, timeout=1800)
-def p_gpu() -> dict:
+def p_gpu(expected_gpus: int = 1) -> dict:
     _sync_repo()
     tor = _sh(f"{PY} -c \"import torch; print(torch.cuda.device_count(), [torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())], torch.version.cuda)\"", timeout=300)
-    cap_ok = tor["rc"] == 0 and tor["out"].strip().startswith("1 [(10, 0)]")   # B200 = sm_100；换卡改这里
+    expected = f"{expected_gpus} " + str([(10, 0)] * expected_gpus)
+    cap_ok = tor["rc"] == 0 and tor["out"].strip().startswith(expected)
     fa = _sh(f"{PY} scripts/infra/check_flash_attn_backward.py", cwd=REPO, timeout=600)
     open("/tmp/fla_parity.py", "w").write(_FLA_PARITY)
     fl = _sh(f"{PY} /tmp/fla_parity.py", timeout=900)
@@ -579,7 +569,7 @@ if __name__ == "__main__":   # spawn 会重新 import 主模块，没有守卫 �
 
 @app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=8, memory=32768, timeout=1200)
 def p_nccl() -> dict:
-    """两张 B200：都是 sm_100；NVLink 状态；all_reduce/all_gather 三种消息大小的带宽（学习项，对照 4×5090 PCIe 的 25.6 GB/s）。"""
+    """两张 B200：核对 sm_100、NVLink 与三种消息大小的集合通信带宽。"""
     tor = _sh(f"{PY} -c \"import torch; print(torch.cuda.device_count(), [torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())], torch.cuda.can_device_access_peer(0,1))\"", timeout=300)
     open("/tmp/nccl2.py", "w").write(_NCCL)
     r = _sh(f"{PY} /tmp/nccl2.py", timeout=300)
@@ -683,14 +673,94 @@ json.dump({"url": url, "n_points": len(hist)}, open("/tmp/wandb_result.json", "w
 
 
 # ─────────────────────────── 通用：在新栈镜像里执行一段脚本（守则⑰：核对一律进容器做） ───────────────────────────
-@app.function(image=image, volumes={VOL: vol}, cpu=4, memory=16384, timeout=1800)
+@app.function(image=image, volumes={VOL: vol}, cpu=4, memory=16384, timeout=1800, single_use_containers=True)
 def p_exec(script: str, with_repo: bool = True) -> dict:
     """把本机传来的 python 脚本原文写进容器跑，返回 stdout/stderr 尾部。`modal run … --steps exec --exec-file path.py`"""
-    if with_repo: _sync_repo()
+    source = _sync_repo() if with_repo else {}
     open("/tmp/exec_script.py", "w").write(script)
     r = _sh(f"{PY} /tmp/exec_script.py", cwd=REPO if with_repo else None, timeout=1700)
     print(r["out"][-8000:])
-    return {"step": "exec", "ok": r["rc"] == 0, "rc": r["rc"], "out": r["out"][-8000:]}
+    vol.commit()
+    return {"step": "exec", "ok": r["rc"] == 0, "rc": r["rc"], "source": source, "out": r["out"][-8000:]}
+
+
+@app.function(image=image, volumes={VOL: vol}, cpu=4, memory=16384,
+              timeout=1200, single_use_containers=True)
+def p_infra_probe(name: str, run_id: str, mode: str = "cpu") -> dict:
+    """有限的 B 系列微测试；默认 CPU，真实训练仍只走 pipeline。"""
+    import shlex
+    from syncopate.pipeline.cloud_execution import bind_source, writer_claims
+    from contextlib import nullcontext
+    from syncopate.pipeline.infra_probe import can_start_gpu, probe_command, probe_spec, test_counts, tests_passed
+    from syncopate.train.gpu_telemetry import gpu_telemetry
+    spec = probe_spec(name, run_id)
+    if mode not in {"cpu", "gpu"}:
+        raise ValueError("infra probe mode 必须为 cpu 或 gpu")
+    source = _sync_repo()
+    root = pathlib.Path(VOL) / spec["relative_root"]
+    target = root / mode
+    with writer_claims(writers, ["infra-probe:" + str(root)], uuid4().hex):
+        bind_source(root, source)
+        if target.exists():
+            raise RuntimeError("该探针目录已有证据，不能覆盖；使用新 run-id")
+        if mode == "gpu":
+            preflight = json.loads((root / "cpu_execution.json").read_text())
+            if preflight.get("source") != source or not can_start_gpu(preflight):
+                raise RuntimeError("CPU 前置未通过，拒绝 GPU 计算")
+        # 占用整个阶段，包括在模块创建叶目录之前失败的情况。
+        with (root / f"{mode}_claim.json").open("x") as claim:
+            json.dump({"source": source, "mode": mode}, claim)
+        vol.commit()
+
+        def finish(ok: bool, details: dict) -> dict:
+            details = {"ok": bool(ok), **details}
+            with (root / f"{mode}_execution.json").open("x") as output:
+                json.dump(details, output, indent=2)
+            return _record(f"infra_{name}_{mode}", ok, details)
+        # 微测试无需复制 vLLM 大缓存；所有可写缓存仍位于本调用独占的 Volume 目录。
+        cache = pathlib.Path(VOL) / "_cache_runs" / ("infra_" + uuid4().hex)
+        env = {}
+        for folder, variable in (("flashinfer_cache", "FLASHINFER_WORKSPACE_BASE"),
+                ("vllm_cache", "VLLM_CACHE_ROOT"), ("triton", "TRITON_CACHE_DIR"),
+                ("torch_extensions", "TORCH_EXTENSIONS_DIR"), ("cuda", "CUDA_CACHE_PATH")):
+            directory = cache / folder
+            directory.mkdir(parents=True, exist_ok=False)
+            env[variable] = str(directory)
+        # CPU 模式也执行受测模块的真实 CPU 数学检查；任何跳过不冒充 GPU 验收。
+        counts = {}
+        if mode == "cpu":
+            test_files = shlex.join(spec['test_files'])
+            checks = _sh(f"{PY} -m pytest tests/pipeline/test_infra_probe.py tests/pipeline/test_infra_probe_entry.py "
+                         f"{test_files} -q --junitxml={root}/cpu_tests.xml",
+                         cwd=REPO, env=env, timeout=300)
+            (root / "cpu_tests.log").write_text(checks["out"])
+            counts = test_counts(root / "cpu_tests.xml")
+            if checks["rc"] != 0 or not tests_passed(counts):
+                return finish(False, {"source": source, "rc": checks["rc"], "tests": counts,
+                    "process": {key: value for key, value in checks.items() if key != "out"},
+                    "out": checks["out"][-4000:]})
+        command = shlex.join(probe_command(PY, spec, str(target), mode))
+        started = time.monotonic()
+        telemetry = root / "gpu_telemetry.csv" if mode == "gpu" else None
+        with gpu_telemetry(telemetry) if telemetry else nullcontext():
+            run = _sh(command, cwd=REPO, env=env, timeout=spec["timeout"] - 180)
+        (root / f"{mode}_process.log").write_text(run["out"])
+        result_file = target / "result.json"
+        try:
+            result = json.loads(result_file.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            result = {"read_error": str(exc)}
+        details = {"source": source, "rc": run["rc"], "result": result,
+                   "tests": counts, "telemetry_path": str(telemetry) if telemetry else None,
+                   "process": {key: value for key, value in run.items() if key != "out"},
+                   "wall_seconds": time.monotonic() - started, "cache": env,
+                   "command": command, "output": str(target),
+                   "resources": {"gpus": spec["gpus"] if mode == "gpu" else 0,
+                       "cpu": spec["cpu"] if mode == "gpu" else 4,
+                       "memory_mib": spec["memory"] if mode == "gpu" else 16384},
+                   "topology": _topology() if mode == "gpu" else {},
+                   "out": run["out"][-4000:]}
+        return finish(run["rc"] == 0 and result.get("health_ok") is True, details)
 
 
 # ─────────────────────────── v16 case 库在 Modal 上生成（S2 判据：与本机独立生成逐字节相同） ───────────────────────────
@@ -1103,23 +1173,117 @@ def p_eval_ab(think: int = 0, arm: str = "", model: str = "", adapter: str = "",
 
 
 # ─────────────────────────── 固定管线统一入口（B01/B02） ───────────────────────────
-@app.function(image=image, volumes={VOL: vol}, gpu=GPU_PAIR, cpu=32, memory=262144,
-              timeout=12 * 3600, secrets=SECRETS)
+@app.function(image=image, volumes={VOL: vol}, cpu=4, memory=16384,
+              timeout=1800, single_use_containers=True)
+def p_prepare_cache(run_id: str, stage: str, cache_from: str = "") -> dict:
+    from syncopate.pipeline.cloud_execution import audit_cache_path, prepare_cache, reuse_prepared_cache, validate_run_id, writer_claims
+    from syncopate.pipeline.stages import resources_for
+    validate_run_id(run_id)
+    if not resources_for(stage).gpus:
+        raise ValueError("CPU 阶段不需要 GPU 编译缓存")
+    with writer_claims(writers, [f"run:{run_id}"], uuid4().hex):
+        source = _sync_repo()
+        directory = pathlib.Path(VOL) / "_audit/v16/runs" / run_id / "preparation" / stage
+        print(f"[cache-prepare] CPU 复制 {stage} 缓存", flush=True)
+        if cache_from:
+            previous = audit_cache_path(pathlib.Path(VOL), cache_from)
+            result = reuse_prepared_cache(previous, directory, source)
+        else:
+            result = prepare_cache(pathlib.Path(VOL), directory, source)
+        return _record(f"cache_{run_id}_{stage}", True, result)
+
+
+@app.function(image=image, volumes={VOL: vol}, cpu=8, memory=32768,
+              timeout=1800, single_use_containers=True)
+def p_rl_preflight(run_id: str, input_run: str, identity_probe: bool = False) -> dict:
+    from syncopate.pipeline.cloud_execution import bind_source, validate_run_id, writer_claims
+    for value in (run_id, input_run):
+        validate_run_id(value)
+    with writer_claims(writers, [f"run:{run_id}"], uuid4().hex):
+        source = _sync_repo()
+        aud = pathlib.Path(VOL) / "_audit/v16/runs" / run_id
+        bind_source(aud, source)
+        output = aud / "preparation/rl-train/preflight.json"
+        result = _sh(f"{PY} -m syncopate.train.rl_preflight --input-run {input_run} "
+                     f"--run-id {run_id} --out {output}", cwd=REPO,
+                     env={"SYNCOPATE_OPT_STEP_PROBE": "1", "SYNCOPATE_POLICY_PROBE": "1" if identity_probe else "0"}, timeout=1700)
+        details = json.loads(output.read_text()) if output.exists() else {}
+        return _record(f"rl_preflight_{run_id}", result["rc"] == 0 and details.get("health_ok") is True,
+                       {"source": source, "process": result, "preflight": details})
+
+
+@app.function(image=image, volumes={VOL: vol}, cpu=8, memory=32768,
+              timeout=1800, single_use_containers=True)
+def p_opd_preflight(run_id: str, input_run: str, verify_only: bool = False) -> dict:
+    from syncopate.pipeline.cloud_execution import bind_source, writer_claims
+    from syncopate.pipeline.opd_input import validate_request
+    validate_request('opd-train', 'smoke', run_id, input_run)
+    with writer_claims(writers, [f'run:{run_id}'], uuid4().hex):
+        source = _sync_repo()
+        aud = pathlib.Path(VOL) / '_audit/v16/runs' / run_id
+        bind_source(aud, source)
+        output = aud / 'preparation/opd-train/preflight.json'
+        verify_flag = ' --verify-only' if verify_only else ''
+        result = _sh(f'{PY} -m syncopate.train.opd_preflight{verify_flag} --input-run {input_run} '
+                     f'--run-id {run_id} --out {output}', cwd=REPO, timeout=1500, stop_grace=105)
+        details = json.loads(output.read_text()) if output.exists() else {}
+        return _record(f'opd_preflight_{run_id}', result['rc'] == 0 and details.get('health_ok') is True,
+                       {'source': source, 'process': result, 'preflight': details})
+
+
+@app.function(image=image, volumes={VOL: vol}, cpu=8, memory=16384,
+              timeout=12 * 3600, secrets=SECRETS, single_use_containers=True)
 def p_pipeline(stage: str = "train-all", profile: str = "smoke", gate_mode: str = "",
-               run_id: str = "", resume: bool = False) -> dict:
+               run_id: str = "", resume: bool = False, rl_input_run: str = "", timeout_seconds: int = 42600,
+               identity_probe: bool = False, opd_input_run: str = '', opd_real_steps: int = 0) -> dict:
+    from syncopate.pipeline.cloud_execution import validate_run_id, writer_claims
+    run_id = run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "_" + uuid4().hex[:8]
+    validate_run_id(run_id)
+    keys = [f"run:{run_id}"]
+    if stage in {"data-prepare", "sft-data-group", "cases", "menus", "split", "rl-data", "sft-data-offline"}:
+        keys.append("data:v16")
+    with writer_claims(writers, keys, uuid4().hex):
+        return _pipeline_stage(stage, profile, gate_mode, run_id, resume, rl_input_run, timeout_seconds, identity_probe,
+                               opd_input_run, opd_real_steps)
+
+
+def _pipeline_stage(stage: str, profile: str, gate_mode: str, run_id: str, resume: bool,
+                    rl_input_run: str = "", timeout_seconds: int = 42600, identity_probe: bool = False,
+                    opd_input_run: str = '', opd_real_steps: int = 0) -> dict:
     """只调用固定 runbook，不在 Modal 层复制训练参数。默认用现成数据跑 smoke/observe 训练链。"""
     if profile not in {"smoke", "candidate"}:
         raise ValueError(f"unknown profile: {profile}")
+    from syncopate.pipeline.opd_input import validate_cloud_request
+    validate_cloud_request(stage, profile, run_id, opd_input_run, rl_input_run, opd_real_steps)
+    if identity_probe and (stage != "rl-train" or profile != "smoke" or not rl_input_run):
+        raise ValueError("身份诊断只用于显式上游输入的 smoke rl-train；不能冒充性能或 candidate")
     gate_mode = gate_mode or ("observe" if profile == "smoke" else "strict")
     if gate_mode not in {"observe", "strict"}:
         raise ValueError(f"unknown gate mode: {gate_mode}")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", stage):
         raise ValueError(f"unsafe stage: {stage!r}")
     run_id = run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", run_id):
-        raise ValueError(f"unsafe run id: {run_id!r}")
-
+    from syncopate.pipeline.stages import resources_for
+    from syncopate.pipeline.cloud_execution import bind_source, cache_writer_keys, prepared_cache, validate_run_id, writer_claims
+    validate_run_id(run_id)
+    resources = resources_for(stage)
     source = _sync_repo()
+    aud = f"{VOL}/_audit/v16/runs/{run_id}"
+    bind_source(pathlib.Path(aud), source)
+    if not 60 <= timeout_seconds <= 42600:
+        raise ValueError("pipeline timeout 须在 60～42600 秒")
+    if rl_input_run:
+        validate_run_id(rl_input_run)
+        preflight = json.loads((pathlib.Path(aud) / "preparation/rl-train/preflight.json").read_text())
+        if preflight.get("health_ok") is not True or preflight.get("input", {}).get("input_run") != rl_input_run:
+            raise RuntimeError("缺少本轮上游输入的 CPU 前置通过证据")
+    if opd_input_run:
+        # Model/data imports run in the frozen training Python, not Modal's controller Python.
+        checked = _sh(f'{PY} -m syncopate.train.opd_preflight --verify-only --input-run {opd_input_run} '
+                      f'--run-id {run_id} --out {aud}/preparation/opd-train/preflight.json',
+                      cwd=REPO, timeout=120, stop_grace=105)
+        if checked['rc'] != 0:
+            raise RuntimeError('OPD 本轮 CPU 原始证据未通过回读: ' + checked['out'])
     services = _start_services() if stage in {"all", "train-all", "exam"} else {}
     if services and any(services[name]["rc"] != 0 for name in ("pg", "redis")):
         return _record(f"pipeline_{run_id}", False, {
@@ -1128,14 +1292,25 @@ def p_pipeline(stage: str = "train-all", profile: str = "smoke", gate_mode: str 
             "error": "PostgreSQL/Redis bootstrap failed",
         })
 
-    aud = f"{VOL}/_audit/v16/runs/{run_id}"
-    os.makedirs(aud, exist_ok=True)
+    cache_env = prepared_cache(pathlib.Path(aud) / "preparation" / stage, source) if resources.gpus else {}
     resume_flag = " --resume" if resume else ""
     redirect = ">>" if resume else ">"
     command = (f"bash scripts/v16_pipeline.sh{resume_flag} --profile {profile} --gate-mode {gate_mode} "
-               f"--run-id {run_id} {stage} {redirect} {aud}/pipeline.log 2>&1")
-    result = _sh(command, cwd=REPO, env={**SERVICE_ENV, "PY": PY},
-                 timeout=12 * 3600 - 600)
+               f"--run-id {run_id} " + (f"--rl-input-run {rl_input_run} " if rl_input_run else "") +
+               (f'--opd-input-run {opd_input_run} ' if opd_input_run else '') +
+               f"{stage} {redirect} {aud}/pipeline.log 2>&1")
+    with writer_claims(writers, cache_writer_keys(cache_env) if cache_env else [], uuid4().hex):
+        from contextlib import nullcontext
+        from syncopate.train.gpu_telemetry import gpu_telemetry
+        kernel_gate = p_gpu.local(resources.gpus) if resources.gpus else None
+        if kernel_gate is not None and kernel_gate.get("ok") is not True:
+            return _record(f"pipeline_{run_id}", False, {"error": "GPU kernel gate failed", "kernel_gate": kernel_gate})
+        with gpu_telemetry(pathlib.Path(aud) / f"gpu_{stage}.csv") if resources.gpus else nullcontext():
+            result = _sh(command, cwd=REPO,
+                         env={**SERVICE_ENV, **cache_env, "PY": PY, "SYNCOPATE_POLICY_PROBE": "1" if identity_probe else "0",
+                              **({'OPD_SMOKE_REAL_STEPS': str(opd_real_steps)} if opd_real_steps else {}),
+                              **({"SYNCOPATE_OPT_STEP_PROBE": "1", "RAY_DEDUP_LOGS": "0"} if rl_input_run else {})},
+                         timeout=timeout_seconds, stop_grace=105)
     try:
         manifest = json.load(open(f"{aud}/manifest.json"))
     except Exception as exc:
@@ -1144,26 +1319,129 @@ def p_pipeline(stage: str = "train-all", profile: str = "smoke", gate_mode: str 
         log_tail = open(f"{aud}/pipeline.log", errors="replace").read()[-6000:]
     except OSError:
         log_tail = ""
+    identity_result = None
+    if identity_probe and result["rc"] == 0:
+        identity_output = pathlib.Path(aud) / "identity_gate.json"
+        checked = _sh(f"{PY} -m syncopate.train.policy_evidence --run-id {run_id} --out {identity_output}",
+                      cwd=REPO, timeout=180)
+        identity_result = json.loads(identity_output.read_text()) if identity_output.exists() else {"error": checked["out"][-2000:]}
+        if checked["rc"] != 0 or identity_result.get("health_ok") is not True:
+            result["rc"] = 3
     vol.commit()
     # observe 只表示“继续把诊断跑完”；任一 WARN 仍要让总结果非绿，不能冒充 B02 全链通过。
     ok = result["rc"] == 0 and manifest.get("all_passed") is True
     return _record(f"pipeline_{run_id}", ok, {
         "run_id": run_id, "profile": profile, "gate_mode": gate_mode, "resume": resume,
         "stage_requested": stage, "source": source, "services": services,
+        "resources": resources.modal_options(), "cache_env": cache_env,
+        "kernel_gate": kernel_gate, "rl_input_run": rl_input_run,
+        "opd_input_run": opd_input_run, "opd_real_steps": opd_real_steps,
+        "identity_probe": identity_probe,
+        "identity_gate": identity_result,
         "returncode": result["rc"], "secs": result["secs"],
         "manifest": manifest, "log_tail": log_tail, "topology": _topology(),
     })
 
 
 # ─────────────────────────── 本机入口 ───────────────────────────
-ALL_STEPS = ["image", "verl", "versions", "models", "gpu", "fa4", "nccl", "vllm", "vllm_ep"]
+@app.function(image=image, volumes={VOL: vol}, cpu=4, memory=16384,
+              timeout=2700, single_use_containers=True)
+def p_generation_probe(source_run: str, arm: str, run_id: str, mode: str = "cpu", cache_from: str = "") -> dict:
+    from contextlib import ExitStack
+    from syncopate.pipeline.cloud_execution import (bind_source, cache_writer_keys, prepare_cache,
+        prepared_cache, reuse_prepared_cache, validate_run_id, writer_claims)
+    if mode not in {"cpu", "gpu"} or arm not in {"full", "model_defaults"}:
+        raise ValueError("未登记的诊断模式或实验臂")
+    for value in (source_run, run_id):
+        validate_run_id(value)
+    keys = [f"generation:{run_id}:{arm}"]
+    if cache_from:
+        validate_run_id(cache_from)
+        if cache_from == run_id:
+            raise ValueError("新实验不能把自己当旧缓存来源")
+        keys.append(f"generation:{cache_from}:{arm}")
+    with ExitStack() as scope:
+        scope.enter_context(writer_claims(writers, keys, uuid4().hex))
+        source = _sync_repo()
+        version = _sh(f"{PY} -c \"from syncopate.pipeline.split import DATA_VERSION; print('__DATA_VERSION__=' + DATA_VERSION)\"",
+                      cwd=REPO, timeout=60)
+        match = re.search(r"^__DATA_VERSION__=([A-Za-z0-9_-]+)$", version["out"], re.MULTILINE)
+        if version["rc"] != 0 or match is None:
+            raise RuntimeError("训练 venv 未返回数据版本：" + version["out"])
+        data_version = match.group(1)
+        label = f"{data_version}_smoke_{source_run}"
+        model = f"{STUDENT}-sft-{label}"
+        directory = pathlib.Path(VOL) / "_audit/mainline/T1-1" / run_id / arm
+        target = directory / mode
+        bind_source(target, source)
+        cache_env = {}
+        kernel_gate = None
+        cpu_tests = None
+        if mode == "cpu":
+            check = _sh(f"{PY} -m pytest tests/train/test_generation_observer.py tests/train/test_generation_probe.py "
+                        "tests/train/test_v16_launch_profiles.py tests/pipeline/test_cloud_execution.py "
+                        "tests/train/test_source_snapshot.py tests/train/test_vllm_process.py "
+                        "tests/pipeline/test_process_guard.py "
+                        "tests/train/test_rollout_loop.py::test_native_eos_and_hidden_eos_produce_identical_next_turn_inputs "
+                        "tests/train/test_rollout_loop.py::test_inserted_template_tokens_do_not_claim_to_be_sampled_policy_tokens "
+                        "tests/train/test_rollout_loop.py::test_sft_sample_is_token_identical_to_rl_rollout "
+                        "tests/train/test_rollout_loop.py::test_gold_script_through_full_loop_scores_high -q -rs",
+                        cwd=REPO, env={"SYNCOPATE_TEST_TOKENIZER": STUDENT}, timeout=600)
+            cpu_tests = check
+            if check["rc"] != 0 or "skipped" in check["out"]:
+                return _record(f"generation_{run_id}_{arm}_cpu", False,
+                               {"source": source, "cpu_tests": check})
+        else:
+            cache_env = prepared_cache(directory / "cpu", source)
+            scope.enter_context(writer_claims(writers, cache_writer_keys(cache_env), uuid4().hex))
+            RUN_ENV.update(cache_env)
+            kernel_gate = p_gpu.local()
+            if not kernel_gate["ok"]:
+                return _record(f"generation_{run_id}_{arm}_gpu", False,
+                               {"source": source, "kernel_gate": kernel_gate})
+        dry = " --dry-run" if mode == "cpu" else ""
+        command = (f"{PY} -m syncopate.train.generation_probe --source-run {VOL}/checkpoints/grpo/{label} "
+                   f"--model {model} --batch {VOL}/data/batches/{data_version} --out {target} --arm {arm}{dry} "
+                   f"> {target}/execution.log 2>&1")
+        result = _sh(command, cwd=REPO, env=cache_env, timeout=2400,
+                     completed_path=target / "result.json" if mode == "gpu" else None)
+        log_tail = (target / "execution.log").read_text(errors="replace")[-6000:]
+        details = {"source": source, "arm": arm, "mode": mode, "run_id": run_id,
+                   "returncode": result["rc"], "secs": result["secs"], "log_tail": log_tail,
+                   "process_returncode": result["process_returncode"],
+                   "timed_out": result["timed_out"], "timeout_reason": result["timeout_reason"],
+                   "cache_env": cache_env, "kernel_gate": kernel_gate, "cpu_tests": cpu_tests}
+        if mode == "cpu" and result["rc"] == 0:
+            if cache_from:
+                previous = pathlib.Path(VOL) / "_audit/mainline/T1-1" / cache_from / arm / "cpu"
+                details["prepared_cache"] = reuse_prepared_cache(previous, target, source)
+                print(f"[cache-prepare] {arm} 顺序复用 {cache_from} 的已完成缓存；旧来源保留", flush=True)
+            else:
+                print(f"[cache-prepare] CPU 复制 {arm} 缓存，完成前不分配 GPU", flush=True)
+                details["prepared_cache"] = prepare_cache(pathlib.Path(VOL), target, source)
+        if mode == "gpu" and (target / "result.json").exists():
+            summary = json.loads((target / "result.json").read_text())
+            details["result"] = {key: value for key, value in summary.items() if key != "rows"}
+            details["topology"] = _topology()
+        details["probe_completed"] = result["rc"] == 0
+        ok = result["rc"] == 0 and (mode == "cpu" or details.get("result", {}).get("generation_shape_ok") is True)
+        return _record(f"generation_{run_id}_{arm}_{mode}", ok, details)
+
+
+ALL_STEPS = ["image", "verl"]
 
 
 @app.local_entrypoint()
-def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 1, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = "", build_gates: str = "strict", pipeline_stage: str = "train-all", pipeline_profile: str = "smoke", pipeline_gate_mode: str = "", pipeline_run_id: str = "", pipeline_resume: bool = False):
+def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: str = "tests -q -rfE -p no:cacheprovider", exec_file: str = "", expected_sha: str = "", max_steps: int = 30, exam_model: str = "", exam_adapter: str = "", exam_arm: str = "v16_smoke", exam_passes: int = 1, exam_limit: int = 0, sft_arm: str = "v16_smoke", sft_train_file: str = "", sft_val_file: str = "", sft_epochs: int = 1, diag_n: int = 20, diag_samples: int = 4, diag_max_tokens: int = 4096, diag_arm: str = "base", rl_steps: int = 2, rl_gpus: int = 2, rl_extra: str = "", rl_arm: str = "v16_smoke", opd_steps: int = 1, opd_adapter: str = "", opd_arm: str = "v16_smoke", ab_think: int = 0, ab_arm: str = "", ab_samples: int = 8, ab_limit: int = 0, ab_families: str = "", ab_adapter: str = "", build_gates: str = "strict", pipeline_stage: str = "train-all", pipeline_profile: str = "smoke", pipeline_gate_mode: str = "", pipeline_run_id: str = "", pipeline_resume: bool = False, probe_source_run: str = "", probe_run_id: str = "", probe_mode: str = "cpu", probe_cache_from: str = "", probe_arms: str = "full,model_defaults", pipeline_rl_input_run: str = "", pipeline_cache_from: str = "", pipeline_timeout: int = 42600, pipeline_identity_probe: bool = False, infra_probe: str = "", infra_run_id: str = "", infra_mode: str = "cpu", pipeline_opd_input_run: str = '', pipeline_opd_real_steps: int = 0):
     want = [s.strip() for s in steps.split(",") if s.strip()]
     results: dict[str, dict] = {}
     t0 = time.time()
+    if pipeline_opd_input_run or pipeline_opd_real_steps or 'opd_preflight' in want:
+        from syncopate.pipeline.opd_input import validate_cloud_request
+        if not set(want) <= {'pipeline', 'opd_preflight'} or not pipeline_opd_input_run:
+            raise ValueError('独立 OPD 输入只适用于明确的 pipeline / opd_preflight')
+        validate_cloud_request(pipeline_stage if 'pipeline' in want else 'opd-train', pipeline_profile,
+                               pipeline_run_id, pipeline_opd_input_run, pipeline_rl_input_run, pipeline_opd_real_steps)
 
     def run(name, fn, *a, **kw):
         try:
@@ -1184,6 +1462,10 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "pytest" in want: run("pytest", p_pytest, pytest_args)
     if "wandb" in want: run("wandb", p_wandb)
     if "exec" in want and exec_file: run("exec", p_exec, open(exec_file).read())
+    if "infra_probe" in want:
+        from syncopate.pipeline.infra_probe import execute_probe
+        for mode, result in execute_probe(p_infra_probe, infra_probe, infra_run_id, infra_mode).items():
+            results[f"infra_{infra_probe}_{mode}"] = result
     if "rebuild_v16" in want: run("rebuild_v16", p_rebuild_v16, expected_sha)
     if "build_v16" in want: run("build_v16", p_build_v16, False, build_gates)
     if "teacher_diag" in want: run("teacher_diag", p_teacher_diag, diag_n, diag_samples, diag_max_tokens, diag_arm, diag_arm == "base")
@@ -1193,11 +1475,72 @@ def main(steps: str = ",".join(ALL_STEPS), models_only: str = "", pytest_args: s
     if "rl_smoke" in want: run("rl_smoke", p_rl_smoke, rl_steps, rl_gpus, rl_extra, rl_arm)
     if "opd_smoke" in want: run("opd_smoke", p_opd_smoke, opd_steps, opd_adapter, opd_arm)
     if "eval_ab" in want: run("eval_ab", p_eval_ab, ab_think, ab_arm, "", ab_adapter, ab_samples, ab_limit, ab_families)
-    if "pipeline" in want: run("pipeline", p_pipeline, pipeline_stage, pipeline_profile, pipeline_gate_mode, pipeline_run_id, pipeline_resume)
+    if "rl_preflight" in want:
+        run("rl_preflight", p_rl_preflight, pipeline_run_id, pipeline_rl_input_run, pipeline_identity_probe)
+    if 'opd_preflight' in want and 'pipeline' not in want:
+        run('opd_preflight', p_opd_preflight, pipeline_run_id, pipeline_opd_input_run)
+    if "pipeline" in want:
+        from syncopate.pipeline.stages import modal_plan
+        run_id = pipeline_run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "_" + uuid4().hex[:8]
+        if not 60 <= pipeline_timeout <= 42600:
+            raise ValueError("pipeline timeout 须在 60～42600 秒")
+        if pipeline_rl_input_run:
+            from syncopate.pipeline.rl_input import validate_request
+            validate_request(pipeline_stage, pipeline_profile, run_id, pipeline_rl_input_run)
+        if pipeline_identity_probe and (pipeline_stage != "rl-train" or pipeline_profile != "smoke" or not pipeline_rl_input_run):
+            raise ValueError("--pipeline-identity-probe 只适用于显式上游输入的 smoke rl-train")
+        for index, (stage, resources) in enumerate(modal_plan(pipeline_stage)):
+            name = f"pipeline_{stage}"
+            if pipeline_opd_input_run and stage in {'opd-train', 'opd-eval'}:
+                run('opd_preflight', p_opd_preflight, run_id, pipeline_opd_input_run,
+                    pipeline_resume or stage == 'opd-eval')
+                if results['opd_preflight'].get('ok') is not True:
+                    break
+            if pipeline_rl_input_run and stage == "rl-train":
+                run("rl_preflight", p_rl_preflight, run_id, pipeline_rl_input_run, pipeline_identity_probe)
+                if results["rl_preflight"].get("ok") is not True:
+                    break
+            if resources.gpus:
+                preparation = f"prepare_{stage}"
+                run(preparation, p_prepare_cache, run_id, stage, pipeline_cache_from)
+                if results[preparation].get("ok") is not True:
+                    break
+            print(f"[{name}] 资源：{resources.gpus}×B200 / {resources.cpu} CPU / {resources.memory_mib} MiB")
+            run(name, p_pipeline.with_options(**resources.modal_options(), timeout=min(43200, pipeline_timeout + 2400)), stage,
+                pipeline_profile, pipeline_gate_mode, run_id, pipeline_resume or index > 0,
+                pipeline_rl_input_run, pipeline_timeout, pipeline_identity_probe,
+                pipeline_opd_input_run, pipeline_opd_real_steps)
+            result = results[name]
+            # 质量 WARN 不阻止后段；程序/身份错误、坏产物、严格门禁则停止依赖链。
+            if result.get("returncode", 1) != 0 or not result.get("manifest", {}).get("pipeline_ok", False):
+                break
+    if "generation_probe" in want:
+        if probe_mode not in {"cpu", "gpu"}:
+            raise ValueError("probe-mode 只能是 cpu 或 gpu")
+        from syncopate.train.generation_probe import parse_arms
+        arms = parse_arms(probe_arms)
+        # 同一镜像/源码先通过完整 CPU 接口测试和输入身份对拍，再分配 GPU。
+        cpu_calls = {arm: p_generation_probe.spawn(probe_source_run, arm, probe_run_id, "cpu", probe_cache_from) for arm in arms}
+        for arm, call in cpu_calls.items():
+            try:
+                results[f"probe_cpu_{arm}"] = call.get()
+            except Exception as exc:
+                results[f"probe_cpu_{arm}"] = {"ok": None, "error": repr(exc)}
+        if probe_mode == "gpu" and all(results[f"probe_cpu_{arm}"].get("ok") is True for arm in arms):
+            calls = {arm: p_generation_probe.with_options(gpu=GPU_ONE, cpu=16, memory=131072).spawn(
+                probe_source_run, arm, probe_run_id, "gpu", probe_cache_from) for arm in arms}
+            # 先启动全部实验臂，再等待任何一个结果；不是逐臂串行申请 GPU。
+            for arm, call in calls.items():
+                print(f"[probe-started] {arm} {call.object_id}")
+            for arm, call in calls.items():
+                try:
+                    results[f"probe_gpu_{arm}"] = call.get()
+                except Exception as exc:
+                    results[f"probe_gpu_{arm}"] = {"ok": None, "error": repr(exc)}
 
     out_dir = LOCAL_ROOT / "_audit" / "stack_probe"; out_dir.mkdir(parents=True, exist_ok=True)
     # 09-04：并行多臂时两个 run 同一分钟收尾会互相覆盖（exam_plumb 被 rl_cfg 盖掉过）⇒ 文件名带秒 + 步名
-    stamp = time.strftime("%Y-%m-%d_%H%M%S") + "_" + "-".join(want)[:40]
+    stamp = time.strftime("%Y-%m-%d_%H%M%S") + "_" + "-".join(want)[:40] + "_" + uuid4().hex[:8]
     (out_dir / f"summary_{stamp}.json").write_text(json.dumps(results, ensure_ascii=False, indent=1))
     print("\n══════ 新栈探针 · 汇总 ══════")
     for k, v in results.items():

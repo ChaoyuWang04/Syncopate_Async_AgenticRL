@@ -1,67 +1,7 @@
-"""GRPO 启动器：拼 verl 的 Hydra override 并起子进程。
+"""已退役的 verl 0.8 配置夹具，只供历史结构回归读取。
 
-★ 相对老师那套 64 卡配置，单卡 5090 有三处**必须反着来**的改动：
-
-1. **关掉 offload**（两个都关）。老师那套开 `param_offload` + `optimizer_offload`，
-   前提是"CPU 内存富余、每卡显存紧张"；本机 30GB 内存才是瓶颈，开着会被 OOM killer 干掉。
-   ⚠️ commit cf813f0 的标题写着「param_offload 必须开」，但**真正跑通 50 步的那次用的是
-   False**——让它跑通的是 `max_num_seqs` 1024→32。2026-08-12 实测开 True 反而在
-   vLLM 第一次 `sleep()` 时静默杀掉 VllmWorker。**别照着 commit 标题改默认值。**
-
-★★ 2026-08-12 实测的显存账（wake_up OOM 连挂三次换来的）：
-
-   **`max_num_seqs` 不是显存旋钮。** `gpu_memory_utilization` 是按比例**预分配**的：
-   0.42 × 31.36 = 13.2GB，vLLM 无论并发上限是 32 还是 20 都照拿不误。
-   降 `max_num_seqs` 只限并发、不改分配量 —— 实测 32→20 对 OOM 毫无影响。
-   （cf813f0 里 1024→32 有效，是因为那是调度结构和 block table 的开销，不是 KV 池。）
-
-   本机的真实账本（Qwen3-4B：36 层 / 8 KV 头 / head_dim 128 ⇒ **KV = 144 KB/token**）：
-
-       FSDP 建好后 actor 常驻      10.49 GB   （实测，日志里 "After FSDP"）
-       vLLM 按 0.42 预分配         13.2  GB   （权重 7.6 + KV 池 5.6 = 41k token）
-       update_weights 时推权重     ~7.6  GB   （聚合出的一份全量 bf16）
-       ------------------------------------------------
-       合计                        31.3  GB   ≈ 31.36 的物理上限 ⇒ **贴着墙，必挂**
-
-   ⇒ 真正的旋钮是 **`--rollout-gpu-util`**。给 vLLM 少分一点，就是给 wake_up 那一刻
-   的权重聚合腾地方。0.34 ⇒ vLLM 10.7GB、KV 池 3.1GB（22k token ≈ 3 条满长序列），
-   总占用 28.8GB，留 2.5GB 余量。代价是 rollout 并发下降、变慢，但结果不受影响。
-
-   ⚠️ 别把 `--rollout-gpu-util` 降到 KV 池装不下**一条**满长序列以下
-   （max_model_len 7168 × 144KB = 0.98GB），否则会退化成 §5 表里第一行的
-   「vLLM 分不到 KV cache」。
-
-★★★ 更隐蔽的一条：**actor 的显存会随训练步数单调爬升，是碎片不是泄漏**
-
-   2026-08-12 第五次尝试跑到 **step 24** 才挂（前四次是第一步就挂）。实测：
-
-       step   allocated   reserved   差值(碎片)
-         1      16.35      19.22       2.87
-        10      17.01      20.38       3.36
-        15      18.72      20.58       1.86
-        24      18.72      21.08       2.36   ← 然后 wake_up OOM
-
-   **`allocated` 从 step 15 起就不涨了，`reserved` 还在爬** —— PyTorch 缓存分配器
-   的 reserved 只增不减。到 step 24 剩给 vLLM 的只有 31.36−21.08 = 10.28GB，
-   而 0.42 要 13.2GB。
-
-   ⇒ **配 `--rollout-gpu-util` 不能按第一步的显存算，要按跑几十步之后的峰值算。**
-   按 21.08 反推上限是 0.328；实际取 0.30 留余量。
-   ⇒ 这也解释了前四次：它们不是"某个参数配错"，是这条路本来就贴着墙走 ——
-   prompt 更长的时候第一步就撞，prompt 裁短之后能撑 24 步，但墙还在那儿。
-
-   ⚠️ 碎片的标准解法 `expandable_segments:True` 在这里**用不了**，原因见下面
-   `env.pop("PYTORCH_CUDA_ALLOC_CONF")` 那段：它和 vLLM 的 colocate 内存池冲突。
-
-2. **上 LoRA**。4B 全参 AdamW 要 48GB 优化器状态，装不下。
-   r=32 挂全部线性层 = 66M 可训练参数（占 1.64%），优化器状态 0.79GB。
-   ⚠️ 只挂注意力是老习惯，容量差 2.8 倍，必须带上 MLP 的 gate/up/down。
-
-3. **vLLM 显存份额调大**。老师给 0.2（64 卡分摊），单卡要给到 0.4 左右。
-
-用法：
-    python -m syncopate.train.launch_rl --dry-run          # 只打印命令，不启动
-    python -m syncopate.train.launch_rl --steps 10         # 真跑 10 步冒烟
+这里的参数与注释不适用于当前 B200 栈。本模块不能启动训练。
+现行计算只走 scripts/v16_pipeline.sh；V1 适配器为 launch_rl_v1.py。
 """
 
 from __future__ import annotations
@@ -237,7 +177,7 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         #    ★ 纪律：推断句一律标 `[推断，未验证]`，别和事实排在一起。
         #
         #    ⚠️ 实测代价：trainer 3 卡跑 FULL_SHARD 每步 1182s，1 卡不切分 198s ——
-        #    **多两张卡慢 6 倍**。因为 5090 没有 P2P，卡间只有 6.4 GB/s（经主机中转），
+        #    **多两张卡慢 6 倍**。因为 旧 GPU 没有 P2P，卡间只有 6.4 GB/s（经主机中转），
         #    而 FULL_SHARD 每层前向反向都要把 8GB 权重 all-gather 回来。
         #    ⛔ 原来这里写「LoRA 下 DDP 只同步 66M 梯度（约 260MB ⇒ 40ms），三个数量级的差距」——
         #    那 260MB 是**算出来的**（66M×4B），从没量过；而 E21 之下这段流量**根本不存在**。
@@ -252,7 +192,7 @@ def build_overrides(args: argparse.Namespace) -> list[str]:
         # ② `use_dynamic_bsz`：按 **token 预算**打包，而不是按固定条数。
         #
         # ⛔⛔ **在本机是倒退，默认关掉了。** 原猜想是「序列才 4.1k token，
-        # 一条一条算喂不饱 5090，打包成 16k 应该更快」。实测（同为 step 1，1 张训练卡）：
+        # 一条一条算喂不饱 旧 GPU，打包成 16k 应该更快」。实测（同为 step 1，1 张训练卡）：
         #        静态 micro_batch=1   update_actor  84.5 s
         #        dynamic 16384        update_actor 184.9 s   ← **慢 2.19×**
         #    3 卡上同样的比值（187.8 / 84.5 ≈ 2.2），说明和卡数无关。
@@ -736,7 +676,8 @@ def write_run_purpose(save_path: Path, *, purpose: str, steps: int) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 5090 降配）")
+    raise SystemExit("此旧入口已退役，不会启动计算。请使用 scripts/v16_pipeline.sh。")
+    parser = argparse.ArgumentParser(description="Syncopate GRPO 启动器（单卡 旧 GPU 降配）")
     parser.add_argument("--model", default=TEST_TOKENIZER)
     # ★ 2026-08-19：默认值跟着 DATA_VERSION 走（单一来源，见 08 §4.0「不该有副本」）。
     #   此前写死 "v3" —— 目录早已不存在，谁忘了传就 FileNotFoundError（第七形态：
@@ -1147,7 +1088,7 @@ def main(argv: list[str] | None = None) -> int:
     # 参见 pytorch/pytorch#147851。抄配置时最容易连这种坑一起抄过来。
     env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
     env.setdefault("VLLM_USE_V1", "1")
-    # ★★★ vLLM 的注意力后端（2026-08-13 在 4×5090 / 驱动 570.195.03 上实测）
+    # ★★★ vLLM 的注意力后端（2026-08-13 在 旧机器 / 驱动 570.195.03 上实测）
     #
     # 默认的 FlashAttention-2 在 sm_120 上走 PTX JIT，而那份 PTX 是用比本机驱动更新的
     # 工具链编的 ⇒ `CUDA error: the provided PTX was compiled with an unsupported toolchain`。
@@ -1165,7 +1106,7 @@ def main(argv: list[str] | None = None) -> int:
     # 内存吃紧时 Ray 会提前杀 worker。放宽一点，让真正的分配失败自己暴露出来，
     # 而不是被 Ray 的保护机制提前打断（真 OOM 有堆栈，被 Ray 杀掉只有一句话）
     env.setdefault("RAY_memory_usage_threshold", "0.97")
-    # ★★★ 多卡必须设 NCCL_CUMEM_ENABLE=0（2026-08-13 在 4×5090 + Ray 上实测出来的）
+    # ★★★ 多卡必须设 NCCL_CUMEM_ENABLE=0（2026-08-13 在 旧机器 + Ray 上实测出来的）
     #
     # 症状：FSDP 初始化的第一次参数广播直接炸
     #     transport/shm.cc:590 NCCL WARN Cuda failure 217

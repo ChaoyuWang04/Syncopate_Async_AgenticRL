@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,7 @@ def inspect_adapter(adapter_dir: str | Path) -> dict[str, Any]:
         alpha = float(config.get("lora_alpha", 0))
     except (TypeError, ValueError) as exc:
         raise AdapterValidationError("r and lora_alpha must be numeric") from exc
-    if rank <= 0 or alpha <= 0:
+    if rank <= 0 or not math.isfinite(alpha) or alpha <= 0:
         raise AdapterValidationError(f"invalid LoRA metadata: r={rank}, alpha={alpha}")
     if config.get("task_type") != "CAUSAL_LM":
         raise AdapterValidationError(
@@ -54,6 +55,10 @@ def inspect_adapter(adapter_dir: str | Path) -> dict[str, Any]:
         keys = list(handle.keys())
         for key in keys:
             tensor = handle.get_tensor(key)
+            if not tensor.is_floating_point():
+                raise AdapterValidationError(f"LoRA tensor must be floating point: {key}")
+            if not bool(tensor.isfinite().all().item()):
+                raise AdapterValidationError(f"LoRA tensor must be finite: {key}")
             shapes[key] = tuple(tensor.shape)
             learned = bool(tensor.count_nonzero().item())
             nonzero += int(learned)

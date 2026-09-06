@@ -2,7 +2,8 @@
 
 render_prompt_text：与 runtime decider 同一条渲染路径（system.txt + step_user.txt）；reference_now = 今天（与 decider 同，此前写死 2026-08-20），
 context 空（裁定⑨：account_id 运行态注入，不进题面）。
-segment_text：按 offset_mapping 把 v15 的 think / tool / 纯自然语言三段映射到 token；
+segment_text：仅供文本诊断，按 offset_mapping 把 v15 字符段映射到新编码的 token；
+生产 OPD 用 opd_tokens 将本模块的 v15_char_labels 对齐到原始生成 ID，绝不调用 segment_text。
 只有纯自然语言终答可蒸。旧 JSON reply 白名单只属于 v14 历史，不再用于当前 OPD。
 """
 from __future__ import annotations
@@ -183,7 +184,7 @@ def v15_char_labels(text: str, *, implicit_think_open: bool = False) -> list[str
 
 def segment_text(tokenizer, text: str, *,
                  implicit_think_open: bool | None = None) -> tuple[list[int], list[str]]:
-    """Current v15 segmenter, mapped with tokenizer offsets rather than token text.
+    """Text-only diagnostic segmenter; NOT an on-policy sampled-ID interface.
 
     The old implementation still selected only a JSON ``reply`` value.  That was
     the v14 wire format; under v15 it inverted the objective by skipping correct

@@ -17,6 +17,7 @@ import itertools
 import json
 import random
 from pathlib import Path
+from syncopate.pipeline.split import DEFAULT_OPD_PROMPTS
 
 rng = random.Random(240828)
 STATE = json.load(open("data/demo/platform_state.json"))
@@ -122,7 +123,7 @@ def main() -> None:
         rows = [r for r in rows if r not in dup]
     import sys as _sys
     # 裁定⑭（09-04）：产物带数据版本名；demo 状态 09-02 加了 CMP_7，旧 p1_prompts.jsonl 不再被 v16 读
-    p = Path(_sys.argv[1] if len(_sys.argv) > 1 else "data/u_route/v16_p1_prompts.jsonl")
+    p = Path(_sys.argv[1] if len(_sys.argv) > 1 else DEFAULT_OPD_PROMPTS)
     with open(p, "w") as f:
         for i, r in enumerate(rows):
             f.write(json.dumps({"id": f"p1_{i:04d}", **r}, ensure_ascii=False) + "\n")

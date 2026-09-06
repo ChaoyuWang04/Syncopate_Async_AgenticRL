@@ -26,7 +26,7 @@ from syncopate.train.rollout_loop import (
 MODEL_DIR = Path(TEST_TOKENIZER)
 DOMAIN = build_domain()
 
-pytestmark = pytest.mark.skipif(not MODEL_DIR.exists(), reason="需要 models/Qwen3-0.6B 软链")
+pytestmark = pytest.mark.skipif(not MODEL_DIR.exists(), reason="需要当前测试 tokenizer 的本地文件")
 
 
 @pytest.fixture(scope="module")
@@ -149,6 +149,95 @@ def test_token_trace_maps_every_token_to_a_step(tokenizer):
     traced = sum(s["token_count"] for s in output.token_trace["segments"])
     assert traced == len(output.response_ids)
     assert all(s["step"] >= 1 for s in output.token_trace["segments"])
+
+
+def test_generation_trace_reconstructs_actual_inputs_and_keeps_stop_reason(tokenizer):
+    from syncopate.train.rollout_loop import Generation
+    bundle = SEED_BUILDERS["SIG_HIGH_001"]()
+    script = ScriptedEngine(tokenizer, _gold_script(bundle))
+    seen = []
+
+    async def engine(ids, params):
+        seen.append((list(ids), dict(params)))
+        tokens = await script(ids, params)
+        return Generation(tokens, [-.2] * len(tokens), finish_reason="stop", stop_reason=248046)
+
+    output = asyncio.run(run_rollout(
+        bundle, registry=DOMAIN.registry, tokenizer=tokenizer, generate=engine,
+        config=RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))))
+    assert len(seen) > 1, "正对照必须真正经过工具后再生成"
+    for (ids, params), generation in zip(seen, output.token_trace["generations"], strict=True):
+        assert ids == output.prompt_ids + output.response_ids[:generation["response_offset"]]
+        assert params == generation["sampling_params"]
+        assert params["max_tokens"] < generation["remaining_response_budget"]
+        assert generation["finish_reason"] == "stop" and generation["stop_reason"] == 248046
+    assert output.metrics["generation_stop_reason_missing"] == 0
+    assert output.metrics["unclosed_think_turns"] == 0
+
+
+def test_native_eos_and_hidden_eos_produce_identical_next_turn_inputs(tokenizer):
+    """真实 vLLM 返回 EOS；省去 EOS 的 gold 引擎也必须得到同一模板边界。"""
+    from syncopate.train.rollout_loop import Generation, ASSISTANT_TURN_END
+    bundle = SEED_BUILDERS['SIG_HIGH_001']()
+    hidden, _ = asyncio.run(_run(bundle, tokenizer, _gold_script(bundle)))
+    script = ScriptedEngine(tokenizer, _gold_script(bundle))
+    async def native_eos(ids, params):
+        raw = await script(ids, params)
+        raw += tokenizer.encode(ASSISTANT_TURN_END, add_special_tokens=False)
+        return Generation(raw, [-.2] * len(raw), finish_reason='stop')
+    explicit = asyncio.run(run_rollout(bundle, registry=DOMAIN.registry, tokenizer=tokenizer,
+        generate=native_eos, config=RolloutConfig(max_assistant_turns=assistant_turn_budget(bundle.case.max_steps))))
+    assert explicit.prompt_ids == hidden.prompt_ids
+    assert explicit.response_ids == hidden.response_ids
+    assert explicit.metrics['logprob_coverage'] == 1
+
+
+def test_inserted_template_tokens_do_not_claim_to_be_sampled_policy_tokens(tokenizer):
+    from syncopate.train.rollout_loop import Generation
+    bundle = SEED_BUILDERS['SIG_HIGH_001']()
+    script = ScriptedEngine(tokenizer, _gold_script(bundle))
+    raw_tokens = []
+    async def engine(ids, params):
+        raw = await script(ids, params)
+        raw_tokens.extend(raw)
+        return Generation(raw, [-.2] * len(raw), finish_reason='stop')
+    output = asyncio.run(run_rollout(bundle, registry=DOMAIN.registry, tokenizer=tokenizer, generate=engine))
+    assert sum(output.response_mask) == len(raw_tokens)
+    assert all(v == -.2 for v, mask in zip(output.response_logprobs, output.response_mask) if mask)
+    assert output.metrics['logprob_coverage'] == 1
+
+
+def test_raw_repetition_and_unclosed_think_are_visible(tokenizer):
+    from syncopate.train.rollout_loop import Generation
+    bundle = SEED_BUILDERS["SIG_HIGH_001"]()
+
+    async def engine(ids, params):
+        return Generation(tokenizer.encode("<think>" + " decision" * 96, add_special_tokens=False),
+                          finish_reason="length")
+
+    output = asyncio.run(run_rollout(bundle, registry=DOMAIN.registry, tokenizer=tokenizer,
+                                     generate=engine))
+    assert output.metrics["unclosed_think_turns"] == 1
+    assert output.metrics["max_repeat_span_tokens"] >= 90
+    assert output.trajectory.truncated and not output.trajectory.parse_ok
+    assert not output.trajectory.actions
+    assert output.token_trace["generations"][0]["parsed_kind"] == "incomplete"
+
+
+def test_trimmed_tail_is_never_executed_or_scored_as_a_final(tokenizer):
+    bundle = SEED_BUILDERS["SIG_HIGH_001"]()
+
+    async def ignores_budget(ids, params):
+        return tokenizer.encode("分析。" * 200 + "</think>\n" + render_tool_call(
+            "campaign.get_metrics", {"campaign_id": "CMP_1024"}), add_special_tokens=False)
+
+    output = asyncio.run(run_rollout(
+        bundle, registry=DOMAIN.registry, tokenizer=tokenizer, generate=ignores_budget,
+        config=RolloutConfig(max_response_length=128)))
+    assert output.token_trace["generations"][0]["discarded_model_tokens"] > 0
+    assert output.trajectory.truncated and not output.trajectory.parse_ok
+    assert not output.trajectory.actions and not output.trajectory.observations
+    assert len(output.response_ids) == len(output.response_mask) == len(output.response_logprobs) == 128
 
 
 # --------------------------------------------------------------------------
@@ -379,10 +468,12 @@ def test_sft_sample_is_token_identical_to_rl_rollout(case_id, tokenizer):
 
     rl_output, _ = asyncio.run(_run(bundle, tokenizer, _gold_script(bundle)))
     assert sample.input_ids == rl_output.prompt_ids + rl_output.response_ids
-    # ★ 09-02（Chaoyu 裁定）：SFT 对**空 think 块**不监督；RL 的 response_mask 仍标全部模型 token。
-    #   两者的差**只能**是空块那几段 —— 用生产同一份 _mask_empty_think 算期望值（不另抄一份）。
+    # 两者只允许这些差：SFT 监督 gold 模板结束符；空 think 块仍不监督。
     from syncopate.pipeline.sft_replay import _mask_empty_think
     expect = [0] * len(rl_output.prompt_ids) + list(rl_output.response_mask)
+    for gen in rl_output.token_trace['generations']:
+        start = len(rl_output.prompt_ids) + gen['response_offset'] + gen['retained_model_tokens']
+        expect[start:start + gen['inserted_template_tokens']] = [1] * gen['inserted_template_tokens']
     _mask_empty_think(tokenizer, sample.input_ids, expect, start=len(rl_output.prompt_ids))
     assert sample.loss_mask == expect
 

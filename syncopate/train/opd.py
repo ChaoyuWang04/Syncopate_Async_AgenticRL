@@ -6,14 +6,14 @@
         --nproc_per_node=1 -m syncopate.train.opd --base <本轮合并 SFT> \
         --adapter <本轮 RL adapter> --out checkpoints/opd/<run>
 
-当前 B200×2 布局：学生在 GPU0；教师和冻结锚在 GPU1。旧 4×5090 双 rank
+当前 B200×2 布局：学生在 GPU0；教师和冻结锚在 GPU1。历史双 rank
 布局已经归档，不能套到当前默认入口。
 
 机制（P0-4 spike 三判据的生产版，判据行全部常驻）：
   on-policy：学生自己 generate（契约渲染+契约采样参数，多轮取最后一轮回复）
   掩码：v15 think / tool / 纯自然语言三分；只蒸纯自然语言——[opd-mask] 每批非零断言
   双教师路由：chat→底座 · task/task_neg→候选冻结锚——[opd-route] 计数入 wandb
-  损失：逐 token 反向 KL(学生‖教师)，逐样本 backward + logits_to_keep（显存两课）
+  损失：逐 token 反向 KL(学生‖教师)，逐样本累积总和、更新前除以全局有效 token 数
   零泄漏断言：每 --probe-every 步跑一次零掩码对照，LoRA 梯度必须逐位为零
 
 存储：adapter-only（peft save_pretrained，E29 口径），滚动保留最近 3 份 + final。
@@ -23,6 +23,7 @@ wandb：project=syncopate（与 sft/launch_rl 同族默认开），指标前缀 
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import os
@@ -35,6 +36,11 @@ from pathlib import Path
 import torch
 import torch.distributed as dist
 from syncopate.core.model_paths import TEST_TOKENIZER, STUDENT_MODEL, TEACHER_MODEL
+from syncopate.pipeline.split import DEFAULT_OPD_PROMPTS
+from syncopate.train.token_objective import assert_replicated_parameters, finish_token_window
+from syncopate.train.opd_tokens import (ByteLevelTokenMapper, GeneratedSample,
+    TokenAuditWriter, capture_generated_sample, positions_from_mask)
+from syncopate.train.opd_updates import OptimizerUpdateAudit
 
 sys.path.insert(0, ".")
 
@@ -109,38 +115,111 @@ def build_prompt(tok, turns: list[str], replies: list[str], tools) -> str:
 
 @torch.no_grad()
 def gen_batch(student, tok, prompts: list[str], max_new: int, temp: float,
-              top_p: float, top_k: int) -> list[str]:
-    """学生 on-policy 采样（左 pad 批量生成）。"""
+              top_p: float, top_k: int, *, mapper: ByteLevelTokenMapper | None = None
+              ) -> list[GeneratedSample]:
+    """Current text-only, single-beam sampling; retain its exact padded inputs."""
+    from syncopate.train.rollout_budget import ENABLE_THINKING
+
+    if student.config.is_encoder_decoder or student.generation_config.num_beams != 1:
+        raise ValueError("OPD raw-token capture only supports current decoder-only single-beam sampling")
+    if student.generation_config.num_return_sequences != 1:
+        raise ValueError("OPD requires one generated sequence per prompt")
+    mapper = mapper if mapper is not None else ByteLevelTokenMapper(tok)
     tok.padding_side = "left"
     enc = tok(prompts, return_tensors="pt", padding=True).to(student.device)
-    out = student.generate(**enc, max_new_tokens=max_new, do_sample=True,
+    if set(enc) != {"input_ids", "attention_mask"}:
+        raise ValueError("OPD expects text-only input_ids and attention_mask")
+    positions = torch.tensor([positions_from_mask(tuple(mask)) for mask in enc.attention_mask.tolist()],
+                             dtype=torch.long, device=student.device)
+    pad_id = tok.pad_token_id
+    if pad_id is None:
+        pad_id = tok.eos_token_id
+    if pad_id is None:
+        raise ValueError("OPD requires an explicit padding token ID")
+    eos_ids = student.generation_config.eos_token_id
+    eos_ids = () if eos_ids is None else (eos_ids,) if isinstance(eos_ids, int) else tuple(eos_ids)
+    out = student.generate(**enc, position_ids=positions, max_new_tokens=max_new, do_sample=True,
                            temperature=temp, top_p=top_p,
                            top_k=(top_k if top_k > 0 else 0) or None,
-                           pad_token_id=tok.pad_token_id or tok.eos_token_id)
-    texts = []
+                           eos_token_id=list(eos_ids) or None, pad_token_id=pad_id)
+    if not isinstance(out, torch.Tensor) or out.ndim != 2 or out.shape[0] != len(prompts):
+        raise ValueError("unexpected generate output interface")
+    records = []
     for i in range(len(prompts)):
-        texts.append(tok.decode(out[i][enc.input_ids.shape[1]:],
-                                skip_special_tokens=True))
-    return texts
+        records.append(capture_generated_sample(mapper,
+            prompt_ids=enc.input_ids[i].tolist(), prompt_attention_mask=enc.attention_mask[i].tolist(),
+            prompt_position_ids=positions[i].tolist(), generated_ids=out[i].tolist(),
+            eos_token_ids=eos_ids, pad_token_id=pad_id, implicit_think_open=ENABLE_THINKING))
+    return records
 
 
-def kl_step(student, aux, tok, prompt: str, reply: str, aux_dev: str,
-            zero_mask: bool = False) -> tuple[float, int]:
-    """单样本：掩码反向 KL + 立即 backward。返回 (sum_kl, masked_tokens)。"""
-    from syncopate.train.opd_render import segment_text
-    ids_p = tok(prompt, return_tensors="pt").input_ids
-    r_ids, r_labs = segment_text(tok, reply)
+def generation_runtime_evidence(student=None) -> dict:
+    """Record the installed position/cache API, not an assumption from an old HF release."""
+    import hashlib
+    import inspect
+    import importlib.metadata
+    from transformers.generation.utils import GenerationMixin
+
+    methods = {}
+    for name in ("prepare_inputs_for_generation", "_prepare_position_ids_for_generation",
+                 "_update_model_kwargs_for_generation"):
+        source = inspect.getsource(getattr(GenerationMixin, name))
+        methods[name] = {"sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
+    evidence = {"versions": {name: importlib.metadata.version(name) for name in ("transformers", "tokenizers", "torch")},
+        "position_policy": "text_only_cumsum_attention_minus_one_pad_zero",
+        "generation_methods": methods}
+    if student is not None:
+        active = {}
+        base = student.get_base_model() if hasattr(student, "get_base_model") else student
+        for name, model in (("student", student), ("base", base)):
+            source = inspect.getsource(model.prepare_inputs_for_generation)
+            active[name] = {"class": type(model).__name__, "source": source,
+                            "sha256": hashlib.sha256(source.encode()).hexdigest()}
+        evidence["active_prepare_inputs"] = active
+        if student is not base:
+            evidence["versions"]["peft"] = importlib.metadata.version("peft")
+    return evidence
+
+
+def kl_step(student, aux, sample: GeneratedSample, aux_dev: str, *,
+            zero_mask: bool = False, audit: dict | None = None) -> tuple[float, int]:
+    """Score the actual sampled IDs under identical student/aux masks and positions.
+
+    No string/tokenizer API exists here: decoding and re-encoding can change both
+    BPE identity and normalization, even when the visible answer looks identical.
+    """
+    if not isinstance(sample, GeneratedSample):
+        raise TypeError("kl_step requires a GeneratedSample, never prompt/reply strings")
+    sample.validate()
+    r_ids, r_labs = sample.response_ids, sample.alignment.labels
+    active = [int(label == "text" and not zero_mask) for label in r_labs]
+    if audit is not None:
+        audit.update(student_forward=0, aux_forward=0, backward=0, reply_tokens=len(r_ids),
+            response_ids=list(r_ids), response_labels=list(r_labs), response_mask=active,
+            masked_tokens=sum(active), alignment_warnings=list(sample.alignment.warnings), loss_sum=0.0)
     if not r_ids:
         return 0.0, 0
-    mask = torch.tensor([1.0 if (l == "text" and not zero_mask) else 0.0
-                         for l in r_labs])
+    mask = torch.tensor(active, dtype=torch.float32)
     if mask.sum() == 0 and not zero_mask:
         return 0.0, 0
-    ids = torch.cat([ids_p, torch.tensor([r_ids])], dim=1)
     kr = len(r_ids)
-    s_out = student(ids.to(student.device), logits_to_keep=kr + 1).logits[0, :-1]
+    inputs = {name: torch.tensor([getattr(sample, name)], dtype=torch.long)
+              for name in ("input_ids", "attention_mask", "position_ids")}
+    student_inputs = {name: value.to(student.device) for name, value in inputs.items()}
+    s_out = student(**student_inputs, logits_to_keep=kr + 1).logits[0, :-1]
+    if audit is not None:
+        audit['student_forward'] += 1
+        audit.update({f"student_{name}": value[0].detach().cpu().tolist()
+                      for name, value in student_inputs.items()})
+    aux_inputs = {name: value.to(aux_dev) for name, value in inputs.items()}
     with torch.no_grad():
-        t_out = aux(ids.to(aux_dev), logits_to_keep=kr + 1).logits[0, :-1]
+        t_out = aux(**aux_inputs, logits_to_keep=kr + 1).logits[0, :-1]
+    if audit is not None:
+        audit['aux_forward'] += 1
+        audit.update({f"aux_{name}": value[0].detach().cpu().tolist()
+                      for name, value in aux_inputs.items()})
+    if s_out.shape != t_out.shape or s_out.ndim != 2 or s_out.shape[0] != kr:
+        raise ValueError("student/aux response logits do not have identical token/vocabulary dimensions")
     ls = torch.log_softmax(s_out.float(), -1)
     lt = torch.log_softmax(t_out.float().to(student.device), -1)
     kl = (ls.exp() * (ls - lt)).sum(-1)
@@ -148,12 +227,38 @@ def kl_step(student, aux, tok, prompt: str, reply: str, aux_dev: str,
     loss = (kl * m).sum()
     if loss.requires_grad:
         loss.backward()
-    return float(loss.item()), int(m.sum().item())
+        if audit is not None:
+            audit['backward'] += 1
+    total = float(loss.item())
+    if audit is not None:
+        audit['loss_sum'] = total
+    return total, int(m.sum().item())
+
+
+def zero_mask_control(student, aux, sample: GeneratedSample, aux_dev: str) -> dict:
+    """空回复/没有反向不能冒充零梯度；辅助模型也不得收到梯度。"""
+    student.zero_grad(set_to_none=True)
+    evidence = {}
+    total, count = kl_step(student, aux, sample, aux_dev, zero_mask=True, audit=evidence)
+    gradients = [p.grad for p in student.parameters() if p.requires_grad and p.grad is not None]
+    evidence['gradients'] = len(gradients)
+    finite = [bool(torch.isfinite(g).all()) for g in gradients]
+    evidence['nonfinite_gradient_tensors'] = sum(not good for good in finite)
+    evidence['zero_gradient_tensors'] = sum(good and bool((g == 0).all()) for good, g in zip(finite, gradients))
+    evidence['aux_gradient_tensors'] = sum(p.grad is not None for p in aux.parameters())
+    executed = all(evidence[key] == 1 for key in ('student_forward', 'aux_forward', 'backward'))
+    if not executed or not gradients or evidence['reply_tokens'] <= 0:
+        raise ValueError('[opd-zero] 对照没有完整执行前向和反向，不能判通过')
+    if total != 0 or count != 0 or evidence['zero_gradient_tensors'] != len(gradients):
+        raise ValueError('[opd-zero] 零掩码仍有非零或非有限梯度')
+    if evidence['aux_gradient_tensors']:
+        raise ValueError('[opd-zero] 辅助模型不应收到梯度')
+    return evidence
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--prompts", default="data/u_route/v16_p1_prompts.jsonl")   # 裁定⑭：v16 产物（syncopate/pipeline/build_opd_prompts.py）
+    ap.add_argument("--prompts", default=DEFAULT_OPD_PROMPTS)
     ap.add_argument("--out", default="checkpoints/opd/p1_r1")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--batch", type=int, default=8, help="每 rank 每步样本数")
@@ -196,11 +301,14 @@ def main() -> int:
         log(f"[opd-run] token={run_token} base={args.base} adapter={args.adapter} "
             f"out={args.out}")
     dist.barrier()
+    run_tokens = [run_token]
+    dist.broadcast_object_list(run_tokens, src=0)
+    run_token = run_tokens[0]
     aux_gpus = os.environ.get("OPD_AUX_GPUS", "2,3").split(",")
     # ⚠️ 卡号是 CUDA_VISIBLE 重映射后的索引：启动令 CUDA_VISIBLE_DEVICES=0,3,1,2 下
     #   可见 0=物理0(rank0 学生) 1=物理3(rank1 学生) 2=物理1(rank0 教师) 3=物理2(rank1 教师)
     # 卡数回退（08-29 审计补）：可见卡不足教师独立卡时，教师/锚与学生同挤一张
-    # （4B bf16 学生+教师+锚 ≈ 24GB，5090 32GB 放得下——慢但能跑，单/双卡应急档）
+    # 小模型单设备诊断分支；不能据此推断当前学生、教师和锚能同时放进一张卡。
     n_vis = torch.cuda.device_count()
     if rank < len(aux_gpus) and int(aux_gpus[rank]) < n_vis:
         aux_dev = f"cuda:{aux_gpus[rank]}"
@@ -254,6 +362,12 @@ def main() -> int:
         device_map={"": aux_dev})
     anchor = (PeftModel.from_pretrained(anchor_base, args.adapter, is_trainable=False).eval()
               if args.adapter else anchor_base.eval())
+    token_mapper = ByteLevelTokenMapper(tok)
+    runtime_evidence = generation_runtime_evidence(student)
+    runtime_evidence.update(student_class=type(student).__name__, base=args.base,
+        tokenizer_class=type(tok).__name__, enable_thinking=ENABLE_THINKING,
+        tokenizer=token_mapper.evidence())
+    token_audit = TokenAuditWriter(Path(args.out), run_token=run_token, rank=rank, runtime=runtime_evidence)
 
     rows = [json.loads(x) for x in open(args.prompts)]
     # ★ 等长分片（08-29 审计修复）：原 rows[rank::world] 在特定条数下各 rank 批次数
@@ -263,6 +377,8 @@ def main() -> int:
     rows = (rows * world)[: n_per * world][rank * n_per:(rank + 1) * n_per]
     trainables = [p for p in student.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(trainables, lr=args.lr)
+    update_audit = OptimizerUpdateAudit(Path(args.out), run_token=run_token, rank=rank,
+        named_parameters=student.named_parameters(), optimizer=opt)
 
     wb = None
     if rank == 0 and not args.no_wandb:
@@ -292,38 +408,55 @@ def main() -> int:
             batch = epoch_rows[i: i + args.batch]
             t0 = time.time()
             # ① on-policy 采样（逐轮：多轮 prompt 先生成前轮回复垫底）
-            samples = []                   # (prompt, reply, family)
+            samples = []                   # (GeneratedSample | None, generation_id, family)
             invalid_history = 0
-            for r in batch:
+            for sample_index, r in enumerate(batch):
                 replies: list[str] = []
+                sample, generation_id = None, None
+                if not r["turns"]:
+                    raise ValueError("OPD source row has no prompt turns")
                 for tI in range(len(r["turns"])):
                     try:
                         prm = build_prompt(tok, r["turns"][: tI + 1], replies, tools)
                     except ValueError:
                         invalid_history += 1
-                        prm, replies = "", []
+                        sample, generation_id = None, None
                         break
-                    rep = gen_batch(student, tok, [prm], args.max_new,
+                    sample = gen_batch(student, tok, [prm], args.max_new,
                                     SAMPLING_TEMPERATURE, SAMPLING_TOP_P,
-                                    SAMPLING_TOP_K)[0]
-                    replies.append(rep)
-                samples.append((prm, replies[-1] if replies else "", r["family"]))
+                                    SAMPLING_TOP_K, mapper=token_mapper)[0]
+                    generation_id = token_audit.generation(sample, attempt=attempted_steps,
+                        sample_index=sample_index, turn_index=tI, family=r["family"],
+                        final_turn=tI == len(r["turns"]) - 1)
+                    if sample.alignment.warnings:
+                        log(f"[opd-token-warn] generation={generation_id} "
+                            f"reasons={dict(Counter(sample.alignment.warnings))}")
+                    replies.append(sample.response_text)
+                samples.append((sample, generation_id, r["family"]))
             # ② 掩码反 KL（双教师路由），逐样本 backward
             opt.zero_grad(set_to_none=True)
             kl_chat = kl_task = 0.0
             n_chat = n_task = tok_chat = tok_task = 0
             chat_no_nl = 0
-            seg_sick = 0
-            for prm, rep, fam in samples:
+            chat_conservative_zero = 0
+            for sample, generation_id, fam in samples:
                 aux = teacher if fam == "chat" else anchor
-                s, m = kl_step(student, aux, tok, prm, rep, aux_dev)
+                if sample is None:
+                    s, m = 0.0, 0
+                else:
+                    evidence = {}
+                    s, m = kl_step(student, aux, sample, aux_dev, audit=evidence)
+                    token_audit.kl(generation_id, attempt=attempted_steps, family=fam,
+                                   zero_mask=False, audit=evidence)
                 if fam == "chat" and m == 0:
-                    # 字符层明明有 v15 自然语言、token mask 却为零才是分段器病。
-                    # 旧 JSON 壳、纯 think 或纯工具调用没有合格 NL，是模型现象，记数并跳步。
+                    # A mixed-boundary token or uncertain UTF-8 range can legally
+                    # contain visible NL while all original token masks are zero.
+                    # Identity/length/interface faults already fail in validate().
                     from syncopate.train.opd_render import v15_char_labels
                     if any(label == "text" for label in v15_char_labels(
-                            rep, implicit_think_open=ENABLE_THINKING)):
-                        seg_sick += 1
+                            sample.response_text if sample is not None else "",
+                            implicit_think_open=ENABLE_THINKING)):
+                        chat_conservative_zero += 1
                     else:
                         chat_no_nl += 1
                 if fam == "chat":
@@ -331,13 +464,9 @@ def main() -> int:
                 else:
                     kl_task += s; tok_task += m; n_task += 1
             total_masked = tok_chat + tok_task
-            # ⚠️ 判据分两层（首跑 rank1 全 task 批被误杀的学费）：
-            #   chat 样本有回复却零掩码 = 分段器病 ⇒ 停机；
-            #   全批只有工具/思考而没有 v15 自然语言终答 = 合法 ⇒ 跳步记数
-            if seg_sick > 0:
-                log(f"[opd-mask] 🔴 attempt {attempted_steps} 有 {seg_sick} 条 chat 回复"
-                    f"字符层含 v15 NL、token 层却零掩码——分段器真病，停机自查")
-                raise RuntimeError("segmenter-sick batch")
+            if chat_conservative_zero:
+                log(f"[opd-token-warn] attempt={attempted_steps} "
+                    f"chat_conservative_zero={chat_conservative_zero}（原始 token 边界保守掩码）")
             # 跳步必须集体决定（单 rank 跳而对端进 all_reduce = 死锁）
             gm = torch.tensor([float(total_masked)], device=f"cuda:{rank}")
             dist.all_reduce(gm)
@@ -358,13 +487,13 @@ def main() -> int:
                 opt.zero_grad(set_to_none=True)
                 dist.barrier()
                 continue
-            # DDP 梯度手动 allreduce（模型未包 DDP——逐样本 backward 与 PEFT 包装更省心）
-            for p in trainables:
-                g = p.grad if p.grad is not None else torch.zeros_like(p)
-                dist.all_reduce(g, op=dist.ReduceOp.AVG)
-                p.grad = g
+            # 与 SFT 共用完整 DP 副本的 token 均值目标；不能用各 rank 梯度的平均
+            # 代替有效 token 平均。零 token 的 rank 也参与，整个窗口为零已在上面集体跳过。
+            objective = finish_token_window(trainables, local_tokens=total_masked,
+                local_loss_sum=kl_chat + kl_task, device=student.device)
             torch.nn.utils.clip_grad_norm_(trainables, 1.0, error_if_nonfinite=True)
-            opt.step()
+            with update_audit.step(step=real_steps + 1, attempt=attempted_steps):
+                opt.step()
             real_steps += 1
             if args.max_steps and real_steps >= args.max_steps:
                 log(f"[max-steps] 已完成 {real_steps} 次真实更新，停止（冒烟）")
@@ -376,7 +505,9 @@ def main() -> int:
             if rank == 0:
                 m_chat = kl_chat / max(tok_chat, 1)
                 m_task = kl_task / max(tok_task, 1)
-                log(f"[opd-mask] attempt {attempted_steps} 全局可蒸 token={total_masked}")
+                log(f"[opd-mask] attempt {attempted_steps} 全局可蒸 token={objective['supervised_tokens']}")
+                log(f"[opd-objective] step {real_steps} kl_per_token={objective['loss']:.8g} "
+                    f"global_tokens={objective['supervised_tokens']}")
                 log(f"step {real_steps} attempt={attempted_steps} ep{ep} kl_chat/tok={m_chat:.4f} "
                     f"kl_task/tok={m_task:.4f} masked={total_masked} "
                     f"[opd-route] chat={n_chat} task={n_task} chat_masked={tok_chat} "
@@ -385,7 +516,10 @@ def main() -> int:
                     wb.log({"opd/kl_chat_per_tok": m_chat,
                             "opd/kl_task_per_tok": m_task,
                             "opd/chat_no_nl": chat_no_nl,
+                            "opd/chat_conservative_zero": chat_conservative_zero,
                             "opd/masked_tokens": total_masked,
+                            "opd/global_masked_tokens": objective["supervised_tokens"],
+                            "opd/kl_per_token_global": objective["loss"],
                             "opd/route_chat": n_chat, "opd/route_task": n_task,
                             "opd/step_time_s": dt, "opd/epoch": ep,
                             "opd/attempted_steps": attempted_steps,
@@ -394,13 +528,19 @@ def main() -> int:
             # ③ 零泄漏对照断言（守则②：假设写成断言）
             if args.probe_every > 0 and real_steps % args.probe_every == 0:
                 opt.zero_grad(set_to_none=True)
-                kl_step(student, teacher, tok, samples[0][0], samples[0][1],
-                        aux_dev, zero_mask=True)
-                bad = sum(int(p.grad is not None and p.grad.abs().sum() > 0)
-                          for p in trainables)
-                assert bad == 0, f"[opd-zero] 零掩码对照有 {bad} 张量带梯度"
+                probe = next(((sample, generation_id, fam) for sample, generation_id, fam in samples
+                              if sample is not None and sample.response_ids), None)
+                if probe is None:
+                    raise ValueError('[opd-zero] 本地没有非空回复，不能声称对照通过')
+                sample, generation_id, fam = probe
+                evidence = zero_mask_control(student, teacher if fam == 'chat' else anchor,
+                                             sample, aux_dev)
+                token_audit.kl(generation_id, attempt=attempted_steps, family=fam,
+                              zero_mask=True, audit=evidence)
                 if rank == 0:
-                    log(f"[opd-zero] step {real_steps} 对照通过（0/{len(trainables)}）")
+                    log(f"[opd-zero] step {real_steps} 对照通过（0/{len(trainables)}） "
+                        f"student_forward={evidence['student_forward']} aux_forward={evidence['aux_forward']} "
+                        f"backward={evidence['backward']} gradients={evidence['gradients']}")
                 opt.zero_grad(set_to_none=True)
             # ④ adapter-only 滚动存档
             if rank == 0 and real_steps % args.save_every == 0:
@@ -414,16 +554,18 @@ def main() -> int:
         # ★ epoch 末：rank 间学生权重一致性硬断言（08-29 审计补，与 sft.py 同款防线）
         #   手动梯度同步 + 各 rank 同步后独立 opt.step()，权重应逐位一致；
         #   发散 = 同步静默失效（「adapter 没推送」家族），宁可停机不带病训完。
-        fp = torch.tensor(
-            [sum(float(p.detach().float().norm()) ** 2 for p in trainables)],
-            device=f"cuda:{rank}")
-        got = [torch.zeros_like(fp) for _ in range(world)]
-        dist.all_gather(got, fp)
-        vals = [float(x) for x in got]
-        assert max(vals) - min(vals) < 1e-4, \
-            f"🔴 [opd-sync] rank 间权重发散 {vals} —— 梯度同步失效，停机"
+        fingerprint = assert_replicated_parameters(student.named_parameters())
         if rank == 0:
-            log(f"[opd-sync] ep{ep} 权重一致性通过（fp={vals[0]:.4f}）")
+            log(f"[opd-sync] ep{ep} 完整可训练参数指纹一致 "
+                f"sha256={fingerprint['sha256']} tensors={fingerprint['tensors']}")
+    local_token_summary = token_audit.summary()
+    token_summaries = [None] * world
+    dist.all_gather_object(token_summaries, local_token_summary)
+    log(f"[opd-token-summary] {json.dumps(local_token_summary, ensure_ascii=False, sort_keys=True)}")
+    local_update_summary = update_audit.summary()
+    update_summaries = [None] * world
+    dist.all_gather_object(update_summaries, local_update_summary)
+    log(f"[opd-update-summary] {json.dumps(local_update_summary, ensure_ascii=False, sort_keys=True)}")
     completed = training_completed(real_steps, args.max_steps)
     if rank == 0:
         log(f"[opd-summary] attempted={attempted_steps} real={real_steps} "
@@ -440,10 +582,17 @@ def main() -> int:
                 "adapter": args.adapter,
                 "prompts": args.prompts,
                 "seed": args.seed,
+                "world_size": world,
+                "probe_every": args.probe_every,
                 "prompt_hash": contract_hash,
                 "attempted_steps": attempted_steps,
+                "skipped_steps": skipped_steps,
                 "real_steps": real_steps,
                 "target_real_steps": args.max_steps or None,
+                "objective": "global_masked_token_mean_reverse_kl",
+                "parameter_fingerprint": fingerprint,
+                "token_audits": token_summaries,
+                "update_audits": update_summaries,
             }
             completion_marker.parent.mkdir(parents=True, exist_ok=True)
             marker_tmp = completion_marker.with_suffix(".json.tmp")

@@ -1,12 +1,12 @@
 """E00 · 满载功耗与降频曲线 —— 「分母的分母」。
 
-四张 5090 满载是 4×575 W = 2.3 kW。如果同时压满时核心频率掉下去，
+如果多卡同时满载时核心频率下降，
 **所有多卡对照实验里都混着这一份**，你会把「卡变慢了」错当成「协作有开销」。
 
 方法：同一个持续 matmul 负载，先压 1 张卡、再压 N 张卡，各采样一段时间，
 比较**稳态**的 SM 频率 / 功耗 / 温度 / 实测 TFLOPS。
 
-    python scripts/infra/probe_power_throttle.py                 # 1 卡 vs 4 卡，各 240 s
+    python scripts/infra/probe_power_throttle.py                 # 1 卡 vs 当前可见卡数，各 240 s
     python scripts/infra/probe_power_throttle.py --seconds 120
 """
 

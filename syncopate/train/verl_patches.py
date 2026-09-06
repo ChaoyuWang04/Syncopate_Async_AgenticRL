@@ -327,6 +327,19 @@ def setup_worker() -> None:
     """
     # ★★★ 2026-08-17：这里**绝不能直接 import verl**（见 _defer_until_imported 的说明）。
     _defer_until_imported("verl.utils.fsdp_utils", _patch_fsdp_cpu_copy_for_ddp)
+    if os.environ.get("SYNCOPATE_GENERATION_OBSERVER") == "1":
+        from syncopate.train.generation_observer import install_verl_observer, install_verl_client_observer
+        _defer_until_imported("verl.workers.rollout.vllm_rollout.vllm_async_server",
+                              install_verl_observer)
+        _defer_until_imported("verl.workers.rollout.llm_server", install_verl_client_observer)
+    if os.environ.get("SYNCOPATE_POLICY_AUDIT_DIR"):
+        from syncopate.train.policy_observer import (install_engine, install_worker, install_trainer,
+                                                    install_server_adapter, install_server)
+        _defer_until_imported("verl.workers.engine.fsdp.transformer_impl", install_engine)
+        _defer_until_imported("verl.workers.engine_workers", install_worker)
+        _defer_until_imported("verl.trainer.ppo.v1.trainer_base", install_trainer)
+        _defer_until_imported("verl.workers.rollout.vllm_rollout.vllm_rollout", install_server_adapter)
+        _defer_until_imported("verl.workers.rollout.vllm_rollout.vllm_async_server", install_server)
 
     # ★★★ 动态分池（2026-08-17 补上，此前只打在 driver ⇒ fully_async 下静默失效）
     #
@@ -1875,4 +1888,3 @@ def _patch_prefix_grouper() -> None:
         _ti.FSDPEngineWithLMHead.forward_step = _forward_step
     print("[verl-patch] PrefixGrouper 已接线（SYNCOPATE_PREFIX_GROUPER=1，对齐 #7202 + 掩码/因果两处修复）"
           " —— ★ 没看到 [prefix-grouper] 打包前向已生效 就是没走到", flush=True)
-

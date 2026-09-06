@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from syncopate.train.rl_evidence import summarize_termination
+
 _NUMBER = r"[-+]?(?:nan|inf(?:inity)?|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)"
 
 
@@ -50,6 +52,7 @@ def evaluate(run_dir: Path, log_path: Path, *, expected_profile: str) -> dict[st
     requested = purpose.get("steps_requested")
     known_wandb_exit = (
         "Exception ignored in atexit callback" in log and "BrokenPipeError" in log)
+    termination = summarize_termination(run_dir, steps_requested=requested)
 
     health_checks = {
         "log_exists": log_path.is_file() and bool(log.strip()),
@@ -59,6 +62,7 @@ def evaluate(run_dir: Path, log_path: Path, *, expected_profile: str) -> dict[st
         "steps_declared": isinstance(requested, int) and requested > 0,
         "loss_finite": bool(losses) and all(math.isfinite(x) for x in losses),
         "grad_finite": bool(grad_norms) and all(math.isfinite(x) for x in grad_norms),
+        "grad_nonzero": bool(grad_norms) and any(math.isfinite(x) and x > 0 for x in grad_norms),
         "reward_nonzero": bool(rewards) and all(math.isfinite(x) for x in rewards)
         and any(x != 0.0 for x in rewards),
         # 量真实 step 指标，不用配置里的 update_weights_bucket_megabytes 冒充接线证据。
@@ -69,14 +73,15 @@ def evaluate(run_dir: Path, log_path: Path, *, expected_profile: str) -> dict[st
         "checkpoint_complete": isinstance(requested, int) and bool(checkpoints)
         and checkpoints[-1][0] >= requested,
         "no_unexpected_traceback": "Traceback" not in log or known_wandb_exit,
+        "rollout_trace_valid": termination["trace_valid"],
     }
-    clip_metric_valid = bool(response_clip_ratios) and all(
-        math.isfinite(x) and 0.0 <= x <= 1.0 for x in response_clip_ratios
-    )
+    # verl 的 clip_ratio 可能用动态 padding 宽度作分母边界；保留原值，但不据此判截断。
+    measured = termination["measured"]
     quality_checks = {
-        "response_clipping_measured": clip_metric_valid,
-        "response_not_clipped": clip_metric_valid
-        and all(x == 0.0 for x in response_clip_ratios),
+        "response_clipping_measured": measured,
+        "response_not_clipped": measured and termination["token_limited_trajectories"] == 0,
+        "turn_limit_not_reached": measured and termination["trajectory_limits"].get("turns", 0) == 0,
+        "observation_not_clipped": measured and termination["trajectory_limits"].get("observation", 0) == 0,
     }
     health_ok = all(health_checks.values())
     quality_ready = all(quality_checks.values())
@@ -94,6 +99,7 @@ def evaluate(run_dir: Path, log_path: Path, *, expected_profile: str) -> dict[st
         "checks": {**health_checks, **quality_checks},
         "health_checks": health_checks,
         "quality_checks": quality_checks,
+        "termination": termination,
         "metrics": {
             "pg_loss": losses,
             "grad_norm": grad_norms,

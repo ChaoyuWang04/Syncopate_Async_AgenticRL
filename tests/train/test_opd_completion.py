@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("torch")
+
 from syncopate.train.opd import prior_result, prioritize_smoke_routes, training_completed
 
 

@@ -34,6 +34,24 @@ def test_sft_and_eval_default_to_student_and_data_version():
     assert _defaults("syncopate/train/eval_local.py")["--model"] == "STUDENT_MODEL"
 
 
+def test_sft_normalizes_before_clipping_and_keeps_empty_rank_at_window_boundary():
+    source = (ROOT / "syncopate/train/sft.py").read_text()
+    loop = source[source.index("for micro_step, batch in enumerate(train_loader"):]
+    assert "token_loss.mean() / args.grad_accum" not in loop
+    assert loop.index("finish_token_window(") < loop.index("clip_grad_norm_(") < loop.index("optimizer.step()")
+    assert "continue" not in loop[:loop.index("if micro_step % args.grad_accum")]
+    assert "assert_replicated_parameters(model.named_parameters())" in loop
+
+
+def test_opd_uses_global_token_mean_before_optimizer_and_byte_identity_after_epoch():
+    source = (ROOT / "syncopate/train/opd.py").read_text()
+    loop = source[source.index("for i in range(0, len(epoch_rows), args.batch)"):]
+    assert loop.index("finish_token_window(") < loop.index("clip_grad_norm_(") < loop.index("opt.step()")
+    assert "local_tokens=total_masked" in loop and "local_loss_sum=kl_chat + kl_task" in loop
+    assert "dist.ReduceOp.AVG" not in loop
+    assert "assert_replicated_parameters(student.named_parameters())" in loop
+
+
 def test_runbook_dry_run_lists_every_stage():
     rb = ROOT / "scripts" / "v16_pipeline.sh"
     assert rb.exists(), "固定管线 runbook 不存在"
@@ -75,6 +93,14 @@ def test_default_profile_is_smoke_and_candidate_is_explicit():
     assert candidate.returncode == 0, candidate.stderr
     assert "profile=candidate, gate=strict" in candidate.stdout
     assert "--out checkpoints/sft/v16 " in candidate.stdout
+
+
+@pytest.mark.parametrize("run_id", [".", "..", "../other", "-option"])
+def test_runbook_rejects_unsafe_run_id_before_listing_stages(run_id):
+    result = subprocess.run(["bash", str(ROOT / "scripts/v16_pipeline.sh"), "--dry-run",
+                             "--run-id", run_id, "supply"], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 2
+    assert "[stage" not in result.stdout
 
 
 def test_smoke_chain_has_no_bare_model_or_cross_profile_fallback():
@@ -135,6 +161,21 @@ def test_train_all_uses_existing_data_and_prints_every_training_command():
         assert f"[stage {stage}]" in run.stdout
     assert "-m syncopate.train.entropy" in run.stdout
     assert "-m syncopate.train.eval_local" in run.stdout
+
+
+def test_external_sft_diagnostic_cannot_masquerade_as_full_chain():
+    import os
+    command = ["bash", str(ROOT / "scripts/v16_pipeline.sh"), "--dry-run", "--run-id", "b03",
+               "--rl-input-run", "b02"]
+    env = {**os.environ, **ENV}
+    allowed = subprocess.run([*command, "rl-train"], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert allowed.returncode == 0, allowed.stderr
+    assert "--model models/Qwen3.6-35B-A3B-sft-v16_smoke_b02" in allowed.stdout
+    assert "--save-path checkpoints/grpo/v16_smoke_b03" in allowed.stdout
+    for stage in ("all", "train-all", "sft-train", "merge"):
+        rejected = subprocess.run([*command, stage], cwd=ROOT, capture_output=True, text=True, env=env)
+        assert rejected.returncode == 2
+        assert "[stage" not in rejected.stdout
 
 
 OLD_NAME = re.compile(r"scripts/[A-Za-z0-9_./-]*(v8|v13|v14|v145|v15|u_build|u_exam|u_p[0-9])[A-Za-z0-9_./-]*\.(py|sh)")
@@ -236,12 +277,33 @@ def test_modal_pipeline_only_delegates_to_the_fixed_runbook():
     tree = ast.parse(source)
     fn = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "p_pipeline")
     body = ast.get_source_segment(source, fn) or ""
-    assert "bash scripts/v16_pipeline.sh" in body
+    impl = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_pipeline_stage")
+    implementation = ast.get_source_segment(source, impl) or ""
+    call = next(node for node in ast.walk(fn) if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name) and node.func.id == "_pipeline_stage")
+    assert [ast.unparse(arg) for arg in call.args] == ["stage", "profile", "gate_mode", "run_id", "resume",
+                                                     "rl_input_run", "timeout_seconds", "identity_probe",
+                                                     "opd_input_run", "opd_real_steps"]
+    assert '"SYNCOPATE_POLICY_PROBE": "1" if identity_probe else "0"' in implementation
+    assert "from syncopate.pipeline.split import" not in implementation, "数据/训练栈只在 PY 子进程导入"
+    assert "syncopate.train.policy_evidence --run-id {run_id}" in implementation
+    assert "writer_claims" in body
+    assert "bash scripts/v16_pipeline.sh" in implementation
     assert "launch_rl_v1" not in body and "syncopate.train.sft" not in body and "syncopate.train.opd" not in body
+    assert "launch_rl_v1" not in implementation and "syncopate.train.sft" not in implementation
+    assert "syncopate.train.opd " not in implementation, 'CPU preflight is allowed; training stays in runbook'
     assert 'profile: str = "smoke"' in body
     assert 'stage: str = "train-all"' in body
-    assert 'resume: bool = False' in body and '" --resume" if resume' in body
-    assert 'manifest.get("all_passed") is True' in body
+    assert 'resume: bool = False' in body and '" --resume" if resume' in implementation
+    assert 'manifest.get("all_passed") is True' in implementation
+    assert 'bind_source' in implementation and 'prepared_cache' in implementation
+    assert 'isolated_cache' not in implementation, "CPU 复制准备不能占用 GPU"
+
+
+def test_opd_raw_token_gate_uses_the_actual_bound_base_tokenizer():
+    line = next(line for line in (ROOT / 'scripts/v16_pipeline.sh').read_text().splitlines()
+                if '-m syncopate.train.opd_run_gate ' in line)
+    assert '--tokenizer $MERGED' in line
 
 
 def test_modal_uploads_only_the_current_source_overlay():
@@ -249,6 +311,7 @@ def test_modal_uploads_only_the_current_source_overlay():
     assert 'OVERLAY_DIRS = ("syncopate", "scripts", "configs", "tests", "docs", "modal_app")' in source
     assert 'OVERLAY_FILES = ("pyproject.toml", "alembic.ini")' in source
     assert '.add_local_dir(LOCAL_ROOT,' not in source, "不能把整个仓库（数据/模型/.git）上传到镜像"
+    assert '.add_local_dir(SOURCE_ROOT, CURRENT_OVERLAY, copy=True)' in source
     assert "local_overlay_sha256" in source and "remote_git_head" in source
 
 

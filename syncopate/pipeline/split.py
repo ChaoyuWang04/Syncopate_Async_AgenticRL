@@ -477,6 +477,7 @@ DEFAULT_BATCH_DIR = f"data/batches/{DATA_VERSION}"
 DEFAULT_SPLIT_DIR = f"data/splits/{DATA_VERSION}"
 DEFAULT_SFT_DIR = f"data/sft/{DATA_VERSION}"      # SFT 训练集（原 data/sft/v15；契约协议名仍是 v15，数据版本是 v16）
 DEFAULT_RL_DIR = f"data/rl/{DATA_VERSION}"
+DEFAULT_OPD_PROMPTS = f"data/u_route/{DATA_VERSION}_p1_prompts.jsonl"
 
 
 def data_version_of(path: str | Path) -> str | None:

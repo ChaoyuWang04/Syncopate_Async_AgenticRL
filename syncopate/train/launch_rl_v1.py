@@ -2,7 +2,7 @@
 
     python -m syncopate.train.launch_rl_v1 --steps 2 --gpus 2 --experiment rl_v16_smoke
 
-★ 为什么另起一个薄壳而不是改 `launch_rl.py`：那份是 4×5090 / verl 0.8 的产物（DDP·无 P2P·offload 账本·
+★ 为什么另起一个薄壳而不是改 `launch_rl.py`：那份是旧 verl 0.8 的历史夹具（DDP·无 P2P·offload 账本·
   20 处补丁），1200 行里大半前提在 B200+0.9 上都不成立（26 §W4′ S1-4 分诊：删 6 停 4 改 1 留 3）。
   这份只放 V1 trainer 真会读的键；契约参数（长度/采样）仍**只**从 `rollout_budget` 取（守则⑨），
   默认走 verl 官方均匀采样；动态分池是尚待 B05 重测的算法开关，只有显式
@@ -35,7 +35,8 @@ MIN_CANDIDATE_STEPS = 400
 
 
 def build_overrides(a: argparse.Namespace) -> list[str]:
-    from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
+    from syncopate.train.rollout_budget import (MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH,
+        SAMPLING_TEMPERATURE, SAMPLING_TOP_P, SAMPLING_TOP_K)
     model = str((ROOT / a.model).resolve())
     max_model_len = MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH
     ov = [
@@ -86,7 +87,8 @@ def build_overrides(a: argparse.Namespace) -> list[str]:
         f"actor_rollout_ref.rollout.agent.agent_loop_config_path={ROOT / 'configs/verl_agent_loop.yaml'}",
         f"actor_rollout_ref.rollout.agent.num_workers={a.agent_workers}",
         f"actor_rollout_ref.rollout.checkpoint_engine.update_weights_bucket_megabytes={a.weight_sync_bucket_mb}",
-        "actor_rollout_ref.rollout.top_p=1.0", "actor_rollout_ref.rollout.top_k=-1",
+        f"actor_rollout_ref.rollout.temperature={SAMPLING_TEMPERATURE}",
+        f"actor_rollout_ref.rollout.top_p={SAMPLING_TOP_P}", f"actor_rollout_ref.rollout.top_k={SAMPLING_TOP_K}",
         # ── trainer（V1）──
         "trainer.use_v1=True", f"trainer.v1.trainer_mode={a.mode}",
         f"trainer.n_gpus_per_node={a.gpus}", "trainer.nnodes=1", "trainer.total_epochs=1",
@@ -98,9 +100,18 @@ def build_overrides(a: argparse.Namespace) -> list[str]:
         # ── worker 钩子：补丁与动态分池在 Ray worker（含 TaskRunnerV1）进程里生效 ──
         "+ray_kwargs.ray_init.runtime_env.worker_process_setup_hook=syncopate.train.verl_patches.setup_worker",
         f"+ray_kwargs.ray_init.runtime_env.env_vars.VLLM_LOGGING_LEVEL={a.vllm_log_level}",
+        f"+ray_kwargs.ray_init.runtime_env.env_vars.SYNCOPATE_ROLLOUT_ARTIFACT_ROOT={ROOT / a.save_path / 'artifacts'}",
+        "+ray_kwargs.ray_init.runtime_env.env_vars.SYNCOPATE_GENERATION_OBSERVER='1'",
     ]
     if a.save_lora_only:
         ov.append("+actor_rollout_ref.actor.checkpoint.save_lora_only=True")   # 0.9：字段在 CheckpointConfig 数据类里、不在 yaml 默认 ⇒ 要 + 追加（rl_cfg 实测）
+    if os.environ.get("SYNCOPATE_OPT_STEP_PROBE") == "1":
+        ov.append("+ray_kwargs.ray_init.runtime_env.env_vars.SYNCOPATE_OPT_STEP_PROBE='1'")
+    if os.environ.get("SYNCOPATE_POLICY_PROBE") == "1":
+        if a.mode != "sync" or a.strategy != "fsdp2":
+            raise ValueError("当前身份观察器只验 sync/FSDP2；异步需单独登记采纳与锚策略口径")
+        directory = ROOT / a.save_path / "policy_evidence"
+        ov.append(f"+ray_kwargs.ray_init.runtime_env.env_vars.SYNCOPATE_POLICY_AUDIT_DIR={directory}")
     return ov + list(a.extra)
 
 
@@ -187,9 +198,14 @@ def main(argv: list[str] | None = None) -> int:
     env = os.environ.copy()
     env["PYTHONPATH"] = f"{ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
     env["SYNCOPATE_RUN_ID"] = a.experiment
+    env["SYNCOPATE_ROLLOUT_ARTIFACT_ROOT"] = str(ROOT / a.save_path / "artifacts")
+    env["SYNCOPATE_GENERATION_OBSERVER"] = "1"
     env["SYNCOPATE_LATENCY_SCALE"] = str(a.latency_scale)
     env["SYNCOPATE_ASYNC_VERIFIER"] = "1"
     save = ROOT / a.save_path; save.mkdir(parents=True, exist_ok=True)
+    (save / "launch_config.json").write_text(json.dumps({
+        "entry": entry, "arguments": vars(a), "overrides": build_overrides(a),
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (save / "run_purpose.json").write_text(json.dumps({
         "purpose": a.profile,
         "profile": a.profile,
@@ -197,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         "stack": "verl0.9-v1",
         "model": str(a.model),
         "dynamic_pool": pool_enabled,
+        "identity_probe": os.environ.get("SYNCOPATE_POLICY_PROBE") == "1",
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     env["SYNCOPATE_DISPATCH_LOG"] = str(save / "dispatched.jsonl")
     env["SYNCOPATE_POOL_STATE"] = str(save / "pool_state.json")

@@ -34,6 +34,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from syncopate.train.rollout_budget import MAX_PROMPT_LENGTH, MAX_RESPONSE_LENGTH
 from syncopate.core.model_paths import STUDENT_MODEL
+from syncopate.train.token_objective import finish_token_window, assert_replicated_parameters
 
 LORA_TARGETS_DEFAULT = "attn_shared"   # attn_shared | all-linear | 任意 peft target_modules 正则
 
@@ -412,9 +413,9 @@ def main(argv: list[str] | None = None) -> int:
     #    token_losses 为了稀疏投影直调主干（trunk/lm_head），绕过包装器的 forward
     #    ⇒ DDP 的 reducer 收不到 prepare_for_backward，梯度会**静默不同步**
     #    （两基石 bug 之一「三个 rank 没同步梯度」的同族死法）。
-    #    手动路径 = opd.py 已实战的模式：累积窗口末尾对每个可训练梯度 all_reduce(AVG)，
-    #    LoRA 只有 ~66M 参数（fp32 梯度 ~264 MB），四卡 PCIe 上一次 <0.1s，开销可忽略。
-    #    正确性由每 epoch 的「rank 间权重一致」硬断言兜底（见 epoch 尾）。
+    #    累积 token loss 的和，在窗口末尾对梯度 all_reduce(SUM)，除以全局有效 token 数。
+    #    不能平均 micro-batch 均值：监督长度不同会改变目标，尾窗口也不能用完整窗口的分母。
+    #    每 epoch 再检查全部可训练参数的字节指纹；不能用一个范数代替权重相等。
     world = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
     if world > 1:
@@ -631,6 +632,7 @@ def main(argv: list[str] | None = None) -> int:
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)   # 不设的话每个 epoch 洗牌顺序相同
         running, seen = 0.0, 0
+        window_loss_sum, window_tokens = 0.0, 0
         epoch_started = time.time()
         optimizer.zero_grad(set_to_none=True)
         for micro_step, batch in enumerate(train_loader, start=1):
@@ -640,23 +642,20 @@ def main(argv: list[str] | None = None) -> int:
                 # ⚠️ **静默跳过是这个项目最贵的失效形状**（SFT 标签 bug 那次
                 # val_loss 降到 0.0000 却什么都没学对）。所以跳过要计数、要上报。
                 skipped += 1
-                continue
-            sup_tokens += int(token_loss.numel())
-            # mean over 被监督 token —— 和 HF 的 `model(**batch).loss` 同口径
-            loss = token_loss.mean() / args.grad_accum
-            loss.backward()
-            running += float(loss.detach()) * args.grad_accum
-            seen += 1
+                # 不跳过窗口边界：其余 rank 仍可能有有效 token，必须共同进入归约。
+            else:
+                loss = token_loss.sum()
+                loss.backward()
+                value, count = float(loss.detach()), int(token_loss.numel())
+                window_loss_sum += value
+                window_tokens += count
+                running += value
+                seen += count
             if micro_step % args.grad_accum == 0 or micro_step == len(train_loader):
-                if world > 1:
-                    # ★ 手动梯度同步（见文件头 DDP 注释）。grad 为 None 的补零参与
-                    #   ——保证所有 rank 的集合通信次数逐参数一致（单 rank 少一次
-                    #   all_reduce = 死锁，opd.py 跳步改集体决定的同一课）
-                    for p in model.parameters():
-                        if p.requires_grad:
-                            if p.grad is None:
-                                p.grad = torch.zeros_like(p)
-                            dist.all_reduce(p.grad, op=dist.ReduceOp.AVG)
+                window = finish_token_window(model.parameters(), local_tokens=window_tokens,
+                                             local_loss_sum=window_loss_sum, device=device)
+                window_loss_sum, window_tokens = 0.0, 0
+                sup_tokens += window["supervised_tokens"]
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     [p for p in model.parameters() if p.requires_grad], 1.0,
                     error_if_nonfinite=True)
@@ -673,9 +672,10 @@ def main(argv: list[str] | None = None) -> int:
                 elapsed = max(1e-6, time.time() - started)
                 # 09-04：判据行落 stdout（wandb 关掉时冒烟探针也能量到 grad_norm/吞吐；每 5 步一行不刷屏）
                 if rank == 0 and (global_step % 5 == 0 or args.max_steps):
-                    print(f"[step {global_step}] loss={float(loss) * args.grad_accum:.4f} grad_norm={float(grad_norm):.4f} "
-                          f"lr={scheduler.get_last_lr()[0]:.2e} sup_tok/s={sup_tokens / elapsed:.0f}", flush=True)
-                log({"train/loss": float(loss) * args.grad_accum,
+                    print(f"[step {global_step}] loss={window['loss']:.4f} grad_norm={float(grad_norm):.4f} "
+                          f"lr={scheduler.get_last_lr()[0]:.2e} sup_tok/s={sup_tokens / elapsed:.0f} "
+                          f"global_supervised_tokens={window['supervised_tokens']} token_mean=true", flush=True)
+                log({"train/loss": window["loss"],
                      # grad_norm 是最早能看出训练崩没崩的信号：突然飙高 = 有坏样本或 lr 过大
                      "train/grad_norm": float(grad_norm),
                      "train/lr": scheduler.get_last_lr()[0],
@@ -719,18 +719,8 @@ def main(argv: list[str] | None = None) -> int:
             print(line)
         # ★★★ 位移：||ΔW||/||W||。**这是判断"到底训没训动"的唯一直接证据。**
         ratio = _delta_w_ratio()
-        if world > 1:
-            # ★ 每 epoch 硬断言：各 rank 权重必须一致。梯度 all_reduce 的结果全 rank
-            #   相同 + 优化器状态起点相同 ⇒ 权重应逐位一致 ⇒ ratio 逐位一致。
-            #   发散 = 手动同步失效（[silent-degradation-fsdp-nosync] 那类静默死法），
-            #   宁可停机也不许带病训完。
-            gathered = [torch.zeros(1, device=device) for _ in range(world)]
-            dist.all_gather(gathered, torch.tensor([ratio], device=device))
-            vals = [float(g) for g in gathered]
-            spread = max(vals) - min(vals)
-            assert spread < 1e-7, (
-                f"🔴 rank 间权重发散：ΔW ratio spread={spread:.3e}（{vals}）"
-                f"—— 梯度同步失效，停机检查")
+        fingerprint = assert_replicated_parameters(model.named_parameters())
+        print(f"[sft-weights] {fingerprint['tensors']} tensors · sha256={fingerprint['sha256']}")
         print(f"          ||ΔW||/||W|| = {ratio*100:.4f}%  "
               f"（正常 LoRA 0.5%–5%；M7 那次只有 0.0093% ⇒ 白训）")
         log({"health/delta_w_ratio": ratio,

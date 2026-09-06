@@ -234,6 +234,10 @@ def reward_extra_info(result: ScoreResult, output: RolloutOutput,
         "num_steps": metrics["num_steps"],
         "tool_errors": metrics["tool_errors"],
         "parse_errors": metrics["parse_errors"],
+        "unclosed_think_turns": metrics["unclosed_think_turns"],
+        "max_generation_tokens": metrics["max_generation_tokens"],
+        "max_repeat_span_tokens": metrics["max_repeat_span_tokens"],
+        "generation_stop_reason_missing": metrics["generation_stop_reason_missing"],
         "truncated": int(metrics["truncated"]),
         # ★ 异步对照实验的核心观测量：生成耗时 vs 工具耗时 vs 总墙钟
         "generate_seconds": metrics["generate_seconds"],
@@ -333,7 +337,8 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             token_output = await self.server_manager.generate(
                 request_id=uuid4().hex, prompt_ids=prompt_ids, sampling_params=params
             )
-            extra = getattr(token_output, "extra_fields", None) or {}
+            extra = dict(getattr(token_output, "extra_fields", None) or {})
+            generation_meta = extra.pop("syncopate_generation", {})
             if not version_fields:
                 version_fields.update(extra)
                 _log_version_fields_once(version_fields)
@@ -347,7 +352,13 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             #   docs/archive/syncopate/pre-consolidation-v16/23-research-question.md。
             #   需要 actor_rollout_ref.rollout.calculate_log_probs=True 才有值。
             return Generation(token_ids=list(token_output.token_ids),
-                              log_probs=list(token_output.log_probs or []) or None)
+                              log_probs=list(token_output.log_probs or []) or None,
+                              finish_reason=generation_meta.get("finish_reason"),
+                              # 续写层可能先累计到总上限；不能被最后一段的 stop 覆盖。
+                              stop_reason=("length" if token_output.stop_reason == "length"
+                                           else generation_meta.get("stop_reason")),
+                              sampling_params=generation_meta.get("sampling_params"),
+                              engine_metadata=generation_meta)
 
         # ★★★ max_prompt_length 必须用**显式配置的那个**，不能拿 max_model_len 折半。
         #
@@ -394,10 +405,17 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             await record_dispatch_abort(bundle, rollout_id, type(exc).__name__)
             raise
 
-        artifact_root = extra_info.get("artifact_root")
+        artifact_root = os.environ.get("SYNCOPATE_ROLLOUT_ARTIFACT_ROOT") or extra_info.get("artifact_root")
         result = await score_and_persist(
             bundle, output, domain, Path(artifact_root) if artifact_root else None
         )
+        # 保留失败 artifact，但绝不把缺采样概率或错误 mask 的轨迹送进 optimizer。
+        from syncopate.train.rl_evidence import validate_trace
+        try:
+            validate_trace(output.token_trace, output.metrics)
+        except (ValueError, KeyError, TypeError) as exc:
+            await record_dispatch_abort(bundle, rollout_id, "invalid_training_signal")
+            raise RuntimeError(f"RL 张量接线失败：{exc}") from exc
         # ★ 这条 rollout 到此算「跑完了」；它会不会被 trainer 采纳是下游的事
         # —— 而 dispatch / complete / 训练到 三者两两的差，正是我们要量的东西。
         await record_dispatch(bundle, output, result.reward,
@@ -408,9 +426,7 @@ class SyncopateAgentLoop(AgentLoopBase):  # type: ignore[misc]
             response_ids=output.response_ids,
             response_mask=output.response_mask,
             # ★ 策略版本随轨迹一起交回去（见上面 version_fields 的说明）。
-            # 有 logprob 才传；全是占位值时传 None，免得给 TIS 喂假数据
-            response_logprobs=(output.response_logprobs
-                               if output.metrics["logprob_coverage"] > 0.5 else None),
+            response_logprobs=output.response_logprobs,
             reward_score=result.reward,
             num_turns=output.num_turns,
             metrics=AgentLoopMetrics(),

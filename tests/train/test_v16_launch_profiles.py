@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from syncopate.train.sft import resolve_grad_accum
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV = {**os.environ, "SYNCOPATE_CONTRACT": "v15", "SYNCOPATE_THINK": "1"}
@@ -41,12 +41,23 @@ def test_short_candidate_cannot_masquerade_as_candidate():
 
 
 def test_sft_one_vs_two_gpu_keeps_the_same_effective_batch():
+    pytest.importorskip("torch")
+    from syncopate.train.sft import resolve_grad_accum
     assert resolve_grad_accum(2, 1, 16, None) == 8
     assert resolve_grad_accum(2, 2, 16, None) == 4
 
 
 def test_sft_rejects_a_silent_batch_change():
-    import pytest
+    pytest.importorskip("torch")
+    from syncopate.train.sft import resolve_grad_accum
 
     with pytest.raises(ValueError, match="配方漂移"):
         resolve_grad_accum(2, 2, 16, 8)
+
+
+def test_rl_sampling_is_read_from_shared_contract():
+    from syncopate.train.rollout_budget import SAMPLING_TEMPERATURE, SAMPLING_TOP_P, SAMPLING_TOP_K
+    run = _launch("--logger", "console")
+    assert run.returncode == 0, run.stderr
+    for key, value in {"temperature": SAMPLING_TEMPERATURE, "top_p": SAMPLING_TOP_P, "top_k": SAMPLING_TOP_K}.items():
+        assert f"actor_rollout_ref.rollout.{key}={value}" in run.stdout

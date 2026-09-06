@@ -88,7 +88,7 @@ ENABLE_THINKING = THINK_ON
 #   多轮行再加最近 6 轮历史（每轮 ≤400 tok）⇒ 9216。9216 + 8192 = 17408 ⇒ 服务/RL max_model_len 18432
 #   （logs/runtime/start_vllm.sh · scripts/v16/exam_chain.sh · decider.RUNTIME_MAX_MODEL_LEN 同步改）。
 #   显存：Qwen3-4B 每 token KV ≈144 KB ⇒ 18432 一条 ≈2.65 GB；R6 起跑前按 25 §R6 V0⒠ 重测并发。
-# ★ 2026-09-04（Chaoyu 裁定：上限是按 5090 显存定的数字，B200 上只要不爆显存就抬；教师 CoT 必须完整）：9216 → **12288**，
+# ★ 2026-09-04（Chaoyu 裁定：按 B200 实测容量安排预算；教师 CoT 必须完整）：9216 → **12288**，
 #   think-on response 8192 → **12288** ⇒ max_model_len 24576（服务/RL/eval 全部派生；stack_probe.SERVE_MAX_MODEL_LEN 有相等断言）。
 #   依据：学生 Qwen3.6-35B-A3B 30/40 层是线性注意力（KV 不随长度涨），10 层全注意力 GQA ⇒ 每 token KV 极小；
 #   SFT 实测 17408 上限下峰值 74 GB / 183 GB；RL 冒烟 response 均值 1.3k token，抬上限只是给尾巴留余量。
