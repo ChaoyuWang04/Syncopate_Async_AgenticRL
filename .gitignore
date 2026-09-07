@@ -1,4 +1,5 @@
 # 环境
+/harness-lab/
 .venv/
 __pycache__/
 *.pyc
