@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "path": "/vol/_audit/infra-probes/B07/exact-dot-02/attempt-649d3a867fea4354a03060f223f4dc9d",
+  "image_id": "im-pIuSu4LDU1X5r6Egoy1r9G",
+  "entry_sha256": "4126012918ca6284b78b11a6b85a079f86e4439e5148e9ac54c2aff73ba933e8",
+  "result_sha256": "5899fea188143173af324e9af66595a969176eb855422389328395b75c502571",
+  "scope": "exact rational sum of stored BF16 products; selected differing B05 output elements; no CUDA run",
+  "weight_key": "model.language_model.layers.0.linear_attn.out_proj.weight",
+  "shard_sha256": "adee7bcb930aed22e0677e58d4873b48dadb1ed8001cb5c6a0487286eadb3478",
+  "different_elements": 269,
+  "verified_elements": 269,
+  "total_elements": 131072,
+  "closer_counts": {
+    "batch2": 61,
+    "single": 208
+  },
+  "midpoint_distance_cumulative": {
+    "0.001": 61,
+    "0.01": 135,
+    "0.1": 199,
+    "0.5": 252,
+    "1": 260
+  },
+  "max_distance": 2.256076388888889,
+  "largest_difference_example": {
+    "row": 18,
+    "column": 1229,
+    "single": 0.050537109375,
+    "batch2": 0.05029296875,
+    "exact_dot": "1773825123869/35184372088832",
+    "exact_float": 0.050415142250955114,
+    "closer": "single",
+    "distance_to_midpoint_in_pair_spacing": 0.0004226599121466279,
+    "single_error": 0.00012196712404488608,
+    "batch2_error": 0.00012217350095511392,
+    "single_even_lsb": false,
+    "batch2_even_lsb": true
+  },
+  "cuda_initialized": false
+}

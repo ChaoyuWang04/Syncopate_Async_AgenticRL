@@ -1,0 +1,142 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-gpu-01",
+  "mode": "gpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "ad0bac4a5805d2b161ce080eff474483b570016cf593205b2e310a3068baacf9",
+  "entry_sha256": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+  "image_id": "im-z5xaA9pGHQZ0kdNajQUfdK",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-gpu-01",
+  "started_utc": "2026-09-07T09:19:39Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "probe_sources": {
+    "modal_app/infra_probes.py": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+    "syncopate/infra/probability_probe.py": "b326ecd1a39b44998e55e5f91bec165c87b36f6407fb3f8e1a7dbbfa0be9bee1",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_probability_probe.py": "401eb20bd48301962acda9c44b73268bc02797639f0486ac0c859a366ec81dc7",
+    "tests/infra/test_probe_run.py": "8101b6eb8624a91f63dd1fe89c45148b2a983657f372e4e8ed0c73359d6acdc7"
+  },
+  "source_archive": {
+    "overlay_sha256": "ad0bac4a5805d2b161ce080eff474483b570016cf593205b2e310a3068baacf9",
+    "members": 655,
+    "bytes": 2775042,
+    "archive_sha256": "a82ba61482311f5e8896cf8f647553b76d0521c9cf3796cc50709f007a9bd85c"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B01/b01-cpu-02",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert torch.cuda.get_device_capability()==(10,0)"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "hf",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "vllm",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "summary",
+      "/vol/_audit/infra-probes/B01/b01-gpu-01"
+    ]
+  ],
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 78.0,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 3.0,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 53.0,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 1,
+      "process_returncode": 1,
+      "out": "",
+      "secs": 118.4,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 263.149091989,
+  "files": {
+    "hf-result.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "hf.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "d6c1d2e367f9328ee3b714a23256dff8f3a2d15829937f7b0993964a7060c665",
+    "step-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-1.log": "f6fe50bebf0d014ec4207867009dbdba06fd393cf3094246de7bfd55f9107eb6",
+    "step-2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-3.log": "4549334623c43d77b1d5050938849ebe9b63e64a51195ed2462b2b2927e5dd3b",
+    "step-4.log": "3ebadea1a711795fe4e707306b6601899d06a6cd0cb8e384bae124778338b072",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "app_id": "ap-1mows4QgdP4OOwqdudQkiC",
+  "readback_verified": true,
+  "partial_result": {
+    "hf_repeat_single": 0.0,
+    "hf_batch": {
+      "max_abs": 0.12748193740844727,
+      "mean_abs": 0.017083460281673256,
+      "p95_abs": 0.08739620447158813,
+      "tokens": 63
+    }
+  },
+  "gpu_identity": "name, uuid, memory.total [MiB], memory.used [MiB], driver_version\nNVIDIA B200, GPU-e56050b1-4bec-eaaf-d0ed-03351d3c8f6c, 183359 MiB, 130 MiB, 580.95.05\n",
+  "failure": "probe apply_model callable IPC serialization disabled; no vLLM probability measurement",
+  "cost_actual_usd": null
+}

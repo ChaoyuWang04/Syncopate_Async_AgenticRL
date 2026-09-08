@@ -1,0 +1,150 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "batch3-cpu-01",
+  "phase": "cpu",
+  "evidence_path": "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "d84aa06e78e5c6fe07653a1e81efbb56512c016a13cab4fe0121f678e4d49eb1",
+  "image_id": "im-2iOBb4EIBUZ2QvcKZTJNYQ",
+  "entry_sha256": "d503cc23d9e72a3e5ee65c80636ba2b3534b2f229d8ae66aca6067de1c3718f9",
+  "sources": {
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "d503cc23d9e72a3e5ee65c80636ba2b3534b2f229d8ae66aca6067de1c3718f9",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T15:11:46Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.9,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 126.8,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 17.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 22.9,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 3.4,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "d84aa06e78e5c6fe07653a1e81efbb56512c016a13cab4fe0121f678e4d49eb1",
+    "members": 699,
+    "bytes": 2831131,
+    "archive_sha256": "06f10ebf17c3f88157a469fff3eb6484c9d7a2247f95cc2b8bf1416136ceea99"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_gdn_boundary_probe.py",
+      "tests/infra/test_fp8_probe.py",
+      "tests/infra/test_probe_run.py",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_fsdp_probability_probe.py",
+      "tests/infra/test_batch_layer_probe.py",
+      "-q",
+      "-r",
+      "a"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.fsdp_probability_probe",
+      "--cpu",
+      "--input",
+      "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4/input.json",
+      "--output",
+      "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.fp8_probe",
+      "--cpu",
+      "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.gdn_boundary_probe",
+      "--cpu",
+      "--out",
+      "/vol/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4"
+    ]
+  ],
+  "validated_results": [
+    "cpu-result.json",
+    "fsdp2-cpu.json",
+    "fp8-cpu.json",
+    "gdn-cpu.json"
+  ],
+  "seconds": 182.965694487,
+  "files": {
+    "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+    "fp8-cpu.json": "8abc79d7b28995ce551b08e6fa13f900b023563350a39fae7937c324d34d7dbb",
+    "fsdp2-cpu.json": "da48649cde598a950d21f1f52a0a13e3fecf5fa09eaf06309b65d8ebb5fd0384",
+    "gdn-cpu.json": "21ac933f8213e3d17520a838e87239f3ba3936ad41598ea5743a47711f82126e",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "dcda3af4ca4659bb33af846a5ba39ce191d183267adb9d6bda9380462ce7d5dd"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "app_id": "ap-TmhZp1A8DVnwYjRAGVoS2c",
+  "readback": {
+    "terminal_exact_to_cli": true,
+    "verified_files": {
+      "fp8-cpu.json": "8abc79d7b28995ce551b08e6fa13f900b023563350a39fae7937c324d34d7dbb",
+      "gdn-cpu.json": "21ac933f8213e3d17520a838e87239f3ba3936ad41598ea5743a47711f82126e"
+    }
+  }
+}

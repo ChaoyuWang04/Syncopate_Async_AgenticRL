@@ -1,0 +1,242 @@
+{
+  "first_observed_divergence": "model.language_model.layers.0.linear_attn.out_proj",
+  "first_output_diff": {
+    "name": "model.language_model.layers.0.linear_attn.out_proj",
+    "class": "Linear",
+    "shape": [
+      2,
+      64,
+      2048
+    ],
+    "target_shape": [
+      64,
+      2048
+    ],
+    "max_abs": 0.000244140625,
+    "relative_l2": 5.3298442239084834e-05,
+    "reference_l2": 6.250373509095505,
+    "difference_l2": 0.00033313517144723274,
+    "equal": false,
+    "same_shape_repeat": {
+      "max_abs": 0.0,
+      "relative_l2": 0.0,
+      "reference_l2": 6.25037027360231,
+      "difference_l2": 0.0,
+      "equal": true
+    }
+  },
+  "router_membership": [
+    {
+      "layer": "model.language_model.layers.0.mlp.gate",
+      "ordered_changed": 0,
+      "membership_changed": 0
+    },
+    {
+      "layer": "model.language_model.layers.1.mlp.gate",
+      "ordered_changed": 5,
+      "membership_changed": 1
+    },
+    {
+      "layer": "model.language_model.layers.2.mlp.gate",
+      "ordered_changed": 12,
+      "membership_changed": 1
+    },
+    {
+      "layer": "model.language_model.layers.3.mlp.gate",
+      "ordered_changed": 13,
+      "membership_changed": 5
+    },
+    {
+      "layer": "model.language_model.layers.4.mlp.gate",
+      "ordered_changed": 18,
+      "membership_changed": 6
+    },
+    {
+      "layer": "model.language_model.layers.5.mlp.gate",
+      "ordered_changed": 22,
+      "membership_changed": 5
+    },
+    {
+      "layer": "model.language_model.layers.6.mlp.gate",
+      "ordered_changed": 28,
+      "membership_changed": 7
+    },
+    {
+      "layer": "model.language_model.layers.7.mlp.gate",
+      "ordered_changed": 31,
+      "membership_changed": 19
+    },
+    {
+      "layer": "model.language_model.layers.8.mlp.gate",
+      "ordered_changed": 37,
+      "membership_changed": 14
+    },
+    {
+      "layer": "model.language_model.layers.9.mlp.gate",
+      "ordered_changed": 34,
+      "membership_changed": 20
+    },
+    {
+      "layer": "model.language_model.layers.10.mlp.gate",
+      "ordered_changed": 42,
+      "membership_changed": 14
+    },
+    {
+      "layer": "model.language_model.layers.11.mlp.gate",
+      "ordered_changed": 44,
+      "membership_changed": 21
+    },
+    {
+      "layer": "model.language_model.layers.12.mlp.gate",
+      "ordered_changed": 39,
+      "membership_changed": 23
+    },
+    {
+      "layer": "model.language_model.layers.13.mlp.gate",
+      "ordered_changed": 47,
+      "membership_changed": 23
+    },
+    {
+      "layer": "model.language_model.layers.14.mlp.gate",
+      "ordered_changed": 47,
+      "membership_changed": 22
+    },
+    {
+      "layer": "model.language_model.layers.15.mlp.gate",
+      "ordered_changed": 55,
+      "membership_changed": 36
+    },
+    {
+      "layer": "model.language_model.layers.16.mlp.gate",
+      "ordered_changed": 51,
+      "membership_changed": 32
+    },
+    {
+      "layer": "model.language_model.layers.17.mlp.gate",
+      "ordered_changed": 49,
+      "membership_changed": 28
+    },
+    {
+      "layer": "model.language_model.layers.18.mlp.gate",
+      "ordered_changed": 57,
+      "membership_changed": 38
+    },
+    {
+      "layer": "model.language_model.layers.19.mlp.gate",
+      "ordered_changed": 56,
+      "membership_changed": 35
+    },
+    {
+      "layer": "model.language_model.layers.20.mlp.gate",
+      "ordered_changed": 52,
+      "membership_changed": 30
+    },
+    {
+      "layer": "model.language_model.layers.21.mlp.gate",
+      "ordered_changed": 54,
+      "membership_changed": 28
+    },
+    {
+      "layer": "model.language_model.layers.22.mlp.gate",
+      "ordered_changed": 52,
+      "membership_changed": 35
+    },
+    {
+      "layer": "model.language_model.layers.23.mlp.gate",
+      "ordered_changed": 55,
+      "membership_changed": 38
+    },
+    {
+      "layer": "model.language_model.layers.24.mlp.gate",
+      "ordered_changed": 55,
+      "membership_changed": 39
+    },
+    {
+      "layer": "model.language_model.layers.25.mlp.gate",
+      "ordered_changed": 55,
+      "membership_changed": 35
+    },
+    {
+      "layer": "model.language_model.layers.26.mlp.gate",
+      "ordered_changed": 60,
+      "membership_changed": 42
+    },
+    {
+      "layer": "model.language_model.layers.27.mlp.gate",
+      "ordered_changed": 54,
+      "membership_changed": 34
+    },
+    {
+      "layer": "model.language_model.layers.28.mlp.gate",
+      "ordered_changed": 56,
+      "membership_changed": 30
+    },
+    {
+      "layer": "model.language_model.layers.29.mlp.gate",
+      "ordered_changed": 54,
+      "membership_changed": 39
+    },
+    {
+      "layer": "model.language_model.layers.30.mlp.gate",
+      "ordered_changed": 57,
+      "membership_changed": 41
+    },
+    {
+      "layer": "model.language_model.layers.31.mlp.gate",
+      "ordered_changed": 60,
+      "membership_changed": 41
+    },
+    {
+      "layer": "model.language_model.layers.32.mlp.gate",
+      "ordered_changed": 53,
+      "membership_changed": 38
+    },
+    {
+      "layer": "model.language_model.layers.33.mlp.gate",
+      "ordered_changed": 54,
+      "membership_changed": 30
+    },
+    {
+      "layer": "model.language_model.layers.34.mlp.gate",
+      "ordered_changed": 53,
+      "membership_changed": 34
+    },
+    {
+      "layer": "model.language_model.layers.35.mlp.gate",
+      "ordered_changed": 55,
+      "membership_changed": 44
+    },
+    {
+      "layer": "model.language_model.layers.36.mlp.gate",
+      "ordered_changed": 54,
+      "membership_changed": 35
+    },
+    {
+      "layer": "model.language_model.layers.37.mlp.gate",
+      "ordered_changed": 50,
+      "membership_changed": 34
+    },
+    {
+      "layer": "model.language_model.layers.38.mlp.gate",
+      "ordered_changed": 49,
+      "membership_changed": 30
+    },
+    {
+      "layer": "model.language_model.layers.39.mlp.gate",
+      "ordered_changed": 45,
+      "membership_changed": 29
+    }
+  ],
+  "output_difference": {
+    "max_abs": 0.14914560317993164,
+    "mean_abs": 0.017294682455868165,
+    "p95_abs": 0.09673190116882324,
+    "tokens": 63
+  },
+  "observer_all_equal": true,
+  "same_shape_all_equal": true,
+  "observed_modules": 690,
+  "skipped_boundaries": 60,
+  "boundary_limit": "No pre-hook on out_proj: cannot distinguish upstream GDN intermediate difference from out_proj GEMM itself.",
+  "run": "runs/batch2-layers-01.json"
+}

@@ -1,0 +1,121 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-gpu-02",
+  "phase": "gpu",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-gpu-02/attempt-30331c1241424bfd94e40e737422175d",
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 2.3,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 1,
+      "process_returncode": 1,
+      "out": "",
+      "secs": 417.8,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZTRC3CVNQ5XK2KEKKHFNVR",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "441f31bd75a40f0da736b923f22566c9cb9a7d55ad98b929336d9678b787be6d",
+  "image_id": "im-Lw0rhU8NggQlqXXVbF4hFS",
+  "entry_sha256": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+    "syncopate/infra/communication_baseline_probe.py": "ca1c96a5d51c476cec9258341ad2ecae4565658f2359de421ba83ba3eb0e61dc",
+    "tests/infra/test_communication_baseline_probe.py": "3c35a93fd2010bf47f5d2538f04a1f8ae63e298ec435eae02eda51834128aca5",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T06:19:52Z",
+  "source_archive": {
+    "overlay_sha256": "441f31bd75a40f0da736b923f22566c9cb9a7d55ad98b929336d9678b787be6d",
+    "members": 782,
+    "bytes": 2981124,
+    "archive_sha256": "75a48a44cedfd3ec60e4df878fb8eb5b2a9426c70699de0cd3c293faf6aeb39a"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-02/attempt-0197374b92544932ab6e2047ea2e4244",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==2; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(2))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "gpu",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-gpu-02/attempt-30331c1241424bfd94e40e737422175d",
+      "--preflight",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-02/attempt-0197374b92544932ab6e2047ea2e4244"
+    ]
+  ],
+  "seconds": 431.619471346,
+  "files": {
+    "communication-baseline-result.json": "8806e56f236d76e310b64b66c7f59478bfd2404666c21ea247c5a60d490d0edd",
+    "devices-command.json": "43cef93467684cb5c22e470430e50dac2bd69df309381df947e93c53ea265442",
+    "ldd-0-command.json": "727704b3b20f219f041424bf64c80418ca3e8045f9e0e697800ef2ee13a365fe",
+    "ldd-1-command.json": "4c4f54348e0ab090e8a69eb3017f345d69c482add074cac281c5b8fecb8a1041",
+    "ldd-2-command.json": "8307bf571a728942579e00b544698ab8705d7baf65f9a6d4023877106da2341c",
+    "ldd-3-command.json": "36e3814521591325e3da9c48a57d08585f6f57fb06a84d5f9c5fcd684211e4e0",
+    "ldd-4-command.json": "aca5f231e1abcff8a8aec880c904fa7c7d35e202627f04f877d7765f797dcdab",
+    "ldd-5-command.json": "16d341e727ca790fa23b7b948c7adef0c331df7c6bc3cb66fee5d170f9369b24",
+    "ldd-6-command.json": "cb4f823a728da38f8f01e6c72fef0baf974ad651296d4d0c5618eae87d17886d",
+    "native-0-command.json": "c49397b391350981bf49306b5fd50287d69bc20ea844139a415019d732f775b2",
+    "native-1-command.json": "a50ac1004147abb65ae2b1f4fe9972f44d62e60f6bcd5463cc47d568b5759b5c",
+    "native-2-command.json": "b74d92638bf35526b426a0a69a20ac2a72fc7420a65973b9d6f7eee1a703a5a3",
+    "native-3-command.json": "68617953382159eaa1b3fbfac84846ec20c4a5d4b80e76872fb528016f7246dc",
+    "native-4-command.json": "6ae04460196172e53731f18f210460d4f06be2e9f78d93b24ff4dec36ee65289",
+    "native-5-command.json": "a857ff306c6a92032fa78f0ee18a712a0d5eee3e83777fd84161422af09b84a7",
+    "native-6-command.json": "f5f6ecdb192309a43caf22d77fa0d3e042f0f0669c911dbbf8add57f58d8166a",
+    "native-pilot-0-command.json": "e8c6616669cef887155f85fcd42b9c9703861d3ce979ac17d31f03b9ee7f736a",
+    "native-pilot-1-command.json": "ee08f9a70f83d141576479a8b6f2b1c17f15dc4bbb98957ff1cd2b2bba9a0851",
+    "native-pilot-2-command.json": "07cf72332ae9852cd03606976462b7aa03d1fc47f72410c67c2fb1ae4e553b7c",
+    "native-pilot-3-command.json": "b7a47573222447827bcc196100e2089bd4df52a7a3376d920d5b705623a08b3f",
+    "native-pilot-4-command.json": "29c817d23cf3b021f47b4de9ef93da9b742c6eee9069bf7750b67c9b45a759d5",
+    "native-pilot-5-command.json": "2a0620e1c270b6f6239ed162316bfe1058307b7c1472b0a6b518c2ef698b514c",
+    "native-pilot-6-command.json": "9e1efd5797e0983241818bf602c1da70ce945008cf6289d5016c6ae28380ff27",
+    "native-results.json": "a79b8efa453be6cbeafda5e886339ceb078f13681a0213f37454932c7c4bad98",
+    "rank-0.json": "dab1a5e92efc5c1b629fa5fc599c2062206f89cd8bdef38a96b567aac09b2846",
+    "rank-1.json": "2458485bce4f780194dbd24f8ca60fb5809117d86377baeb4c2a4102d12d498f",
+    "source.tar.gz.json": "8d1390a7a8bb6b13604cf69d0eba950ffd3333ed8399b358fbc6f3d2a16d51b1",
+    "trace-rank-0-all_gather-16777184.json": "d2d4ca80017910787e2430cee81713ca86432ec74d7864da6bf23ed7994318ba",
+    "trace-rank-0-all_gather-16777216.json": "02938f79ce4ae45c499212e379b0be17dd8b3b9462448dd50601a9443e8838a4",
+    "trace-rank-0-all_reduce-16777214.json": "4b3a630d77e5c2381c25861099d0459453c4afa1c4060e99c0a08c42ae29b60f",
+    "trace-rank-0-all_reduce-16777216.json": "3029e9949585eef271f997dc466752796dded8d274e40a10cf37d3df5d498f8d",
+    "trace-rank-0-all_reduce-16777218.json": "ba28296a1b19a10546a91794c1474f220f359290ae1fb60e348d511a336b4a74",
+    "trace-rank-0-reduce_scatter-16777184.json": "cb32bf2f280525a434a42f5147368360cd586a51808ffe2887ae63a3bbe98517",
+    "trace-rank-0-reduce_scatter-16777216.json": "18b6069b0e050061012a2293aeb0e917f44b5b63b699c025343dd4d26ef256f3",
+    "trace-rank-1-all_gather-16777184.json": "2716d3ef8b538c86686ecead465b4b1b247da24c264a352e5d8d0b9beb69c6e0",
+    "trace-rank-1-all_gather-16777216.json": "711015500615cca25f2d3221992c2deaa453d4b643c6f8b4d7b6e71b4265bab7",
+    "trace-rank-1-all_reduce-16777214.json": "669c5ebe08b389ef71be119a83f470b51ed59ff1860492283416e96a8b4ee77e",
+    "trace-rank-1-all_reduce-16777216.json": "47b020461cf4aff0e2bd93f85346f1a40a202a57d3ff9f29f22faf141cb83d5e",
+    "trace-rank-1-all_reduce-16777218.json": "b97fe46ba4cf41461a5f05405e112df806765927d396c0fb4c6f23879cb8aecf",
+    "trace-rank-1-reduce_scatter-16777184.json": "337315e2cc1d6a8dbc42ad3d9bada6e60d8851bf02655c116c4f9f956f3de687",
+    "trace-rank-1-reduce_scatter-16777216.json": "4a0fd0f0b9a3d90487486dcac0eaf10bf87eb81eb81bfb6621c1e54c97374100"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-QAZB8flPjOpBOgP1FIliQg",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": "B200:2",
+    "timeout_seconds": 1800
+  },
+  "failure_classification": "torch subprocess 360s timeout after both rank measurement files; live Graph before PG teardown matches known upstream lifecycle issue, not accepted performance run"
+}

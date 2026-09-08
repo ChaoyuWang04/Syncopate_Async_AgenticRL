@@ -1,0 +1,134 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-gpu-03",
+  "mode": "gpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "59b73a8122435eff84063fca35bd2c3086b495643e4b20a6dfe496f5ff4a92c9",
+  "entry_sha256": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+  "image_id": "im-TaEIeKjHKr5RGZDCWvLuBm",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-gpu-03",
+  "started_utc": "2026-09-07T09:44:20Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "probe_sources": {
+    "modal_app/infra_probes.py": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+    "syncopate/infra/probability_probe.py": "a8f41bff1fc21a9124ef5dd3ac60d00f4a64b154317d282005ccd019f76a915f",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_probe_run.py": "8101b6eb8624a91f63dd1fe89c45148b2a983657f372e4e8ed0c73359d6acdc7"
+  },
+  "source_archive": {
+    "overlay_sha256": "59b73a8122435eff84063fca35bd2c3086b495643e4b20a6dfe496f5ff4a92c9",
+    "members": 661,
+    "bytes": 2783964,
+    "archive_sha256": "e4caaebbf24dc43824d7bf1b5ce5d135cfd9b8aeb5096af3fe30b273ecc5dcfd"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B01/b01-cpu-04",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert torch.cuda.get_device_capability()==(10,0)"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "hf",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "vllm",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "summary",
+      "/vol/_audit/infra-probes/B01/b01-gpu-03"
+    ]
+  ],
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 41.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 2.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 48.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 1,
+      "process_returncode": 1,
+      "out": "",
+      "secs": 122.3,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 221.32935141299998,
+  "files": {
+    "hf-result.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "hf.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "23a092987e26d01267ceab662e6a0ab496bff570fdc6ac547899e5c03f87c4c1",
+    "step-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-1.log": "531388386d42992e1a2e654d80641c0660f62f0d69e0d9170fedc0ec00f3cbfb",
+    "step-2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-3.log": "dc7299112be237a0ac38a8309f505d4a967f3cb982df86be3abd59f0084337dc",
+    "step-4.log": "b4181f21f25fd18c3c25f706ac1b7c855bb7360ed9f2a872ad5ec0e1abe7f5f4",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633",
+    "vllm-root.jsonl": "e857eecff6967e754e0c5d46a109ad21ba0896bec837cfd6f0bca4d050882159"
+  },
+  "modal_app_id": "ap-BjNdsVLUfuaTGP7jy6Od8S",
+  "readback_verified_files": [
+    "vllm-root.jsonl",
+    "step-4.log"
+  ]
+}

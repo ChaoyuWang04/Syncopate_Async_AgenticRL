@@ -1,0 +1,76 @@
+{
+  "experiment": "infra-probes/B02",
+  "run_id": "b02-cpu-02",
+  "mode": "cpu",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B02/b02-cpu-02",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "60d97b6d6d5247f4ef94c294fe0fa9d5ab5dde8a64f8c6d04c9272e2c64ffea0",
+  "entry_sha256": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+  "image_id": "im-nohHO9kKdWuTc1QlyZtuPj",
+  "started_utc": "2026-09-07T09:57:15Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 16.7,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "probe_sources": {
+    "modal_app/lora_probe.py": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+    "syncopate/infra/lora_accumulation_probe.py": "78956eb2c44ff0f86d70a4e2abd1b71096fad8d6c7f8076e90e3e5adfde8eb19",
+    "syncopate/infra/training_probe.py": "6b4b7e7003df7d4ee437c17e2c3217b0bce5919cf02a5fec43732917b580ff04",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_lora_accumulation_probe.py": "38a03ca9d3cbb9291500ead5b55311353f9b5ee4cc3dbe427d385b1b9390d261",
+    "modal_app/stack/uv.lock": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a"
+  },
+  "source_archive": {
+    "overlay_sha256": "60d97b6d6d5247f4ef94c294fe0fa9d5ab5dde8a64f8c6d04c9272e2c64ffea0",
+    "members": 662,
+    "bytes": 2786287,
+    "archive_sha256": "e7d5c1fa7e9908f322bde03faefc77979f335fd3339b48b4525a4a50368f3753"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_lora_accumulation_probe.py",
+      "tests/infra/test_probe_run.py",
+      "-q"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.lora_accumulation_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B02/b02-cpu-02"
+    ]
+  ],
+  "seconds": 23.182753669,
+  "files": {
+    "cpu-result.json": "75b5ed552fc9dcfd5ff5684ad130cedf28b2285255e9851d38bb3c478070f8c3",
+    "source.tar.gz.json": "c6e43dc236586a190afa69cf85d37c6d14ad5c10a8ad6f64cea6fe88bb682185",
+    "step-0.log": "c2cba0e5b1275bde99432021fd22a26635493fa35d0886fcd5cd38708b0f7cca",
+    "step-1.log": "73277d184060f3b3ae2826249445197bee40cd2fc59301525379c22dae01f1b9"
+  },
+  "modal_app_id": "ap-SuUewFzTAPLbfRZsQVfq0R",
+  "readback_verified_files": [
+    "cpu-result.json",
+    "step-0.log"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "experiment": "infra-probes/B04",
+  "run_id": "batch2-config-diagnostic-02",
+  "app_id": "ap-NgyoOmSyYUpoyNRKXvLstP",
+  "ok": false,
+  "error_round": 2,
+  "classification": "local diagnostic entry import failure before any model/config result",
+  "error": "ModuleNotFoundError: modal_app",
+  "volume": "syncopate-home",
+  "evidence_path": "/_audit/infra-probes/B04/batch2-config-diagnostic-02",
+  "files": {
+    "cli.log": "2ccf5f12aa2c01cf97b1f33a29beaf73bafbcf4fc6ef80541feff8969abdd6d1",
+    "entry.py": "e8e9e3175af0799f914af4cd043e64e5ad13ccd29035a93004fd9f1024d74f83"
+  },
+  "runtime_identity": "No remote run manifest produced; do not infer image/overlay identity from later runs.",
+  "readback_hashes_verified": true,
+  "cleanup": "Own idle failed CPU App explicitly stopped; final list shows stopped and zero tasks."
+}

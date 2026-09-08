@@ -1,0 +1,135 @@
+{
+  "query_utc": "2026-09-08T03:01:00.725986+00:00",
+  "upstream": {
+    "repo": "https://github.com/NVIDIA/nccl",
+    "latest_release": "v2.31.2-1",
+    "release_published_at": "2026-08-11T00:24:08Z",
+    "release_sha": "7b83616df3ae082a1f32bb74c27458bfe8153a13",
+    "master_sha": "fd168324a3dc0c9080fd4881b6c7f4bb252a95a2"
+  },
+  "queries": [
+    {
+      "query": "repo:NVIDIA/nccl alignment",
+      "url": "https://api.github.com/search/issues?q=repo:NVIDIA/nccl+alignment",
+      "status": "success",
+      "total_count": 24,
+      "hits": [
+        "https://github.com/NVIDIA/nccl/pull/1452",
+        "https://github.com/NVIDIA/nccl/pull/2075"
+      ],
+      "finding": "Open PR1452 Allow default alignment less then 16; open PR2075 Fix atomic alignment. Bodies failed retrieval (TLS timeout / web DisabledError); neither assumed merged or applicable."
+    },
+    {
+      "query": "repo:NVIDIA/nccl allgather performance",
+      "url": "https://api.github.com/search/issues?q=repo:NVIDIA/nccl+allgather+performance",
+      "status": "TLS timeout"
+    },
+    {
+      "query": "repo:NVIDIA/nccl allgather performance is:closed",
+      "url": "https://api.github.com/search/issues?q=repo:NVIDIA/nccl+allgather+performance+is:closed",
+      "status": "TLS timeout"
+    },
+    {
+      "query": "site.github.com/NVIDIA/nccl misaligned allgather performance alignment",
+      "url": "https://github.com/NVIDIA/nccl/issues/413",
+      "status": "read issue body through web",
+      "finding": "Closed as not planned; 2020 NCCL2.5.7-1 all-gather alignment sensitivity. Search excerpt says Simple improved in2.8 and padding remains an option. Current B200 applicability unproven."
+    },
+    {
+      "url": "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html",
+      "status": "read official reference",
+      "finding": "Default automatic selection retained; diagnostic overrides are not universal production defaults."
+    },
+    {
+      "url": "https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md",
+      "status": "read official byte convention",
+      "finding": "All-reduce bus factor2(n-1)/n, gather/scatter(n-1)/n on total array size."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/NVIDIA/nccl/fd168324a3dc0c9080fd4881b6c7f4bb252a95a2/src/device/prims_simple.h",
+      "status": "25-second timeout; no current source-body evidence",
+      "finding": "Current source alignment behavior is not claimed; release/master identities were separately obtained via GitHub API."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/NVIDIA/nccl/v2.29.7-1/src/graph/topo.cc",
+      "status": "read successfully during focused analysis",
+      "source_sha256": "a66704baf697191c1ff05a170ec71fd23fa4575ad72a16136a5b99b3ba560ca5",
+      "finding": "line445 maps0x068000 to NVS;606-620 GPU branch parses target busID, switch branch creates/reuses NVS0 without parsing target.625-629 connects both directions. F target here does not imply NCCL wrong connection."
+    }
+  ],
+  "decision": "bounded default-NCCL existence screening; no asserted upstream bug; no optimization or forced legacy LL128",
+  "facts": [
+    "Actual selected model shape comes from config and matching safetensors header; hashes are bound in CPU preflight.",
+    "Existing old5090 alignment behavior does not establish current B200 defect."
+  ],
+  "hypotheses": [
+    "Neighboring BF16 chunk lengths may change selected-kernel effective bandwidth; test without assuming impact."
+  ],
+  "limits": [
+    "No actual trainer traffic frequency measured.",
+    "One allocation is screening only; at least three independent comparable allocations required for performance baseline.",
+    "PR bodies and closed-issue API query unavailable in this retrieval; not a claim that no existing fix exists."
+  ],
+  "focused_conclusion": {
+    "payload_protocol": "Actual payload log RING/SIMPLE for all333 calls; LL kernel name is not authoritative protocol evidence",
+    "transport": "32-channel P2P/CUMEM and NVS-backed NVL graph established",
+    "decision": "close existence screening; no stable size causality or performance baseline; no new GPU task",
+    "timing_limit": "Host dispatch+synchronize and CUDA-event intervals include dispatch/scheduling gaps; kernel durations may include peer waiting. Independent one-call profiler observations are diagnostic and not a bandwidth baseline."
+  },
+  "batch6_measurement_research": {
+    "date": "2026-09-08",
+    "nccl_tests_sha": "b4d5beebca8a76cf01335f724d154b9b9d394d96",
+    "native_sources": [
+      "https://github.com/NVIDIA/nccl-tests/blob/b4d5beebca8a76cf01335f724d154b9b9d394d96/src/common.cu",
+      "https://github.com/NVIDIA/nccl-tests/blob/b4d5beebca8a76cf01335f724d154b9b9d394d96/src/all_reduce.cu",
+      "https://github.com/NVIDIA/nccl-tests/blob/b4d5beebca8a76cf01335f724d154b9b9d394d96/src/all_gather.cu",
+      "https://github.com/NVIDIA/nccl-tests/blob/b4d5beebca8a76cf01335f724d154b9b9d394d96/src/reduce_scatter.cu"
+    ],
+    "mpi_startup": {
+      "source": "https://github.com/openpmix/openpmix/issues/1747",
+      "docs": "https://docs.openpmix.org/en/latest/how-things-work/modex.html",
+      "finding": "Known hash datastore workaround; CPU real two-rank MPI validation passed. Does not tune NCCL payload transport. Exact old help-file fetch returned404."
+    },
+    "graph_teardown": {
+      "source": "https://github.com/pytorch/pytorch/issues/115388#issuecomment-3009880966",
+      "finding": "Known live Graph resources may prevent communicator teardown; GPU02 timed out after measurements, GPU03 normal exit after releasing Graphs first. Existing remedy, not new upstream discovery."
+    },
+    "graph_mixing": {
+      "sources": [
+        "https://discuss.pytorch.org/t/unexplained-gaps-in-execution-before-nccl-operations-when-using-cuda-graphs/197818/16",
+        "https://github.com/pytorch/pytorch/blob/v2.13.0/torch/csrc/distributed/c10d/ProcessGroupNCCL.cpp",
+        "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html#nccl-graph-mixing-support"
+      ],
+      "finding": "Existing graph-mixing synchronization explanation and conditional workaround; verify with native serial 3-arm test, not new generic framework bug. Current torch synchronous default uses current stream, so old separate-stream ping-pong explanation not assumed. Flag not adopted as training default."
+    },
+    "current_pytorch_graph_path": {
+      "date": "2026-09-08",
+      "release": "v2.14.0",
+      "main_sha": "a56a3a18b879d9c1ee1e1d74136fc0df98857fd2",
+      "compared_to": "deployed v2.13.0",
+      "section_bytes": 5178,
+      "section_sha256": "b384028e505cfabc5afb76c7a66d6ebf143d974ea85da5e5eff370c82c00c40b",
+      "section": "ordinary collective from asyncOp=false comment through before return asyncOp ? work : nullptr",
+      "finding": "Compared section byte-identical. No exact-symptom fix identified in bounded issue search; event/Future cost remains hypothesis. Not a claim all upstream fixes are absent.",
+      "nearby_issues_not_equivalent": [
+        "https://github.com/pytorch/pytorch/issues/138773",
+        "https://github.com/pytorch/pytorch/issues/131739",
+        "https://github.com/pytorch/pytorch/issues/173680",
+        "https://github.com/pytorch/pytorch/pull/191827"
+      ]
+    }
+  },
+  "direct_api_blocker": {
+    "checked_date": "2026-09-08",
+    "observed": "Python3.12 / PyTorch2.13 public nccl.init_rank fails on both ranks before payload with PY_SSIZE_T_CLEAN error",
+    "pinned_source": "https://github.com/pytorch/pytorch/blob/v2.13.0/torch/csrc/cuda/python_nccl.cpp#L107",
+    "main_source": "https://github.com/pytorch/pytorch/blob/a56a3a18b879d9c1ee1e1d74136fc0df98857fd2/torch/csrc/cuda/python_nccl.cpp#L101",
+    "main_blob_sha": "83aeebaef20a44f9ca7ed9da1b73898528d1fbbc",
+    "fact": "Both inspected files use PyArg_ParseTuple is#i; main translation unit has no macro definition. Runtime environment cannot repair compiled binding.",
+    "known_issue": "https://github.com/pytorch/pytorch/issues/38019",
+    "known_fix_proposal": "https://github.com/pytorch/pytorch/pull/127702",
+    "observed_status": "both open",
+    "stable_2_14_status": "source retrieval timed out twice; no verified fix claim",
+    "decision": "Do not rebuild Torch or change Python for optional direct diagnostic. Preserve unresolved PG/Graph attribution and accepted native baseline separately."
+  }
+}

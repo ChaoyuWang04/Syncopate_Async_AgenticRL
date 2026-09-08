@@ -1,0 +1,16 @@
+{
+  "experiment": "infra-probes/B00",
+  "run_id": "b00-cpu-01",
+  "app_id": "ap-tNiIEzmrmPbqo8Gbb7GjCI",
+  "command": "PYTHONPATH=. modal run --detach modal_app/infra_probes.py --run-id b00-cpu-01",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "aebf323274f9050528e5b3ad4ab4488bb4761c963a451ac5d20fc715e728d992",
+  "image_id": "im-sDgx6ynf41zQfRD4BQU8F1",
+  "ok": false,
+  "stage": "container import before function execution",
+  "error": "ModuleNotFoundError: modal_app",
+  "volume_evidence": null,
+  "cost_actual_usd": null,
+  "scope": "CPU only; no metric or GPU executed",
+  "action": "Stopped precise app; add frozen overlay to sys.path before importing image definition"
+}

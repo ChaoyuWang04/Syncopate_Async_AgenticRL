@@ -1,0 +1,30 @@
+{
+  "date": "2026-09-08",
+  "verl_main": "c8687a02e5b38172d6645cf120b71220f28cce88",
+  "verl_release": "v0.9.0",
+  "release_sha": "483b8a009ba3a97563edee3a19887e4862b8094a",
+  "axrl_main": "ad7659cf0b42da6c0576292194cc27a9f3ea45aa",
+  "sources": [
+    {
+      "url": "https://github.com/verl-project/verl/pull/4368",
+      "status": "merged"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/pull/7202",
+      "status": "closed_unmerged"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/issues/6401",
+      "status": "open"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/blob/c8687a02e5b38172d6645cf120b71220f28cce88/verl/workers/engine/fsdp/transformer_impl.py",
+      "finding": "No PrefixGrouper call in engine; current worker/trainer scan covers114 Python files."
+    },
+    {
+      "url": "https://github.com/XYZ-AI-Lab/axrl/blob/ad7659cf0b42da6c0576292194cc27a9f3ea45aa/axrl/utils/megatron/magi_forward.py",
+      "finding": "Alternative implementation; not stock verl and not locally certified."
+    }
+  ],
+  "decision": "Both engines investigated; no runtime or performance acceptance."
+}

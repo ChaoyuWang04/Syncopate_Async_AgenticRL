@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-08",
+  "main_sha": "c8687a02e5b38172d6645cf120b71220f28cce88",
+  "release_sha": "483b8a009ba3a97563edee3a19887e4862b8094a",
+  "version": "v0.9.0",
+  "identity_source": "Shared batch Q09 official GitHub API read; Q05 separately observed short refs. Exact Q05 execution-source call path not yet frozen.",
+  "sources": [
+    "https://verl.readthedocs.io/en/latest/advance/fully_async.html",
+    "https://github.com/verl-project/verl/issues/6780",
+    "https://github.com/verl-project/verl/blob/main/verl/experimental/fully_async_policy/config/fully_async_ppo_trainer.yaml"
+  ],
+  "decision": "Metrics and candidate same-entry comparison only; no target execution yet."
+}

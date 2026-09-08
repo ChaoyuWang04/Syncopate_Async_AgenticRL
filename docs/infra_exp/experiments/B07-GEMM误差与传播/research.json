@@ -1,0 +1,106 @@
+{
+  "date": "2026-09-08",
+  "scope": "Q19 actual GDN out_proj shape-sensitive GEMM, precision controls and downstream causal substitution",
+  "frozen_target": {
+    "torch": "2.13.0",
+    "transformers": "5.10.4",
+    "model_revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+    "modeling_sha256": "40da264c51fcfadd7b87271c5485f029ee9efd05e6e54b34728c8ee252db4c9c",
+    "reason": "preserve B05 exact same input/output witness; latest main informs hypotheses, not an automatic dependency upgrade",
+    "torch_source_identity": "record actual torch.version.git_version at execution"
+  },
+  "queries": [
+    "site.pytorch.org docs numerical accuracy batched computations reduced precision reduction BF16",
+    "site.docs.nvidia.com cublas results reproducibility algorithm workspace",
+    "site.github.com/pytorch/pytorch issues linear batch size bfloat16 numerical cublas"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.pytorch.org/docs/main/notes/numerical_accuracy.html",
+      "finding": "batched and sliced computations need not be bitwise identical; BF16 reduced-precision reduction is allowed by default; motivates exact-input batch and precision counterfactuals"
+    },
+    {
+      "url": "https://docs.pytorch.org/docs/main/notes/cuda.html",
+      "finding": "fp32_precision ieee controls FP32 matmul accuracy; allow_bf16_reduced_precision_reduction controls BF16 reduction policy. These are distinct settings, read back during each arm"
+    },
+    {
+      "url": "https://docs.nvidia.com/cuda/cublas/",
+      "finding": "results reproducibility has toolkit/architecture/SM and stream/workspace conditions; shape-driven heuristic choice is not a cross-shape equality promise. Split partial results may be deterministically summed, so deterministic repetition does not prove batch invariance"
+    },
+    {
+      "url": "https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/Linear.cpp",
+      "finding": "no-bias Linear calls matmul(input, weight.t()); real profiler must confirm target dispatch, not infer an addmm path from biased Linear examples"
+    },
+    {
+      "url": "https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cuda/CUDABlas.cpp",
+      "finding": "current main BF16 reduction policy changes cuBLASLt reduction scheme preferences. This establishes plausible policy-to-library wiring but not the exact frozen target dispatch or closed-source accumulation algorithm"
+    },
+    {
+      "url": "https://github.com/pytorch/pytorch/issues/87355",
+      "state_read": "closed as not planned",
+      "finding": "FP16 Linear/matmul batch-size dependent outputs on older GPU/PyTorch; related class of behavior, not this B200 BF16 witness and not proof of a current bug"
+    },
+    {
+      "url": "https://github.com/pytorch/pytorch/issues/139964",
+      "finding": "BF16 3D Linear issue returned in official issue search and opened; distinct user workload. No exact fix adopted"
+    },
+    {
+      "url": "https://docs.pytorch.org/docs/main/profiler.html",
+      "finding": "CPU/CUDA activities and export_chrome_trace allow real kernel inspection; CPU-only or CUPTI-unavailable event sets cannot satisfy CUDA identity gate"
+    }
+  ],
+  "latest_refresh": [
+    {
+      "url": "https://api.github.com/repos/pytorch/pytorch/commits/main",
+      "result": "web tool internal error; latest main SHA not verified"
+    },
+    {
+      "url": "https://api.github.com/repos/pytorch/pytorch/releases/latest",
+      "result": "web tool internal error; latest release not verified"
+    }
+  ],
+  "decision": "Q19 closed after fixed-M64 cuBLASLt intervention: unrestricted reproduces TorchM64; same algorithm with splitK/reduction changed2/2 to1/0 reproduces TorchM128 exactly for all131072 elements. No production fix or whole-model sole-cause claim.",
+  "limitations": [
+    "closed-source per-instruction accumulation remains unobserved; public split-K mechanism isolated causally",
+    "first sweep identical statistics do not prove cross-mode or batch2/4/8 tensor identity",
+    "no cross-engine larger-batch comparison",
+    "first-projection substitution does not eliminate downstream differences and worsens final chosen-logprob distance on this input",
+    "no production performance or free-generation acceptance",
+    "latest release/main refresh failure is recorded above; experiment keeps actual frozen target"
+  ],
+  "fixed_M_splitK_followup": {
+    "date": "2026-09-08",
+    "official_url": "https://docs.nvidia.com/cuda/cublas/",
+    "finding": "Reduction scheme NONE performs dot product in one sequence; preference mask excludes reduction schemes. Explicit ALGO_CONFIG_SPLITK_NUM=1 plus REDUCTION_SCHEME=NONE and AlgoCheck allow bounded same-algorithm feasibility test. Library status and runtime trace remain required.",
+    "installed_header_evidence": "/vol/_audit/infra-probes/B07/cublas-headers-01/attempt-b652320dc5414fd193cf8ae9ae007ceb",
+    "cublasLt_header_sha256": "8be43fbf48625b98b8562d7df394e6af0d7ee1c05beeb5333577d5e33182fa3e",
+    "cublas_api_header_sha256": "71afd43abd16698be7cbe3120d72700dc0004edc3d3944d865cdbc8d04c22b21",
+    "loaded_library": "/env/.venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13",
+    "abi_decision": "Compile host C++ C ABI bridge against exact installed headers; do not guess ctypes enum or opaque struct layout. No CUDA initialization in CPU gate.",
+    "attribution_gate": "direct unrestricted must reproduce actual torchM64 outputs; same-algorithm mutation supported by AlgoCheck and no splitK trace before attribution",
+    "result": {
+      "run_index": "runs/batch4-splitk-gpu-01.json",
+      "frozen_overlay_sha256": "60b9b0d560a8a8b7b3678a2f5d1cbfc6e53834e4513343f5068d2670f6dc3790",
+      "algorithm_id": 66,
+      "unchanged_attributes": {
+        "tile": 13,
+        "stages": 35,
+        "swizzle": 0,
+        "custom": 3
+      },
+      "splitK_before_after": [
+        2,
+        1
+      ],
+      "reduction_before_after": [
+        2,
+        0
+      ],
+      "exact_output_match": "all131072 elements equal TorchM128 target",
+      "diagnostic_ok": true,
+      "torch_attribution_ok": true,
+      "attribute_scope": "seven read-back public configuration attributes; inner/cluster not separately read"
+    }
+  },
+  "exact_dot_evidence": "exact-dot-summary.json;269/269 differing coordinates verified by CPU rational arithmetic;208 nearer single,61 nearer batch2"
+}

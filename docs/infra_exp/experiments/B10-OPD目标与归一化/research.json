@@ -1,0 +1,85 @@
+{
+  "experiment": "infra-probes/B10",
+  "query_utc": "2026-09-08T03:04:01.880302+00:00",
+  "upstream": {
+    "repository": "verl-project/verl",
+    "release": "v0.9.0",
+    "release_sha": "483b8a009ba3a97563edee3a19887e4862b8094a",
+    "main_sha": "c8687a02e5b38172d6645cf120b71220f28cce88",
+    "fix_sha": "594c51bc04a14d9084218b488c20d6d9ec7a897e",
+    "fix_pr": 7225
+  },
+  "queries": [
+    {
+      "query": "site:github.com/verl-project/verl distillation KL normalization micro batch loss opd",
+      "url": "https://github.com/verl-project/verl/issues/7200",
+      "result": "Closed precise normalization report; maintainer acknowledges missing global info, follow-up thanks fix #7225."
+    },
+    {
+      "url": "https://github.com/verl-project/verl/pull/7225",
+      "result": "Commit history attributes fix 594c51b to PR 7225."
+    },
+    {
+      "url": "https://github.com/verl-project/verl/issues/5625",
+      "result": "Legacy FSDP normalization; historical alternative, not direct distillation path."
+    },
+    {
+      "url": "https://github.com/verl-project/verl/issues/6676",
+      "result": "Student-top-k reverse KL requested separately; do not equate with teacher top-k forward objective."
+    },
+    {
+      "url": "https://github.com/verl-project/verl/blob/main/docs/algo/opd.md",
+      "result": "Official direct forward_kl_topk versus policy-gradient sampled estimator distinction."
+    },
+    {
+      "url": "https://api.github.com/repos/verl-project/verl/commits?path=verl/trainer/distillation/losses.py&per_page=20",
+      "result": "Read latest 20 path commits (6 returned); normalization fix latest change."
+    },
+    {
+      "url": "https://api.github.com/repos/verl-project/verl/contents/verl/trainer/distillation/losses.py?ref=v0.9.0",
+      "result": "Release already populates dp_size, batch_num_tokens, global_batch_size before supervised branch."
+    }
+  ],
+  "source_sha256": {
+    "fsdp-release": "75fb7ac8b8072dbc84ffddc9cf1cdeaec645010b2de3fdedc39fb791d6c170f3",
+    "distill-release": "8fc5835f410228c110f492a10dddfe6ce3274efd22f439dfaf8c88c5d5a6d843",
+    "distill-main": "8fc5835f410228c110f492a10dddfe6ce3274efd22f439dfaf8c88c5d5a6d843",
+    "padding": "4e29a4af7d6f7a2182cbd45536df5c3423745e925d0cd3bb151440dbfba8fbcc",
+    "corr-release": "763158342551bc4077805a8a009d959a7a2043c4d43b772fe6045f4a40932f3e",
+    "ray-release": "32b2fd1a6700d2490dc16f9f1e55413c4ab5207c54ee4584c48fd1d4e0add45e",
+    "workers-release": "22e8fe70af0b617adec01e8c9fc190a4f9da897303a094182f52d26290e767a4",
+    "loop-release": "04234862956696bae55d5f5d59d50d1035f908bd696befaf1bb45b21c6abdd88"
+  },
+  "decision": "Confirmation-only CPU; known fix in latest stable and main, no new upstream claim or GPU needed.",
+  "limitations": [
+    "GPU trainer and Megatron schedule not executed",
+    "Fully empty response masks cause dispatcher metric min/max on empty selection; primitive all-empty denominator undefined, separate supported-input boundary rather than silent pass."
+  ],
+  "network_failures": [
+    "GitHub connector transport failed; some raw curl timeouts; successful GitHub API fallbacks retained locally during investigation."
+  ],
+  "empty_mask_followup": {
+    "query_utc": "2026-09-08T03:18:03.766662+00:00",
+    "query": "repo:verl-project/verl distillation empty in:title,body",
+    "query_url": "https://api.github.com/search/issues?q=repo%3Averl-project%2Fverl+distillation+empty+in%3Atitle%2Cbody&per_page=20",
+    "hits": 13,
+    "read": [
+      {
+        "url": "https://github.com/verl-project/verl/issues/5894",
+        "result": "Closed via5899; ordinary metrics all-aborted bug, not current OPD path proof."
+      },
+      {
+        "url": "https://github.com/verl-project/verl/pull/7096",
+        "result": "Open scalar materialization patch retains empty student_mass.min/max; not covering gap."
+      }
+    ],
+    "source_chain": [
+      "v0.9.0 rollout_corr_helper.compute_rollout_correction_and_rejection_mask allows all-rejected output after nonempty input assertion",
+      "compute_rollout_correction_and_add_to_batch assigns modified response_mask",
+      "ray_trainer computes rejection before _update_actor without empty-output guard in inspected segment",
+      "distillation.compute_forward_kl_topk mass min/max then loss range min/max unguarded"
+    ],
+    "decision": "CPU02 bounded real helper-to-dispatcher counterexample; no GPU or unverified skip-update patch",
+    "pending": "Need real distributed engine regression before proposing completed global optimizer/scheduler skip semantics"
+  }
+}

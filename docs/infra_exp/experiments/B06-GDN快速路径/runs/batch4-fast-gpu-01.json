@@ -1,0 +1,123 @@
+{
+  "experiment": "infra-probes/B06",
+  "run_id": "batch4-fast-gpu-01",
+  "started_utc": "2026-09-07T16:34:58Z",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B06/batch4-fast-gpu-01/attempt-3131b8ea4f1e430c978ade316313249b",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "6330c0f980d43a51573db6371539f227538e6a34780968bcfa4fc91bd1c378f4",
+  "image_id": "im-GMKXfvLjPzdKfErOwKvwsi",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "source_archive": {
+    "overlay_sha256": "6330c0f980d43a51573db6371539f227538e6a34780968bcfa4fc91bd1c378f4",
+    "members": 723,
+    "bytes": 2871762,
+    "archive_sha256": "bd7115cd129f2ec02bce002b2879dcc58acc7e74c86baabf881f1e2a4cf285b4"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B06/batch4-fast-cpu-02/attempt-9c7bee4d6fec479db2c9afdf2656750f",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B06/batch4-fast-gpu-01/attempt-3131b8ea4f1e430c978ade316313249b",
+      "/vol/_audit/infra-probes/B06/batch4-fast-gpu-01/attempt-3131b8ea4f1e430c978ade316313249b/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import subprocess,json; r=subprocess.run(['nvidia-smi','topo','-m'],capture_output=True,text=True); print(json.dumps({'available':r.returncode==0,'returncode':r.returncode,'stdout':r.stdout,'stderr':r.stderr}))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count()))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.gdn_fastpath_probe",
+      "--input",
+      "/vol/_audit/infra-probes/B06/batch4-fast-gpu-01/attempt-3131b8ea4f1e430c978ade316313249b/input.json",
+      "--out",
+      "/vol/_audit/infra-probes/B06/batch4-fast-gpu-01/attempt-3131b8ea4f1e430c978ade316313249b"
+    ]
+  ],
+  "seconds": 166.01579745200002,
+  "files": {
+    "fastpath-dependencies.json": "9ae8eca2c132fdb191fd9983d31ddb5fca198cb1122215143bbd8dcd14a00d20",
+    "fastpath-native-identity.json": "bb2678c7951d1a4f5507fc25778137f2e0e7d3bb0324453c027c3eeb5a3907be",
+    "fastpath-partial.json": "0611ee4d4cc103b52e18b5e0c939f33f9c3ade05553f2c486b72dddc7f0f684c",
+    "fastpath-result.json": "8e131d9ddbf4733df708dd45f0cc4f83728340744134faaa39a4d82d14617c47",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "9a284534010081c743ccb580d2ee1621a41cfa4db2b9e4e764a9e503d1145ef8",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "cpu": {
+    "run_id": "batch4-fast-cpu-02",
+    "started_utc": "2026-09-07T16:26:34Z",
+    "evidence_path": "/vol/_audit/infra-probes/B06/batch4-fast-cpu-02/attempt-9c7bee4d6fec479db2c9afdf2656750f",
+    "image_id": "im-GMKXfvLjPzdKfErOwKvwsi",
+    "seconds": 182.025086085,
+    "validated_results": [
+      "cpu-result.json",
+      "fastpath-cpu.json"
+    ],
+    "files": {
+      "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+      "fastpath-cpu.json": "b70f4618407ee2ed5cf06b11be4fb9ca03da2b28883aa3b61ea4c894a0a54855",
+      "fastpath-dependencies.json": "cd064fec639a531ece4c017bdc9bb604a17649bd9eea4c8f49d936b185cdcbb3",
+      "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+      "source.tar.gz.json": "78cc97fad4ca0ad90b74e353545ddbd377f7fc2a95331df6462229eaa48e9ed8"
+    }
+  },
+  "source_identity_note": "Frozen runtime overlay 6330c0..., not the current working tree",
+  "ok": true,
+  "exit": "all five GPU commands rc0, no timeout",
+  "readback_verified_files": [
+    "fastpath-result.json",
+    "fastpath-native-identity.json",
+    "fastpath-partial.json"
+  ],
+  "build": {
+    "first_attempt": "failed before compile: Python sysconfig CXX=clang++ but executable missing; torch reported sentinel0.0.0",
+    "fixed_command": "CC=gcc CXX=g++ CAUSAL_CONV1D_FORCE_BUILD=TRUE MAX_JOBS=4 uv pip install --python /env/.venv/bin/python --no-deps --no-build-isolation causal-conv1d==1.7.0",
+    "gcc": "13.3.0",
+    "build_seconds": 628.69,
+    "source_package_sha256": null,
+    "built_wheel_sha256": null,
+    "hash_limitation": "not recorded; image ID and installed version/source identities preserved"
+  },
+  "criteria": {
+    "native_B05_exact": true,
+    "all_11_tensors_per_arm_relative_l2_le_0_03": true,
+    "native_core_hits": 1,
+    "fast_conv_hits": 1,
+    "fast_core_hits": 1,
+    "output_input_gradient_repeat_noise_zero": true,
+    "timing": {
+      "native_median_ms": 4.504255771636963,
+      "fast_median_ms": 4.33081579208374,
+      "native_range_ms": [
+        4.489920139312744,
+        5.1943359375
+      ],
+      "fast_range_ms": [
+        3.540895938873291,
+        4.7979841232299805
+      ],
+      "fast_faster_than_entire_native_range": false,
+      "scope": "single allocation screening only"
+    }
+  },
+  "cost": {
+    "actual_usd": null,
+    "note": "not measured; GPU allocation reported166.016 seconds, not a bill"
+  }
+}

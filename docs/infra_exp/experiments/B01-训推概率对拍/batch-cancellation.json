@@ -1,0 +1,514 @@
+{
+  "scope": "exact arithmetic decomposition of B01 chosen-token engine probabilities; not kernel attribution",
+  "identity": "d_batch = d_single + vllm_batch_shift - fsdp_batch_shift",
+  "closer_positions": 38,
+  "farther_positions": 25,
+  "equal_positions": 0,
+  "mean_abs_change": -0.005687897771759521,
+  "rows": [
+    {
+      "position": 0,
+      "single_cross_signed": -0.057361602783203125,
+      "fsdp_batch_shift": -0.015050888061523438,
+      "vllm_batch_shift": 0.028293609619140625,
+      "batch_cross_signed": -0.014017105102539062,
+      "absolute_error_change": -0.04334449768066406
+    },
+    {
+      "position": 1,
+      "single_cross_signed": -0.05579519271850586,
+      "fsdp_batch_shift": 0.04633903503417969,
+      "vllm_batch_shift": 0.09372472763061523,
+      "batch_cross_signed": -0.008409500122070312,
+      "absolute_error_change": -0.04738569259643555
+    },
+    {
+      "position": 2,
+      "single_cross_signed": -0.031890869140625,
+      "fsdp_batch_shift": 0.11293601989746094,
+      "vllm_batch_shift": 0.1013946533203125,
+      "batch_cross_signed": -0.04343223571777344,
+      "absolute_error_change": 0.011541366577148438
+    },
+    {
+      "position": 3,
+      "single_cross_signed": -0.02863311767578125,
+      "fsdp_batch_shift": 0.029035568237304688,
+      "vllm_batch_shift": 0.021147727966308594,
+      "batch_cross_signed": -0.036520957946777344,
+      "absolute_error_change": 0.007887840270996094
+    },
+    {
+      "position": 4,
+      "single_cross_signed": -0.06802654266357422,
+      "fsdp_batch_shift": 0.060634613037109375,
+      "vllm_batch_shift": 0.11152124404907227,
+      "batch_cross_signed": -0.017139911651611328,
+      "absolute_error_change": -0.05088663101196289
+    },
+    {
+      "position": 5,
+      "single_cross_signed": -0.10675048828125,
+      "fsdp_batch_shift": -0.1068878173828125,
+      "vllm_batch_shift": 0.10136258602142334,
+      "batch_cross_signed": 0.10149991512298584,
+      "absolute_error_change": -0.00525057315826416
+    },
+    {
+      "position": 6,
+      "single_cross_signed": 0.009511470794677734,
+      "fsdp_batch_shift": -0.025613784790039062,
+      "vllm_batch_shift": -0.01402139663696289,
+      "batch_cross_signed": 0.021103858947753906,
+      "absolute_error_change": 0.011592388153076172
+    },
+    {
+      "position": 7,
+      "single_cross_signed": 0.021592378616333008,
+      "fsdp_batch_shift": 0.12508201599121094,
+      "vllm_batch_shift": -0.028584003448486328,
+      "batch_cross_signed": -0.13207364082336426,
+      "absolute_error_change": 0.11048126220703125
+    },
+    {
+      "position": 8,
+      "single_cross_signed": -0.0931711196899414,
+      "fsdp_batch_shift": -0.005001068115234375,
+      "vllm_batch_shift": 0.066680908203125,
+      "batch_cross_signed": -0.02148914337158203,
+      "absolute_error_change": -0.07168197631835938
+    },
+    {
+      "position": 9,
+      "single_cross_signed": -0.10149335861206055,
+      "fsdp_batch_shift": -0.03885078430175781,
+      "vllm_batch_shift": 0.09133374691009521,
+      "batch_cross_signed": 0.02869117259979248,
+      "absolute_error_change": -0.07280218601226807
+    },
+    {
+      "position": 10,
+      "single_cross_signed": 0.014263153076171875,
+      "fsdp_batch_shift": 0.07290458679199219,
+      "vllm_batch_shift": -0.011943340301513672,
+      "batch_cross_signed": -0.07058477401733398,
+      "absolute_error_change": 0.05632162094116211
+    },
+    {
+      "position": 11,
+      "single_cross_signed": -0.10538554191589355,
+      "fsdp_batch_shift": -0.011003494262695312,
+      "vllm_batch_shift": 0.022851228713989258,
+      "batch_cross_signed": -0.07153081893920898,
+      "absolute_error_change": -0.03385472297668457
+    },
+    {
+      "position": 12,
+      "single_cross_signed": -0.05575156211853027,
+      "fsdp_batch_shift": -0.0053806304931640625,
+      "vllm_batch_shift": -0.01216578483581543,
+      "batch_cross_signed": -0.06253671646118164,
+      "absolute_error_change": 0.006785154342651367
+    },
+    {
+      "position": 13,
+      "single_cross_signed": -0.25041723251342773,
+      "fsdp_batch_shift": -0.1532268524169922,
+      "vllm_batch_shift": 0.02675008773803711,
+      "batch_cross_signed": -0.07044029235839844,
+      "absolute_error_change": -0.1799769401550293
+    },
+    {
+      "position": 14,
+      "single_cross_signed": 0.036951929330825806,
+      "fsdp_batch_shift": -0.030710220336914062,
+      "vllm_batch_shift": -0.04992687702178955,
+      "batch_cross_signed": 0.017735272645950317,
+      "absolute_error_change": -0.01921665668487549
+    },
+    {
+      "position": 15,
+      "single_cross_signed": -0.013980850577354431,
+      "fsdp_batch_shift": -0.0159759521484375,
+      "vllm_batch_shift": 0.007628008723258972,
+      "batch_cross_signed": 0.009623110294342041,
+      "absolute_error_change": -0.00435774028301239
+    },
+    {
+      "position": 16,
+      "single_cross_signed": -0.0021998509764671326,
+      "fsdp_batch_shift": 0.000568389892578125,
+      "vllm_batch_shift": -0.008836545050144196,
+      "batch_cross_signed": -0.011604785919189453,
+      "absolute_error_change": 0.00940493494272232
+    },
+    {
+      "position": 17,
+      "single_cross_signed": -0.000854887068271637,
+      "fsdp_batch_shift": -0.0015506744384765625,
+      "vllm_batch_shift": -0.0004421062767505646,
+      "batch_cross_signed": 0.00025368109345436096,
+      "absolute_error_change": -0.000601205974817276
+    },
+    {
+      "position": 18,
+      "single_cross_signed": -0.0037996582686901093,
+      "fsdp_batch_shift": -0.0009307861328125,
+      "vllm_batch_shift": -0.0009785555303096771,
+      "batch_cross_signed": -0.0038474276661872864,
+      "absolute_error_change": 4.7769397497177124e-05
+    },
+    {
+      "position": 19,
+      "single_cross_signed": -0.0022221598774194717,
+      "fsdp_batch_shift": 0.000274658203125,
+      "vllm_batch_shift": 0.000848080962896347,
+      "batch_cross_signed": -0.0016487371176481247,
+      "absolute_error_change": -0.000573422759771347
+    },
+    {
+      "position": 20,
+      "single_cross_signed": -0.008924730122089386,
+      "fsdp_batch_shift": -0.008356094360351562,
+      "vllm_batch_shift": 0.0024390146136283875,
+      "batch_cross_signed": 0.001870378851890564,
+      "absolute_error_change": -0.007054351270198822
+    },
+    {
+      "position": 21,
+      "single_cross_signed": 0.06066465377807617,
+      "fsdp_batch_shift": 0.05419158935546875,
+      "vllm_batch_shift": -0.08028531074523926,
+      "batch_cross_signed": -0.07381224632263184,
+      "absolute_error_change": 0.013147592544555664
+    },
+    {
+      "position": 22,
+      "single_cross_signed": 0.00854116678237915,
+      "fsdp_batch_shift": 0.003337860107421875,
+      "vllm_batch_shift": -0.03499859571456909,
+      "batch_cross_signed": -0.029795289039611816,
+      "absolute_error_change": 0.021254122257232666
+    },
+    {
+      "position": 23,
+      "single_cross_signed": -0.00083942711353302,
+      "fsdp_batch_shift": -0.0019378662109375,
+      "vllm_batch_shift": 0.001269591972231865,
+      "batch_cross_signed": 0.002368031069636345,
+      "absolute_error_change": 0.0015286039561033249
+    },
+    {
+      "position": 24,
+      "single_cross_signed": 0.001415342092514038,
+      "fsdp_batch_shift": -0.0042057037353515625,
+      "vllm_batch_shift": -0.017814096063375473,
+      "batch_cross_signed": -0.012193050235509872,
+      "absolute_error_change": 0.010777708142995834
+    },
+    {
+      "position": 25,
+      "single_cross_signed": -0.0006482414901256561,
+      "fsdp_batch_shift": -0.0002155303955078125,
+      "vllm_batch_shift": -0.0028153415769338608,
+      "batch_cross_signed": -0.0032480526715517044,
+      "absolute_error_change": 0.0025998111814260483
+    },
+    {
+      "position": 26,
+      "single_cross_signed": -0.0007586823776364326,
+      "fsdp_batch_shift": 0.0014324188232421875,
+      "vllm_batch_shift": -0.002175547182559967,
+      "batch_cross_signed": -0.004366648383438587,
+      "absolute_error_change": 0.0036079660058021545
+    },
+    {
+      "position": 27,
+      "single_cross_signed": -0.00035615265369415283,
+      "fsdp_batch_shift": 0.0003185272216796875,
+      "vllm_batch_shift": -0.0017199618741869926,
+      "batch_cross_signed": -0.002394641749560833,
+      "absolute_error_change": 0.00203848909586668
+    },
+    {
+      "position": 28,
+      "single_cross_signed": -0.0002307835966348648,
+      "fsdp_batch_shift": 0.0001544952392578125,
+      "vllm_batch_shift": -0.00020002969540655613,
+      "batch_cross_signed": -0.0005853085312992334,
+      "absolute_error_change": 0.00035452493466436863
+    },
+    {
+      "position": 29,
+      "single_cross_signed": -0.0005458476953208447,
+      "fsdp_batch_shift": -0.0005130767822265625,
+      "vllm_batch_shift": 0.0005611265078186989,
+      "batch_cross_signed": 0.0005283555947244167,
+      "absolute_error_change": -1.7492100596427917e-05
+    },
+    {
+      "position": 30,
+      "single_cross_signed": 0.00188571703620255,
+      "fsdp_batch_shift": 0.0021839141845703125,
+      "vllm_batch_shift": -0.0005617702845484018,
+      "batch_cross_signed": -0.0008599674329161644,
+      "absolute_error_change": -0.0010257496032863855
+    },
+    {
+      "position": 31,
+      "single_cross_signed": 0.0010798759758472443,
+      "fsdp_batch_shift": 0.002414703369140625,
+      "vllm_batch_shift": 0.00059518963098526,
+      "batch_cross_signed": -0.0007396377623081207,
+      "absolute_error_change": -0.00034023821353912354
+    },
+    {
+      "position": 32,
+      "single_cross_signed": 0.015557408332824707,
+      "fsdp_batch_shift": -0.018093109130859375,
+      "vllm_batch_shift": -0.019106924533843994,
+      "batch_cross_signed": 0.014543592929840088,
+      "absolute_error_change": -0.0010138154029846191
+    },
+    {
+      "position": 33,
+      "single_cross_signed": -0.014454547315835953,
+      "fsdp_batch_shift": -0.0032596588134765625,
+      "vllm_batch_shift": 0.007754046469926834,
+      "batch_cross_signed": -0.003440842032432556,
+      "absolute_error_change": -0.011013705283403397
+    },
+    {
+      "position": 34,
+      "single_cross_signed": 0.0005965973250567913,
+      "fsdp_batch_shift": 0.0018520355224609375,
+      "vllm_batch_shift": 0.0008519096300005913,
+      "batch_cross_signed": -0.0004035285674035549,
+      "absolute_error_change": -0.0001930687576532364
+    },
+    {
+      "position": 35,
+      "single_cross_signed": -0.00039197318255901337,
+      "fsdp_batch_shift": -0.000823974609375,
+      "vllm_batch_shift": -0.001227603293955326,
+      "batch_cross_signed": -0.0007956018671393394,
+      "absolute_error_change": 0.0004036286845803261
+    },
+    {
+      "position": 36,
+      "single_cross_signed": -0.0012607816606760025,
+      "fsdp_batch_shift": 0.0001678466796875,
+      "vllm_batch_shift": 0.001305372454226017,
+      "batch_cross_signed": -0.0001232558861374855,
+      "absolute_error_change": -0.001137525774538517
+    },
+    {
+      "position": 37,
+      "single_cross_signed": -0.00034657231299206614,
+      "fsdp_batch_shift": -1.71661376953125e-05,
+      "vllm_batch_shift": -9.470590157434344e-05,
+      "batch_cross_signed": -0.0004241120768710971,
+      "absolute_error_change": 7.753976387903094e-05
+    },
+    {
+      "position": 38,
+      "single_cross_signed": 0.00011850637383759022,
+      "fsdp_batch_shift": 0.0005893707275390625,
+      "vllm_batch_shift": 0.0005976355168968439,
+      "batch_cross_signed": 0.00012677116319537163,
+      "absolute_error_change": 8.26478935778141e-06
+    },
+    {
+      "position": 39,
+      "single_cross_signed": 5.909102037549019e-05,
+      "fsdp_batch_shift": 0.000492095947265625,
+      "vllm_batch_shift": -0.00010127830319106579,
+      "batch_cross_signed": -0.0005342832300812006,
+      "absolute_error_change": 0.0004751922097057104
+    },
+    {
+      "position": 40,
+      "single_cross_signed": 0.00010526739060878754,
+      "fsdp_batch_shift": 0.000835418701171875,
+      "vllm_batch_shift": 0.0007531768642365932,
+      "batch_cross_signed": 2.3025553673505783e-05,
+      "absolute_error_change": -8.224183693528175e-05
+    },
+    {
+      "position": 41,
+      "single_cross_signed": -0.0013748761266469955,
+      "fsdp_batch_shift": 0.000255584716796875,
+      "vllm_batch_shift": -0.0002569332718849182,
+      "batch_cross_signed": -0.0018873941153287888,
+      "absolute_error_change": 0.0005125179886817932
+    },
+    {
+      "position": 42,
+      "single_cross_signed": -0.0052116066217422485,
+      "fsdp_batch_shift": -0.0013179779052734375,
+      "vllm_batch_shift": 0.007401581853628159,
+      "batch_cross_signed": 0.0035079531371593475,
+      "absolute_error_change": -0.001703653484582901
+    },
+    {
+      "position": 43,
+      "single_cross_signed": -0.05290883779525757,
+      "fsdp_batch_shift": -0.021087646484375,
+      "vllm_batch_shift": -0.0036267638206481934,
+      "batch_cross_signed": -0.03544795513153076,
+      "absolute_error_change": -0.017460882663726807
+    },
+    {
+      "position": 44,
+      "single_cross_signed": 0.0011530760675668716,
+      "fsdp_batch_shift": 0.0035114288330078125,
+      "vllm_batch_shift": 0.0027561448514461517,
+      "batch_cross_signed": 0.0003977920860052109,
+      "absolute_error_change": -0.0007552839815616608
+    },
+    {
+      "position": 45,
+      "single_cross_signed": -0.005125619936734438,
+      "fsdp_batch_shift": -0.00023651123046875,
+      "vllm_batch_shift": 0.0050260059360880405,
+      "batch_cross_signed": 0.00013689722982235253,
+      "absolute_error_change": -0.004988722706912085
+    },
+    {
+      "position": 46,
+      "single_cross_signed": -0.002504509873688221,
+      "fsdp_batch_shift": 0.0022869110107421875,
+      "vllm_batch_shift": 0.0035358816385269165,
+      "batch_cross_signed": -0.001255539245903492,
+      "absolute_error_change": -0.001248970627784729
+    },
+    {
+      "position": 47,
+      "single_cross_signed": -0.0017585414461791515,
+      "fsdp_batch_shift": -0.0001888275146484375,
+      "vllm_batch_shift": 0.0012017758563160896,
+      "batch_cross_signed": -0.0003679380752146244,
+      "absolute_error_change": -0.0013906033709645271
+    },
+    {
+      "position": 48,
+      "single_cross_signed": 6.856900290586054e-05,
+      "fsdp_batch_shift": -0.0011196136474609375,
+      "vllm_batch_shift": -0.0005432093457784504,
+      "batch_cross_signed": 0.0006449733045883477,
+      "absolute_error_change": 0.0005764043016824871
+    },
+    {
+      "position": 49,
+      "single_cross_signed": -0.00033805682323873043,
+      "fsdp_batch_shift": -1.71661376953125e-05,
+      "vllm_batch_shift": 1.960108056664467e-05,
+      "batch_cross_signed": -0.00030128960497677326,
+      "absolute_error_change": -3.676721826195717e-05
+    },
+    {
+      "position": 50,
+      "single_cross_signed": -0.000731408130377531,
+      "fsdp_batch_shift": -0.00046539306640625,
+      "vllm_batch_shift": -0.0009332145564258099,
+      "batch_cross_signed": -0.001199229620397091,
+      "absolute_error_change": 0.00046782149001955986
+    },
+    {
+      "position": 51,
+      "single_cross_signed": 0.0006777197122573853,
+      "fsdp_batch_shift": 0.0006465911865234375,
+      "vllm_batch_shift": 0.00014967471361160278,
+      "batch_cross_signed": 0.00018080323934555054,
+      "absolute_error_change": -0.0004969164729118347
+    },
+    {
+      "position": 52,
+      "single_cross_signed": -0.0009794272482395172,
+      "fsdp_batch_shift": -0.0011444091796875,
+      "vllm_batch_shift": -0.00041085935663431883,
+      "batch_cross_signed": -0.00024587742518633604,
+      "absolute_error_change": -0.0007335498230531812
+    },
+    {
+      "position": 53,
+      "single_cross_signed": -0.0027267932891845703,
+      "fsdp_batch_shift": -0.0009059906005859375,
+      "vllm_batch_shift": 0.004657140001654625,
+      "batch_cross_signed": 0.002836337313055992,
+      "absolute_error_change": 0.00010954402387142181
+    },
+    {
+      "position": 54,
+      "single_cross_signed": -0.04767495393753052,
+      "fsdp_batch_shift": -0.049648284912109375,
+      "vllm_batch_shift": -0.004910647869110107,
+      "batch_cross_signed": -0.00293731689453125,
+      "absolute_error_change": -0.04473763704299927
+    },
+    {
+      "position": 55,
+      "single_cross_signed": 0.0001027863472700119,
+      "fsdp_batch_shift": 0.0025501251220703125,
+      "vllm_batch_shift": 0.003532625734806061,
+      "batch_cross_signed": 0.0010852869600057602,
+      "absolute_error_change": 0.0009825006127357483
+    },
+    {
+      "position": 56,
+      "single_cross_signed": -0.0011442131362855434,
+      "fsdp_batch_shift": -0.00037384033203125,
+      "vllm_batch_shift": 0.00040466245263814926,
+      "batch_cross_signed": -0.0003657103516161442,
+      "absolute_error_change": -0.0007785027846693993
+    },
+    {
+      "position": 57,
+      "single_cross_signed": -0.0025114426389336586,
+      "fsdp_batch_shift": -0.001251220703125,
+      "vllm_batch_shift": -0.0008426206186413765,
+      "batch_cross_signed": -0.002102842554450035,
+      "absolute_error_change": -0.0004086000844836235
+    },
+    {
+      "position": 58,
+      "single_cross_signed": -0.0005199229344725609,
+      "fsdp_batch_shift": 0.0005245208740234375,
+      "vllm_batch_shift": 0.0009604035876691341,
+      "batch_cross_signed": -8.404022082686424e-05,
+      "absolute_error_change": -0.00043588271364569664
+    },
+    {
+      "position": 59,
+      "single_cross_signed": -0.0037109279073774815,
+      "fsdp_batch_shift": 0.0011157989501953125,
+      "vllm_batch_shift": 0.005909297848120332,
+      "batch_cross_signed": 0.0010825709905475378,
+      "absolute_error_change": -0.0026283569168299437
+    },
+    {
+      "position": 60,
+      "single_cross_signed": -0.000565267400816083,
+      "fsdp_batch_shift": -0.000415802001953125,
+      "vllm_batch_shift": 0.0001899560447782278,
+      "batch_cross_signed": 4.049064591526985e-05,
+      "absolute_error_change": -0.0005247767549008131
+    },
+    {
+      "position": 61,
+      "single_cross_signed": -0.0009648086270317435,
+      "fsdp_batch_shift": 2.6702880859375e-05,
+      "vllm_batch_shift": 0.0011609174543991685,
+      "batch_cross_signed": 0.00016940594650804996,
+      "absolute_error_change": -0.0007954026805236936
+    },
+    {
+      "position": 62,
+      "single_cross_signed": -0.0008065232541412115,
+      "fsdp_batch_shift": -6.67572021484375e-05,
+      "vllm_batch_shift": 0.0003204280510544777,
+      "batch_cross_signed": -0.0004193380009382963,
+      "absolute_error_change": -0.0003871852532029152
+    }
+  ]
+}

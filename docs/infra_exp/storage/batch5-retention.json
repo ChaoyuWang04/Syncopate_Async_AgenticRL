@@ -1,0 +1,230 @@
+{
+  "checked_utc": "2026-09-08T03:54:48.690537+00:00",
+  "volume": "syncopate-home",
+  "experiments": {
+    "B09": {
+      "bytes": 32396696,
+      "entries": 107,
+      "large_files": [
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-gpu-03/attempt-80ee3794d6174e638feec659eacf2f19/source.tar.gz",
+          "bytes": 2951203
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-cpu-03/attempt-95cd03b12722475197d406385a11b11e/source.tar.gz",
+          "bytes": 2951203
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-gpu-02/attempt-e588c32a9df94c77add8315f3e105e5d/source.tar.gz",
+          "bytes": 2943260
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-cpu-02/attempt-97c9e70bc47141bc9ead9556049c04f0/source.tar.gz",
+          "bytes": 2943260
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-gpu-01/attempt-6e1b0d778cb546f78c19f2b4990af010/residual-captures.pt",
+          "bytes": 13695219
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-gpu-01/attempt-6e1b0d778cb546f78c19f2b4990af010/source.tar.gz",
+          "bytes": 2929841
+        },
+        {
+          "path": "_audit/infra-probes/B09/batch5-residual-cpu-01/attempt-e0e008388e21404180f4cf8a147e5bc9/source.tar.gz",
+          "bytes": 2929841
+        }
+      ],
+      "checkpoint_named_files": []
+    },
+    "B10": {
+      "bytes": 5948805,
+      "entries": 28,
+      "large_files": [
+        {
+          "path": "_audit/infra-probes/B10/batch5-opd-cpu-02/attempt-7dfef6787a2c47e897aa8a9a1640439e/source.tar.gz",
+          "bytes": 2935303
+        },
+        {
+          "path": "_audit/infra-probes/B10/batch5-opd-cpu-01/attempt-e7a8ef16f83c4fe9a4e4497dc4c7cae5/source.tar.gz",
+          "bytes": 2929841
+        }
+      ],
+      "checkpoint_named_files": []
+    },
+    "B11": {
+      "bytes": 27426498,
+      "entries": 109,
+      "large_files": [
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-gpu-05/attempt-af9b7bf3ce5440a9aa254f4a66e949cf/source.tar.gz",
+          "bytes": 2945792
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-cpu-03/attempt-165db8b6fb9143a087f20365379896f4/source.tar.gz",
+          "bytes": 2945792
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-gpu-04/attempt-2dec47db41464fddbb1f890374baa493/source.tar.gz",
+          "bytes": 2932410
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-gpu-03/attempt-7f9b38d23855417cbeed08bb6fb8e1ba/source.tar.gz",
+          "bytes": 2932410
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-gpu-02/attempt-e47ed879214d43f187c92546595eef3b/source.tar.gz",
+          "bytes": 2932410
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-cpu-02/attempt-e08b751f688842eb862c4759d1f10340/source.tar.gz",
+          "bytes": 2932410
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-gpu-01/attempt-32c7e35d5dd84faeba80cb40ccf0faa8/source.tar.gz",
+          "bytes": 2928130
+        },
+        {
+          "path": "_audit/infra-probes/B11/batch5-communication-cpu-01/attempt-45163f1e8ca9445996ec09401b82e7c9/source.tar.gz",
+          "bytes": 2928130
+        }
+      ],
+      "checkpoint_named_files": []
+    }
+  },
+  "total_bytes": 65771999,
+  "policy": "Retain exact source snapshots, captured tensor witnesses and diagnostics for unfinished B09 and upstream reproduction. No training checkpoint created; shared base untouched. No deletion performed.",
+  "apps_closed": [
+    {
+      "app_id": "ap-i3oCJfmsv65xX2Xel4zHrA",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:47:36+08:00",
+      "stopped_at": "2026-09-08 11:50:35+08:00"
+    },
+    {
+      "app_id": "ap-z59EH8TbRmxDcTE6AaWMmQ",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:42:14+08:00",
+      "stopped_at": "2026-09-08 11:45:44+08:00"
+    },
+    {
+      "app_id": "ap-732OS9kj7TrIM7tCU1Bc6O",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:37:25+08:00",
+      "stopped_at": "2026-09-08 11:38:12+08:00"
+    },
+    {
+      "app_id": "ap-hDXCyh02TgF0JlClre4Htd",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:34:38+08:00",
+      "stopped_at": "2026-09-08 11:37:59+08:00"
+    },
+    {
+      "app_id": "ap-GtAwgg174qnTYvs8Mv5FHR",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:33:50+08:00",
+      "stopped_at": "2026-09-08 11:34:57+08:00"
+    },
+    {
+      "app_id": "ap-CuspcnYuKoghd0GQREyhnA",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:27:18+08:00",
+      "stopped_at": "2026-09-08 11:31:03+08:00"
+    },
+    {
+      "app_id": "ap-hSz3px5PvMIbggxZmqFeFv",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:23:53+08:00",
+      "stopped_at": "2026-09-08 11:24:51+08:00"
+    },
+    {
+      "app_id": "ap-FoPBHVeSsAiEKyTSFEAorp",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:21:00+08:00",
+      "stopped_at": "2026-09-08 11:21:59+08:00"
+    },
+    {
+      "app_id": "ap-PeRbsfYaPEl2t4wJ38vIHu",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:17:24+08:00",
+      "stopped_at": "2026-09-08 11:18:58+08:00"
+    },
+    {
+      "app_id": "ap-VCgl0bfJe6kOAEMoPHanYN",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:15:43+08:00",
+      "stopped_at": "2026-09-08 11:18:40+08:00"
+    },
+    {
+      "app_id": "ap-zMssOdSp9aB8BnLAsWT3fV",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:17:06+08:00",
+      "stopped_at": "2026-09-08 11:17:54+08:00"
+    },
+    {
+      "app_id": "ap-YTyyLtIN1lcb7QRqU7jliG",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:13:52+08:00",
+      "stopped_at": "2026-09-08 11:14:55+08:00"
+    },
+    {
+      "app_id": "ap-kgGazu1dsiEm6Wm8QZV7jx",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:05:49+08:00",
+      "stopped_at": "2026-09-08 11:11:00+08:00"
+    },
+    {
+      "app_id": "ap-YOGtUaCsT98fD0MELRTTEm",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:05:21+08:00",
+      "stopped_at": "2026-09-08 11:08:42+08:00"
+    },
+    {
+      "app_id": "ap-3TRnckehqUmCA93oluRghc",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:06:20+08:00",
+      "stopped_at": "2026-09-08 11:07:48+08:00"
+    },
+    {
+      "app_id": "ap-1BLfUrqtKaq7bOcFd0j7sO",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 11:02:24+08:00",
+      "stopped_at": "2026-09-08 11:04:05+08:00"
+    }
+  ],
+  "other_active_apps_untouched": [
+    "ap-twgTLN4AD1Pv9uiIcuA49L"
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "experiment": "infra-probes/B02",
+  "run_id": "b02-cpu-03",
+  "mode": "cpu",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B02/b02-cpu-03",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "63d26b3cfb794478c301db6c46cfef45d7940b64924a238e01f4f9a5d86d0101",
+  "entry_sha256": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+  "image_id": "im-dtfbsHDldGmyMuIbbn88GL",
+  "started_utc": "2026-09-07T10:03:47Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.6,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 22.3,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "probe_sources": {
+    "modal_app/lora_probe.py": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+    "syncopate/infra/lora_accumulation_probe.py": "5cf47513c959a7396e2d033be613fe35138fb758f35d0d718a7dd4029b01fd90",
+    "syncopate/infra/training_probe.py": "6b4b7e7003df7d4ee437c17e2c3217b0bce5919cf02a5fec43732917b580ff04",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_lora_accumulation_probe.py": "38a03ca9d3cbb9291500ead5b55311353f9b5ee4cc3dbe427d385b1b9390d261",
+    "modal_app/stack/uv.lock": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a"
+  },
+  "source_archive": {
+    "overlay_sha256": "63d26b3cfb794478c301db6c46cfef45d7940b64924a238e01f4f9a5d86d0101",
+    "members": 666,
+    "bytes": 2786341,
+    "archive_sha256": "279f84ec1e01abdba0a6dd26b784411722e486b4d720d407d8dd89aa8d6d556a"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_lora_accumulation_probe.py",
+      "tests/infra/test_probe_run.py",
+      "-q"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.lora_accumulation_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B02/b02-cpu-03"
+    ]
+  ],
+  "seconds": 27.782625853000003,
+  "files": {
+    "cpu-result.json": "7ee0b97007119b6140c3b9ed3748d54c8802d0ce1ebd3d9ca993470b995ce317",
+    "source.tar.gz.json": "36f4e3d906e2f156d742fa11d292321cdb81cab12e05b7723d8f7dffb404a284",
+    "step-0.log": "86288ee89a493b657a4f02c2118272c4f6a9a7afa049f10741e60f3a564db934",
+    "step-1.log": "3d71b8b6de8e05fc25bd430a6301ae7e1150b8efa81c73578b630002eed67d84"
+  },
+  "modal_app_id": "ap-DiRBdptSytOhnUtZMhZUkP",
+  "readback_verified_files": [
+    "cpu-result.json",
+    "step-1.log"
+  ],
+  "outer_call_note": "Original CPU computation completed and committed ok=true; result and SHA read back. Modal later restarted/re-dispatched the same input and reserve_run rejected existing directory with FileExistsError. CLI finally exited 1; no overwrite, not a second successful run."
+}

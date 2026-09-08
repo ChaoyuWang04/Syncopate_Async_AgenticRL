@@ -1,0 +1,74 @@
+{
+  "queried_utc": "2026-09-07T16:06:07.333Z",
+  "snapshots": [
+    {
+      "url": "https://api.github.com/repos/huggingface/transformers/commits/main",
+      "sha": "6622f6f781c9c0b1f2f5541a257943bee95ad586"
+    },
+    {
+      "url": "https://api.github.com/repos/huggingface/transformers/releases/latest",
+      "tag": "v5.16.1"
+    },
+    {
+      "url": "https://api.github.com/repos/Dao-AILab/causal-conv1d/commits/main",
+      "sha": "cd81f0413cad2fc1e6f17e785ac39f59aae690cd"
+    },
+    {
+      "url": "https://api.github.com/repos/Dao-AILab/causal-conv1d/releases/latest",
+      "tag": "v1.7.0",
+      "assets": []
+    },
+    {
+      "url": "https://api.github.com/repos/fla-org/flash-linear-attention/commits/main",
+      "sha": "9d981ffef3b361ba931102b633ae2a9fd91ca6c3"
+    },
+    {
+      "url": "https://api.github.com/repos/fla-org/flash-linear-attention/releases/latest",
+      "tag": "v0.5.2",
+      "assets": []
+    }
+  ],
+  "frozen_model_source_sha256": "40da264c51fcfadd7b87271c5485f029ee9efd05e6e54b34728c8ee252db4c9c",
+  "frozen_import_utils_sha256": "0109c7c9260655f3808a675626b9fcdd2397b3bf4b3fcba696e7adf24d554497",
+  "findings": [
+    "CPU availability requires CUDA, so CPU FLA callable=false does not mean broken FLA installation.",
+    "Aggregate is_fast_path_available flag drives warning only; each kernel selected independently.",
+    "Missing causal_conv1d is known optional dependency gap; verification is confirmation of existing supported solution, no upstream bug claim.",
+    "Main uses Hub-decorated fallback kernels, outside frozen-version single-variable scope.",
+    "causal-conv1d v1.7.0 release has no matching torch2.13 cp312 x86_64 asset; official setup explicitly targets sm100 with CUDA>=12.8. Derived image source build only."
+  ],
+  "sources": [
+    "https://github.com/huggingface/transformers/blob/v5.10.0/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py",
+    "https://github.com/Dao-AILab/causal-conv1d/blob/v1.7.0/setup.py",
+    "https://github.com/Dao-AILab/causal-conv1d/issues/104",
+    "https://github.com/Dao-AILab/causal-conv1d/issues/108"
+  ],
+  "queries": [
+    "site:github.com/huggingface/transformers is_flash_linear_attention_available cuda",
+    "site:github.com/Dao-AILab/causal-conv1d releases torch2.13"
+  ],
+  "failures": [
+    "GitHub v5.10.4 ref 404; actual installed source exported through target CPU and hash matched B05.",
+    "Local source wheel download timed out; not installed; installed source supersedes it."
+  ],
+  "decision": "Confirm existing official optional-dependency fix in isolated real layer; three arms keep native hybrid separate from all-torch diagnostic.",
+  "confirmed_runtime_findings": {
+    "run_index": "runs/batch4-fast-gpu-01.json",
+    "native_core": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+    "native_replays_B05_exactly": true,
+    "fast_conv_and_core_hit": true,
+    "numeric_gate_passed": true,
+    "acceleration_proved": false,
+    "compiler_origin": {
+      "CC_env": null,
+      "CXX_env": null,
+      "sysconfig_CC": "clang",
+      "sysconfig_CXX": "clang++",
+      "clang_executable": null,
+      "clangpp_executable": null,
+      "corrective_override": "CC=gcc CXX=g++",
+      "gcc_version": "13.3.0"
+    },
+    "wheel_source_hashes": "not recorded"
+  }
+}

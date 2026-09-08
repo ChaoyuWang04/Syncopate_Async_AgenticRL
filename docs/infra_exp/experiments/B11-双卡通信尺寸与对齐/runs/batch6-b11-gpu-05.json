@@ -1,0 +1,127 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-gpu-05",
+  "phase": "gpu",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-gpu-05/attempt-a80afd83d62f4c04bec00f45c3074b22",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 3.3,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 89.0,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZVVDQF96E389MRD10YM8HR",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "42522276e60cf4e517153b56ce260d0a8d831bb6c4fef9b5c90e6663bb13fa16",
+  "image_id": "im-yiqokl5nqh8AGULnoHFpnV",
+  "entry_sha256": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+    "syncopate/infra/communication_baseline_probe.py": "22e5071a4a4184e9b9c042fe9c457291a10fa7f2b2bedd3081bf6af028ac10af",
+    "tests/infra/test_communication_baseline_probe.py": "180edd9a2377894f9bc0ab40270d8e96463e62067f8cb24edb99c78892aa7294",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T06:39:02Z",
+  "source_archive": {
+    "overlay_sha256": "42522276e60cf4e517153b56ce260d0a8d831bb6c4fef9b5c90e6663bb13fa16",
+    "members": 783,
+    "bytes": 2983769,
+    "archive_sha256": "b1cb7cebd0c5ea8d3bd6b3cd9561725baa1387358cd781ebc5a5cb14a82cd326"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-03/attempt-eb1335ecdca14301a01f0a5b5e852f8c",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==2; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(2))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "gpu",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-gpu-05/attempt-a80afd83d62f4c04bec00f45c3074b22",
+      "--preflight",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-03/attempt-eb1335ecdca14301a01f0a5b5e852f8c"
+    ]
+  ],
+  "validated_results": [
+    "communication-baseline-result.json"
+  ],
+  "seconds": 103.421894831,
+  "files": {
+    "communication-baseline-result.json": "1f0cc83210668c513cd964dd52833e7f6c7086db046bda4e3d8b470c900c48a9",
+    "devices-command.json": "a20eca5a301539927a550abca57169232794b1b87e2287d48e85ebc4fc5ff72a",
+    "diagnostic-all_gather-command.json": "d6dc6f0c9932ecffa8cf3f4fa92ba829dd804a224fff7ce66ea22963ff7bbff4",
+    "diagnostic-all_reduce-command.json": "5a4573773d7a8cc114a408ed2fe258874570a04f8e935939a8ae7d0d310d3130",
+    "diagnostic-reduce_scatter-command.json": "ee422e29b14431777e27afd8e782784ec587056a3e8961ee172fea7eb5acd1f0",
+    "ldd-0-command.json": "00b96ca7a36ec66e4175f3ad71f97ca63a6678c49d93fc941713971c0faf9b4c",
+    "ldd-1-command.json": "f391b43870d3f8237d27eb4c914dbee1a25583ea3aa038db2b0c5250443b8c71",
+    "ldd-2-command.json": "07633a0f66b56f98fbe7212f9958c1e4f60f9caa28bc142360363ad5f5ba31aa",
+    "ldd-3-command.json": "6543b824472715127d53897f95f9a0ec8fed3b62645d14c3f4bb49cbda674485",
+    "ldd-4-command.json": "4753cd1e345f1d74087389d4f00736682f38b679e8a656d58066b5ae1e5f806b",
+    "ldd-5-command.json": "95b625acef2b77b41811a2b9a238f33e5fd6d7d4977a3a0947826f7144a8418d",
+    "ldd-6-command.json": "f5bc34eb912c2ecc5abf16ea31e98c33a1838cf943160ffae949494ac0da554e",
+    "native-0-command.json": "f2a9db3093df5f042b20a96e63f0cac419184f774fd579352746bff26b2e04e7",
+    "native-1-command.json": "932629dddca28fa7a2cfcdb4eebbaf0436b3d11075595b46c255dc2d73bd1c0e",
+    "native-2-command.json": "36003c596cc415a333671496220b51c6b1cccb2bd11316b70fdb9b52212694ce",
+    "native-3-command.json": "9a97ddc60c2655d0e753068ccf5c920b4481b59b585f4eb6ba65ab8970c3b249",
+    "native-4-command.json": "e363a51236b6c72d1e573f4ad4b4bc9038531ce43e146186bf106347e04a124c",
+    "native-5-command.json": "46afb3be6f748934679f3d2d9271ea36d0140407c2db99086b82333d1f5e4081",
+    "native-6-command.json": "8f44e83805b715ea4ddd27364507aa5c46e52f8011415aaeaa22e16ba6ffdf37",
+    "native-pilot-0-command.json": "9f2dc3a1cc049e56a7c22e3a696aca2ed83482d96eaac5f936bb5d0a210de2ae",
+    "native-pilot-1-command.json": "b4247c786132462b71a7574020a8950bf6a5c288537860378ec6efc6618ecd2d",
+    "native-pilot-2-command.json": "7537c9948f683484bddfc7062afc23f745d3433e0773af77eb3600145ab92de8",
+    "native-pilot-3-command.json": "9f8af96ab85ab9fbc2cc90ccf11200dbb3458166fca83750bbcb8b990828ff63",
+    "native-pilot-4-command.json": "2e4300faed6371cb7eaa3c15af2d31a6b732a91fe2548f1a1538038f4bade4ef",
+    "native-pilot-5-command.json": "ac48173fc7db8fa1954c1902a10a36a85d09bd01346cf25cc7d1d813580a7836",
+    "native-pilot-6-command.json": "91f3ca99a6715ab2f0eef69ca96f62498b2f5bf04edaaaced6e1f9e98f2217d3",
+    "native-results.json": "d4d191a51bd44dd729b92e46b18af99d7d51fb2096693abf4c8bcfa383d57d2a",
+    "rank-0.json": "4549e2a53f191b965246eb0b46db2357837fbfabe56bf3fb79e74425d038df5f",
+    "rank-1.json": "9e3d97bd2ee7163330c1440d9d079b2da1934a3781e0813b60b208f05a98d5b0",
+    "source.tar.gz.json": "9da7bf66b792b8830607a45c8bc110bd4d76f1cf36aae4e0f1cc262eec20da5a",
+    "torch-command.json": "b9256ba904b79ec9751d18f1001a2fe3a097eaadfd77d7d9d59e3af3c3880711",
+    "trace-rank-0-all_gather-16777184.json": "8dc064a0638e2dccb7d05f972635b0612b47c3abed88fc3474b04b1469f2102e",
+    "trace-rank-0-all_gather-16777216.json": "8f12d671fb064ae848695e6fd2a4d0e75cda27c6c325be6c33cadcf61eb4d9b0",
+    "trace-rank-0-all_reduce-16777214.json": "70dff5ca752414bb95f1fe10aac01dc253fdf3722816e9954c7902438badecfd",
+    "trace-rank-0-all_reduce-16777216.json": "3bfcbead3a5c603dee257590815204eeafb20075c53d72711c0df3933c160aa0",
+    "trace-rank-0-all_reduce-16777218.json": "b4ee80c2182900a0f3c83e57aa65f40274d19e24e072bf1a0318350e88f0b86b",
+    "trace-rank-0-reduce_scatter-16777184.json": "df51a2e1e5ec4be9fd22791a76fa1a7fa3fa7f6ca575d81a8b7948aa0d650be4",
+    "trace-rank-0-reduce_scatter-16777216.json": "1b63fc65920be597a0e1927d10458cac02a9d54ecedfb8a9db0d9495b84f2268",
+    "trace-rank-1-all_gather-16777184.json": "f87a988779eef40f246a18eb919ca8dadaeb987eae6d86b4f4da68c0d441e8cb",
+    "trace-rank-1-all_gather-16777216.json": "e82aeb7afe2794b0301d036082afc7e52156a9b8ce1ab7a4181d4e5e34c8205f",
+    "trace-rank-1-all_reduce-16777214.json": "afb9c19a637da2d62878ce41aa8531957a76154483dd984b9312f0467f7e344d",
+    "trace-rank-1-all_reduce-16777216.json": "6686f79c051ba1eb5b524a4e6726ee86c839074d23f18de0d0bac1deb123f2c2",
+    "trace-rank-1-all_reduce-16777218.json": "5129dd72cb11138e5c28552a3e07c254711f62af5ff90692d7d7afc662b91572",
+    "trace-rank-1-reduce_scatter-16777184.json": "73c20c4d8e63f597252835efa9d5dd937c5551fb8964d3cb0c92819fb79214ae",
+    "trace-rank-1-reduce_scatter-16777216.json": "7945d2db4768bd50b1563d5bd39c89877482d2a3e1acec287d6826904a68fa35"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-zfwX4xay3JGw2466LPJANP",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": "B200:2",
+    "timeout_seconds": 1800
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "experiment": "infra-probes/B08",
+  "run_id": "batch4-lora-cpu-03",
+  "phase": "lora_cpu",
+  "evidence_path": "/vol/_audit/infra-probes/B08/batch4-lora-cpu-03/attempt-364ef82149304fb0a4a0ada211c2298f",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "62a32b2e8e357009ad75fb69cd596df2625d8bd1ae5f8f8b7c4f7a5d43f766c1",
+  "image_id": "im-mWvTDkMnLFcKNY2aKXTdkA",
+  "entry_sha256": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+  "sources": {
+    "syncopate/infra/splitk_probe.py": "de019969bab8d5818fba07c7cef443fc3720ce555ad7804366cda1324125d45c",
+    "tests/infra/test_splitk_probe.py": "69ef960b3c4eb7c30aa0c06205097c3b37c93dd99fa67001bc2f739ef320e900",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "tests/infra/test_mechanism_contract.py": "c0385901dd6ad0638ea8d5b866ab3de3d3374192030f7ccf7297cb868b371adc",
+    "syncopate/infra/gemm_cause_probe.py": "f0a15d66807799e183373b1ba73ac46fad3362f13db79069aea7ec8c0926629d",
+    "tests/infra/test_gemm_cause_probe.py": "a7a28950d5b22c177562b27d590b4689e6f93ef667dd03b17651190b07334138",
+    "syncopate/infra/gdn_fastpath_probe.py": "050491f04e8ba3b9f69996d43c29f6ffb654602c8d31775860b2ee100d799a65",
+    "tests/infra/test_gdn_fastpath_probe.py": "040b50222fc229433cd244280e6673b12a3e31d77ebcaf3a9bbfc547fe26d3cb",
+    "syncopate/infra/lora_handoff_probe.py": "78763579ebbe3b05720c1f13e4902a56a1209a9b5b0446946d6029934624dcc2",
+    "tests/infra/test_lora_handoff_probe.py": "58687436056a7824f9c71b429de897a58c186bbbac592cce7b0f735fa67a6089",
+    "modal_app/gdn_fastpath_batch.py": "d8170bca3a58e9f3968e6e27f8309a25ca060a1273f1d6f93399b6e7682554bc",
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T16:56:28Z",
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 2.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 127.9,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 1,
+      "process_returncode": 1,
+      "out": "",
+      "secs": 97.8,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "62a32b2e8e357009ad75fb69cd596df2625d8bd1ae5f8f8b7c4f7a5d43f766c1",
+    "members": 733,
+    "bytes": 2896191,
+    "archive_sha256": "04fb3aa37b6a7b28e253c9242d760b0a6724ce63c25eb9ab5461766cd92433ea"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_splitk_probe.py",
+      "tests/infra/test_mechanism_contract.py",
+      "tests/infra/test_gemm_cause_probe.py",
+      "tests/infra/test_gdn_fastpath_probe.py",
+      "tests/infra/test_lora_handoff_probe.py",
+      "tests/infra/test_gdn_boundary_probe.py",
+      "tests/infra/test_fp8_probe.py",
+      "tests/infra/test_probe_run.py",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_fsdp_probability_probe.py",
+      "tests/infra/test_batch_layer_probe.py",
+      "-q",
+      "-r",
+      "a"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-03/attempt-364ef82149304fb0a4a0ada211c2298f"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.lora_handoff_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-03/attempt-364ef82149304fb0a4a0ada211c2298f",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-03/attempt-364ef82149304fb0a4a0ada211c2298f/input.json"
+    ]
+  ],
+  "seconds": 233.020990571,
+  "files": {
+    "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "24890611495fa6ae08cd15f518ce7a61b221c462e97c64b5c017b7161ca97235"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "conclusion": "CPU typed wire and wrapper gates reached, then upstream loader cached PIN_MEMORY requested CUDA pinned allocation on a CPU-only image; no GPU attempt.",
+  "local_readback": {
+    "run_sha256": "b67f1c6d7b0bda571dae1db3c9253802cfa8dc16910264131f2482299f6c0a1f",
+    "step2_log_sha256_unsealed": "e79fbdeccfbd699f00a79bf8bb39ee0dbf47e708fbe3d49429d03e36165cee9c"
+  }
+}

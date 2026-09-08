@@ -1,0 +1,1005 @@
+{
+  "experiment": "infra-probes/B11",
+  "status": "parked_until_real_training_signal",
+  "correctness": "pass",
+  "performance_baseline": false,
+  "stable_size_cause_established": false,
+  "upstream_bug_claim": false,
+  "runtime_nccl": [
+    2,
+    29,
+    7
+  ],
+  "image_NCCL_VERSION_metadata": "2.28.3-1",
+  "runs": [
+    {
+      "run_id": "batch5-communication-gpu-02",
+      "result_sha256": "01cf9ea5d798fa2102d5b3a0d376e9fdc18f0551a1ede647eb60fa12b3a71e0b",
+      "cases": 36,
+      "ok": true,
+      "modal_task_id": "ta-01M1ZGAN757KWZJXGPCAS2VPNR",
+      "gpu_uuids": [
+        "bd79ce7e-67c1-0189-d163-8d6b42e2ad56",
+        "955fd574-dce6-142f-2172-f0367a95f052"
+      ],
+      "flags": [
+        {
+          "operation": "all_gather_into_tensor",
+          "block_bytes": 16777214,
+          "ratio": 1.565560257450426
+        },
+        {
+          "operation": "reduce_scatter_tensor",
+          "block_bytes": 16777214,
+          "ratio": 1.2105635617266717
+        }
+      ]
+    },
+    {
+      "run_id": "batch5-communication-gpu-03",
+      "result_sha256": "62917e75ad6150e203e93d586537fff38bdb1e3b02c7cbc46ee9f0c4d1dad69e",
+      "cases": 36,
+      "ok": true,
+      "modal_task_id": "ta-01M1ZGHGJQ82MRBYM68EZD847R",
+      "gpu_uuids": [
+        "739cf0bb-6abf-f370-bb50-9d63de96ec15",
+        "3a9e8a4a-f16d-99d1-33de-8f7be3b320d5"
+      ],
+      "flags": []
+    },
+    {
+      "run_id": "batch5-communication-gpu-04",
+      "result_sha256": "4518d6984b2a1c486803edb3d9451920f8d746641f51f7b768f0906b81b7c304",
+      "cases": 36,
+      "ok": true,
+      "modal_task_id": "ta-01M1ZGPVQ9ZY6THWM0CD3036SR",
+      "gpu_uuids": [
+        "0a15e452-0609-ba40-041a-23685cf88096",
+        "c33005c6-10ad-a084-28b5-537b852811ea"
+      ],
+      "flags": []
+    },
+    {
+      "run_id": "batch5-communication-gpu-05",
+      "result_sha256": "0f12a5b3ea3ea56f580705b84afc7e4d0cf85f1912a02b8bc8d0a006a0370bbc",
+      "cases": 9,
+      "ok": true,
+      "modal_task_id": "ta-01M1ZHFJFDYZ5X80R1MCYMZXER",
+      "gpu_uuids": [
+        "e1c75274-73d0-9d36-2f3c-b215ea7103b8",
+        "2dd5bd58-dee6-3805-1c45-24205f38bc48"
+      ],
+      "flags": []
+    }
+  ],
+  "focused_payload": {
+    "algorithm": "RING",
+    "protocol": "SIMPLE",
+    "channels": 32,
+    "log_count_per_combination": 37,
+    "combinations": 9,
+    "meaning": "3*(2 warmup+10 timed)+1 profiler",
+    "barrier": "334 4-byte RING/LL calls",
+    "transport": "P2P/CUMEM",
+    "graph_path": "GPU -> NVS/0-0 -> GPU; 2/721.8/NVL; modeled bandwidth, not measured bandwidth",
+    "physical_topology_limit": "NVML ancestor unavailable; switch identity modeled as NVS, not a direct GPU remote PCI identity"
+  },
+  "profiler_rank0_allgather": [
+    {
+      "block_bytes": 16777214,
+      "kernel_duration_us": 84.116,
+      "cpu_annotation_us": 434.893,
+      "trace_sha256": "d0c2c23ec5fbc7efb29d88ff4d719dccff59ea9173e25a259386e06796e566a1"
+    },
+    {
+      "block_bytes": 16777216,
+      "kernel_duration_us": 790.506,
+      "cpu_annotation_us": 1113.041,
+      "trace_sha256": "baad4028c3725adc323686865ec899d39135bd8f425f5177f61d32e1a994ad31"
+    },
+    {
+      "block_bytes": 16777218,
+      "kernel_duration_us": 356.009,
+      "cpu_annotation_us": 414.322,
+      "trace_sha256": "aa6401b45d79ae797bd65e20a15dd143e7a6dd8f166e6560b0d8b101836cc07a"
+    }
+  ],
+  "timing_limit": "Host dispatch+synchronize and CUDA-event intervals include dispatch/scheduling gaps; kernel durations may include peer waiting. Independent one-call profiler observations are diagnostic and not a bandwidth baseline.",
+  "reopen_condition": "real training communication bottleneck requires this local baseline or unresolved Graph attribution",
+  "performance_baseline_scope": "No general training or all-path baseline; native per-case local reference evaluated below.",
+  "batch6": {
+    "run_ids": [
+      "batch6-b11-gpu-03",
+      "batch6-b11-gpu-04",
+      "batch6-b11-gpu-05"
+    ],
+    "source_overlay": "42522276e60cf4e517153b56ce260d0a8d831bb6c4fef9b5c90e6663bb13fa16",
+    "threshold_max_min": 1.1,
+    "cases": [
+      {
+        "operation": "all_reduce",
+        "actual_bytes": 16777214,
+        "compare_mode": "in_place",
+        "native": {
+          "median_seconds_by_run": [
+            5.232e-05,
+            5.274e-05,
+            5.242e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              5.231e-05,
+              5.232e-05,
+              5.25e-05
+            ],
+            [
+              5.278e-05,
+              5.274e-05,
+              5.268e-05
+            ],
+            [
+              5.243e-05,
+              5.242e-05,
+              5.2369999999999995e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0080275229357798,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            5.846605491697705e-05,
+            5.2389997231449486e-05,
+            5.238551510159101e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              9.091176628352326e-05,
+              5.531312388249225e-05,
+              5.846605491697705e-05
+            ],
+            [
+              5.293836489479517e-05,
+              5.2389997231449486e-05,
+              5.2352337209305024e-05
+            ],
+            [
+              5.232941350905892e-05,
+              5.238551510159101e-05,
+              5.28035409115805e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.1160729221349466,
+          "within_each_allocation": [
+            false,
+            true,
+            true
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            9.97952413793092e-05,
+            0.00010428386378737387,
+            0.00010427106919275541
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              9.906836653896083e-05,
+              9.97952413793092e-05,
+              0.00010003052107278879
+            ],
+            [
+              0.0001043220952380977,
+              0.00010413966445182353,
+              0.00010428386378737387
+            ],
+            [
+              0.0001041854651290474,
+              0.00010427106919275541,
+              0.00010455518341570448
+            ]
+          ],
+          "cross_allocation_max_min": 1.0449783210704804,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      },
+      {
+        "operation": "all_reduce",
+        "actual_bytes": 16777216,
+        "compare_mode": "in_place",
+        "native": {
+          "median_seconds_by_run": [
+            5.221e-05,
+            5.258e-05,
+            5.245e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              5.211e-05,
+              5.221e-05,
+              5.248e-05
+            ],
+            [
+              5.257e-05,
+              5.264e-05,
+              5.258e-05
+            ],
+            [
+              5.245e-05,
+              5.243e-05,
+              5.253e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0070867649875503,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            8.134269445999666e-05,
+            5.584467807067079e-05,
+            5.330482707993274e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              8.134269445999666e-05,
+              8.192190654728921e-05,
+              7.619224286513544e-05
+            ],
+            [
+              5.395405272013593e-05,
+              5.584467807067079e-05,
+              6.254601794727819e-05
+            ],
+            [
+              5.2529402936377e-05,
+              5.330482707993274e-05,
+              6.164006742794386e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.525991151570945,
+          "within_each_allocation": [
+            true,
+            false,
+            false
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            0.00010561901343034448,
+            0.00010486012563095561,
+            0.00010483733278955953
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              0.00010473106939002465,
+              0.00010568100615556047,
+              0.00010561901343034448
+            ],
+            [
+              0.00010663187212563468,
+              0.00010486012563095561,
+              0.00010448101065619255
+            ],
+            [
+              0.00010517469439913167,
+              0.00010471906688417573,
+              0.00010483733278955953
+            ]
+          ],
+          "cross_allocation_max_min": 1.0074561286517467,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      },
+      {
+        "operation": "all_reduce",
+        "actual_bytes": 16777218,
+        "compare_mode": "in_place",
+        "native": {
+          "median_seconds_by_run": [
+            5.255e-05,
+            5.2770000000000005e-05,
+            5.275e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              5.2799999999999996e-05,
+              5.255e-05,
+              5.245e-05
+            ],
+            [
+              5.2770000000000005e-05,
+              5.286e-05,
+              5.2759999999999996e-05
+            ],
+            [
+              5.278e-05,
+              5.275e-05,
+              5.274e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.00418648905804,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            9.380504751621147e-05,
+            5.858750284737773e-05,
+            5.300121985815711e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              9.688818250540343e-05,
+              9.380504751621147e-05,
+              6.697720518357722e-05
+            ],
+            [
+              5.57383115034126e-05,
+              5.858750284737773e-05,
+              6.203448747152592e-05
+            ],
+            [
+              5.300121985815711e-05,
+              5.2652176213855326e-05,
+              5.72407326786721e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.769865821338723,
+          "within_each_allocation": [
+            false,
+            false,
+            true
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            0.00010023357883368026,
+            0.00010443481264237366,
+            0.00010477551227495589
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              0.00010087762958963726,
+              0.00010023357883368026,
+              0.00010014702483801672
+            ],
+            [
+              0.00010443481264237366,
+              0.00010446995216400985,
+              0.00010423710022779373
+            ],
+            [
+              0.00010488049645390083,
+              0.00010475361865793923,
+              0.00010477551227495589
+            ]
+          ],
+          "cross_allocation_max_min": 1.0453134916873732,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      },
+      {
+        "operation": "all_gather",
+        "actual_bytes": 16777184,
+        "compare_mode": "out_of_place",
+        "native": {
+          "median_seconds_by_run": [
+            3.747e-05,
+            3.7770000000000006e-05,
+            3.739e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              3.721e-05,
+              3.75e-05,
+              3.747e-05
+            ],
+            [
+              3.745e-05,
+              3.7829999999999995e-05,
+              3.7770000000000006e-05
+            ],
+            [
+              3.739e-05,
+              3.728e-05,
+              3.7619999999999996e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0101631452259965,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            7.373961885245543e-05,
+            5.9567401136357225e-05,
+            5.0919322052405196e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              7.373961885245543e-05,
+              7.969471174859744e-05,
+              6.255088524587723e-05
+            ],
+            [
+              5.958158806818048e-05,
+              5.9567401136357225e-05,
+              4.512043011363108e-05
+            ],
+            [
+              5.033603493450015e-05,
+              5.0919322052405196e-05,
+              5.7199528384278604e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.4481657626266904,
+          "within_each_allocation": [
+            false,
+            false,
+            false
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            8.279619535519107e-05,
+            8.899824147727225e-05,
+            8.962031113537351e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              8.307042349725781e-05,
+              8.184261748634151e-05,
+              8.279619535519107e-05
+            ],
+            [
+              8.902739318182155e-05,
+              8.899824147727225e-05,
+              8.882864488636794e-05
+            ],
+            [
+              8.962031113537351e-05,
+              8.967849399563055e-05,
+              8.95302434497785e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0824206444620716,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      },
+      {
+        "operation": "all_gather",
+        "actual_bytes": 16777216,
+        "compare_mode": "out_of_place",
+        "native": {
+          "median_seconds_by_run": [
+            3.714e-05,
+            3.714e-05,
+            3.718e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              3.725e-05,
+              3.706e-05,
+              3.714e-05
+            ],
+            [
+              3.714e-05,
+              3.699e-05,
+              3.722e-05
+            ],
+            [
+              3.718e-05,
+              3.7189999999999995e-05,
+              3.702e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0010770059235325,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            8.126400524474179e-05,
+            5.431556716417738e-05,
+            5.384640548628457e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              6.887851573426869e-05,
+              8.126400524474179e-05,
+              0.00011663771853147427
+            ],
+            [
+              6.220810074626727e-05,
+              5.015453251599738e-05,
+              5.431556716417738e-05
+            ],
+            [
+              4.793901945136621e-05,
+              5.384640548628457e-05,
+              5.507710573566416e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.5091816159472495,
+          "within_each_allocation": [
+            false,
+            false,
+            false
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            7.575035139861176e-05,
+            8.927207782515865e-05,
+            9.009964788030137e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              7.556198951049823e-05,
+              7.681185489512037e-05,
+              7.575035139861176e-05
+            ],
+            [
+              8.927207782515865e-05,
+              8.926566257995745e-05,
+              8.95093688699375e-05
+            ],
+            [
+              9.009964788030137e-05,
+              9.02278738154644e-05,
+              8.978851172069941e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.1894287777779549,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": false
+        }
+      },
+      {
+        "operation": "reduce_scatter",
+        "actual_bytes": 16777184,
+        "compare_mode": "out_of_place",
+        "native": {
+          "median_seconds_by_run": [
+            3.688e-05,
+            3.7189999999999995e-05,
+            3.701e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              3.683e-05,
+              3.688e-05,
+              3.707e-05
+            ],
+            [
+              3.711e-05,
+              3.722e-05,
+              3.7189999999999995e-05
+            ],
+            [
+              3.703e-05,
+              3.701e-05,
+              3.7e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.008405639913232,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            8.281620421605935e-05,
+            5.255000957353814e-05,
+            5.2650815675676585e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              0.00011590738208170905,
+              8.281620421605935e-05,
+              7.77680052700869e-05
+            ],
+            [
+              5.1759204525681205e-05,
+              6.062477197563387e-05,
+              5.255000957353814e-05
+            ],
+            [
+              5.499400594595266e-05,
+              5.2650815675676585e-05,
+              5.247931513513383e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.5759503164346125,
+          "within_each_allocation": [
+            false,
+            false,
+            true
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            8.19982147562378e-05,
+            8.554810617928264e-05,
+            8.913723567567055e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              8.17093227931489e-05,
+              8.19982147562378e-05,
+              8.238885638999551e-05
+            ],
+            [
+              8.516871192341915e-05,
+              8.554810617928264e-05,
+              8.56306275021759e-05
+            ],
+            [
+              8.913723567567055e-05,
+              8.908573675675193e-05,
+              8.915942756756847e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.087063126199216,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      },
+      {
+        "operation": "reduce_scatter",
+        "actual_bytes": 16777216,
+        "compare_mode": "out_of_place",
+        "native": {
+          "median_seconds_by_run": [
+            3.6700000000000004e-05,
+            3.705e-05,
+            3.688e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              3.6700000000000004e-05,
+              3.6649999999999996e-05,
+              3.685e-05
+            ],
+            [
+              3.705e-05,
+              3.703e-05,
+              3.7229999999999994e-05
+            ],
+            [
+              3.687e-05,
+              3.688e-05,
+              3.693e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0095367847411443,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        },
+        "eager": {
+          "median_seconds_by_run": [
+            7.250563183730433e-05,
+            6.113324999999685e-05,
+            5.234541349124329e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              6.930712061712419e-05,
+              7.250563183730433e-05,
+              9.411872580644858e-05
+            ],
+            [
+              5.542620407098179e-05,
+              6.113324999999685e-05,
+              6.576620459290332e-05
+            ],
+            [
+              5.2312744078271426e-05,
+              5.234541349124329e-05,
+              5.4444428424303916e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.3851382003016097,
+          "within_each_allocation": [
+            false,
+            false,
+            true
+          ],
+          "local_reference_pass": false
+        },
+        "graph": {
+          "median_seconds_by_run": [
+            8.709951963533043e-05,
+            8.838819728601624e-05,
+            8.905417507724337e-05
+          ],
+          "window_samples_seconds_by_run": [
+            [
+              8.640508906029421e-05,
+              8.71568660588941e-05,
+              8.709951963533043e-05
+            ],
+            [
+              8.838819728601624e-05,
+              8.873729853862534e-05,
+              8.820824164926366e-05
+            ],
+            [
+              8.905417507724337e-05,
+              8.918834963954192e-05,
+              8.897714109166134e-05
+            ]
+          ],
+          "cross_allocation_max_min": 1.0224416328597072,
+          "within_each_allocation": [
+            true,
+            true,
+            true
+          ],
+          "local_reference_pass": true
+        }
+      }
+    ],
+    "scope": "2 B200, NCCL2.29.7, BF16, two processes one GPU each, pinned nccl-tests; independent allocations not proven distinct physical hosts",
+    "runs": [
+      {
+        "run_id": "batch6-b11-gpu-03",
+        "result_sha256": "c03b62ae639d623dd05c3bb97d7c58d6099163c85634dabf868896651eb9a9c9",
+        "devices": "uuid, name, pci.bus_id, memory.total [MiB]\nGPU-d54c8d1a-3a59-9863-4837-ee138f9b1e5b, NVIDIA B200, [Unknown Error], 183359 MiB\nGPU-fe935290-1bdb-4ca4-f0ae-72f5fc547c75, NVIDIA B200, [Unknown Error], 183359 MiB\n",
+        "engineering_ok": true
+      },
+      {
+        "run_id": "batch6-b11-gpu-04",
+        "result_sha256": "97020f094e3ac9f8389a0acb642cd0bbf82bd3b21f02bdb9c895baf174fa62d9",
+        "devices": "uuid, name, pci.bus_id, memory.total [MiB]\nGPU-b83a6d28-d952-1319-d6fd-4312e5648400, NVIDIA B200, [Unknown Error], 183359 MiB\nGPU-6e1bb51d-1944-e949-c682-6aee9581d7de, NVIDIA B200, [Unknown Error], 183359 MiB\n",
+        "engineering_ok": true
+      },
+      {
+        "run_id": "batch6-b11-gpu-05",
+        "result_sha256": "1f0cc83210668c513cd964dd52833e7f6c7086db046bda4e3d8b470c900c48a9",
+        "devices": "uuid, name, pci.bus_id, memory.total [MiB]\nGPU-3a677db4-fded-2443-294d-d22acf5bb6c3, NVIDIA B200, [Unknown Error], 183359 MiB\nGPU-12b40b6f-84b5-6b2c-f97e-154d9b4f945f, NVIDIA B200, [Unknown Error], 183359 MiB\n",
+        "engineering_ok": true
+      }
+    ]
+  },
+  "native_graph_mixing": {
+    "run_id": "batch6-b11-gpu-07",
+    "result_sha256": "f91c25b6b8e745c5c0dd1ec3bcf0ce1eadeb7b6d53b1a4309fe5bb744c24fb47",
+    "cases": 27,
+    "summaries": [
+      {
+        "operation": "all_reduce",
+        "compare_mode": "in_place",
+        "actual_bytes": 16777216,
+        "arms": {
+          "native_eager": {
+            "samples_seconds": [
+              5.2369999999999995e-05,
+              5.248e-05,
+              5.236e-05
+            ],
+            "median_seconds": 5.2369999999999995e-05,
+            "sample_stdev_seconds": 6.658328118479457e-08,
+            "max_min_ratio": 1.0022918258212377,
+            "within_allocation_stable": true
+          },
+          "native_graph": {
+            "samples_seconds": [
+              5.0520000000000004e-05,
+              5.054e-05,
+              5.0390000000000004e-05
+            ],
+            "median_seconds": 5.0520000000000004e-05,
+            "sample_stdev_seconds": 8.144527815246978e-08,
+            "max_min_ratio": 1.0029767811073624,
+            "within_allocation_stable": true
+          },
+          "native_graph_mixing_off": {
+            "samples_seconds": [
+              5.0350000000000004e-05,
+              5.0509999999999996e-05,
+              5.042e-05
+            ],
+            "median_seconds": 5.042e-05,
+            "sample_stdev_seconds": 8.020806277010221e-08,
+            "max_min_ratio": 1.0031777557100297,
+            "within_allocation_stable": true
+          }
+        },
+        "paired_graph_minus_eager_seconds": [
+          -1.8499999999999908e-06,
+          -1.9399999999999984e-06,
+          -1.9699999999999964e-06
+        ],
+        "paired_mixing_off_minus_default_seconds": [
+          -1.7000000000000007e-07,
+          -3.0000000000004795e-08,
+          2.999999999999802e-08
+        ],
+        "graph_over_eager": 0.9646744319266758,
+        "mixing_off_over_graph": 0.9980205859065716
+      },
+      {
+        "operation": "all_gather",
+        "compare_mode": "out_of_place",
+        "actual_bytes": 16777216,
+        "arms": {
+          "native_eager": {
+            "samples_seconds": [
+              3.705e-05,
+              3.732e-05,
+              3.724e-05
+            ],
+            "median_seconds": 3.724e-05,
+            "sample_stdev_seconds": 1.3868429375143295e-07,
+            "max_min_ratio": 1.0072874493927126,
+            "within_allocation_stable": true
+          },
+          "native_graph": {
+            "samples_seconds": [
+              3.535e-05,
+              3.532e-05,
+              3.519e-05
+            ],
+            "median_seconds": 3.532e-05,
+            "sample_stdev_seconds": 8.504900548115335e-08,
+            "max_min_ratio": 1.0045467462347257,
+            "within_allocation_stable": true
+          },
+          "native_graph_mixing_off": {
+            "samples_seconds": [
+              3.5619999999999994e-05,
+              3.4649999999999995e-05,
+              3.482e-05
+            ],
+            "median_seconds": 3.482e-05,
+            "sample_stdev_seconds": 5.179768334587929e-07,
+            "max_min_ratio": 1.027994227994228,
+            "within_allocation_stable": true
+          }
+        },
+        "paired_graph_minus_eager_seconds": [
+          -1.7000000000000007e-06,
+          -2.000000000000001e-06,
+          -2.0500000000000024e-06
+        ],
+        "paired_mixing_off_minus_default_seconds": [
+          2.699999999999957e-07,
+          -6.700000000000054e-07,
+          -3.6999999999999815e-07
+        ],
+        "graph_over_eager": 0.9484425349087002,
+        "mixing_off_over_graph": 0.9858437146092865
+      },
+      {
+        "operation": "reduce_scatter",
+        "compare_mode": "out_of_place",
+        "actual_bytes": 16777216,
+        "arms": {
+          "native_eager": {
+            "samples_seconds": [
+              3.697e-05,
+              3.693e-05,
+              3.6950000000000004e-05
+            ],
+            "median_seconds": 3.6950000000000004e-05,
+            "sample_stdev_seconds": 1.999999999999981e-08,
+            "max_min_ratio": 1.001083130246412,
+            "within_allocation_stable": true
+          },
+          "native_graph": {
+            "samples_seconds": [
+              3.635e-05,
+              3.624e-05,
+              3.639e-05
+            ],
+            "median_seconds": 3.635e-05,
+            "sample_stdev_seconds": 7.767453465154238e-08,
+            "max_min_ratio": 1.0041390728476822,
+            "within_allocation_stable": true
+          },
+          "native_graph_mixing_off": {
+            "samples_seconds": [
+              3.6899999999999996e-05,
+              3.633e-05,
+              3.633e-05
+            ],
+            "median_seconds": 3.633e-05,
+            "sample_stdev_seconds": 3.290896534380845e-07,
+            "max_min_ratio": 1.0156895127993393,
+            "within_allocation_stable": true
+          }
+        },
+        "paired_graph_minus_eager_seconds": [
+          -6.199999999999975e-07,
+          -6.900000000000019e-07,
+          -5.600000000000014e-07
+        ],
+        "paired_mixing_off_minus_default_seconds": [
+          5.49999999999993e-07,
+          9.000000000000083e-08,
+          -6.000000000000281e-08
+        ],
+        "graph_over_eager": 0.9837618403247632,
+        "mixing_off_over_graph": 0.9994497936726271
+      }
+    ],
+    "conclusion": "Native Graph not slower; disabling mixing does not explain earlier PyTorch Graph overhead. No default adopted."
+  },
+  "direct_diagnostic": {
+    "run_id": "batch6-b11-gpu-09",
+    "ok": false,
+    "stage": "public init_rank before payload",
+    "error": "SystemError: PY_SSIZE_T_CLEAN macro must be defined for '#' formats",
+    "paired_performance_available": false,
+    "evidence_index": "runs/batch6-b11-gpu-09.json",
+    "app_stopped": true,
+    "tasks": 0,
+    "known_issue": "https://github.com/pytorch/pytorch/issues/38019",
+    "known_pr": "https://github.com/pytorch/pytorch/pull/127702",
+    "scope": "does not invalidate completed native baseline; no transport or numerical failure inferred"
+  }
+}

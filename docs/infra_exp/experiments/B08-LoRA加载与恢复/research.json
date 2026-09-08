@@ -1,0 +1,173 @@
+{
+  "queried_utc": "2026-09-07T16:09:44.684645+00:00",
+  "stable": {
+    "tag": "v0.28.0",
+    "sha": "2cf0a6915ce544dc493a0990f2ea38d81601128a"
+  },
+  "main": {
+    "sha": "51da0ca66c8065619c79e35dff97aa99aeaf5644"
+  },
+  "official_sources": [
+    "https://github.com/vllm-project/vllm/blob/v0.28.0/docs/features/lora.md",
+    "https://github.com/vllm-project/vllm/blob/v0.28.0/tests/lora/test_qwen35_densemodel_lora.py",
+    "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/lora/worker_manager.py",
+    "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/lora/model_manager.py"
+  ],
+  "download_sha256": {
+    "model": "d5fa8f7c99c5cac89bfb0c0288bab58c846ee27b9733178bf957ca44b9d1392d",
+    "worker": "21aa03fbc470f5d5a3bbe03d25c40b2ad6b70ec2d806c49bfdde9cad73b5aca5",
+    "manager": "a784bb0fc0675d363f144ab7115ae70ccef9ef3573a02571a373788b13521a3c",
+    "row": "0ee6a753a11dab7fb10da605e48dad43bf7e814482190db00aef4ff067bb68b9",
+    "base_linear": "040d75b4a76cb97f28c507453ab8aea68252c35b8b64d9f83ce40d32e2a3a495",
+    "llm": "52de4ac99489e004ef6c61d0bedc84aa96020dd58b8bd1ae500814b548b2b83e",
+    "gpuworker": "5e8faf3e00649289c81c2917dd4557a80b0b351c33295d8e0c4b204a304e6552",
+    "test": "a5795b88f6a534fdd398d04bd0d357ac686ae4154db49511debd320b71a6e79f",
+    "doc": "46513bde61b795709201cb35277907e325c9fe64aeaa1af8efc7add8da4c986e",
+    "mainworker": "7807187ddfd128f6a6dc31820b435dc954f2e9122d254ce7d6484b44076e3522",
+    "mainmodel": "3abeac36180df7bd1bd96b1a7c698a8f212d92c063026420cbdd16d1980e90e6"
+  },
+  "queries": [
+    {
+      "query": "repo:vllm-project/vllm lora reload stale",
+      "url": "https://api.github.com/search/issues?q=repo:vllm-project/vllm+lora+reload+stale",
+      "total_count": 41,
+      "read_hits": [
+        "https://github.com/vllm-project/vllm/pull/48352",
+        "https://github.com/vllm-project/vllm/pull/48337",
+        "https://github.com/vllm-project/vllm/pull/44950",
+        "https://github.com/vllm-project/vllm/issues/44939",
+        "https://github.com/vllm-project/vllm/issues/42125",
+        "https://github.com/vllm-project/vllm/issues/48312",
+        "https://github.com/vllm-project/vllm/issues/44701",
+        "https://github.com/vllm-project/vllm/issues/48297",
+        "https://github.com/vllm-project/vllm/issues/53194",
+        "https://github.com/vllm-project/vllm/pull/55492",
+        "https://github.com/vllm-project/vllm/issues/42361",
+        "https://github.com/vllm-project/vllm/issues/48310"
+      ]
+    },
+    {
+      "query": "repo:vllm-project/vllm Qwen3.5 lora is:pr",
+      "url": "https://api.github.com/search/issues?q=repo:vllm-project/vllm+Qwen3.5+lora+is:pr",
+      "total_count": 82,
+      "read_hits": [
+        "https://github.com/vllm-project/vllm/pull/52198",
+        "https://github.com/vllm-project/vllm/pull/53842",
+        "https://github.com/vllm-project/vllm/pull/51656",
+        "https://github.com/vllm-project/vllm/pull/37019",
+        "https://github.com/vllm-project/vllm/pull/49525",
+        "https://github.com/vllm-project/vllm/pull/54897",
+        "https://github.com/vllm-project/vllm/pull/42746",
+        "https://github.com/vllm-project/vllm/pull/49171",
+        "https://github.com/vllm-project/vllm/pull/41457",
+        "https://github.com/vllm-project/vllm/pull/54783",
+        "https://github.com/vllm-project/vllm/pull/42301",
+        "https://github.com/vllm-project/vllm/pull/44488"
+      ]
+    }
+  ],
+  "issues_and_prs": [
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/38085",
+      "state": "closed",
+      "title": "[Bug]: Qwen3.5 LoRA module is not in model's supported LoRA target modules"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/48934",
+      "state": "closed",
+      "title": "[Bug]: Qwen3.5 CausalLM missing embedding_modules breaks LoRA on embed_tokens/lm_head"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/42583",
+      "state": "open",
+      "title": "Qwen3.5 + --enable-lora + TP=4 fails at startup in custom_all_reduce.cuh"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/42125",
+      "state": "open",
+      "title": "[Bug]: Runtime LoRA same-name reload can reuse stale prefix-cache blocks from previous adapter version"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/48352",
+      "state": "open",
+      "title": "[V1][LoRA] Version prefix-cache keys for local runtime LoRA reloads"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/53842",
+      "state": "open",
+      "title": "[Bugfix][MRV2][LoRA] Fix prompt logprobs mapping"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/49525",
+      "state": "open",
+      "title": "[Bugfix] Shared MM text-LoRA mapper fallback for language_model wrappers"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/48297",
+      "state": "open",
+      "title": "[RFC] LoRA Adapter Lifecycle for RL Training"
+    }
+  ],
+  "findings": [
+    "Stable worker add_adapter calls activate_adapter; model manager attaches itself to model.lora_manager. BaseLinear slot layout is [slots,1,rank,input] and [slots,1,output,rank], copies CPU A/B directly with alpha/rank=1.",
+    "38085 closed; comments identify 0.18.1 fix. 48934 closed by merged PR48850 at 2026-08-19T04:55:21Z. 42583 open TP4 startup issue does not establish TP1 failure.",
+    "42125 same-name prefix cache stale reuse remains open; 48352 open content-key proposal. Official available workarounds include disabling cache or unique names. This experiment isolates cache-disabled path and does not duplicate the known report.",
+    "49525 open bare-model text-LoRA mapper no-op fix; use actual checkpoint model.language_model prefix and enforce receiver matrix/GPU-slot equality.",
+    "53842 open MRV2 lm_head chunk mapping fix; not applicable to one ordinary o_proj adapter and 64 prompt tokens.",
+    "48297 official RL adapter lifecycle RFC confirms practical downstream demand; current experiment does not cover adapter-training sync, sleep/wake, or trainer-versus-rollout equality."
+  ],
+  "decision": "bounded confirmation of existing official cache-disabled TP1 o_proj reload support, no optimization or new bug presumption",
+  "network_notes": [
+    "Local sandbox DNS failed; official small-file downloads succeeded with reviewed network access. Web main response was cached at 6a2a2bb; live GitHub API fetch returned recorded 51da0ca."
+  ],
+  "initialization_failure_followup": {
+    "queried_utc": "2026-09-07T16:30:47.227259+00:00",
+    "error": "LoRA context must be set",
+    "queries": [
+      {
+        "query": "repo:vllm-project/vllm \"LoRA context\"",
+        "hits": 124
+      },
+      {
+        "query": "repo:vllm-project/vllm lora_target_modules moe",
+        "hits": 4
+      },
+      {
+        "query": "repo:vllm-project/vllm trtllm lora context",
+        "hits": 77
+      }
+    ],
+    "source_sha256": {
+      "selector": "c49c3bc8ede6f3676cc5ef0fd759f79843cb256942c604505b6786d8d5ae00ae",
+      "trt": "3a223a513a6ea228464dc95284011da142e9263c735d3b13db539dec52312367",
+      "moelora": "7069ae10fc9bfcbc701cf3d2712f359f87bba15cfd94de95658d4c98661994d3",
+      "mainselector": "c8b8203bd0b73bb7f586f703607394d663f14c05711416ad42d45af564382223"
+    },
+    "source_files": [
+      "vllm/model_executor/layers/fused_moe/oracle/unquantized.py",
+      "vllm/model_executor/layers/fused_moe/experts/trtllm_lora_moe.py",
+      "vllm/lora/layers/fused_moe.py"
+    ],
+    "finding": "Global LoRA selector precedes explicit backend; target filtering can omit expert wrapper that supplies context. Profile fails before adapter load. Main still contains same ordering.",
+    "workaround": "Official default target filter None verified on final GPU: initialization and all five A/B/A phases passed; all40 expert wrappers had context and zero active LoRA slots in each adapter phase. Original o_proj deployment filter startup witness preserved."
+  },
+  "typed_lora_api_followup": {
+    "queried_utc": "2026-09-07T16:56:15.780063+00:00",
+    "sources": {
+      "vllm/v1/engine/llm_engine.py": "415b7d02460984e8678f78420be22dbc336d8bb73734d7a753b2badb62232744",
+      "vllm/v1/engine/core_client.py": "afb2b627cf9ef861f05b411494156cc6ad5076ea770c6f2a4c8a941ca82103ec",
+      "vllm/v1/engine/core.py": "f4b1e07b6d91fac1549bc74a5c804e5a88793d663b5dc045c9e455db6550f5ad",
+      "vllm/lora/request.py": "b90138a585a7eec65c2e9339bd8a070593b5bb523755ac410eab32fa34695c84"
+    },
+    "finding": "LoRARequest array_like msgspec Struct becomes list in nested generic RPC args. EngineCoreProc converts only top-level typed Struct parameters. Official LLMEngine.add_lora routes typed utility and reconstructs request. Local probe API misuse, not new upstream issue.",
+    "cpu_gate": "Actual MsgpackEncoder/Decoder and EngineCoreProc._convert_msgspec_args bound to generic versus add_lora methods, plus actual loader mapper and expert buffer methods."
+  },
+  "final_verification": {
+    "status": "Q04 closed in registered scope",
+    "cpu_run": "batch4-lora-cpu-04",
+    "gpu_run": "batch4-lora-gpu-03",
+    "official_typed_api": "LLMEngine.add_lora/remove_lora/list_loras",
+    "all_result_sha_readbacks_verified": true,
+    "no_performance_or_training_claim": true
+  }
+}

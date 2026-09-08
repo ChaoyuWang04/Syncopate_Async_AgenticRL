@@ -1,0 +1,182 @@
+{
+  "experiment": "infra-probes/B07",
+  "run_id": "batch4-gemm-gpu-01",
+  "phase": "gemm",
+  "evidence_path": "/vol/_audit/infra-probes/B07/batch4-gemm-gpu-01/attempt-7399a788309545e0bde5593836841a70",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "ebfe1ede439d0dc34ef2d082eaf4b9124f176011b757e1c2455b3ab91c877943",
+  "image_id": "im-J5jRGJOILryp9VikpHuQj8",
+  "entry_sha256": "ec6a9ccd33b9f860fdbafc5acd82a5e822434270124015acac71a58679629827",
+  "sources": {
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "tests/infra/test_mechanism_contract.py": "c0385901dd6ad0638ea8d5b866ab3de3d3374192030f7ccf7297cb868b371adc",
+    "syncopate/infra/gemm_cause_probe.py": "f0a15d66807799e183373b1ba73ac46fad3362f13db79069aea7ec8c0926629d",
+    "tests/infra/test_gemm_cause_probe.py": "a7a28950d5b22c177562b27d590b4689e6f93ef667dd03b17651190b07334138",
+    "syncopate/infra/gdn_fastpath_probe.py": "050491f04e8ba3b9f69996d43c29f6ffb654602c8d31775860b2ee100d799a65",
+    "tests/infra/test_gdn_fastpath_probe.py": "040b50222fc229433cd244280e6673b12a3e31d77ebcaf3a9bbfc547fe26d3cb",
+    "syncopate/infra/lora_handoff_probe.py": "54478cb30a4fd033ce9c65129d190069d6cd32fde62a70b71e0e52139dcc4322",
+    "tests/infra/test_lora_handoff_probe.py": "58687436056a7824f9c71b429de897a58c186bbbac592cce7b0f735fa67a6089",
+    "modal_app/gdn_fastpath_batch.py": "02a939daa0017df5bd17986eab934188a34396ce8f58f63dcd1c608647c8f458",
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "ec6a9ccd33b9f860fdbafc5acd82a5e822434270124015acac71a58679629827",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T16:16:55Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 82.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 3.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 135.4,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "ebfe1ede439d0dc34ef2d082eaf4b9124f176011b757e1c2455b3ab91c877943",
+    "members": 723,
+    "bytes": 2870030,
+    "archive_sha256": "fd8479a84c4fa66692480091a368236601f96269c180433f8b636cd63249c535"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B07/batch4-gemm-cpu-01/attempt-7c92b01b34324bffa0c3b709c79d16b1",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B07/batch4-gemm-gpu-01/attempt-7399a788309545e0bde5593836841a70",
+      "/vol/_audit/infra-probes/B07/batch4-gemm-gpu-01/attempt-7399a788309545e0bde5593836841a70/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import subprocess,json; r=subprocess.run(['nvidia-smi','topo','-m'],capture_output=True,text=True); print(json.dumps({'available':r.returncode==0,'returncode':r.returncode,'stdout':r.stdout,'stderr':r.stderr}))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count()))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.gemm_cause_probe",
+      "--input",
+      "/vol/_audit/infra-probes/B07/batch4-gemm-gpu-01/attempt-7399a788309545e0bde5593836841a70/input.json",
+      "--out",
+      "/vol/_audit/infra-probes/B07/batch4-gemm-gpu-01/attempt-7399a788309545e0bde5593836841a70"
+    ]
+  ],
+  "validated_results": [
+    "gemm-result.json"
+  ],
+  "seconds": 225.980602118,
+  "files": {
+    "gemm-bf16_off-1-duplicate.trace.json": "f5fc7f6b8be19477f5daed39d97ac45264ed1efae9db55d6ac8aeaf9bb193590",
+    "gemm-bf16_off-1-real.trace.json": "24006d0d23a57aa24166da9b78d9184cf07bb6baf22ee774418ad4b896e43c65",
+    "gemm-bf16_off-1-zero.trace.json": "269b79b971d45b4a9fcdaeaf839e92bc38287bdff60b994733307d8b3ae57754",
+    "gemm-bf16_off-2-duplicate.trace.json": "67da666396273e3dfaeea6824a604013baa67cd50ada6ea676d77ed68d137bb3",
+    "gemm-bf16_off-2-real.trace.json": "2785d96f0834d93d29f1628b2a3c5e78a5855ff76cbb611afd3aaf08e8696286",
+    "gemm-bf16_off-2-zero.trace.json": "2dee19cb86856b0563ed5ea139d6097046d19882bd6856c06f6741c27bb400f6",
+    "gemm-bf16_off-4-duplicate.trace.json": "6553aa54a9fcda057e5e2bdaa9203fd7b41e0d15565bc3a0c138cb73f71b6f3e",
+    "gemm-bf16_off-4-real.trace.json": "820ea2d566fd5d1c3d398d85e7c12986702b015b75cc08bf04a79c0fb5062c34",
+    "gemm-bf16_off-4-zero.trace.json": "200a86b7086eb9904615e22a63e83a5e89785f347181e26726f859173c451201",
+    "gemm-bf16_off-8-duplicate.trace.json": "f6552a273b4b7629a3bf199eae2901babb262db87c629ef4b4e240137daffd11",
+    "gemm-bf16_off-8-real.trace.json": "f3425e779aa77ed73dfa4b513f0888a71edb80c1e13963e1923ca3abcb6f964d",
+    "gemm-bf16_off-8-zero.trace.json": "b616788ba3e0c5f4f951e856203cda8085fdf2beeb3c75d1430bf379f93327e9",
+    "gemm-bf16_on-1-duplicate.trace.json": "f47c3faef9883ebd434c520a2aa2da74b059bfe90dba9c98b3bd46092e3df85a",
+    "gemm-bf16_on-1-real.trace.json": "4275b0822173cf97e71ec9a0ff05daa871390e1fd1c7bc9b2b203a12fbff7881",
+    "gemm-bf16_on-1-zero.trace.json": "c2d091cbfb8a0db862cbfc8b76418b84d78207ca0543ff5184e1ebcab94ae222",
+    "gemm-bf16_on-2-duplicate.trace.json": "0267a8b055a59188b515c73eec5882f53d119601f2225d6c916490b965eb564e",
+    "gemm-bf16_on-2-real.trace.json": "aa70d216ae21c587491eed65e5a0044589c4021f9f39ed2d4a44ee1f5adcd15b",
+    "gemm-bf16_on-2-zero.trace.json": "4e50e3e8e8fcc71bc8ee37501148027e2c941c4335d20ab673bd2bbea7c373dd",
+    "gemm-bf16_on-4-duplicate.trace.json": "c57274130e0a6aaebb4e32cd18913026a830ec3b8872e7f8de3acbfefe60c6ae",
+    "gemm-bf16_on-4-real.trace.json": "b9d8a9d1f131a34e3454ecd80279c69f6568b376e6d2dac1884a184184f9fe98",
+    "gemm-bf16_on-4-zero.trace.json": "896a19aa72e9a714e46ad07ed90e8ee6e71107145f44ee9b00139306b97f832c",
+    "gemm-bf16_on-8-duplicate.trace.json": "2efd735c31a3012ddafe5c02ef865eaf778be79bbf3a9d77d209cd741ef00675",
+    "gemm-bf16_on-8-real.trace.json": "6b0fcae32b02f6f831dae821cf9df0391d1fe498abb4759059bf2019c61dbebb",
+    "gemm-bf16_on-8-zero.trace.json": "f8f6c835db9bb7d6e2fb92c63bcd879b56279ac55666190653dad723d91af956",
+    "gemm-fp32-1-duplicate.trace.json": "c5a4632c550d6867efd30b7a98550b9a51961cffac1c06c10b8ccf5a0968b154",
+    "gemm-fp32-1-real.trace.json": "b1bccf3b14917b73d85fcbaa2ddbe2d531880b94d6c8963cb0c5e4f276741080",
+    "gemm-fp32-1-zero.trace.json": "85f07f216baeee1386aa63bb91f987d1b713c4b10c0cc14506833f0e1d310533",
+    "gemm-fp32-2-duplicate.trace.json": "4ce802cdeca77b87dcf2f5a7c6c10e58457b6f9f1e11169e1f14510efffca287",
+    "gemm-fp32-2-real.trace.json": "fcac9513a0133639662d72cc4fc95a85e629611666ed84bc8f94b14754139ead",
+    "gemm-fp32-2-zero.trace.json": "6ae4967a2393201d072f3ca0eeea814cdda3bc21207c007b897ca215078cf19f",
+    "gemm-fp32-4-duplicate.trace.json": "e6759490b80604977cec125adcedf6ee69f16b90ef7a9c20e71f673d84940e37",
+    "gemm-fp32-4-real.trace.json": "caa52c69d4ba27958d5a419e11d5fdbf11b1ea87164c0ecb4d27bc7648b25aa7",
+    "gemm-fp32-4-zero.trace.json": "25934b5dc38e34b51775bf2df5cee54c199e2a2094d963f6def47798bc54e467",
+    "gemm-fp32-8-duplicate.trace.json": "9e46dc9669f01536f6741ace7d770745804ad55525b7f958c8b172dc58657636",
+    "gemm-fp32-8-real.trace.json": "3c985338a52ec919a9f15d81252b6453bec703aa9adae44da6b454ca3cdc9bb7",
+    "gemm-fp32-8-zero.trace.json": "615bace63e252fbaa9a271d406d29cd60a95f32c7fa58aa577fdc9c4449a5f7f",
+    "gemm-identity.json": "2b8f2086077e05baf4225a669ce5df813d1205fbdd39774083f44ba2fd4a0cbb",
+    "gemm-operator.json": "f7e0a627f39264cda2a98dc10dc991b0222c8e57e310e131bf3e26187cdff2ec",
+    "gemm-partial.json": "9592bfa0965db22f8c7767fe16272e0aa8d7913425a29866ac4dec3e3fe99568",
+    "gemm-propagation-partial.json": "8589bf4e0c83b37e969e58ef2cbdaa67bee1727191543f767ef7fedd638973dd",
+    "gemm-propagation.json": "779e4007d499a3181e5dc201063e3b75d184912a09d90eab4d42fc7219dcaa11",
+    "gemm-result.json": "5f325a0ac1327974612d9f4da796128388135183e05f041eadc23f3380310fc0",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "54a9f7bf89dd2b41327ec101f612b5fadba18a88988c5d7df6ef850ce821f6a0",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "readback": {
+    "verified_files": {
+      "gemm-result.json": "5f325a0ac1327974612d9f4da796128388135183e05f041eadc23f3380310fc0",
+      "gemm-operator.json": "f7e0a627f39264cda2a98dc10dc991b0222c8e57e310e131bf3e26187cdff2ec",
+      "gemm-propagation.json": "779e4007d499a3181e5dc201063e3b75d184912a09d90eab4d42fc7219dcaa11"
+    },
+    "scope": "local result JSON compared with run seal; raw tensors remain on Volume"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "date_utc": "2026-09-07",
+  "scope": "Q14 batch mechanism reference",
+  "sources": [
+    {
+      "url": "https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/",
+      "finding": "batch shape can change reduction order; does not identify this model root cause"
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/commit/299c53839f0c49cdb2caaa3ace26e5ae89f3d964",
+      "finding": "cached main modeling source used to identify decoder/router outputs; installed source SHA recorded at runtime"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/45819",
+      "finding": "prior investigation open GDN batch invariance path; not adopted"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/49827",
+      "finding": "prior investigation open hybrid batch invariance path; not adopted"
+    }
+  ],
+  "decision": "bounded diagnosis warranted by B01 gpu05 actual single vs batch difference; do not infer upstream bug",
+  "limitations": [
+    "modeling direct web fetch failed in this subtask; cached source plus installed target source inspection",
+    "no claim exhaustive issue search; no implementation fix proposed"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "queried_utc": "2026-09-07T09:01:57.665263+00:00",
+  "queries": {
+    "verl_5625": "https://api.github.com/repos/verl-project/verl/issues/5625",
+    "verl_5625_comments": "https://api.github.com/repos/verl-project/verl/issues/5625/comments",
+    "verl_6957": "https://api.github.com/repos/verl-project/verl/pulls/6957",
+    "verl_fsdp": "https://api.github.com/repos/verl-project/verl/contents/verl/workers/engine/fsdp/transformer_impl.py?ref=v0.9.0",
+    "verl_core": "https://api.github.com/repos/verl-project/verl/contents/verl/trainer/ppo/core_algos.py?ref=v0.9.0",
+    "verl_base": "https://api.github.com/repos/verl-project/verl/contents/verl/workers/engine/base.py?ref=v0.9.0",
+    "verl_3470": "https://api.github.com/repos/verl-project/verl/issues/3470"
+  },
+  "decision": "Revalidate official new FSDP2 engine and sft_loss with q/v LoRA and a shorter final accumulation window. Legacy token normalization and critic fix are not new bugs. No GDN or full-size checkpoint claims.",
+  "sources": [
+    {
+      "html_url": "https://github.com/verl-project/verl/issues/5625",
+      "title": "Incorrect loss_scale_factor for token-mean mode in gradient accumulation in legacy FSDP implementation",
+      "state": "closed"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/pull/6957",
+      "title": "[algo] fix: normalize critic value loss over the global mini-batch, not per micro-batch",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-07-07T08:56:51Z"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/blob/v0.9.0/verl/workers/engine/fsdp/transformer_impl.py",
+      "sha": "dd5cf3311da22dd583cdf1f5c7d5e1de03f289af"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/blob/2f077454e02671c630feb8fdd212a643978a2aa1/verl/workers/engine/fsdp/transformer_impl.py",
+      "sha": "b385c9bb23e5a121d931d59f6407fd34688cd7f2"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/blob/v0.9.0/verl/trainer/ppo/core_algos.py",
+      "sha": "a89bc392be9abe27e86582e434e59b6d3da29ce0"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/blob/v0.9.0/verl/workers/engine/base.py",
+      "sha": "b0404a14d279e643f59e743d0c6cca2c8303c40d"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/blob/v0.9.0/verl/workers/utils/losses.py",
+      "sha": "ebaa4e4d8b759db980f62bf96f83be305f54847e"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/issues/3470",
+      "title": "FSDP2 with LoRA training throws dtype mismatch error",
+      "state": "closed"
+    }
+  ],
+  "maintainer_context": "#5625 comments: legacy worker removed; new engine already uses global token denominator. #3470 old mixed dtype report; this probe isolates FP32 accumulation, no BF16 dtype support claim."
+}

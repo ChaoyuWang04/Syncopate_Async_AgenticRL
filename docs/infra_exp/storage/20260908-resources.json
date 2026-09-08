@@ -1,0 +1,415 @@
+{
+  "checked_utc": "2026-09-08T08:21:59.666576+00:00",
+  "volume": "syncopate-home",
+  "method": "Modal Volume recursive metadata listing of /models /data /hf_cache; read config/index/cache ref only; no GPU, weights download, full hash or model load",
+  "models": [
+    {
+      "name": "Qwen3.6-35B-A3B",
+      "volume_path": "/vol/models/Qwen3.6-35B-A3B",
+      "role": "primary_moe",
+      "cached_ref_revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_moe_text",
+      "num_experts": 256,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "93a4693fa9d8392fbfccd4b3c9873f4bfdcb14fdede978b123d07d19675efe99",
+      "index_sha256": "41b9356101ebf8e7519e150dc811f80c4226e727301fbb032b890f006ed0be83",
+      "indexed_weight_bytes": 71903645408.0,
+      "shards": [
+        {
+          "name": "model-00001-of-00026.safetensors",
+          "listed_bytes": 3996199712
+        },
+        {
+          "name": "model-00002-of-00026.safetensors",
+          "listed_bytes": 1284907696
+        },
+        {
+          "name": "model-00003-of-00026.safetensors",
+          "listed_bytes": 3357898360
+        },
+        {
+          "name": "model-00004-of-00026.safetensors",
+          "listed_bytes": 3370808712
+        },
+        {
+          "name": "model-00005-of-00026.safetensors",
+          "listed_bytes": 3357898360
+        },
+        {
+          "name": "model-00006-of-00026.safetensors",
+          "listed_bytes": 3959424904
+        },
+        {
+          "name": "model-00007-of-00026.safetensors",
+          "listed_bytes": 1096788232
+        },
+        {
+          "name": "model-00008-of-00026.safetensors",
+          "listed_bytes": 3946842008
+        },
+        {
+          "name": "model-00009-of-00026.safetensors",
+          "listed_bytes": 1096460848
+        },
+        {
+          "name": "model-00010-of-00026.safetensors",
+          "listed_bytes": 3946841992
+        },
+        {
+          "name": "model-00011-of-00026.safetensors",
+          "listed_bytes": 1096460752
+        },
+        {
+          "name": "model-00012-of-00026.safetensors",
+          "listed_bytes": 3409971080
+        },
+        {
+          "name": "model-00013-of-00026.safetensors",
+          "listed_bytes": 1633331664
+        },
+        {
+          "name": "model-00014-of-00026.safetensors",
+          "listed_bytes": 3422553872
+        },
+        {
+          "name": "model-00015-of-00026.safetensors",
+          "listed_bytes": 1633659224
+        },
+        {
+          "name": "model-00016-of-00026.safetensors",
+          "listed_bytes": 3946842136
+        },
+        {
+          "name": "model-00017-of-00026.safetensors",
+          "listed_bytes": 1096460608
+        },
+        {
+          "name": "model-00018-of-00026.safetensors",
+          "listed_bytes": 3946841992
+        },
+        {
+          "name": "model-00019-of-00026.safetensors",
+          "listed_bytes": 1096460808
+        },
+        {
+          "name": "model-00020-of-00026.safetensors",
+          "listed_bytes": 3409971072
+        },
+        {
+          "name": "model-00021-of-00026.safetensors",
+          "listed_bytes": 1633331744
+        },
+        {
+          "name": "model-00022-of-00026.safetensors",
+          "listed_bytes": 3370808752
+        },
+        {
+          "name": "model-00023-of-00026.safetensors",
+          "listed_bytes": 3357898392
+        },
+        {
+          "name": "model-00024-of-00026.safetensors",
+          "listed_bytes": 3370808752
+        },
+        {
+          "name": "model-00025-of-00026.safetensors",
+          "listed_bytes": 3832888256
+        },
+        {
+          "name": "model-00026-of-00026.safetensors",
+          "listed_bytes": 2231416848
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 71903776776,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    },
+    {
+      "name": "Qwen3.8-27B",
+      "volume_path": "/vol/models/Qwen3.8-27B",
+      "role": "primary_dense",
+      "cached_ref_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_text",
+      "num_experts": null,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",
+      "index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+      "indexed_weight_bytes": 55562855904.0,
+      "shards": [
+        {
+          "name": "model-00001-of-00018.safetensors",
+          "listed_bytes": 3966730552
+        },
+        {
+          "name": "model-00002-of-00018.safetensors",
+          "listed_bytes": 3043080328
+        },
+        {
+          "name": "model-00003-of-00018.safetensors",
+          "listed_bytes": 2542796952
+        },
+        {
+          "name": "model-00004-of-00018.safetensors",
+          "listed_bytes": 3988973152
+        },
+        {
+          "name": "model-00005-of-00018.safetensors",
+          "listed_bytes": 2099339864
+        },
+        {
+          "name": "model-00006-of-00018.safetensors",
+          "listed_bytes": 3979553696
+        },
+        {
+          "name": "model-00007-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00008-of-00018.safetensors",
+          "listed_bytes": 3979553696
+        },
+        {
+          "name": "model-00009-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00010-of-00018.safetensors",
+          "listed_bytes": 3979553696
+        },
+        {
+          "name": "model-00011-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00012-of-00018.safetensors",
+          "listed_bytes": 3979553696
+        },
+        {
+          "name": "model-00013-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00014-of-00018.safetensors",
+          "listed_bytes": 3979553696
+        },
+        {
+          "name": "model-00015-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00016-of-00018.safetensors",
+          "listed_bytes": 3979564040
+        },
+        {
+          "name": "model-00017-of-00018.safetensors",
+          "listed_bytes": 2108759344
+        },
+        {
+          "name": "model-00018-of-00018.safetensors",
+          "listed_bytes": 3392197344
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 55563006776,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    },
+    {
+      "name": "Qwen3.5-27B",
+      "volume_path": "/vol/models/Qwen3.5-27B",
+      "role": "existing_not_primary",
+      "cached_ref_revision": "fc05daec18b0a78c049392ed2e771dde82bdf654",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_text",
+      "num_experts": null,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "f8d190c5b89c1521220f935d2567a587d6e291ed69066a45a106560b05a2174c",
+      "index_sha256": "b3737e9d00bda0e37f0b873629d98bf9b407bef35735b9193c23d9844bcc96a6",
+      "indexed_weight_bytes": 55562872800,
+      "shards": [
+        {
+          "name": "model.safetensors-00001-of-00011.safetensors",
+          "listed_bytes": 5263851872
+        },
+        {
+          "name": "model.safetensors-00002-of-00011.safetensors",
+          "listed_bytes": 5347741440
+        },
+        {
+          "name": "model.safetensors-00003-of-00011.safetensors",
+          "listed_bytes": 5347741504
+        },
+        {
+          "name": "model.safetensors-00004-of-00011.safetensors",
+          "listed_bytes": 5347741504
+        },
+        {
+          "name": "model.safetensors-00005-of-00011.safetensors",
+          "listed_bytes": 5347741504
+        },
+        {
+          "name": "model.safetensors-00006-of-00011.safetensors",
+          "listed_bytes": 5347741504
+        },
+        {
+          "name": "model.safetensors-00007-of-00011.safetensors",
+          "listed_bytes": 5347741496
+        },
+        {
+          "name": "model.safetensors-00008-of-00011.safetensors",
+          "listed_bytes": 5368714128
+        },
+        {
+          "name": "model.safetensors-00009-of-00011.safetensors",
+          "listed_bytes": 5347745520
+        },
+        {
+          "name": "model.safetensors-00010-of-00011.safetensors",
+          "listed_bytes": 5347749200
+        },
+        {
+          "name": "model.safetensors-00011-of-00011.safetensors",
+          "listed_bytes": 2148512760
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 55563022432,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    },
+    {
+      "name": "Qwen3.5-9B",
+      "volume_path": "/vol/models/Qwen3.5-9B",
+      "role": "existing_not_primary",
+      "cached_ref_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_text",
+      "num_experts": null,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "d0883072e01861ed0b2d47be3c16c36a8e81c224c7ffaa310c6558fb3f932b05",
+      "index_sha256": "26d3539b516be613f39563617cb9d33b3f83d401298125be392c80cefb8f7fe5",
+      "indexed_weight_bytes": 19306216416,
+      "shards": [
+        {
+          "name": "model.safetensors-00001-of-00004.safetensors",
+          "listed_bytes": 5276436216
+        },
+        {
+          "name": "model.safetensors-00002-of-00004.safetensors",
+          "listed_bytes": 5335161512
+        },
+        {
+          "name": "model.safetensors-00003-of-00004.safetensors",
+          "listed_bytes": 5368717440
+        },
+        {
+          "name": "model.safetensors-00004-of-00004.safetensors",
+          "listed_bytes": 3325995712
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 19306310880,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    },
+    {
+      "name": "Qwen3.5-4B",
+      "volume_path": "/vol/models/Qwen3.5-4B",
+      "role": "existing_not_primary",
+      "cached_ref_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_text",
+      "num_experts": null,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "ddc63e1c717afa86c865bb5e01313d89d72bb53b97ad4a8a03ba8510c0621670",
+      "index_sha256": "cf3f798ee02ba45f9622aa8892a47369ab667d0afbf154ee7c2212de42e6302d",
+      "indexed_weight_bytes": 9319737856,
+      "shards": [
+        {
+          "name": "model.safetensors-00001-of-00002.safetensors",
+          "listed_bytes": 5329398688
+        },
+        {
+          "name": "model.safetensors-00002-of-00002.safetensors",
+          "listed_bytes": 3990429408
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 9319828096,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    },
+    {
+      "name": "Qwen3.5-0.8B",
+      "volume_path": "/vol/models/Qwen3.5-0.8B",
+      "role": "existing_not_primary",
+      "cached_ref_revision": "2fc06364715b967f1860aea9cf38778875588b17",
+      "revision_evidence": "cached refs/main; selected config download metadata also read; not full shard hash verification",
+      "model_type": "qwen3_5_text",
+      "num_experts": null,
+      "layer_types": [
+        "full_attention",
+        "linear_attention"
+      ],
+      "config_sha256": "b90b86f35c8e6925ef74ee04d0e758f0a845c83a42089ad82bbaa948de9b4204",
+      "index_sha256": "d8a08838a613b025eb7952ed9db11696213e57e76a375661ef5c12f9dd5dcf4e",
+      "indexed_weight_bytes": 1746882752,
+      "shards": [
+        {
+          "name": "model.safetensors-00001-of-00001.safetensors",
+          "listed_bytes": 1746942600
+        }
+      ],
+      "missing_or_empty_shards": [],
+      "listed_shard_bytes": 1746942600,
+      "tokenizer_files_present": [
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja"
+      ]
+    }
+  ],
+  "data_scope": {
+    "listed_paths": [
+      "/data",
+      "/hf_cache/datasets"
+    ],
+    "data": "/data entries under v16 only; no identified new public task dataset in inspected directories",
+    "cache": "four generic parquet caches with 165/207/660/825 examples; source not identified from dataset_info, not treated as public ready inputs",
+    "excluded": "No account-wide/other Volume inventory; no raw trajectory scan outside these roots"
+  },
+  "no_download_or_deletion": true
+}

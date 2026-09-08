@@ -1,0 +1,171 @@
+{
+  "experiment": "infra-probes/B00",
+  "run_id": "b00-cpu-02",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "7009604b7700eed9ded533503aaa532501eb656ac50334fb241e23ee99c34b84",
+  "entry_sha256": "42fbd516eddec93a7c3cd9bebb650edb22be09d26a45c928c3f94ceda1329888",
+  "image_id": "im-x6KZ5MN9N9COqTkJrlcRFD",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B00/b00-cpu-02",
+  "cpu": 2,
+  "memory_mib": 8192,
+  "gpu": null,
+  "started_utc": "2026-09-07T09:03:27Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "source_archive": {
+    "overlay_sha256": "7009604b7700eed9ded533503aaa532501eb656ac50334fb241e23ee99c34b84",
+    "members": 646,
+    "bytes": 2760582,
+    "archive_sha256": "d8f8899e70c0a8c747c6892fc3684f2767e05d3eeb447c9218aa2bc59512b3ed"
+  },
+  "returncode": 0,
+  "ok": true,
+  "command": [
+    "/env/.venv/bin/python",
+    "-m",
+    "syncopate.infra.length_metric_probe",
+    "/vol/_audit/infra-probes/B00/b00-cpu-02"
+  ],
+  "seconds": 19.81994407,
+  "files": {
+    "metric_utils.py": "29f84eba62a315575d62d64dc5514458cb7d30ea2b7fb3a6d36df64ba6c1205f",
+    "pytest.txt": "7b58711a0cd9206183408ff980a12d4ff24244c6a8b6816024a4374005fd4c6d",
+    "result.json": "ba6316459407251fa3ab6c19b252ec69f2a94b6fc65ee7a240999ecb91adb83b",
+    "source.tar.gz.json": "a67f3af9d7b15b8861214d33e3336fb01560096accdad0ae9f3bafa6338488e5",
+    "stdout.log": "78bfc63e389c9c379950d1d402e7610026bfea1e379be2109b4af6f9ad12e457"
+  },
+  "app_id": "ap-kiMRPZwng5X2BP23D2R8HR",
+  "volume_result_readback": true,
+  "cost_actual_usd": null,
+  "results": {
+    "ok": true,
+    "torch": "2.13.0+cu130",
+    "verl": "0.9.0",
+    "metric_git_blob": "c9c8c1e92e44130fddd5c7d1be51d55b15d59cea",
+    "source_sha256": "29f84eba62a315575d62d64dc5514458cb7d30ea2b7fb3a6d36df64ba6c1205f",
+    "rows": [
+      {
+        "width": 4,
+        "lengths": [
+          2,
+          4
+        ],
+        "raw_tokens": [
+          [
+            10,
+            11
+          ],
+          [
+            10,
+            11,
+            12,
+            13
+          ]
+        ],
+        "synthetic_finish_reason": [
+          "stop",
+          "stop"
+        ],
+        "generation_budget": 12,
+        "boundary_fraction": 0.5,
+        "length_finish_fraction": 0.0
+      },
+      {
+        "width": 12,
+        "lengths": [
+          2,
+          4
+        ],
+        "raw_tokens": [
+          [
+            10,
+            11
+          ],
+          [
+            10,
+            11,
+            12,
+            13
+          ]
+        ],
+        "synthetic_finish_reason": [
+          "stop",
+          "stop"
+        ],
+        "generation_budget": 12,
+        "boundary_fraction": 0.0,
+        "length_finish_fraction": 0.0
+      },
+      {
+        "width": 12,
+        "lengths": [
+          2,
+          12
+        ],
+        "raw_tokens": [
+          [
+            10,
+            11
+          ],
+          [
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21
+          ]
+        ],
+        "synthetic_finish_reason": [
+          "stop",
+          "length"
+        ],
+        "generation_budget": 12,
+        "boundary_fraction": 0.5,
+        "length_finish_fraction": 0.5
+      },
+      {
+        "width": 12,
+        "lengths": [
+          2,
+          12
+        ],
+        "raw_tokens": [
+          [
+            10,
+            11
+          ],
+          [
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21
+          ]
+        ],
+        "synthetic_finish_reason": [
+          "stop",
+          "stop"
+        ],
+        "generation_budget": 12,
+        "boundary_fraction": 0.5,
+        "length_finish_fraction": 0.0
+      }
+    ],
+    "pytest": ".................                                                        [100%]\n17 passed in 0.13s\n",
+    "scope": "metric function and local consumer; no live rollout"
+  }
+}

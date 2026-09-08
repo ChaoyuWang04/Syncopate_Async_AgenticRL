@@ -1,0 +1,240 @@
+{
+  "volume": "syncopate-home",
+  "volume_id": "vo-elvfcHEZBzF6Ylm42h79OI",
+  "before_file_bytes": 289205308941,
+  "after_file_bytes_before_ledger": 215664338482,
+  "deleted_file_bytes": 73541062943,
+  "completed_utc": "2026-09-07T07:58:08Z",
+  "verified_absent_targets": 28,
+  "untargeted_file_metadata_unchanged": true,
+  "cloud_record_root": "/vol/_audit/storage/20260907-cleanup",
+  "cloud_plan_sha256": "e5592f64d64a0465d95a1486d0eec208de68e3d19628305d78f4de56528ce27f",
+  "cloud_result_sha256": "8307b90cf03c5a9d20449987bdb881abaece8335c4e5549870bac6de2228eced",
+  "targets": [
+    {
+      "path": "models/Qwen3.6-35B-A3B-sft-v16_smoke_b02_20260905a",
+      "recursive": true,
+      "reason": "Stopped business chain merged model; public base and selected SFT adapter retained for reconstruction if ever needed.",
+      "file_bytes": 69341385729,
+      "entries": 10,
+      "metadata_sha256": "685eb594079131282528b1f10628fb55a7e78c169418b08b1e653e516b23945d"
+    },
+    {
+      "path": "_cache_runs/6a912ec1e02f4c3a9fd7aa8004e745d5",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 125579039,
+      "entries": 1819,
+      "metadata_sha256": "1d3ca320a961156ade08083dafc8ef782b618772c6f05b784e736712ac4f9a92"
+    },
+    {
+      "path": "_cache_runs/05a04488af874b2aa2af10f0a6af149f",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 125769248,
+      "entries": 1840,
+      "metadata_sha256": "1b4d6b4fffe8f52b0ee5e69626221044298e29def1c12a17cc58c44d983ddd9e"
+    },
+    {
+      "path": "_cache_runs/56c279114f5e4ded8d78fefd7d86bd6f",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 840718005,
+      "entries": 13103,
+      "metadata_sha256": "be49ea037df30f16ad59be7ea7195a2ebe24ebc1c7a6b16cad4bc8125dac4704"
+    },
+    {
+      "path": "_cache_runs/903e92572d37423b82e1a4f117e8cbd5",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 962878052,
+      "entries": 16195,
+      "metadata_sha256": "50fcfc81693558ed7856790dbbfc208571480feac2d140e6a3f62486f5918a61"
+    },
+    {
+      "path": "_cache_runs/infra_d042dbb173214b24b7756d445af99367",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "42489ab6b4109ac859d9c1a3b7d532e9898a458de74071be21002d078ef462aa"
+    },
+    {
+      "path": "_cache_runs/infra_61ff2bc1070c40279592183eec8156e6",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "b3a7841b4ce21b6f1cf87f2f8a83d220927771db6fb407eef548a5a4825a7b98"
+    },
+    {
+      "path": "_cache_runs/infra_0e4e447e2e1144b48304c2a442b66a45",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "898b5aff6efff44e9b3732f03270d5b5bab7985e0fafceaa3042aa26ad621271"
+    },
+    {
+      "path": "_cache_runs/infra_862a34c2421f42d291bd272daf3f43c7",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "962bfcf62bc41c6f0b487d26b48f9b1e88c6673a7bdc91ad05368b52ab05e1f0"
+    },
+    {
+      "path": "_cache_runs/infra_1a262ecf034d40dd9b2d201400201e45",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "d065ba08c16eb9796e1fa1efa48c1d2fbaec9793d05750db22c15bdd2ccc22ab"
+    },
+    {
+      "path": "_cache_runs/infra_7d895c442392494d8f2d801812091ef0",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 399502,
+      "entries": 44,
+      "metadata_sha256": "fad58baf36f987e78f1cd0acc5a03e2245287ad3e8d7504b167c16e944783e2f"
+    },
+    {
+      "path": "_cache_runs/infra_d700f21f48274c03a31e57cbe11945a1",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 0,
+      "entries": 6,
+      "metadata_sha256": "b1f6a766ba6a1052e1a8937be1d09c72938c134d95581b5b155f819caf296d93"
+    },
+    {
+      "path": "_cache_runs/infra_38c036f7dc0941678f13da4f1f0cd8ed",
+      "recursive": true,
+      "reason": "Completed historical run private compile cache; no running containers; shared cache seed retained.",
+      "file_bytes": 399502,
+      "entries": 44,
+      "metadata_sha256": "2ae3faec959441a1d10abd6fa3c6e83709991301a257fd1190908aeed2f8a8a1"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_identity_20260905d/global_step_2/actor/optim_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180595464,
+      "entries": 1,
+      "metadata_sha256": "52116cdc939b36d8add3c19bdc1a2b81c20c436a40913267df2401c684eb7df4"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_identity_20260905d/global_step_2/actor/optim_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180605704,
+      "entries": 1,
+      "metadata_sha256": "fa004e7bb34a54bef84d5dc28dbf957c351c556fecf04d5d9189c24b3869de27"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_identity_20260905d/global_step_2/actor/model_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "4c806c6dd46ca9786957bbcec51be4937a5bbbadf061555eb9a21d2e406666f5"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_identity_20260905d/global_step_2/actor/model_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "54b3f722482b17755d715ba5b23cb9b94ab8e93f613b4df540cf99697c5e215d"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_health_20260905c/global_step_2/actor/optim_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180595464,
+      "entries": 1,
+      "metadata_sha256": "719392815774d0cc51a41896bd6378a5591844a40166566081fa9752d5cd6302"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_health_20260905c/global_step_2/actor/optim_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180605704,
+      "entries": 1,
+      "metadata_sha256": "563002129ea7e719bfa6184775942d8baff876a1f19dd1c09d2a22fd729c72e8"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_health_20260905c/global_step_2/actor/model_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "e5ffa41a3c635694cd412be7992da7fe2fc0ac9bc8173fb0b8849d0d93d184bf"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b03_health_20260905c/global_step_2/actor/model_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "361c38a7856b1292363815791b467145beef0fe433d09a3c64d3ece72850659d"
+    },
+    {
+      "path": "checkpoints/opd/v16_smoke_b02_20260905a/step_1/adapter_model.safetensors",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 179918552,
+      "entries": 1,
+      "metadata_sha256": "942d726bccff117c2aaf6acff129ca62188f38b192c47859bd439f701976c5f6"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b02_20260905a/global_step_2/actor/optim_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180595464,
+      "entries": 1,
+      "metadata_sha256": "afa6826c24b56cc529829bc7e412049e8380eb27194b3545a049beba0046e2c7"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b02_20260905a/global_step_2/actor/optim_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 180605704,
+      "entries": 1,
+      "metadata_sha256": "893f3a6cd6d48f817db7a8f85154a8301b99d75771e944c1e9691900869b839c"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b02_20260905a/global_step_2/actor/model_world_size_2_rank_1.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "337e1c8ce379a2e5056ca4574c205873ba2111894699b03f6edb93efdf5fe43e"
+    },
+    {
+      "path": "checkpoints/grpo/v16_smoke_b02_20260905a/global_step_2/actor/model_world_size_2_rank_0.pt",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 90263163,
+      "entries": 1,
+      "metadata_sha256": "56e6b7ccebc4489ebd7dcc25cdef53b5cd8a2f2cbc7d44e489fc8bb103f5ccbe"
+    },
+    {
+      "path": "checkpoints/sft/v16_smoke_b02_20260905a/adapter_model.safetensors",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 169416416,
+      "entries": 1,
+      "metadata_sha256": "f3fb74e493a7b66e4f213690877ab101ce2cc8863ccb0ebfa114580a9f59f323"
+    },
+    {
+      "path": "checkpoints/sft/v16_smoke/adapter_model.safetensors",
+      "recursive": false,
+      "reason": "Retired training resume/intermediate weights; final compact adapters and run evidence retained.",
+      "file_bytes": 169416416,
+      "entries": 1,
+      "metadata_sha256": "cc71b202069d1be53bd2e64f15dfebd6fba29c93f13e496c0f05e94d8c2e9bb4"
+    }
+  ],
+  "note": "File logical bytes, not platform billed storage. Metadata fingerprints are not deleted weight content hashes."
+}

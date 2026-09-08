@@ -1,0 +1,207 @@
+{
+  "source_sha256": "74e1d644c282c635471a4a60bbda895eb9dc0f2185c13abbb6440fb9d1484329",
+  "scope": "B03 HF BF16 single vs batch2 target decoder outputs; descriptive profile, not first-error causal amplification factor",
+  "layers": [
+    {
+      "layer": 0,
+      "max_abs": 0.00048828125,
+      "relative_l2": 0.00047642179493982933
+    },
+    {
+      "layer": 1,
+      "max_abs": 0.00390625,
+      "relative_l2": 0.003507214671734454
+    },
+    {
+      "layer": 2,
+      "max_abs": 0.0078125,
+      "relative_l2": 0.004570076202096517
+    },
+    {
+      "layer": 3,
+      "max_abs": 0.015625,
+      "relative_l2": 0.010235026439116085
+    },
+    {
+      "layer": 4,
+      "max_abs": 0.015625,
+      "relative_l2": 0.013750378934861834
+    },
+    {
+      "layer": 5,
+      "max_abs": 0.015625,
+      "relative_l2": 0.01577169991225174
+    },
+    {
+      "layer": 6,
+      "max_abs": 0.015625,
+      "relative_l2": 0.013820115112653011
+    },
+    {
+      "layer": 7,
+      "max_abs": 0.0234375,
+      "relative_l2": 0.025768462881497832
+    },
+    {
+      "layer": 8,
+      "max_abs": 0.03125,
+      "relative_l2": 0.039164657708519554
+    },
+    {
+      "layer": 9,
+      "max_abs": 0.0390625,
+      "relative_l2": 0.04297320148259578
+    },
+    {
+      "layer": 10,
+      "max_abs": 0.25,
+      "relative_l2": 0.01863304241950311
+    },
+    {
+      "layer": 11,
+      "max_abs": 0.25,
+      "relative_l2": 0.022588400812825572
+    },
+    {
+      "layer": 12,
+      "max_abs": 0.25,
+      "relative_l2": 0.023312283527292036
+    },
+    {
+      "layer": 13,
+      "max_abs": 0.25,
+      "relative_l2": 0.029908843650510893
+    },
+    {
+      "layer": 14,
+      "max_abs": 0.25,
+      "relative_l2": 0.03516119652576382
+    },
+    {
+      "layer": 15,
+      "max_abs": 0.25,
+      "relative_l2": 0.044737235430057185
+    },
+    {
+      "layer": 16,
+      "max_abs": 0.25,
+      "relative_l2": 0.05027723998048499
+    },
+    {
+      "layer": 17,
+      "max_abs": 0.25,
+      "relative_l2": 0.056442863886037725
+    },
+    {
+      "layer": 18,
+      "max_abs": 0.4765625,
+      "relative_l2": 0.06543682994589456
+    },
+    {
+      "layer": 19,
+      "max_abs": 0.53125,
+      "relative_l2": 0.084900562001138
+    },
+    {
+      "layer": 20,
+      "max_abs": 0.657470703125,
+      "relative_l2": 0.09261245340954019
+    },
+    {
+      "layer": 21,
+      "max_abs": 0.515625,
+      "relative_l2": 0.09912371927529799
+    },
+    {
+      "layer": 22,
+      "max_abs": 0.3046875,
+      "relative_l2": 0.10379172565271497
+    },
+    {
+      "layer": 23,
+      "max_abs": 0.75,
+      "relative_l2": 0.12013601104023483
+    },
+    {
+      "layer": 24,
+      "max_abs": 0.6171875,
+      "relative_l2": 0.12436301858537155
+    },
+    {
+      "layer": 25,
+      "max_abs": 0.71875,
+      "relative_l2": 0.13206635155818777
+    },
+    {
+      "layer": 26,
+      "max_abs": 0.59375,
+      "relative_l2": 0.13452171603740473
+    },
+    {
+      "layer": 27,
+      "max_abs": 0.7734375,
+      "relative_l2": 0.14484558758773902
+    },
+    {
+      "layer": 28,
+      "max_abs": 1.171875,
+      "relative_l2": 0.143145140518241
+    },
+    {
+      "layer": 29,
+      "max_abs": 0.96875,
+      "relative_l2": 0.14640683981473146
+    },
+    {
+      "layer": 30,
+      "max_abs": 0.9609375,
+      "relative_l2": 0.15175178578424975
+    },
+    {
+      "layer": 31,
+      "max_abs": 1.328125,
+      "relative_l2": 0.21766894529716557
+    },
+    {
+      "layer": 32,
+      "max_abs": 1.078125,
+      "relative_l2": 0.208471489817129
+    },
+    {
+      "layer": 33,
+      "max_abs": 0.625,
+      "relative_l2": 0.1893113469442885
+    },
+    {
+      "layer": 34,
+      "max_abs": 0.953125,
+      "relative_l2": 0.16640773331045366
+    },
+    {
+      "layer": 35,
+      "max_abs": 1.453125,
+      "relative_l2": 0.17332033927235474
+    },
+    {
+      "layer": 36,
+      "max_abs": 1.65625,
+      "relative_l2": 0.178894488395581
+    },
+    {
+      "layer": 37,
+      "max_abs": 1.71875,
+      "relative_l2": 0.16237096601483225
+    },
+    {
+      "layer": 38,
+      "max_abs": 1.53125,
+      "relative_l2": 0.1389366276746351
+    },
+    {
+      "layer": 39,
+      "max_abs": 2.0,
+      "relative_l2": 0.12098317363438778
+    }
+  ],
+  "relative_l2_decreasing_transitions": 9
+}

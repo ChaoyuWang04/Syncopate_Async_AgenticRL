@@ -1,0 +1,146 @@
+{
+  "experiment": "infra-probes/B07",
+  "run_id": "batch4-splitk-gpu-01",
+  "phase": "splitk",
+  "evidence_path": "/vol/_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "60b9b0d560a8a8b7b3678a2f5d1cbfc6e53834e4513343f5068d2670f6dc3790",
+  "image_id": "im-GpqwR0df5hRHV3kSVxiU6T",
+  "entry_sha256": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+  "sources": {
+    "syncopate/infra/splitk_probe.py": "de019969bab8d5818fba07c7cef443fc3720ce555ad7804366cda1324125d45c",
+    "tests/infra/test_splitk_probe.py": "69ef960b3c4eb7c30aa0c06205097c3b37c93dd99fa67001bc2f739ef320e900",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "tests/infra/test_mechanism_contract.py": "c0385901dd6ad0638ea8d5b866ab3de3d3374192030f7ccf7297cb868b371adc",
+    "syncopate/infra/gemm_cause_probe.py": "f0a15d66807799e183373b1ba73ac46fad3362f13db79069aea7ec8c0926629d",
+    "tests/infra/test_gemm_cause_probe.py": "a7a28950d5b22c177562b27d590b4689e6f93ef667dd03b17651190b07334138",
+    "syncopate/infra/gdn_fastpath_probe.py": "050491f04e8ba3b9f69996d43c29f6ffb654602c8d31775860b2ee100d799a65",
+    "tests/infra/test_gdn_fastpath_probe.py": "040b50222fc229433cd244280e6673b12a3e31d77ebcaf3a9bbfc547fe26d3cb",
+    "syncopate/infra/lora_handoff_probe.py": "388d917a9bbc603929ed6c432431309ba89306fc12fb340175813d977bbbbf65",
+    "tests/infra/test_lora_handoff_probe.py": "58687436056a7824f9c71b429de897a58c186bbbac592cce7b0f735fa67a6089",
+    "modal_app/gdn_fastpath_batch.py": "d8170bca3a58e9f3968e6e27f8309a25ca060a1273f1d6f93399b6e7682554bc",
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T16:41:58Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 72.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 6.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 68.0,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "60b9b0d560a8a8b7b3678a2f5d1cbfc6e53834e4513343f5068d2670f6dc3790",
+    "members": 725,
+    "bytes": 2879136,
+    "archive_sha256": "3077135d1fd5f5d11b65108b8b7ec73d394d4a556d79b4c4f9929c9cbb949b61"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B07/batch4-splitk-cpu-02/attempt-90a2993633b0413690c124df3a924687",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713",
+      "/vol/_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import subprocess,json; r=subprocess.run(['nvidia-smi','topo','-m'],capture_output=True,text=True); print(json.dumps({'available':r.returncode==0,'returncode':r.returncode,'stdout':r.stdout,'stderr':r.stderr}))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count()))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.splitk_probe",
+      "--input",
+      "/vol/_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713/input.json",
+      "--out",
+      "/vol/_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713"
+    ]
+  ],
+  "validated_results": [
+    "splitk-result.json"
+  ],
+  "seconds": 162.023598552,
+  "files": {
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "a8a41d9adc7910c5bfa8718bb70bc5565da513166b65bd96f983aa980e116602",
+    "splitk-api.json": "20fb78bcda64e92b36215e23f49edd2d0d6e186caa70313991143237b6937b60",
+    "splitk-no_splitk_preference.trace.json": "8a3e58b0ecb210ddd2ae479606f2f07d32b4bf0fb68ba14b9f6a2b981629dc86",
+    "splitk-no_splitk_same_algorithm.trace.json": "26be979aef4dc1f942cef960b7b9807208a9f4d4129267ad5dda6625d28138a4",
+    "splitk-partial.json": "e48dfd62e89e8da380ecec935419290fa007577d45685b2f96c25592e84c1ef4",
+    "splitk-result.json": "9c74c70135396030de82a6fc9dca510ad65a4638f0f495d85891b4c122afdc96",
+    "splitk-unrestricted.trace.json": "d53992d32838b3f87e181c870346d3bd5c8a96032d7227f5705435e19269509a",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "readback": {
+    "verified_files": {
+      "splitk-result.json": "9c74c70135396030de82a6fc9dca510ad65a4638f0f495d85891b4c122afdc96"
+    },
+    "scope": "local result JSON compared with run seal; raw tensors remain on Volume"
+  }
+}

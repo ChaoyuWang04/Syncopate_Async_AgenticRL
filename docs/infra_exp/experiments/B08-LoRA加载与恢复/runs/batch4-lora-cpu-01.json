@@ -1,0 +1,120 @@
+{
+  "experiment": "infra-probes/B08",
+  "run_id": "batch4-lora-cpu-01",
+  "phase": "lora_cpu",
+  "evidence_path": "/vol/_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "ebfe1ede439d0dc34ef2d082eaf4b9124f176011b757e1c2455b3ab91c877943",
+  "image_id": "im-J5jRGJOILryp9VikpHuQj8",
+  "entry_sha256": "ec6a9ccd33b9f860fdbafc5acd82a5e822434270124015acac71a58679629827",
+  "sources": {
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "tests/infra/test_mechanism_contract.py": "c0385901dd6ad0638ea8d5b866ab3de3d3374192030f7ccf7297cb868b371adc",
+    "syncopate/infra/gemm_cause_probe.py": "f0a15d66807799e183373b1ba73ac46fad3362f13db79069aea7ec8c0926629d",
+    "tests/infra/test_gemm_cause_probe.py": "a7a28950d5b22c177562b27d590b4689e6f93ef667dd03b17651190b07334138",
+    "syncopate/infra/gdn_fastpath_probe.py": "050491f04e8ba3b9f69996d43c29f6ffb654602c8d31775860b2ee100d799a65",
+    "tests/infra/test_gdn_fastpath_probe.py": "040b50222fc229433cd244280e6673b12a3e31d77ebcaf3a9bbfc547fe26d3cb",
+    "syncopate/infra/lora_handoff_probe.py": "54478cb30a4fd033ce9c65129d190069d6cd32fde62a70b71e0e52139dcc4322",
+    "tests/infra/test_lora_handoff_probe.py": "58687436056a7824f9c71b429de897a58c186bbbac592cce7b0f735fa67a6089",
+    "modal_app/gdn_fastpath_batch.py": "02a939daa0017df5bd17986eab934188a34396ce8f58f63dcd1c608647c8f458",
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "ec6a9ccd33b9f860fdbafc5acd82a5e822434270124015acac71a58679629827",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T16:13:17Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 2.0,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 120.5,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 90.9,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "ebfe1ede439d0dc34ef2d082eaf4b9124f176011b757e1c2455b3ab91c877943",
+    "members": 723,
+    "bytes": 2870030,
+    "archive_sha256": "8059e8f890644c7caf8cacbb1385a769468f88d80908940a52c832a8d860988d"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_mechanism_contract.py",
+      "tests/infra/test_gemm_cause_probe.py",
+      "tests/infra/test_gdn_fastpath_probe.py",
+      "tests/infra/test_lora_handoff_probe.py",
+      "tests/infra/test_gdn_boundary_probe.py",
+      "tests/infra/test_fp8_probe.py",
+      "tests/infra/test_probe_run.py",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_fsdp_probability_probe.py",
+      "tests/infra/test_batch_layer_probe.py",
+      "-q",
+      "-r",
+      "a"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.lora_handoff_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7/input.json"
+    ]
+  ],
+  "validated_results": [
+    "cpu-result.json"
+  ],
+  "seconds": 219.33973554500002,
+  "files": {
+    "cpu-result.json": "a24aac913a48e7b80f85b37c2973803abdac787de40052fc2b91c790ca5a29ea",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "f38c256ed8e7129406d31e5d9f134c3232a5fe0dc826e583421ecf651bf9abe3"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "conclusion": "CPU input/model identity and controlled adapter construction passed; no GPU claim.",
+  "local_readback": {
+    "run_record_sha256": "d75dfc31a93baa217d77bb16fbd6767ee34187378ddef4a963aa8631319a8420"
+  }
+}

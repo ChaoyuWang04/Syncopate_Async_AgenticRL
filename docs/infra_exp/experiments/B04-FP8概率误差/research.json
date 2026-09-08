@@ -1,0 +1,110 @@
+{
+  "experiment": "infra-probes/B04",
+  "queried_at_utc": "2026-09-07T14:06:47.693921+00:00",
+  "decision": "paused pending user after two CPU error rounds; source-proven local predicate correction is not a target CPU or GPU pass",
+  "upstream": {
+    "repository": "https://github.com/vllm-project/vllm",
+    "stable": "v0.28.0",
+    "stable_sha": "2cf0a6915ce544dc493a0990f2ea38d81601128a",
+    "main_sha": "6a2a2bb02b563b83f946012959fd3927984d072a"
+  },
+  "searches": [
+    {
+      "query": "Qwen3.5 FP8 online quantization",
+      "url": "https://github.com/vllm-project/vllm/issues?q=Qwen3.5+FP8+online+quantization"
+    },
+    {
+      "query": "Qwen3.5 FP8 ignore",
+      "url": "https://github.com/vllm-project/vllm/issues?q=Qwen3.5+FP8+ignore"
+    },
+    {
+      "query": "Qwen3.5 FP8 NaN",
+      "url": "https://github.com/vllm-project/vllm/issues?q=Qwen3.5+FP8+NaN"
+    },
+    {
+      "query": "fp8_per_block B200",
+      "url": "https://github.com/vllm-project/vllm/issues?q=fp8_per_block+B200"
+    },
+    {
+      "query": "Qwen3.5 online FP8 is:pr",
+      "url": "https://github.com/vllm-project/vllm/issues?q=Qwen3.5+online+FP8+is:pr"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://docs.vllm.ai/en/v0.28.0/features/quantization/online/",
+      "finding": "Supports online fp8_per_block and independent linear/moe specs. BF16 linears selected with explicit null weight/activation. FP8 E4M3 weight blocks128x128; dynamic activation blocks1x128; FP32 scales. v0.28 ignore requires exact or regex matching unfused shard names."
+    },
+    {
+      "url": "https://docs.vllm.ai/en/v0.28.0/api/vllm/config/quantization/",
+      "finding": "resolve_quantization_config merges explicit QuantSpec over shorthand; fields linear/moe, weight/activation."
+    },
+    {
+      "url": "https://docs.vllm.ai/en/v0.28.0/api/vllm/engine/arg_utils/",
+      "finding": "EngineArgs.__post_init__ calls resolve_quantization_config; CPU probe can check this without create_engine_config or weight loading."
+    },
+    {
+      "url": "https://docs.vllm.ai/en/v0.28.0/api/vllm/model_executor/layers/quantization/online/fp8/",
+      "finding": "Fp8PerBlockOnlineMoEMethod quantizes w13/w2 per block then _setup_kernel selects and converts backend layout. Runtime weight/scale dtypes must be observed; CPU config is not proof."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/41022",
+      "status": "closed as not planned, stale",
+      "finding": "Reporter connects GDN NaN/repetition to tensorwise shared scale on fused projections; applies to Qwen3.5/3.6. Closure is not a fix. Avoid legacy broad fp8 in this bounded arm."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/51456",
+      "finding": "Related old-version dense online tensorwise FP8 corruption report; not independently verified or treated as proof on B200/v0.28."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/issues/38041",
+      "finding": "Old V2 runner mixed GDN/full attention cache-spec crash report. Do not add V2 runner changes to this experiment."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/releases/tag/v0.28.0",
+      "finding": "Latest stable. Notes Transformers5.15.0, removed calculate_kv_scales, online TP scale sharing PR49764; installed transformers5.10.4 is not declared compatible solely from release identity."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/49764",
+      "finding": "Release identifies online weight scale sharing across TP; direct PR fetch failed."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py",
+      "finding": "GDN qkvz/ba/out projections receive quant_config; source notes ba does not support blockwise FP8. Recommended arm excludes all ordinary linears."
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/blob/main/docs/features/quantization/online.md",
+      "finding": "main adds targets/fnmatch/fused-name matching absent from v0.28 docs; do not copy these into frozen experiment."
+    },
+    {
+      "url": "https://docs.vllm.ai/en/v0.28.0/api/vllm/model_executor/layers/quantization/online/base/",
+      "finding": "OnlineQuantizationConfig._dispatch rejects non-None spec.activation; method selects activation internally. Local CPU check incorrectly required activation non-None. Corrected to require shorthand equality, non-None weight and None activation, with a pure regression test. Target rerun not performed."
+    }
+  ],
+  "proposed_configuration": {
+    "dtype": "bfloat16",
+    "quantization": "fp8_per_block",
+    "quantization_config": {
+      "linear": {
+        "weight": null,
+        "activation": null
+      }
+    },
+    "kv_cache_dtype": "auto"
+  },
+  "inferences": [
+    "MoE-only online block-FP8 avoids the documented fused GDN Linear tensorwise path; does not prove acceptable error.",
+    "Shared experts may fuse into routed expert representation; inventory required."
+  ],
+  "unverified": [
+    "Exact target model/B200 FP8 runtime behavior and chosen-token errors.",
+    "Installed v0.28/transformers5.10.4 compatibility.",
+    "Actual KV and GDN state cache dtypes.",
+    "Corrected CPU predicate has not been rerun on target after the two-error stop."
+  ],
+  "network_failures": [
+    "Local urllib DNS unavailable in sandbox.",
+    "Some raw GitHub/tag source requests disabled; used official versioned API docs and release links."
+  ],
+  "scope": "No resources launched by research task; no claim of GPU validation."
+}

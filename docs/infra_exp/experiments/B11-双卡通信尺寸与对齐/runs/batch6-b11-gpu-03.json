@@ -1,0 +1,127 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-gpu-03",
+  "phase": "gpu",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-gpu-03/attempt-77e8f404102c4f5394ec2937942a6e68",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 7.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 138.9,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZVCFDTAJCTVPDQPHM18H8R",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "42522276e60cf4e517153b56ce260d0a8d831bb6c4fef9b5c90e6663bb13fa16",
+  "image_id": "im-yiqokl5nqh8AGULnoHFpnV",
+  "entry_sha256": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "30e0cb3c0451ae7d7f6284277461611152661793df534aed5ec8f9224ab52bbd",
+    "syncopate/infra/communication_baseline_probe.py": "22e5071a4a4184e9b9c042fe9c457291a10fa7f2b2bedd3081bf6af028ac10af",
+    "tests/infra/test_communication_baseline_probe.py": "180edd9a2377894f9bc0ab40270d8e96463e62067f8cb24edb99c78892aa7294",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T06:30:51Z",
+  "source_archive": {
+    "overlay_sha256": "42522276e60cf4e517153b56ce260d0a8d831bb6c4fef9b5c90e6663bb13fa16",
+    "members": 783,
+    "bytes": 2983769,
+    "archive_sha256": "367c2b9aa90a67b2e2964a5bef83a362edd0972a77ffd1aa4116fa88d82a2644"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-03/attempt-eb1335ecdca14301a01f0a5b5e852f8c",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==2; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(2))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "gpu",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-gpu-03/attempt-77e8f404102c4f5394ec2937942a6e68",
+      "--preflight",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-03/attempt-eb1335ecdca14301a01f0a5b5e852f8c"
+    ]
+  ],
+  "validated_results": [
+    "communication-baseline-result.json"
+  ],
+  "seconds": 154.111148433,
+  "files": {
+    "communication-baseline-result.json": "c03b62ae639d623dd05c3bb97d7c58d6099163c85634dabf868896651eb9a9c9",
+    "devices-command.json": "fff85497728d0294608f2280c596e6146857ee5b66392e23a4f4d0490b03c3ba",
+    "diagnostic-all_gather-command.json": "05a14d4c81f6a007f61c290435f326bd0b27d68dd2c44e6f54809bf495fbc005",
+    "diagnostic-all_reduce-command.json": "02808033cb98e2960e7552be72c5e429282aec935a3d132e896254650905c2a6",
+    "diagnostic-reduce_scatter-command.json": "e7da0891ffaefb7e617fc51bba444a50613ac1665d128c5abc2d8de5f90621b3",
+    "ldd-0-command.json": "397bb828c389cd021b607771866ec47c3a7cb049698ddc8e5b80071b0a6d7782",
+    "ldd-1-command.json": "2363923ab20497c24b37089c81fd4d6036a90232027ef492d398920985ccc5dd",
+    "ldd-2-command.json": "76bd152a6ba72ad43f5f4f754fdac4fceb7e28295752ba02242d83f4fb867293",
+    "ldd-3-command.json": "84620258cf0c7725ef5c3a5deae345e9e332fc2fd9d200b32dba78e1c1077b19",
+    "ldd-4-command.json": "f6479c37758b2bd9af0df278afca061c6a7dea5ab0849ea843a592f84671e61c",
+    "ldd-5-command.json": "177be02628d36fe930ed383054ff2e9c5eb97b44dd326ea3035078ad1bc815cb",
+    "ldd-6-command.json": "ef062e884e49b8b6f5feedd044210e788cb3d8f712b1ecc0cbe168f3260325c0",
+    "native-0-command.json": "c2aa32418b23f3b9efcb2dc6f13ab52bedfc6a8678fc183ef34023e3a8c691f9",
+    "native-1-command.json": "c3bdd33d0d562404a877d42e8f7f08864cffe830546bda0f393512459d1a853d",
+    "native-2-command.json": "5a1354f03132a081d1d859bc69996e00fe1b65c5ee583f824667fa822da7a2de",
+    "native-3-command.json": "c556493487171505add27544740ae730404c3b1e0f7f09b90a2384a9923799f4",
+    "native-4-command.json": "9d56a7b9995f3490c8ce198a5726c795b2b8f79aeed6412ba30bbe4a7c52d2f4",
+    "native-5-command.json": "a2207931bd035dc1cac14343fbcda200a24dad88a80cd3e105c41152cf72e246",
+    "native-6-command.json": "63e3bda472b0dd587c695e9a76a100270acff2161dc5758e4897274056f8b2f8",
+    "native-pilot-0-command.json": "624ade4d04ba06de980e2b763715945a65764c38704233ea0bcea739dc1e0540",
+    "native-pilot-1-command.json": "4dc56502e9738b13a16a97c3c1518f3bf81cb8025aa68f5e7d3c8ef525bc79d0",
+    "native-pilot-2-command.json": "b7d754b2a07527c772f58154e14c36cd180ac5733ad44431502d225f8fcc47c5",
+    "native-pilot-3-command.json": "3f397c102c04c5ce16584ea51961118bee5431bb78241dc42cd3bd6193d2e269",
+    "native-pilot-4-command.json": "23947f5b6cc33bfb1968dc676c78a806bf9a2a306df56b13ba54f4130ed2a001",
+    "native-pilot-5-command.json": "70a743d5af0fbe43e2d1049236baea4db07df4a3d1f658a9bb36236c7c408e7a",
+    "native-pilot-6-command.json": "991a907a6bc3ac3695bf1342a646bb44f893b2f4cf956a2be5f3e902da2130f8",
+    "native-results.json": "703c16f5a5189ac974287e15110b8dd86b5e16515336c004c6d23be0fb44d764",
+    "rank-0.json": "4de34c7e569252b69b58f7bd22ac809593f448ef8cfa0aa8d810812e61ae6103",
+    "rank-1.json": "abcf12e7d013865066aea03a196f7c9c9579410ff9e752665da2ddbb30232482",
+    "source.tar.gz.json": "044d68651e449e2869584a51e50fdb77e22f82d95c051a5b5cd0dec23a8737d9",
+    "torch-command.json": "04719cef2bdaa7c90ed32f2235b848bc67b934f9479e0ec13b0b8af254d5dc09",
+    "trace-rank-0-all_gather-16777184.json": "9f0e11f155487979888365bd46991f26e55fc553291ba21e9c6c576758145fab",
+    "trace-rank-0-all_gather-16777216.json": "03725f6fe31ccb321748689dfb7ebecd5e6a6fdf5d0df1751b830b951dcfe260",
+    "trace-rank-0-all_reduce-16777214.json": "fbfd53a55d9054dc59d06db9b2c663b99bb03f9e33d808af561b7c23a1ee97f6",
+    "trace-rank-0-all_reduce-16777216.json": "affe2c1a5500356873e0e2049e7d1190a74d0948a86b0274086307df4ffc5188",
+    "trace-rank-0-all_reduce-16777218.json": "41f7b10480f824fb725c92c6e76c4777cdfe03aeef880ac1285cbde1036b9838",
+    "trace-rank-0-reduce_scatter-16777184.json": "dbb78842086c627fa2304edd1a901944cbfa71035386a64b42136a8983b1fda7",
+    "trace-rank-0-reduce_scatter-16777216.json": "bda9559455e0870dcc0d9d7f6b77b624d7069d1eabf5a0b053eb6a122f3ff34d",
+    "trace-rank-1-all_gather-16777184.json": "a4758abb9a722231fe1ae6920e78289fdd5c23b3ff7afa340b3efd38137abc28",
+    "trace-rank-1-all_gather-16777216.json": "772bf73ef51a9dc1666128917336e55ccad14c47c49d7ec29081e19dd5650a15",
+    "trace-rank-1-all_reduce-16777214.json": "0d067594c1f41db6d59fe0f5a82ad05bd7077f63b67c912613e61ecff6f0e18e",
+    "trace-rank-1-all_reduce-16777216.json": "aa48cb001373cd21c5457adbdbd66a8dbd67225cfea2eec190f97d82adf47ec3",
+    "trace-rank-1-all_reduce-16777218.json": "796d73e44ad918a8e5c5de482dc0ad027d9d8d0270ff51edfff7850723cd80bf",
+    "trace-rank-1-reduce_scatter-16777184.json": "6e0241d848f97b03cd1bfc10c17314c15e7dbbd2bab78a84e63e03efc5bd84a5",
+    "trace-rank-1-reduce_scatter-16777216.json": "243f6cbaeae3d7e9977bce48da6f61ae97436297ba8baf41c0017391c6310420"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-lEE74cDdkMNW7MBjXNof1y",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": "B200:2",
+    "timeout_seconds": 1800
+  }
+}

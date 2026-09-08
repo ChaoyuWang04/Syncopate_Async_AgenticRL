@@ -1,0 +1,229 @@
+{
+  "date": "2026-09-08",
+  "task": "Q20",
+  "frozen": {
+    "torch": "2.13.0",
+    "torch_git": "cf30153c4c131c8164ee7798e5022d810682e2cb",
+    "transformers": "5.10.4",
+    "model_revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+    "modeling_sha256": "40da264c51fcfadd7b87271c5485f029ee9efd05e6e54b34728c8ee252db4c9c"
+  },
+  "queries": [
+    "site:github.com/huggingface/transformers/issues Qwen3.5 batch numerical experts",
+    "site:github.com/pytorch/pytorch/issues 139964"
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py",
+      "finding": "Current model source inspected alongside exact installed snapshot. Post-attention residual followed by norm and sparse/shared MLP; router returns logits, weights, indices."
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/blob/main/src/transformers/integrations/moe.py",
+      "finding": "Experts implementation can be selected externally; actual native replay and runtime kernels must establish dispatch."
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/issues/47467",
+      "finding": "Open checkpoint/data-dependent expert dispatch report; this inference-only/no-checkpoint witness has different trigger, not adopted as explanation."
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/issues/48306",
+      "finding": "Open TP reshape error for hybrid models; present TP1 numerical probe does not share trigger."
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/issues/47831",
+      "finding": "A_log initialization issue closed via47944; pretrained frozen weights and matching GDN output make it distinct."
+    },
+    {
+      "url": "https://docs.pytorch.org/docs/main/notes/numerical_accuracy.html",
+      "finding": "Batched and sliced operations need not be bitwise equal; this general statement does not identify the residual source."
+    },
+    {
+      "url": "https://github.com/pytorch/pytorch/issues/139964",
+      "state": "open",
+      "finding": "Older PyTorch2.5.1 BF16 3D Linear batch versus slice report. Same general symptom class, not a current 322-source fix."
+    }
+  ],
+  "latest_main_refresh": {
+    "transformers": "8eaf75f84e0ef68ccdaac14b739ace53a962bbee",
+    "pytorch": "2e2b1371931ea2a080c423ee3bc15c4fc59787a6",
+    "method": "official GitHub API, approved network permission, same-turn refresh",
+    "latest_stable": {
+      "transformers": "v5.16.1",
+      "pytorch": "v2.14.0"
+    },
+    "frozen_version_reason": "Exact B07 numerical witness requires installed torch2.13.0/transformers5.10.4. Main and newer stable are investigated, not silently substituted."
+  },
+  "decision": "Closed by user direction after framework-level source investigation; incomplete residual mechanism is not marked solved.",
+  "pinned_source_files": [
+    {
+      "file": "transformers_modeling",
+      "sha256": "e0b72b84f4d9a12edee4033bb627049efff17f57fade2f8b98ecb43a2f49387f"
+    },
+    {
+      "file": "pytorch_linear",
+      "sha256": "d51d3d1c97ca51a792a404b59b2cc30a6d5c8d8acb1c710434cc110da3949607"
+    }
+  ],
+  "execution_update": {
+    "gpu01": "same-input shared expert gate_proj21 and up_proj30 differences; individually replacing leaves149 and184 layer0 coordinates. Router, experts and shared gate equal. Mechanism incomplete.",
+    "gpu02": "follow-up exact replay failed at entry, first confirmation2026-09-08T03:38:00Z",
+    "gpu03": "official loader batch1 equal, batch2 differs215/262144 maxabs0.000244140625. A_log/dt_biasBF16, experts grouped_mm. No new GPU launched after failure.",
+    "unproven_hypotheses": [
+      "execution context or algorithm selection",
+      "serialization/layout or allocation differences"
+    ],
+    "next_diagnostic": "same-process root/immediate-layer/serialized-reload comparisons; first differing boundary and target-versus-neighbor before any causal inference",
+    "run_index": "runs/batch5-residual-gpu-03.json",
+    "gpu03_seal_verification": {
+      "checks": {
+        "residual-failure.json": true,
+        "residual-follow-loader.json": true,
+        "residual-follow-replay-failure.json": true,
+        "current_probe_matches_executed_source": true
+      },
+      "overlay_sha256": "79c562b72028963075fda8930193a470690d2dc7f99dc65db7c526e27afc1b11",
+      "probe_sha256": "db5e76c7ec010034409ca38f885934458bbc88676d7e8db6aa11d83d34f3ad63",
+      "evidence_path": "/vol/_audit/infra-probes/B09/batch5-residual-gpu-03/attempt-80ee3794d6174e638feec659eacf2f19",
+      "limits": "Readback failure/loader/replay JSON hashes match run index and current probe matches executed source SHA. Raw source archive itself not re-downloaded; log is explicitly unsealed."
+    },
+    "status": "paused2026-09-08T03:58:00Z: same replay gate failure unresolved20min from03:38; mechanism_complete remains false; no new GPU"
+  },
+  "framework_closeout": {
+    "checked_utc": "2026-09-08T05:45:26.210175+00:00",
+    "repository": "https://github.com/radixark/miles",
+    "main_sha": "db3d6b56c85dc9886f3e35de15177a319c417156",
+    "method": "Official git ls-remote HEAD plus GitHub tree API and pinned raw source reads; full clone stalled and was terminated, no recipe executed.",
+    "files_read": [
+      {
+        "path": "docs/examples/infra-features/train-infer-mismatch-helper.md",
+        "sha256": "e2559583c171f7422b092c2076b3f2ec8ccfe326053220112bbfc41b2e4a5bb9",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/docs/examples/infra-features/train-infer-mismatch-helper.md"
+      },
+      {
+        "path": "examples/infra_features/low_precision/README.md",
+        "sha256": "177d5d2bfa2c8c820b9157d8eb7c3278c5f5235af29125d1055c4c240d0aed80",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/examples/infra_features/low_precision/README.md"
+      },
+      {
+        "path": "examples/infra_features/low_precision/run-qwen3-30b-a3b-fp8-two-nodes.sh",
+        "sha256": "3a3cb9a68f13b0492592672a546d253e82a782cfd5a4235dedd090e9a20db55b",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/examples/infra_features/low_precision/run-qwen3-30b-a3b-fp8-two-nodes.sh"
+      },
+      {
+        "path": "examples/infra_features/low_precision/run-qwen3-4b-fp8.sh",
+        "sha256": "353ac1601b2e193b8588c9c773bd40a72b351a3dee4e0ee463a56adf843ba0eb",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/examples/infra_features/low_precision/run-qwen3-4b-fp8.sh"
+      },
+      {
+        "path": "examples/infra_features/true_on_policy/README.md",
+        "sha256": "fb11e337cfeed9f0c06511b571e93f20467b1fcdcd3ca7c44e71c7d6ba32e3d7",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/examples/infra_features/true_on_policy/README.md"
+      },
+      {
+        "path": "examples/infra_features/true_on_policy/run_simple.py",
+        "sha256": "a2d83538bccc1ef70c92d575e196145e0601de3d7b0d10b2a0b53890bb474051",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/examples/infra_features/true_on_policy/run_simple.py"
+      },
+      {
+        "path": "miles/backends/fsdp_utils/actor.py",
+        "sha256": "8082c087d978133eee2296d0bcc16ba5b48086b4deefec238ac170cbf40c4850",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/fsdp_utils/actor.py"
+      },
+      {
+        "path": "miles/backends/fsdp_utils/adaptations/specs/qwen3.py",
+        "sha256": "0bd1c427317f4e4a9d79630d307efc494e3b6deb946c71c6a1221dbf3435480c",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/fsdp_utils/adaptations/specs/qwen3.py"
+      },
+      {
+        "path": "miles/backends/fsdp_utils/models/qwen3.py",
+        "sha256": "27cd51463dc9a0b1dd088f8beb88df89552a2ebfe2850df9b5efe4189a01f683",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/fsdp_utils/models/qwen3.py"
+      },
+      {
+        "path": "miles/backends/megatron_utils/megatron_to_hf/processors/quantizer_fp8.py",
+        "sha256": "6a27879b2d4e1b0dc7adef696ddfbe3da1eb561a13ac77f22dd659b2559e3e88",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/megatron_utils/megatron_to_hf/processors/quantizer_fp8.py"
+      },
+      {
+        "path": "miles/backends/megatron_utils/sglang.py",
+        "sha256": "3b531dc0f3edd6197b9fc29d71a6f1c8f95f3bdc0e2821da9919febbd0fa531a",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/megatron_utils/sglang.py"
+      },
+      {
+        "path": "miles/backends/training_utils/loss.py",
+        "sha256": "b3b9ca0ffa131f05a1a9afa6682db2358ba90eff5ea8e4b376ba83618db4a131",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/training_utils/loss.py"
+      },
+      {
+        "path": "miles/backends/training_utils/loss_hub/math_utils.py",
+        "sha256": "7a1c36117f0d9471dbdcfcbe663b5b5b6171bfdfcd423948a1697fec34fa27ca",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/training_utils/loss_hub/math_utils.py"
+      },
+      {
+        "path": "miles/rollout/generate_utils/prefill_logprobs.py",
+        "sha256": "d8370d4b8abdfca3fe705f5f2354ea2710929ca41d974269ccadba4fb192f5c4",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/rollout/generate_utils/prefill_logprobs.py"
+      },
+      {
+        "path": "miles/true_on_policy/config.py",
+        "sha256": "66e41bdac36f349a21f7ab0155e8a42434b3ae72b13e6fee669192d47a59825b",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/true_on_policy/config.py"
+      },
+      {
+        "path": "miles/true_on_policy/contracts.py",
+        "sha256": "b6b987b17090365cbd154a9b389401aee26148e67f013d5160c8dc530d271be8",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/true_on_policy/contracts.py"
+      },
+      {
+        "path": "miles/true_on_policy/model_profiles.py",
+        "sha256": "a69c28d597a57d483016f8a5187ecd2648da3b61572fa69f273067eaecd78dae",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/true_on_policy/model_profiles.py"
+      },
+      {
+        "path": "miles/true_on_policy/schema.py",
+        "sha256": "a4bfad6b3dd4025e2a0d87f40407b139c3f28e20b3e66042d6fe0c056d1baa2c",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/true_on_policy/schema.py"
+      },
+      {
+        "path": "miles/utils/fp8_kernel.py",
+        "sha256": "0c3f8121d9423de9b5109c9015f1b5e4bb0622574fa00b38c267e900ac4bd487",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/utils/fp8_kernel.py"
+      },
+      {
+        "path": "tests/e2e/fsdp/test_qwen3_4B_fsdp_true_on_policy.py",
+        "sha256": "874faf7f69fc76182028188b32f902f3a5b90465ef276de802d598874abb9c12",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/tests/e2e/fsdp/test_qwen3_4B_fsdp_true_on_policy.py"
+      },
+      {
+        "path": "tests/fast/backends/training_utils/test_true_on_policy_loss_metrics.py",
+        "sha256": "f4ba111eb89d8de5508b687a5622c73837cbfc87b76cfdc185f4b84b0e007a00",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/tests/fast/backends/training_utils/test_true_on_policy_loss_metrics.py"
+      },
+      {
+        "path": "tests/fast/utils/test_true_on_policy_logprobs.py",
+        "sha256": "c286bfc82e0bd1e2b1c31f786f03c09e56cd72323525b253d3176161322e81ec",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/tests/fast/utils/test_true_on_policy_logprobs.py"
+      },
+      {
+        "path": "miles/backends/training_utils/loss_hub/losses.py",
+        "sha256": "db7d23cbf5952508752d8ef833e54bf14b332e467629d0c73df5092745b8db11",
+        "url": "https://github.com/radixark/miles/blob/db3d6b56c85dc9886f3e35de15177a319c417156/miles/backends/training_utils/loss_hub/losses.py"
+      }
+    ],
+    "additional_sources": [
+      "https://www.lmsys.org/blog/2025-11-25-fp8-rl/",
+      "https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/",
+      "https://docs.sglang.io/docs/advanced_features/deterministic_inference",
+      "https://docs.pytorch.org/docs/2.14/notes/numerical_accuracy.html"
+    ],
+    "findings": [
+      "Unified FP8 reduces precision mismatch, not a general bitwise guarantee.",
+      "Formal true-on-policy profile registration is Qwen3 dense only at this SHA; model math and precision adaptations remain necessary.",
+      "FSDP actor calls torch.distributed.fsdp.fully_shard and SGLang batch-invariant ops.",
+      "Current derived launch plan recomputes rollout logprobs via prefill; scoring equality alone does not prove behavior-sampling probability equality.",
+      "Same deterministic arithmetic path can yield equality; same batch/framework/dtype alone is insufficient, and batching need not match if operators are batch-invariant.",
+      "The train_rollout_logprob_abs_diff metric compares old/reference logprobs to rollout; with use_rollout_logprobs=True both sources coincide. Current upstream unit test explicitly expects zero even when current trainer logprobs differ. This is a measurement-scope caveat, not evidence that historical true-on-policy experiments used that setting."
+    ],
+    "decision": "User-directed closeout of model-specific residual investigation; incomplete mechanism retained, no automatic resumption."
+  }
+}

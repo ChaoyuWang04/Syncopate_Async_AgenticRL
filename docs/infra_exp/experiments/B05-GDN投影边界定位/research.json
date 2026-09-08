@@ -1,0 +1,67 @@
+{
+  "queried_utc": "2026-09-07T15:09:46.606675+00:00",
+  "scope": "Q18/B05 same B03 BF16 GDN out_proj input/output and identical-input projection replay",
+  "pinned_target": {
+    "transformers": "5.10.4 (B03 target, not latest)",
+    "modeling_source_sha256": "40da264c51fcfadd7b87271c5485f029ee9efd05e6e54b34728c8ee252db4c9c",
+    "reason": "Keep exact B03 mechanism and change observer only"
+  },
+  "same_day_prior_snapshot": {
+    "main_sha": "299c53839f0c49cdb2caaa3ace26e5ae89f3d964",
+    "latest_release": "v5.16.1",
+    "source": "B01/B03 research cache /tmp/probes-research/hf_main.json and hf_release.json; snapshot is not a fresh API response"
+  },
+  "queries": [
+    {
+      "query": "site.github.com/huggingface/transformers Qwen3_5Moe GatedDeltaNet batch out_proj",
+      "method": "web search",
+      "result": "official model source and documentation; no exact out_proj same-input batch reproducer in returned hits"
+    },
+    {
+      "query": "site.github.com/huggingface/transformers Qwen3.5 gated delta batch numerical",
+      "method": "web search",
+      "result": "#46190 full-sequence vs cached decode; different variable"
+    },
+    {
+      "url": "https://api.github.com/repos/huggingface/transformers/commits/main",
+      "method": "local urllib",
+      "result": "failed DNS; latest SHA not freshly verified"
+    },
+    {
+      "url": "https://api.github.com/repos/huggingface/transformers/releases/latest",
+      "method": "local urllib",
+      "result": "failed DNS; latest release not freshly verified"
+    }
+  ],
+  "read_sources": [
+    {
+      "url": "https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py",
+      "finding": "cached exact main source: delta-rule core followed by gated norm, reshape, then self.out_proj; runtime source hash pinned separately"
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/blob/main/docs/source/en/model_doc/qwen3_5_moe.md",
+      "finding": "current official docs describe use_kernels=True GDN Hub kernel; not changed in single-variable Q18"
+    },
+    {
+      "url": "https://github.com/huggingface/transformers/issues/46190",
+      "state_read": "closed",
+      "finding": "cached decode versus full sequence in 5.9.0 CPU; not same raw input with batch neighbor, not treated as this root cause"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/45819",
+      "source": "same-day prior research cache",
+      "finding": "GDN_ATTN batch-invariance support, vLLM backend; not a direct HF fix"
+    },
+    {
+      "url": "https://github.com/vllm-project/vllm/pull/49827",
+      "source": "same-day prior research cache",
+      "finding": "mixed decode/prefill batch invariance, not adopted"
+    }
+  ],
+  "decision": "bounded diagnostic justified by actual B03 first observed difference; capture projection input before classifying upstream drift vs local projection shape sensitivity",
+  "limitations": [
+    "No exhaustive issue absence claim",
+    "Fresh main/release API refresh failed; exact B03 installed source is the experiment identity",
+    "No backend replacement or proposed fix"
+  ]
+}

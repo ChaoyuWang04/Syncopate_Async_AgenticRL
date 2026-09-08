@@ -1,0 +1,78 @@
+{
+  "volume": "syncopate-home",
+  "runs": [
+    {
+      "phase": "cpu",
+      "path": "/_audit/infra-probes/B01/batch3-cpu-01/attempt-229e27af5fae4922a27c27f9940e8fe4",
+      "bytes": 2869232,
+      "cache_bytes": 0,
+      "files": 13,
+      "tensor_files": []
+    },
+    {
+      "phase": "gdn",
+      "path": "/_audit/infra-probes/B05/batch3-gdn-01/attempt-266daa98c57143ab9b6e022642fa48f5",
+      "bytes": 5293113,
+      "cache_bytes": 0,
+      "files": 13,
+      "tensor_files": [
+        {
+          "path": "_audit/infra-probes/B05/batch3-gdn-01/attempt-266daa98c57143ab9b6e022642fa48f5/gdn-captures.pt",
+          "bytes": 2361807
+        }
+      ]
+    },
+    {
+      "phase": "fp8",
+      "path": "/_audit/infra-probes/B04/batch3-fp8-01/attempt-28fa4780f0d84e608cc48998d347d505",
+      "bytes": 48636223,
+      "cache_bytes": 42586591,
+      "files": 638,
+      "tensor_files": []
+    },
+    {
+      "phase": "vllm",
+      "path": "/_audit/infra-probes/B01/batch3-vllm-01/attempt-735d7d8893c2447fb8cc63d14b32dda3",
+      "bytes": 43936651,
+      "cache_bytes": 41017668,
+      "files": 590,
+      "tensor_files": []
+    }
+  ],
+  "policy": "Keep source, small numeric evidence and reusable compile cache. B05 gdn-captures.pt is activation evidence, not a checkpoint. No training checkpoint produced; shared base untouched.",
+  "apps_closed": [
+    {
+      "app_id": "ap-b8cdqCTEFlRqWHRdabEeDC",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 23:18:42+08:00",
+      "stopped_at": "2026-09-07 23:23:42+08:00"
+    },
+    {
+      "app_id": "ap-sta46x4cNOcLItGrhrYaHN",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 23:17:53+08:00",
+      "stopped_at": "2026-09-07 23:22:38+08:00"
+    },
+    {
+      "app_id": "ap-ylVNAA0wn1PaCR9J0UEzJ5",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 23:17:57+08:00",
+      "stopped_at": "2026-09-07 23:22:02+08:00"
+    },
+    {
+      "app_id": "ap-TmhZp1A8DVnwYjRAGVoS2c",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 23:10:58+08:00",
+      "stopped_at": "2026-09-07 23:15:23+08:00"
+    }
+  ],
+  "total_bytes": 100735219
+}

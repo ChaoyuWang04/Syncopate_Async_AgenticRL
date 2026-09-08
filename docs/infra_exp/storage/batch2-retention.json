@@ -1,0 +1,74 @@
+{
+  "volume": "syncopate-home",
+  "scope": "this batch exact paths only",
+  "runs": [
+    {
+      "experiment": "B01",
+      "run": "batch2-cpu-01",
+      "bytes": 2832341,
+      "files": 10,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B01",
+      "run": "batch2-cpu-02",
+      "bytes": 2834857,
+      "files": 9,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B01",
+      "run": "batch2-cpu-03",
+      "bytes": 2836434,
+      "files": 9,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B01",
+      "run": "batch2-fsdp-01",
+      "bytes": 2832661,
+      "files": 8,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B01",
+      "run": "batch2-fsdp-02",
+      "bytes": 3221671,
+      "files": 14,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B01",
+      "run": "batch2-vllm-01",
+      "bytes": 43874849,
+      "files": 590,
+      "cache_bytes": 40971405,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B03",
+      "run": "batch2-layers-01",
+      "bytes": 14131267,
+      "files": 12,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    },
+    {
+      "experiment": "B04",
+      "run": "batch2-config-diagnostic-02",
+      "bytes": 38660,
+      "files": 2,
+      "cache_bytes": 0,
+      "checkpoint_files": []
+    }
+  ],
+  "total_bytes": 72602740,
+  "checkpoint_count": 0,
+  "retention": "No checkpoint created. Keep raw evidence; 40971405-byte private vLLM cache retained for registered B04 follow-up. Shared model untouched.",
+  "recorded_utc": "2026-09-07T14:49:22.725030+00:00"
+}

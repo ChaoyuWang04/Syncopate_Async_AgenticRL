@@ -1,0 +1,162 @@
+{
+  "experiment": "infra-probes/B08",
+  "run_id": "batch4-lora-gpu-03",
+  "phase": "lora",
+  "evidence_path": "/vol/_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d",
+  "volume": "syncopate-home",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "d05aad8ee5f417379cacf537c0d910c5b509ffbf7d72ce1abae625e37d462ec7",
+  "image_id": "im-bY3gmx3nG1cHkR8fLVCnCc",
+  "entry_sha256": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+  "sources": {
+    "syncopate/infra/splitk_probe.py": "de019969bab8d5818fba07c7cef443fc3720ce555ad7804366cda1324125d45c",
+    "tests/infra/test_splitk_probe.py": "69ef960b3c4eb7c30aa0c06205097c3b37c93dd99fa67001bc2f739ef320e900",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "tests/infra/test_mechanism_contract.py": "c0385901dd6ad0638ea8d5b866ab3de3d3374192030f7ccf7297cb868b371adc",
+    "syncopate/infra/gemm_cause_probe.py": "f0a15d66807799e183373b1ba73ac46fad3362f13db79069aea7ec8c0926629d",
+    "tests/infra/test_gemm_cause_probe.py": "a7a28950d5b22c177562b27d590b4689e6f93ef667dd03b17651190b07334138",
+    "syncopate/infra/gdn_fastpath_probe.py": "050491f04e8ba3b9f69996d43c29f6ffb654602c8d31775860b2ee100d799a65",
+    "tests/infra/test_gdn_fastpath_probe.py": "040b50222fc229433cd244280e6673b12a3e31d77ebcaf3a9bbfc547fe26d3cb",
+    "syncopate/infra/lora_handoff_probe.py": "b1dd4ed99e11a3032a703855ad2fea67ccd09c58bbd1be7a6e920bf2a1fccbcf",
+    "tests/infra/test_lora_handoff_probe.py": "58687436056a7824f9c71b429de897a58c186bbbac592cce7b0f735fa67a6089",
+    "modal_app/gdn_fastpath_batch.py": "d8170bca3a58e9f3968e6e27f8309a25ca060a1273f1d6f93399b6e7682554bc",
+    "syncopate/infra/gdn_boundary_probe.py": "76a06cde16aebf99595ffecce23a6d087af70bf527a4ebc2bf840ccd7ff0bbfe",
+    "tests/infra/test_gdn_boundary_probe.py": "e77712c10f26271aa74191c0217ac4602b4d4e0fa2f367eef81a0cd0affe5535",
+    "modal_app/probability_batch.py": "6745cb90f5cfb4954ac3fa9534af8f85d18eb177712e588a0a11419e236e0a03",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/infra/probability_probe.py": "ae6a92770d7cd48586bce6b36fcc0c97d1db92debb4a90dd55a28860ec89745d",
+    "syncopate/infra/fsdp_probability_probe.py": "9c634139619eba1be7829e4b36e5d44d054663ef1965d09afab3e756495bba22",
+    "syncopate/infra/fp8_probe.py": "cae1ea654edc1a7a70d643a9f70501c9df9f475848e82266b877d658c09c2499",
+    "tests/infra/test_fp8_probe.py": "883afdf3c0ed91312bbbcecabe4d7605433eabd221cd0b6a6390112ca051c4ff",
+    "syncopate/infra/batch_layer_probe.py": "9ed3c55c56a3799f40fc52148d952d2612940a78bc37cb38307edccaa5dffa26",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "tests/infra/test_probe_run.py": "5f6d98c469cc1fe4f0c6b50714fe17f8d1e3470a7e83b5cba48f630907e0cb5e",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_fsdp_probability_probe.py": "4bd6038912979bc5831d486f9fd8ed01399be90ece25947df979821ee3d5888d",
+    "tests/infra/test_batch_layer_probe.py": "ccd20a39840163015ff0729502a1cd94484cf5b89c0c5b3da6f9d6e7850ea2e7"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-07T17:09:00Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 70.3,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 4.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 268.9,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "source_archive": {
+    "overlay_sha256": "d05aad8ee5f417379cacf537c0d910c5b509ffbf7d72ce1abae625e37d462ec7",
+    "members": 737,
+    "bytes": 2900309,
+    "archive_sha256": "fa918697dafe389512383739ea0864d2626594d84f256a2746f8b3c1b0f73fb7"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B08/batch4-lora-cpu-04/attempt-32177edc65e0496e8db31ea6584bee44",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d",
+      "/vol/_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import subprocess,json; r=subprocess.run(['nvidia-smi','topo','-m'],capture_output=True,text=True); print(json.dumps({'available':r.returncode==0,'returncode':r.returncode,'stdout':r.stdout,'stderr':r.stderr}))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count()))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.lora_handoff_probe",
+      "gpu",
+      "/vol/_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d",
+      "/vol/_audit/infra-probes/B08/batch4-lora-cpu-04/attempt-32177edc65e0496e8db31ea6584bee44"
+    ]
+  ],
+  "validated_results": [
+    "handoff.json"
+  ],
+  "seconds": 361.72859252899997,
+  "files": {
+    "handoff-partial.json": "ec1fa95c01396fcd4a150792938413536dcd00ff62f4d87e960d1a084a942f05",
+    "handoff.json": "d1a949067d86089b0610afc5ae7e41816abbe30071c58742be747b16c020babf",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "d224926723512dc7e69419531da042d65ffa20a8e23b54062379400fbe406d02",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "log_seal_policy": "Logs are unsealed shutdown diagnostics; result JSON SHA is authoritative.",
+  "conclusion": "Closed Q04 within cache-disabled TP1 BF16 o_proj-only scope: exact receiver/GPU matrices, consumed projection, A/B effect and A/base restoration passed.",
+  "assessment": {
+    "ok": true,
+    "repeat_max": 0.0,
+    "AB_max": 1.5623478889465332,
+    "base_A_max": 0.8537850379943848,
+    "A_reload_max": 0.0,
+    "base_restored_max": 0.0
+  },
+  "local_readback": {
+    "run.json": "a6b84b9e70d6f5a9d12697ba4caa2194a4363fd181f009acd970d2af85985d25",
+    "handoff.json": "d1a949067d86089b0610afc5ae7e41816abbe30071c58742be747b16c020babf",
+    "root.jsonl": "c1d57e328f7c5c36938f3cac604c74956e694d614e2748561458226e5e5d6fbb",
+    "projection.jsonl": "d92fdfcd8934e1a13ddf732da8f7040c91adbe77290e582042e8d3cfdbb5d224"
+  },
+  "readback_checks": {
+    "handoff_sealed_sha_verified": true,
+    "root_traces": 10,
+    "all_root_traces_identical_64_tokens_and_3axis_positions": true,
+    "projection_traces": 8,
+    "active_adapter_projection_traces": 6,
+    "base_restored_projection_traces": 2,
+    "expert_wrappers_per_adapter_phase": 40,
+    "all_expert_contexts_present_and_active_slots_zero": true,
+    "same_receiver_pid": 218,
+    "trace_sha_policy": "Local readback fingerprints; traces not in runner sealed JSON manifest."
+  }
+}

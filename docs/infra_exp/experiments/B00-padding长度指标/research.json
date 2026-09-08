@@ -1,0 +1,68 @@
+{
+  "queried_utc": "2026-09-07T08:54:53.933671+00:00",
+  "upstream": "verl-project/verl",
+  "stable": {
+    "version": "v0.9.0",
+    "commit": "483b8a009ba3a97563edee3a19887e4862b8094a"
+  },
+  "main": "2f077454e02671c630feb8fdd212a643978a2aa1",
+  "metric_blob_both": "c9c8c1e92e44130fddd5c7d1be51d55b15d59cea",
+  "queries": [
+    {
+      "url": "https://api.github.com/search/issues?q=repo%3Averl-project%2Fverl+%22clip_ratio%22+%22padding%22&per_page=50",
+      "total_count": 62,
+      "reviewed_limit": 50
+    },
+    {
+      "url": "https://api.github.com/search/issues?q=repo%3Averl-project%2Fverl+%22response_length%2Fclip_ratio%22&per_page=50",
+      "total_count": 53,
+      "reviewed_limit": 50
+    },
+    {
+      "url": "https://api.github.com/search/issues?q=repo%3Averl-project%2Fverl+is%3Apr+padding+metric&per_page=50",
+      "total_count": 75,
+      "reviewed_limit": 50
+    }
+  ],
+  "read_sources": [
+    {
+      "url": "https://github.com/verl-project/verl/blob/2f077454e02671c630feb8fdd212a643978a2aa1/verl/trainer/ppo/metric_utils.py",
+      "blob": "c9c8c1e92e44130fddd5c7d1be51d55b15d59cea"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/blob/483b8a009ba3a97563edee3a19887e4862b8094a/verl/trainer/ppo/metric_utils.py",
+      "blob": "c9c8c1e92e44130fddd5c7d1be51d55b15d59cea"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/blob/2f077454e02671c630feb8fdd212a643978a2aa1/verl/experimental/agent_loop/agent_loop.py",
+      "blob": "2e6481bf1592b123b83e02411f67b5bfeb8c179f"
+    },
+    {
+      "url": "https://github.com/verl-project/verl/blob/2f077454e02671c630feb8fdd212a643978a2aa1/verl/trainer/ppo/ray_trainer.py",
+      "blob": "9352bcfa4d56bda8e70fc7df183e588a65afb43d"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/pull/5794",
+      "title": "[rollout] fix: set max_tokens to config.data.max_response_length in rollout",
+      "state": "closed",
+      "merged": false,
+      "merged_at": null
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/pull/6675",
+      "title": "[rollout, trainer] fix: handle empty token sequences in _pad_token_ids and metric timing",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-06-14T06:56:56Z"
+    },
+    {
+      "html_url": "https://github.com/verl-project/verl/pull/5969",
+      "title": "[data, trainer] fix: batch padding for multi-trajectory",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-04-16T15:26:36Z"
+    }
+  ],
+  "decision": "CPU confirmation only; metric uses tensor width; official agent_loop pads to rollout_config.response_length. No demonstrated default caller defect. Existing local consumer already uses artifact finish reason.",
+  "limitations": "Search is bounded to first 50 results per broad query; many matches are logs. Not exhaustive PR deduplication. No live generation or V1/TQ integration claimed."
+}

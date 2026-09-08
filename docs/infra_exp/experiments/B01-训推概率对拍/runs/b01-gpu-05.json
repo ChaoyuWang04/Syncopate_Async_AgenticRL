@@ -1,0 +1,150 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-gpu-05",
+  "mode": "gpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "e160b996e6ee47e2c83fe564d3744a03824775f46c7c73e7ef615c52aa0182b1",
+  "entry_sha256": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+  "image_id": "im-JlH3hdbgqqMScXfcxU0omf",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-gpu-05",
+  "started_utc": "2026-09-07T10:09:52Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "probe_sources": {
+    "modal_app/infra_probes.py": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+    "syncopate/infra/probability_probe.py": "113ab82d28a1b7113ee727c3a9e160a2b8fe0c762100e1de336bde8541479f5b",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_probe_run.py": "8101b6eb8624a91f63dd1fe89c45148b2a983657f372e4e8ed0c73359d6acdc7"
+  },
+  "source_archive": {
+    "overlay_sha256": "e160b996e6ee47e2c83fe564d3744a03824775f46c7c73e7ef615c52aa0182b1",
+    "members": 669,
+    "bytes": 2790363,
+    "archive_sha256": "66530262a208d354bc3d22474e2860fc12e5a45111a92671ce9fcefe23e3862c"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B01/b01-cpu-05",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "verify",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05/input.json"
+    ],
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==1; assert torch.cuda.get_device_capability()==(10,0)"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "hf",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "vllm",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05/input.json"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "summary",
+      "/vol/_audit/infra-probes/B01/b01-gpu-05"
+    ]
+  ],
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 42.7,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 2.3,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 48.2,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 112.378432533,
+  "files": {
+    "hf-result.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "hf.json": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "f57a92aa24acfebbf73092d5997743032ffdb6a64a7caf09dbb0447a2cb3ad29",
+    "step-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-1.log": "1205347e7b6976372ed31a84e0fe976c23d6fab521cac67452f2b9e8e16c8282",
+    "step-2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "step-3.log": "8b1edff42ae80ca162cac77eb8f177f3449f1afe73002e03771a40f2a16abf58",
+    "step-4.log": "11e026dfdb35ccf0e66df0d905c6e6b58f9f39b105546b98cef3387fe86bf4d7",
+    "verify-result.json": "a12abca0c141441a462dc1c3d8a10010dd5dfbbd6b121b9cdf6dfd31b3fb1633"
+  },
+  "modal_app_id": "ap-Zx57bTRODtVsw2pvSizsmG",
+  "termination": "Modal cancellation while starting vLLM; RemoteError cause unavailable; no vLLM probabilities",
+  "readback_files": {
+    "step-4.log": {
+      "sha256": "11e026dfdb35ccf0e66df0d905c6e6b58f9f39b105546b98cef3387fe86bf4d7",
+      "matches_manifest": true
+    },
+    "hf.json": {
+      "sha256": "1f57775d3e81ebe85f45c6b2009ffe4d4528113f5d749cf4bb7e7efd69ef38d7",
+      "matches_manifest": true
+    }
+  },
+  "verified_hf_metrics": {
+    "single_repeat": 0.0,
+    "batch_repeat": 0.0,
+    "batch_difference": {
+      "max_abs": 0.12748193740844727,
+      "mean_abs": 0.017083460281673256,
+      "p95_abs": 0.08739620447158813,
+      "tokens": 63
+    }
+  },
+  "app_final_state": {
+    "app_id": "ap-Zx57bTRODtVsw2pvSizsmG",
+    "description": "syncopate-infra-probes",
+    "state": "stopped",
+    "tasks": "0",
+    "created_at": "2026-09-07 18:09:18+08:00",
+    "stopped_at": "2026-09-07 18:12:21+08:00"
+  }
+}

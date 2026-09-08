@@ -1,0 +1,56 @@
+{
+  "fsdp": {
+    "single_repeat_max": 0.0,
+    "batch_repeat_max": 0.0,
+    "batch_effect": {
+      "tokens": 63,
+      "signed_mean": 1.2988135928199404e-05,
+      "mean_abs": 0.016706466674804688,
+      "p95_abs": 0.1068878173828125,
+      "p99_abs": 0.1532268524169922,
+      "max_abs": 0.1532268524169922,
+      "probability_ratio_min": 0.8579350750887825,
+      "probability_ratio_max": 1.133241393171629
+    }
+  },
+  "vllm": {
+    "single_repeat_max": 0.0,
+    "batch_repeat_max": 0.0,
+    "batch_effect": {
+      "tokens": 63,
+      "signed_mean": 0.006783583293861103,
+      "mean_abs": 0.016292282440219193,
+      "p95_abs": 0.09372472763061523,
+      "p99_abs": 0.11152124404907227,
+      "max_abs": 0.11152124404907227,
+      "probability_ratio_min": 0.9228530089421932,
+      "probability_ratio_max": 1.1179774941220024
+    }
+  },
+  "fsdp_vs_vllm": {
+    "single": {
+      "tokens": 63,
+      "signed_mean": -0.015296901626575236,
+      "mean_abs": 0.020831654295011142,
+      "p95_abs": 0.10149335861206055,
+      "p99_abs": 0.25041723251342773,
+      "max_abs": 0.25041723251342773,
+      "probability_ratio_min": 0.7784759098417745,
+      "probability_ratio_max": 1.0625425348106141
+    },
+    "batch": {
+      "tokens": 63,
+      "signed_mean": -0.008526306468642332,
+      "mean_abs": 0.015143756523251622,
+      "p95_abs": 0.07153081893920898,
+      "p99_abs": 0.13207364082336426,
+      "max_abs": 0.13207364082336426,
+      "probability_ratio_min": 0.8762764629830753,
+      "probability_ratio_max": 1.1068298244475212
+    }
+  },
+  "references": {
+    "fsdp": "runs/batch2-fsdp-02.json",
+    "vllm": "runs/batch2-vllm-01.json"
+  }
+}

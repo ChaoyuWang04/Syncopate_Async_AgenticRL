@@ -1,0 +1,90 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-cpu-07",
+  "phase": "cpu",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-07/attempt-0231a3caea214f4490dac9254c5c0f89",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.8,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 39.7,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZYX2YAK3E1196TZ3PYRXRR",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "c5e11c0eef9ec5fce2988ac66a0ba9a6c0e7cfc8e7df9d18715adc6b75c16e08",
+  "image_id": "im-AmVVQS1yqVCI5WzstkwqCV",
+  "entry_sha256": "53b8a1789557ed06026c3f7e19734508569eaabb4087ec079a56caf0d15c9596",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "53b8a1789557ed06026c3f7e19734508569eaabb4087ec079a56caf0d15c9596",
+    "syncopate/infra/communication_baseline_probe.py": "e51f4521d2697f51505ee8c5455157113e03b11137f0fe9514ad58f7854a0e8a",
+    "tests/infra/test_communication_baseline_probe.py": "7294c52675f36e79a0689bf45524d08fca7c5d1756c4a8fff3d15b7a9701fd79",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T07:32:21Z",
+  "source_archive": {
+    "overlay_sha256": "c5e11c0eef9ec5fce2988ac66a0ba9a6c0e7cfc8e7df9d18715adc6b75c16e08",
+    "members": 794,
+    "bytes": 3013890,
+    "archive_sha256": "ecff5c0bd15205c07e30b3124f5fdb138a124660718395bcf94c9500b345bf06"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_communication_baseline_probe.py",
+      "tests/infra/test_mechanism_contract.py",
+      "-q",
+      "-ra"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "cpu",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-07/attempt-0231a3caea214f4490dac9254c5c0f89"
+    ]
+  ],
+  "validated_results": [
+    "communication-baseline-cpu.json"
+  ],
+  "seconds": 53.563667869,
+  "files": {
+    "build-command.json": "2dc4685debd4711cc3f5a8a30292d377a25cf2e92e37303ae8a95e061601f2f8",
+    "checkout-command.json": "aea177685f89062584e4f154ac2496099a75edba666cce7fa5a339b5dd0a2fe5",
+    "clone-command.json": "4f2e447892e0e42420a2bf60aff6bba9872ae25b40a27ddd696d58c054266898",
+    "communication-baseline-cpu.json": "bae492ce368d645449c42618a169d37898f4674829f8cf748dc334abbd0279e1",
+    "mpi-health-build-command.json": "6c5e9186375589c3817297f5e43468a1f9ceaa997cf688543a82730b77fcb7b9",
+    "mpi-health-command.json": "6a3893ed45e3479e4dfe372aa2667d3ef0054262413f67050315ab0a2553f7b2",
+    "source.tar.gz.json": "2917ef00cd0af3abc2e2f98745d271aaaf395e931f60f23dded7de0571e94b37"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-vDlmOc1Gg0ceCN9CFpmfcs",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": 0,
+    "timeout_seconds": 1200
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-cpu-05",
+  "mode": "cpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "60d97b6d6d5247f4ef94c294fe0fa9d5ab5dde8a64f8c6d04c9272e2c64ffea0",
+  "entry_sha256": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+  "image_id": "im-nohHO9kKdWuTc1QlyZtuPj",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-cpu-05",
+  "started_utc": "2026-09-07T09:57:51Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "probe_sources": {
+    "modal_app/infra_probes.py": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+    "syncopate/infra/probability_probe.py": "113ab82d28a1b7113ee727c3a9e160a2b8fe0c762100e1de336bde8541479f5b",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_probability_probe.py": "eda2f64903cb68bb2081aba883c7e8129dacafd76f63bf159adddeeee66a88e2",
+    "tests/infra/test_probe_run.py": "8101b6eb8624a91f63dd1fe89c45148b2a983657f372e4e8ed0c73359d6acdc7"
+  },
+  "source_archive": {
+    "overlay_sha256": "60d97b6d6d5247f4ef94c294fe0fa9d5ab5dde8a64f8c6d04c9272e2c64ffea0",
+    "members": 662,
+    "bytes": 2786287,
+    "archive_sha256": "750e8adf281a26b2712f4acdea9ba0a4065bb287f562f7683acdcc509024290d"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_probe_run.py",
+      "-q"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B01/b01-cpu-05"
+    ]
+  ],
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 5.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 123.3,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 130.913891985,
+  "files": {
+    "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "a3f1ddc085cd43c679de226cac144c2655b6aa4789d6aabff51109d54c574767",
+    "step-0.log": "31aea369e724e06e40899f30e41b4d08322eb801791b7267f074241d775f0735",
+    "step-1.log": "cfb955095229fa70f86b90af8a8508e0cd2b301b3a6f892807bd0cfecefc1f7b"
+  },
+  "modal_app_id": "ap-phh6ySFHvhdw5Ix0KpJ0yX",
+  "readback_verified_files": [
+    "cpu-result.json",
+    "input.json"
+  ]
+}

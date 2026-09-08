@@ -1,0 +1,140 @@
+{
+  "queried_utc": "2026-09-07T09:01:57.665263+00:00",
+  "queries": {
+    "vllm_release": "https://api.github.com/repos/vllm-project/vllm/releases/latest",
+    "vllm_main": "https://api.github.com/repos/vllm-project/vllm/commits/main",
+    "vllm_batch_doc": "https://api.github.com/repos/vllm-project/vllm/contents/docs/features/batch_invariance.md?ref=v0.28.0",
+    "vllm_qwen": "https://api.github.com/repos/vllm-project/vllm/contents/vllm/model_executor/models/qwen3_5.py?ref=v0.28.0",
+    "vllm_32992": "https://api.github.com/repos/vllm-project/vllm/issues/32992",
+    "vllm_51187": "https://api.github.com/repos/vllm-project/vllm/issues/51187"
+  },
+  "model_card": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
+  "recipe": "https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html",
+  "decision": "Bounded CPU identity check then 1-GPU fixed-token diagnostic. Existing B200/dense batch-invariance reports motivate separating repeats/batch; they do not prove this combination is faulty. Qwen3.6 official post-trained checkpoint is unmodified by this project.",
+  "sources": [
+    {
+      "html_url": "https://github.com/vllm-project/vllm/releases/tag/v0.28.0",
+      "tag_name": "v0.28.0"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/commit/392db567b260cb4d1e5f91547b65d527038fe641",
+      "sha": "392db567b260cb4d1e5f91547b65d527038fe641"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/docs/features/batch_invariance.md",
+      "sha": "5a1fe71a1eab004dabebcecff8c594ab22372834"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/model_executor/models/qwen3_5.py",
+      "sha": "28c6a1189937d916785b48abdae13bbc1822d0ed"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/issues/32992",
+      "title": "[Bug]: Batch invariance fails on NVIDIA B200 (Blackwell) with torch.compile",
+      "state": "closed"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/issues/51187",
+      "title": "[Bug]: VLLM_BATCH_INVARIANT=1 returns non-identical logprobs across repeats of a byte-identical concurrent workload at ~44 co-resident sequences",
+      "state": "open"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/pull/45819",
+      "title": "[Feature] Add batch invariance support to GDN_ATTN backend",
+      "state": "open",
+      "merged": false,
+      "merged_at": null
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/pull/49827",
+      "title": "[Model] Enable batch-invariant mixed decode and prefill for Qwen GDN",
+      "state": "open",
+      "merged": false,
+      "merged_at": null
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/issues/47425",
+      "title": "[Performance]: Logprob divergence between vLLM and transformers on a fine-tuned Qwen3.5-VL mobile-use model",
+      "state": "open"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/issues/48613",
+      "title": "[Feature]: [Batch-Invariant-Kernels] GDN_ATTN does not support batch-invariant mode for Qwen3.5/Qwen3.6 GDN models",
+      "state": "open"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/pull/35404",
+      "title": "[Bugfix][Model] Fix gpt-oss batch invariance",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-02-27T20:41:24Z"
+    },
+    {
+      "html_url": "https://github.com/huggingface/transformers/commit/299c53839f0c49cdb2caaa3ace26e5ae89f3d964",
+      "sha": "299c53839f0c49cdb2caaa3ace26e5ae89f3d964"
+    },
+    {
+      "html_url": "https://github.com/huggingface/transformers/releases/tag/v5.16.1",
+      "tag_name": "v5.16.1"
+    },
+    {
+      "html_url": "https://github.com/huggingface/transformers/blob/299c53839f0c49cdb2caaa3ace26e5ae89f3d964/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py",
+      "sha": "b9773fdc5b7c4025b1a62988bc1ba257468240a2"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/entrypoints/llm.py",
+      "sha256": "52de4ac99489e004ef6c61d0bedc84aa96020dd58b8bd1ae500814b548b2b83e",
+      "queried_utc": "2026-09-07T09:57:00Z"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/v1/core/sched/scheduler.py",
+      "sha256": "4b79ab760c3864af6838d555c01335deea3aac97c9be2be415fa0e5dab32f07e",
+      "queried_utc": "2026-09-07T09:57:00Z"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/v1/engine/core.py",
+      "sha256": "f4b1e07b6d91fac1549bc74a5c804e5a88793d663b5dc045c9e455db6550f5ad",
+      "queried_utc": "2026-09-07T10:02:00Z"
+    },
+    {
+      "html_url": "https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/v1/engine/llm_engine.py",
+      "sha256": "415b7d02460984e8678f78420be22dbc336d8bb73734d7a753b2badb62232744",
+      "queried_utc": "2026-09-07T10:02:00Z"
+    }
+  ],
+  "additional_queries": [
+    {
+      "utc": "2026-09-07T09:08:35.471220+00:00",
+      "queries": {
+        "vllm_32992_comments": "repos/vllm-project/vllm/issues/32992/comments?per_page=100",
+        "vllm_prob_search": "search/issues?q=repo%3Avllm-project%2Fvllm+%22Qwen3.5%22+%22logprobs%22&per_page=100",
+        "vllm_batch_main": "repos/vllm-project/vllm/contents/docs/features/batch_invariance.md?ref=392db567b260cb4d1e5f91547b65d527038fe641",
+        "hf_main": "repos/huggingface/transformers/commits/main",
+        "hf_release": "repos/huggingface/transformers/releases/latest",
+        "hf_qwen": "repos/huggingface/transformers/contents/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py?ref=v5.10.4",
+        "verl_fsdp_main": "repos/verl-project/verl/contents/verl/workers/engine/fsdp/transformer_impl.py?ref=2f077454e02671c630feb8fdd212a643978a2aa1",
+        "verl_losses": "repos/verl-project/verl/contents/verl/workers/utils/losses.py?ref=v0.9.0"
+      }
+    },
+    {
+      "utc": "2026-09-07T09:09:56.968824+00:00",
+      "queries": {
+        "gdn45819": "repos/vllm-project/vllm/pulls/45819",
+        "gdn49827": "repos/vllm-project/vllm/pulls/49827",
+        "divergence47425": "repos/vllm-project/vllm/issues/47425",
+        "gdn48613": "repos/vllm-project/vllm/issues/48613",
+        "hf_qwen_main": "repos/huggingface/transformers/contents/src/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py?ref=299c53839f0c49cdb2caaa3ace26e5ae89f3d964",
+        "vllm35404": "repos/vllm-project/vllm/pulls/35404"
+      }
+    }
+  ],
+  "applicability": {
+    "gdn45819": "open unmerged; base GDN batch support with per-sequence dispatch, H100 tests; not installed default",
+    "gdn49827": "open unmerged; mixed decode/prefill and arithmetic grid changes; no adoption in initial default-path screen",
+    "vllm35404": "merged; generic batch invariant linear path; older #32992 closure attributed to this in comments, not proof GDN support",
+    "divergence47425": "private fine-tuned multimodal load; same-token public text-only load needed here",
+    "transformers_version": "latest stable 5.16.1/main299c538; pinned5.10.4 due verl0.9 requires<5.11 and cached frozen stack. v5.10.4 Git tag query404; installed source identity must be recorded, do not invent tag SHA",
+    "search_limit": "Qwen3.5 logprobs:123 hits,first100; bounded admission survey,not exhaustive upstream submission deduplication"
+  },
+  "batch_submission_note": "Official LLM enqueue_chat doc prescribes scheduling-only sleep(level=0), enqueue, wake_up(tags=[scheduling]) to queue all requests before processing. Apply same documented engine pause to raw-token enqueue; verify actual joint root call, not API batch size."
+}

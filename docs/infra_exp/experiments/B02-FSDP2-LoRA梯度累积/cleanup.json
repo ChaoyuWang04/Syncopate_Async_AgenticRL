@@ -1,0 +1,201 @@
+{
+  "volume": "syncopate-home",
+  "utc": "2026-09-07T10:10:51.880160+00:00",
+  "entries": [
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-01/tiny",
+      "size": 50,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-01/tiny/model.safetensors",
+      "size": 698160,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-01/tiny/generation_config.json",
+      "size": 217,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-01/tiny/config.json",
+      "size": 1189,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/tiny",
+      "size": 50,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/adapter",
+      "size": 53,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/tiny/model.safetensors",
+      "size": 698160,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/tiny/generation_config.json",
+      "size": 217,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/tiny/config.json",
+      "size": 1189,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/adapter/adapter_model.safetensors",
+      "size": 10240,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/adapter/adapter_config.json",
+      "size": 1051,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-02/adapter/README.md",
+      "size": 5158,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/tiny",
+      "size": 50,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/adapter",
+      "size": 53,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/tiny/model.safetensors",
+      "size": 698160,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/tiny/generation_config.json",
+      "size": 217,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/tiny/config.json",
+      "size": 1189,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/adapter/adapter_model.safetensors",
+      "size": 10240,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/adapter/adapter_config.json",
+      "size": 1051,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-cpu-03/adapter/README.md",
+      "size": 5158,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-01/tiny",
+      "size": 50,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-01/tiny/model.safetensors",
+      "size": 698160,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-01/tiny/generation_config.json",
+      "size": 217,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-01/tiny/config.json",
+      "size": 1189,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-02/tiny",
+      "size": 50,
+      "type": "2"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-02/tiny/model.safetensors",
+      "size": 698160,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-02/tiny/generation_config.json",
+      "size": 217,
+      "type": "1"
+    },
+    {
+      "path": "_audit/infra-probes/B02/b02-gpu-02/tiny/config.json",
+      "size": 1189,
+      "type": "1"
+    }
+  ],
+  "app_state_before": [
+    {
+      "app_id": "ap-K3LT7weEc4ntTm3xf7XAtK",
+      "description": "syncopate-lora-probe",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 18:07:28+08:00",
+      "stopped_at": "2026-09-07 18:08:29+08:00"
+    },
+    {
+      "app_id": "ap-DiRBdptSytOhnUtZMhZUkP",
+      "description": "syncopate-lora-probe",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 18:03:07+08:00",
+      "stopped_at": "2026-09-07 18:06:51+08:00"
+    },
+    {
+      "app_id": "ap-0fR4nqN87xof2gpPL1hfb6",
+      "description": "syncopate-lora-probe",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 17:58:43+08:00",
+      "stopped_at": "2026-09-07 18:01:47+08:00"
+    },
+    {
+      "app_id": "ap-SuUewFzTAPLbfRZsQVfq0R",
+      "description": "syncopate-lora-probe",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 17:56:39+08:00",
+      "stopped_at": "2026-09-07 17:57:50+08:00"
+    },
+    {
+      "app_id": "ap-vK5B4aVFmu4pMv1WhEgr0k",
+      "description": "syncopate-lora-probe",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-07 17:53:44+08:00",
+      "stopped_at": "2026-09-07 17:54:54+08:00"
+    }
+  ],
+  "removed_paths": [
+    "_audit/infra-probes/B02/b02-cpu-01/tiny",
+    "_audit/infra-probes/B02/b02-cpu-02/tiny",
+    "_audit/infra-probes/B02/b02-cpu-02/adapter",
+    "_audit/infra-probes/B02/b02-cpu-03/tiny",
+    "_audit/infra-probes/B02/b02-cpu-03/adapter",
+    "_audit/infra-probes/B02/b02-gpu-01/tiny",
+    "_audit/infra-probes/B02/b02-gpu-02/tiny"
+  ],
+  "verified_absent": true,
+  "deleted_file_bytes": 3530728,
+  "completed_utc": "2026-09-07T10:11:59.538799+00:00",
+  "reason": "Q03 complete; deterministic tiny and temporary CPU adapters not reused. Keep JSON, source, raw gradient/optimizer witness. Rerun CPU to reconstruct future preflight; old CPU artifact paths retired."
+}

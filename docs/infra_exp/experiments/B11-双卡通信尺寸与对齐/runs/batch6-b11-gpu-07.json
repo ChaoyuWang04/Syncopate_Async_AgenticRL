@@ -1,0 +1,116 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-gpu-07",
+  "phase": "graph",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-gpu-07/attempt-6e51b30450c249c3bd655f5932f55bf6",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 3.4,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 118.9,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZWS74EEV94QHXCTD957GXR",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "979e9d48958ab609f05db68f1e8f7041269d5bac2b4b55078d1bfde6e715a56f",
+  "image_id": "im-x9ZUuFPsivgAPcNQrle9si",
+  "entry_sha256": "5be4841a2ad6559e1c7e9ba197c252c1ebcdf67ed46de2cef6b221a0c308f907",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "5be4841a2ad6559e1c7e9ba197c252c1ebcdf67ed46de2cef6b221a0c308f907",
+    "syncopate/infra/communication_baseline_probe.py": "cb74018074f7dbf9e932b0d1d409fe7bf7a274ecc0a157187561c7bb38b4e5a9",
+    "tests/infra/test_communication_baseline_probe.py": "c0aed58a26bd7ee6223331dfe072fbe926e259bd0ac5662582b909872eaa9981",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T06:55:15Z",
+  "source_archive": {
+    "overlay_sha256": "979e9d48958ab609f05db68f1e8f7041269d5bac2b4b55078d1bfde6e715a56f",
+    "members": 790,
+    "bytes": 3005838,
+    "archive_sha256": "13d3f6be9613885713320b724ed6d8727e3dd0afb3d6a1d1838ec151fa0b5624"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-05/attempt-8c54d3e82b98409dba1521059656f260",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==2; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(2))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "native-graph",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-gpu-07/attempt-6e51b30450c249c3bd655f5932f55bf6",
+      "--preflight",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-05/attempt-8c54d3e82b98409dba1521059656f260"
+    ]
+  ],
+  "validated_results": [
+    "communication-baseline-result.json"
+  ],
+  "seconds": 128.071686209,
+  "files": {
+    "communication-baseline-result.json": "f91c25b6b8e745c5c0dd1ec3bcf0ce1eadeb7b6d53b1a4309fe5bb744c24fb47",
+    "devices-command.json": "3c50c6aaeb9832b5fea86a9b09c4fea4de58e8b7180d4c6c53cb07ffea934061",
+    "ldd-all_gather-command.json": "d9eb7c9c2172fbeb62fc69aa9f5effbab12c97176aa721addb179de3f6269c68",
+    "ldd-all_reduce-command.json": "02ac46ac58ccaedc1d3ea8953ebb200817f6f1356f42455d3f2c655fd466ef44",
+    "ldd-reduce_scatter-command.json": "71949ae10405e6bb5c000ebc7c375760f70480ed09f323d89db5bec510afc548",
+    "native-graph-windows.json": "f897a5eb427768a9cc7454b48422738030d84e738d8fa53435a6096040fe6e3f",
+    "source.tar.gz.json": "b3a1cae96cc0c70d3a83917dab08f6e8138d0e52a7b8cf8fc85df37f06d30c69",
+    "window-0-native_eager-all_gather-command.json": "0db938116047a4e9a170689c7447a66a7b69273dbae174d5a8b75e70e7d882fe",
+    "window-0-native_eager-all_reduce-command.json": "8ac5d0d5706a87e4075e71182effa7b0952cd96b3e21aef9a470f196ab72d870",
+    "window-0-native_eager-reduce_scatter-command.json": "da2d341a6dce2dc2c917f3db235d8727b25c9ed6ee92dc390dca81adcf608684",
+    "window-0-native_graph-all_gather-command.json": "e2ad128aec303d47cbdb2189ee72e49d2cd8cd39673aabf39b0e7ce562de6b7c",
+    "window-0-native_graph-all_reduce-command.json": "787ca83267bc2821666d1c6c02a2c33c534a71abf3f46a3eacd480c0ca142e0a",
+    "window-0-native_graph-reduce_scatter-command.json": "a6c157ccd7e89423885e84ff2be7fdf352d9978756ad4203212488364067f6ac",
+    "window-0-native_graph_mixing_off-all_gather-command.json": "bc6a71ee2a9ac0ae701a18be55d696956c0cc0069ef3534dbcfc8628e5d200b1",
+    "window-0-native_graph_mixing_off-all_reduce-command.json": "7da2fdebb3f236a713e20e16651058ceed9a3c96d7bd9e006c38f067dc3ac137",
+    "window-0-native_graph_mixing_off-reduce_scatter-command.json": "ef66c945f0d373d0783500c6e071e06878d943774d48b37eaf92efb8adc0ddb9",
+    "window-1-native_eager-all_gather-command.json": "685db54a66f10baa4213f3b6cf10c166d4507adaee9e056c9f3cf73a7f921bfb",
+    "window-1-native_eager-all_reduce-command.json": "396df29f007818d5e6d14f848b488e54edbc1bdf93502ec49750fae476ad5cd3",
+    "window-1-native_eager-reduce_scatter-command.json": "99c79fac2df51406038a0628bbba7253d3856da658057d6e5c961e68f15ac013",
+    "window-1-native_graph-all_gather-command.json": "643534a11e1e71bda243bafce6f9c4b28dbf000461dcccb2cef15d577a7e4f91",
+    "window-1-native_graph-all_reduce-command.json": "b43c5cfcaaeb308624c0997605bae2af036ab7edb5fde7c84408c89ba6dc0fc7",
+    "window-1-native_graph-reduce_scatter-command.json": "b117a9006dbb23c3e46e4d80bf620dea58a74e553a68a3adc6467447b3a10c9f",
+    "window-1-native_graph_mixing_off-all_gather-command.json": "212d089f3b9cbe152b1d6ed3acb00060e8221fa1f7363911690b12b072993490",
+    "window-1-native_graph_mixing_off-all_reduce-command.json": "a78898e9063f3411bd81b1e67a3c5f96a93aa5bc31eba54184eef210df986926",
+    "window-1-native_graph_mixing_off-reduce_scatter-command.json": "b1dd27b55ebf4a7698e7949f8f2f0f11642ae49bbdfd24a1b49783ce6bd083fb",
+    "window-2-native_eager-all_gather-command.json": "beab965ca07843d9f164af07e0d651fa0fc50e32e3af986be9914f0231bfd3bd",
+    "window-2-native_eager-all_reduce-command.json": "89de7e25285bf2755b92b6533c10c6cc69c1d03a92c67e69ee3b8d7db3ed1aa2",
+    "window-2-native_eager-reduce_scatter-command.json": "6ec2bb795d6acacd6abeff1ee2c85a72b638b8745f95592f99eba4a75b5f0774",
+    "window-2-native_graph-all_gather-command.json": "c7331680a943e518ccee74d1aa02e66c494dfa63f6f2fc9954e8f7a8488eeebf",
+    "window-2-native_graph-all_reduce-command.json": "adb5154617ba8e1af91757a942398260f69bfd986ac2fbd3916dda0321b5d3b9",
+    "window-2-native_graph-reduce_scatter-command.json": "d6647c8d21dabdac2fbc35df3a3977c9112f7b7c2c2ec4646f44269f29c585bf",
+    "window-2-native_graph_mixing_off-all_gather-command.json": "dccdf44957556a05bf018c163fbf4f671f1262787c1f76d4540f4ca71aa47c7a",
+    "window-2-native_graph_mixing_off-all_reduce-command.json": "0fc4c28dd911e8f80e2ffa58e6bf5f314e3f61069a9eff890fdf0aab74879cdb",
+    "window-2-native_graph_mixing_off-reduce_scatter-command.json": "bcae680159bf8f1e98f6ac704b9a83665bc0239adbad7321521e4219f533ec2e"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-KEBTvb3ezIIyoDI14b6fLg",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": "B200:2",
+    "timeout_seconds": 1800
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "result_sha256": "2b020a319652388a6ea95630a1f2e9293437ab5adf12f671ad88abc185bab677",
+  "target_input_difference": {
+    "equal": true,
+    "max_abs": 0.0,
+    "relative_l2": 0.0,
+    "difference_l2": 0.0,
+    "reference_l2": 16.33769553516155
+  },
+  "target_output_difference": {
+    "equal": false,
+    "max_abs": 0.000244140625,
+    "relative_l2": 5.3298442239084834e-05,
+    "difference_l2": 0.00033313517144723274,
+    "reference_l2": 6.250373509095505
+  },
+  "replay": [
+    {
+      "repeat": 0,
+      "identical_target": true,
+      "single_matches_capture": true,
+      "batch_matches_capture": true,
+      "same_input_batch_difference": {
+        "equal": false,
+        "max_abs": 0.000244140625,
+        "relative_l2": 5.3298442239084834e-05,
+        "difference_l2": 0.00033313517144723274,
+        "reference_l2": 6.250373509095505
+      },
+      "natural_input_vs_identical_input_in_batch": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.25037027360231
+      },
+      "repeat_single": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.250373509095505
+      },
+      "repeat_hybrid": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      },
+      "repeat_natural": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      }
+    },
+    {
+      "repeat": 1,
+      "identical_target": true,
+      "single_matches_capture": true,
+      "batch_matches_capture": true,
+      "same_input_batch_difference": {
+        "equal": false,
+        "max_abs": 0.000244140625,
+        "relative_l2": 5.3298442239084834e-05,
+        "difference_l2": 0.00033313517144723274,
+        "reference_l2": 6.250373509095505
+      },
+      "natural_input_vs_identical_input_in_batch": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.25037027360231
+      },
+      "repeat_single": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.250373509095505
+      },
+      "repeat_hybrid": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      },
+      "repeat_natural": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      }
+    },
+    {
+      "repeat": 2,
+      "identical_target": true,
+      "single_matches_capture": true,
+      "batch_matches_capture": true,
+      "same_input_batch_difference": {
+        "equal": false,
+        "max_abs": 0.000244140625,
+        "relative_l2": 5.3298442239084834e-05,
+        "difference_l2": 0.00033313517144723274,
+        "reference_l2": 6.250373509095505
+      },
+      "natural_input_vs_identical_input_in_batch": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.25037027360231
+      },
+      "repeat_single": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 6.250373509095505
+      },
+      "repeat_hybrid": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      },
+      "repeat_natural": {
+        "equal": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "difference_l2": 0.0,
+        "reference_l2": 9.098429735739034
+      }
+    }
+  ],
+  "top1_batch_difference": {
+    "tokens": 63,
+    "changed_tokens": 0,
+    "changed_positions": [],
+    "reference_margin_at_changes": [],
+    "batch_margin_at_changes": []
+  },
+  "captures": {
+    "path": "/vol/_audit/infra-probes/B05/batch3-gdn-01/attempt-266daa98c57143ab9b6e022642fa48f5/gdn-captures.pt",
+    "bytes": 2361807,
+    "sha256": "24c0face5106870ac0001256d7773f694eb63243b4c478251b40b0e88bffbe23",
+    "scope": "first ON input/output, both shapes; no full-vocab logits"
+  },
+  "limits": "HF BF16 mechanism reference; no exact CUDA kernel attribution; not a trainer or free generation test"
+}

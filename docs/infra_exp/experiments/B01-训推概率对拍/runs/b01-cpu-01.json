@@ -1,0 +1,79 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-cpu-01",
+  "mode": "cpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "fecc4704909c719d8e7b00859a9df171428a8977a57e26f08c655eafcdd37fe0",
+  "entry_sha256": "a1a09261d91f6877669b25648a66241f9eddd80bf866aeba509211b2d6a7b372",
+  "image_id": "im-9xO4Z9l8ymnp5JooOlJhfc",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-cpu-01",
+  "started_utc": "2026-09-07T09:09:04Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "source_archive": {
+    "overlay_sha256": "fecc4704909c719d8e7b00859a9df171428a8977a57e26f08c655eafcdd37fe0",
+    "members": 651,
+    "bytes": 2767104,
+    "archive_sha256": "0d9a634f4d8cbb31632c99ae9f53e8a1787f019b314de12d54959e34adb8a314"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_probe_run.py",
+      "-q"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B01/b01-cpu-01"
+    ]
+  ],
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.5,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 154.8,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 161.86940556000002,
+  "files": {
+    "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "fcc05078a78d618493e007559f98da3f74c4ae46ef70f396b9ab6012f03a78f4",
+    "step-0.log": "c2cba0e5b1275bde99432021fd22a26635493fa35d0886fcd5cd38708b0f7cca",
+    "step-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "ok": true,
+    "revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+    "weights_bytes": 71916703545,
+    "tokens_sha256": "3cb2f099114e7a95e9cd485d05998abc40ebac1e7dced96e6a69a2aa23c14d40",
+    "versions": {
+      "torch": "2.13.0",
+      "transformers": "5.10.4",
+      "vllm": "0.28.0",
+      "verl": "0.9.0",
+      "peft": "0.20.0"
+    }
+  },
+  "app_id": "ap-kUSou7MsAhHMklIj19iWVH",
+  "readback_verified": true,
+  "cost_actual_usd": null
+}

@@ -1,0 +1,89 @@
+{
+  "experiment": "infra-probes/B01",
+  "run_id": "b01-cpu-02",
+  "mode": "cpu",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "17c6825d7f35aea00280c6c8c7b7c59b72e3b7493109c585ca95f8f50d5284f1",
+  "entry_sha256": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+  "image_id": "im-c0mBpVeLsSq6PRJiREQiMe",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B01/b01-cpu-02",
+  "started_utc": "2026-09-07T09:14:24Z",
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "probe_sources": {
+    "modal_app/infra_probes.py": "f3ff91403d2efd37d57b00aff67240605522985f2c0a85e988ae77baef92fbd0",
+    "syncopate/infra/probability_probe.py": "b326ecd1a39b44998e55e5f91bec165c87b36f6407fb3f8e1a7dbbfa0be9bee1",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_probability_probe.py": "401eb20bd48301962acda9c44b73268bc02797639f0486ac0c859a366ec81dc7",
+    "tests/infra/test_probe_run.py": "8101b6eb8624a91f63dd1fe89c45148b2a983657f372e4e8ed0c73359d6acdc7"
+  },
+  "source_archive": {
+    "overlay_sha256": "17c6825d7f35aea00280c6c8c7b7c59b72e3b7493109c585ca95f8f50d5284f1",
+    "members": 651,
+    "bytes": 2769480,
+    "archive_sha256": "85396285199a0026409d428b3fca0e10c8b86a6bf550365f15cd44f2a1312a1d"
+  },
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/infra/test_probability_probe.py",
+      "tests/infra/test_probe_run.py",
+      "-q"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.probability_probe",
+      "cpu",
+      "/vol/_audit/infra-probes/B01/b01-cpu-02"
+    ]
+  ],
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 1.6,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 153.0,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "seconds": 157.48473237,
+  "files": {
+    "cpu-result.json": "acfbe936e2d15c797348996f22715d99f4d868f5d46ee4c98693c7a2058dd99f",
+    "input.json": "cf3fd1e9856ac560c441bfd42c96e573b47d3d8740d4330091482ac278636e28",
+    "source.tar.gz.json": "133c582287ac3034a27c6fa1f67047932057a89e0aeca6ebe1b8c7ca35cb165b",
+    "step-0.log": "a00d95dfbc084b6eb22229f4a5b545b4452162a59797c0faa121535a79212580",
+    "step-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "ok": true,
+    "revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+    "weights_bytes": 71916703545,
+    "tokens_sha256": "3cb2f099114e7a95e9cd485d05998abc40ebac1e7dced96e6a69a2aa23c14d40",
+    "versions": {
+      "torch": "2.13.0",
+      "transformers": "5.10.4",
+      "vllm": "0.28.0",
+      "verl": "0.9.0",
+      "peft": "0.20.0"
+    }
+  },
+  "app_id": "ap-IQXdCbKYcqciv5auHfG2vF",
+  "readback_verified": true,
+  "cost_actual_usd": null,
+  "tests": "....                                                                     [100%]\n4 passed in 0.04s\n"
+}

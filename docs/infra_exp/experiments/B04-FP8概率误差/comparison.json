@@ -1,0 +1,122 @@
+{
+  "scope": "63 fixed target positions; nearest-rank quantiles; no throughput or RL quality claim",
+  "bf16_previous_repeat_exact": true,
+  "comparisons": {
+    "bf16_vs_fp8": {
+      "single": {
+        "tokens": 63,
+        "mean_abs": 0.020332776735784368,
+        "median_abs": 0.0035310667008161545,
+        "p90_abs": 0.055330514907836914,
+        "p95_abs": 0.11655926704406738,
+        "max_abs": 0.18006229400634766,
+        "signed_mean": -0.0033411258486993906,
+        "ratio_min": 0.8352181807040377,
+        "ratio_max": 1.1303751105116677,
+        "bin_counts": [
+          21,
+          20,
+          12,
+          5,
+          5,
+          0
+        ]
+      },
+      "batch": {
+        "tokens": 63,
+        "mean_abs": 0.022865658207881515,
+        "median_abs": 0.002523362636566162,
+        "p90_abs": 0.09466052055358887,
+        "p95_abs": 0.10183203220367432,
+        "max_abs": 0.20314884185791016,
+        "signed_mean": -0.0021048113246381816,
+        "ratio_min": 0.8161567540970086,
+        "ratio_max": 1.10719748258703,
+        "bin_counts": [
+          24,
+          20,
+          8,
+          7,
+          3,
+          1
+        ]
+      }
+    },
+    "fsdp_vs_fp8": {
+      "single": {
+        "tokens": 63,
+        "mean_abs": 0.02327645588887944,
+        "median_abs": 0.0029300153255462646,
+        "p90_abs": 0.07893848419189453,
+        "p95_abs": 0.10527324676513672,
+        "max_abs": 0.20236778259277344,
+        "signed_mean": -0.018638027475274627,
+        "ratio_min": 0.8167944699061006,
+        "ratio_max": 1.0690328285133424,
+        "bin_counts": [
+          18,
+          25,
+          7,
+          9,
+          3,
+          1
+        ]
+      },
+      "batch": {
+        "tokens": 63,
+        "mean_abs": 0.022302706105013687,
+        "median_abs": 0.0022418545559048653,
+        "p90_abs": 0.06589460372924805,
+        "p95_abs": 0.1106252670288086,
+        "max_abs": 0.2396697998046875,
+        "signed_mean": -0.010631117793280513,
+        "ratio_min": 0.7868876486285072,
+        "ratio_max": 1.1837076406102873,
+        "bin_counts": [
+          22,
+          23,
+          10,
+          4,
+          3,
+          1
+        ]
+      }
+    }
+  },
+  "fp8_batch_effect": {
+    "tokens": 63,
+    "mean_abs": 0.030005792631686384,
+    "median_abs": 0.0026376936584711075,
+    "p90_abs": 0.1179046630859375,
+    "p95_abs": 0.14508867263793945,
+    "max_abs": 0.2461388111114502,
+    "signed_mean": 0.008019897817922313,
+    "ratio_min": 0.8273712587452254,
+    "ratio_max": 1.279077111334799,
+    "bin_counts": [
+      21,
+      20,
+      10,
+      3,
+      8,
+      1
+    ]
+  },
+  "repeat_max": {
+    "bf16": 0.0,
+    "fp8": 0.0
+  },
+  "bin_intervals": [
+    "[0,0.001)",
+    "[0.001,0.01)",
+    "[0.01,0.05)",
+    "[0.05,0.1)",
+    "[0.1,0.2)",
+    "[0.2,infinity)"
+  ],
+  "directions": {
+    "bf16_vs_fp8": "signed = FP8 - BF16; ratio = p(FP8)/p(BF16)",
+    "fsdp_vs_fp8": "signed = FP8 - FSDP2; ratio = p(FP8)/p(FSDP2)",
+    "fp8_batch_effect": "signed = batch2 - single; ratio = p(batch2)/p(single)"
+  }
+}

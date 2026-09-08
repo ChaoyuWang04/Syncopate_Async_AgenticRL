@@ -1,0 +1,206 @@
+{
+  "checked_utc": "2026-09-07T17:17:14.641860+00:00",
+  "volume": "syncopate-home",
+  "experiments": {
+    "B06": {
+      "bytes": 6471325,
+      "entries": 46,
+      "cache_bytes": 0,
+      "retained_tensor_files": []
+    },
+    "B07": {
+      "bytes": 20658280,
+      "entries": 153,
+      "cache_bytes": 0,
+      "retained_tensor_files": [
+        {
+          "path": "_audit/infra-probes/B07/batch4-splitk-gpu-01/attempt-08340480a51e424fb4a65d311a001713/splitk-outputs.pt",
+          "bytes": 2362409
+        }
+      ]
+    },
+    "B08": {
+      "bytes": 26893103,
+      "entries": 349,
+      "cache_bytes": 5049603,
+      "retained_tensor_files": [
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d/receiver/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-03/attempt-e159899b95f14c0683e03166f8402b7d/receiver/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-04/attempt-32177edc65e0496e8db31ea6584bee44/sender/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-04/attempt-32177edc65e0496e8db31ea6584bee44/sender/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-03/attempt-364ef82149304fb0a4a0ada211c2298f/sender/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-02/attempt-f3f753a0a10b48baaf6fe9778f6a6f6b/receiver/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-02/attempt-f3f753a0a10b48baaf6fe9778f6a6f6b/receiver/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-02/attempt-e81ecc8ff8204ad5bca9b863a463f9af/sender/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-02/attempt-e81ecc8ff8204ad5bca9b863a463f9af/sender/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-01/attempt-19692aada6a4482ba9247dd71db1d4cd/receiver/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-gpu-01/attempt-19692aada6a4482ba9247dd71db1d4cd/receiver/A/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7/sender/B/adapter_model.safetensors",
+          "bytes": 98600
+        },
+        {
+          "path": "_audit/infra-probes/B08/batch4-lora-cpu-01/attempt-276a91977daa44908bf62babfd0786b7/sender/A/adapter_model.safetensors",
+          "bytes": 98600
+        }
+      ]
+    }
+  },
+  "total_bytes": 54022708,
+  "apps_closed": [
+    {
+      "app_id": "ap-7oVHYeTAyjreJxjyl0HLG7",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 01:08:21+08:00",
+      "stopped_at": "2026-09-08 01:15:26+08:00"
+    },
+    {
+      "app_id": "ap-tQbzK0YgExmfFqyQC2EDHx",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 01:02:34+08:00",
+      "stopped_at": "2026-09-08 01:07:10+08:00"
+    },
+    {
+      "app_id": "ap-S7KNYjz2v3jywsaTP4o5PB",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:55:42+08:00",
+      "stopped_at": "2026-09-08 01:00:39+08:00"
+    },
+    {
+      "app_id": "ap-0vgEDLnJO80BmSexq8aW4Z",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:44:23+08:00",
+      "stopped_at": "2026-09-08 00:50:59+08:00"
+    },
+    {
+      "app_id": "ap-gYq3RGlo3NtVxRX8B5UfD7",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:41:36+08:00",
+      "stopped_at": "2026-09-08 00:45:01+08:00"
+    },
+    {
+      "app_id": "ap-i98WDAbQGLD7yMBlRWhhh2",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:35:28+08:00",
+      "stopped_at": "2026-09-08 00:44:08+08:00"
+    },
+    {
+      "app_id": "ap-mpQA5kUVqhByIWudrZoriK",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:37:46+08:00",
+      "stopped_at": "2026-09-08 00:41:01+08:00"
+    },
+    {
+      "app_id": "ap-TM4FxWv7CJbzgi4imzyDDJ",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:35:33+08:00",
+      "stopped_at": "2026-09-08 00:38:35+08:00"
+    },
+    {
+      "app_id": "ap-Duwr2qkZlWcPaH7aBi3N5z",
+      "description": "syncopate-gdn-fastpath-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:34:36+08:00",
+      "stopped_at": "2026-09-08 00:37:53+08:00"
+    },
+    {
+      "app_id": "ap-cXSAOkbZ29qP0vNk1OYHTx",
+      "description": "syncopate-gdn-fastpath-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:15:22+08:00",
+      "stopped_at": "2026-09-08 00:29:51+08:00"
+    },
+    {
+      "app_id": "ap-7B2zd6nytSRdFG0FE23HYe",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:17:37+08:00",
+      "stopped_at": "2026-09-08 00:25:45+08:00"
+    },
+    {
+      "app_id": "ap-1OnPUIwRs7Pe6B2fZ08ppF",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:16:37+08:00",
+      "stopped_at": "2026-09-08 00:20:51+08:00"
+    },
+    {
+      "app_id": "ap-wcmKWsZfyLDFEHC6Yj0U4Q",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:12:42+08:00",
+      "stopped_at": "2026-09-08 00:17:24+08:00"
+    },
+    {
+      "app_id": "ap-z11d8fAaiof3XZo2uC4ExV",
+      "description": "syncopate-probability-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:12:36+08:00",
+      "stopped_at": "2026-09-08 00:16:04+08:00"
+    },
+    {
+      "app_id": "ap-H6nx0na24071EJfUvnHkAg",
+      "description": "syncopate-gdn-fastpath-batch",
+      "state": "stopped",
+      "tasks": "0",
+      "created_at": "2026-09-08 00:12:47+08:00",
+      "stopped_at": "2026-09-08 00:13:20+08:00"
+    }
+  ],
+  "policy": "Retain source snapshots, numeric witnesses, tiny controlled adapters and reusable compilation cache for reproduction/upstream. No training checkpoint created. Shared model unchanged. No deletion needed; no active experiment writer remains. Function wallclock is not an invoice."
+}

@@ -1,0 +1,85 @@
+{
+  "experiment": "infra-probes/B11",
+  "run_id": "batch6-b11-gpu-08",
+  "phase": "direct",
+  "evidence_path": "/vol/_audit/infra-probes/B11/batch6-b11-gpu-08/attempt-b5468b2275334892bf952d751c249e79",
+  "ok": false,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 6.2,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 1,
+      "process_returncode": 1,
+      "out": "",
+      "secs": 17.0,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "volume": "syncopate-home",
+  "modal_task_id": "ta-01M1ZYFAFXFBVTWWSBD90C7SVR",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "f650e06722579a505a4a99f0149f1f6f0a24b90690bdc3cad102dc454417fa89",
+  "image_id": "im-8bb389BH4w2LdgvmsXZNuy",
+  "entry_sha256": "53b8a1789557ed06026c3f7e19734508569eaabb4087ec079a56caf0d15c9596",
+  "sources": {
+    "modal_app/communication_baseline_batch.py": "53b8a1789557ed06026c3f7e19734508569eaabb4087ec079a56caf0d15c9596",
+    "syncopate/infra/communication_baseline_probe.py": "af9bd9367d9af488e13d981d30c9f679249abb1aa75ed655f82615d79b95100b",
+    "tests/infra/test_communication_baseline_probe.py": "d7f534a8a14bd5b3b923626bd8cb906c4cff97fdd286f5eee656d2c2390b8068",
+    "syncopate/infra/communication_probe.py": "1bbe9c21a3bfd59090ae2a3bbdbf15fff834e64e4b6a602645492b86bcf0c19a",
+    "syncopate/infra/hardware_probe.py": "bb10aaca81feaaa091830eee6cab1b734f9b49edce259877725e4a66dfa6a7bd",
+    "syncopate/infra/mechanism_contract.py": "87cade3e884d89ed044df5cd0675f621cdd759c6bd94a983bd00b93f07d926be",
+    "syncopate/infra/probe_run.py": "11b372e6954fa41565ae5d96538f801e617dede1d0564393514df1f964ffc948",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d"
+  },
+  "lock_sha256": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a",
+  "started_utc": "2026-09-08T07:24:51Z",
+  "source_archive": {
+    "overlay_sha256": "f650e06722579a505a4a99f0149f1f6f0a24b90690bdc3cad102dc454417fa89",
+    "members": 792,
+    "bytes": 3013524,
+    "archive_sha256": "6fb08b01148efae453e4b84b4db62c22425c1a572b53d74aa22ab9b903014d4c"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B11/batch6-b11-cpu-06/attempt-b89f7bc336f34597a44f6b118618d75c",
+  "commands": [
+    [
+      "/env/.venv/bin/python",
+      "-c",
+      "import torch; assert torch.cuda.device_count()==2; assert all(torch.cuda.get_device_capability(i)==(10,0) and 'B200' in torch.cuda.get_device_name(i) for i in range(2))"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "syncopate.infra.communication_baseline_probe",
+      "--mode",
+      "torch-direct",
+      "--out",
+      "/vol/_audit/infra-probes/B11/batch6-b11-gpu-08/attempt-b5468b2275334892bf952d751c249e79",
+      "--preflight",
+      "/vol/_audit/infra-probes/B11/batch6-b11-cpu-06/attempt-b89f7bc336f34597a44f6b118618d75c"
+    ]
+  ],
+  "seconds": 38.004994045,
+  "files": {
+    "communication-baseline-result.json": "a585d2e5d056d7310d4a4473fba44564e73d99d3c7fb0df806445d98aff5bd19",
+    "devices-command.json": "1e498cd240557196758d2e89eb8e6e6be79ee04e50b1e8a4537a156cfdd1ffb4",
+    "source.tar.gz.json": "eb820973741fe3c1797c42410760a703bab8c255767fa65db51d5313111e41e1",
+    "torch-direct-command.json": "04e2c27251b9966a2282a080488787cb610eb6e0fa1bcb13895bf340e6349b8f"
+  },
+  "log_seal_policy": "Logs are shutdown diagnostics; result JSON and artifact manifest hashes are authoritative.",
+  "app_id": "ap-i6PH4DjpDu32b5ljpnvmMP",
+  "readback_verified": true,
+  "resource_budget": {
+    "gpu": "B200:2",
+    "timeout_seconds": 1800
+  },
+  "failure_classification": "Own driver-metadata helper call omitted required name argument; failed before distributed initialization",
+  "first_confirmed_error_utc": "2026-09-08T07:28:05Z"
+}

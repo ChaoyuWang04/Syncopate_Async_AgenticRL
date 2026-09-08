@@ -1,0 +1,91 @@
+{
+  "experiment": "infra-probes/B02",
+  "run_id": "b02-gpu-02",
+  "mode": "gpu",
+  "volume": "syncopate-home",
+  "evidence_path": "/vol/_audit/infra-probes/B02/b02-gpu-02",
+  "git_sha": "2085f1bcac2e59b073da241e32ad1e9d253b4bf3",
+  "overlay_sha256": "c8e016804bc57f188aeece379a55ae489bb4f62a63f45ad401151cf62a1065fe",
+  "entry_sha256": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+  "image_id": "im-c25di4POY8FjYPeJmot3lY",
+  "started_utc": "2026-09-07T10:07:57Z",
+  "ok": true,
+  "steps": [
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 0.1,
+      "timed_out": false,
+      "timeout_reason": null
+    },
+    {
+      "rc": 0,
+      "process_returncode": 0,
+      "out": "",
+      "secs": 21.2,
+      "timed_out": false,
+      "timeout_reason": null
+    }
+  ],
+  "probe_sources": {
+    "modal_app/lora_probe.py": "9f8fb115cbcc9c6329ab317d1cd3a186332b33e032857f4f6f52fcd5b9df5936",
+    "syncopate/infra/lora_accumulation_probe.py": "5cf47513c959a7396e2d033be613fe35138fb758f35d0d718a7dd4029b01fd90",
+    "syncopate/infra/training_probe.py": "6b4b7e7003df7d4ee437c17e2c3217b0bce5919cf02a5fec43732917b580ff04",
+    "syncopate/infra/probe_run.py": "6c23c73ad064c0e4d84ece976a1a7f360f25f29b174136cb185f995ee40a3401",
+    "syncopate/pipeline/process_guard.py": "350081d7f98a21e7ab533137f1bece80d6f720fba0c8910de760e00bd12a1a66",
+    "syncopate/train/source_snapshot.py": "9358b34f6a38c7c90108d73a9562278f396040934b827019a9a76bed0e9a938d",
+    "tests/infra/test_lora_accumulation_probe.py": "38a03ca9d3cbb9291500ead5b55311353f9b5ee4cc3dbe427d385b1b9390d261",
+    "modal_app/stack/uv.lock": "36e2a091c3c87d96556de772702b0eb5a253d566af8c250f0df22613d083294a"
+  },
+  "source_archive": {
+    "overlay_sha256": "c8e016804bc57f188aeece379a55ae489bb4f62a63f45ad401151cf62a1065fe",
+    "members": 668,
+    "bytes": 2787799,
+    "archive_sha256": "2875e1a342340bc779ae3fd174fcd6785124a90e3d9d949b6d321dfa98d4335f"
+  },
+  "cpu_preflight": "/vol/_audit/infra-probes/B02/b02-cpu-03",
+  "commands": [
+    [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,memory.used,driver_version",
+      "--format=csv"
+    ],
+    [
+      "/env/.venv/bin/python",
+      "-m",
+      "torch.distributed.run",
+      "--standalone",
+      "--nnodes=1",
+      "--nproc-per-node=2",
+      "--max-restarts=0",
+      "--module",
+      "syncopate.infra.lora_accumulation_probe",
+      "gpu",
+      "/vol/_audit/infra-probes/B02/b02-gpu-02",
+      "/vol/_audit/infra-probes/B02/b02-gpu-02/tiny"
+    ]
+  ],
+  "seconds": 26.554994337,
+  "files": {
+    "rank-0-step-1-pre.json": "e43d62473ba27cd26dc426f0fc0d53cffb22461df8e60bd9ee24aee02b48ed99",
+    "rank-0-step-1.pt": "df87db3de44a19249e8e03d2754c7a5d828bfbecc1abf26bcce622970388f43c",
+    "rank-0-step-2-pre.json": "4f566644d2a1703e28d4492c53fc6a0be5e1d3b95e379b7792eb425d44cf6876",
+    "rank-0-step-2.pt": "c59dcb4b3405578d072d9c1330e0bdfbb6d51adc628006a1d129af657676f7d9",
+    "rank-0.json": "67d13c491ba6017415336c1fec27e257ae4b498e3ae569774af486784989d3e9",
+    "rank-1-step-1-pre.json": "12d01c529e52e85b2739f1df401192a70607366a63ae226cb6194f3ece0b6517",
+    "rank-1-step-1.pt": "4883c9b5c703e2538cef1f8302a7146dfc785b93fa37a03476943c175b544aeb",
+    "rank-1-step-2-pre.json": "b9db2b72c35afe56dd587b44266a1f3b9507c23b0d1785e185a4f6c47a815133",
+    "rank-1-step-2.pt": "a2b2acfa8bf301ee9f8b7819c5228bb827ed67dcd6d9823aa2d2710df8afc48b",
+    "rank-1.json": "b616bf7146de023dc8e526acbb00e8d53b5d33d90e156e21e18d40f8abd8afba",
+    "source.tar.gz.json": "ef968350d3e32ec6b91e99f034328272ce47aa6c465e4726c3d79c71b53af763",
+    "step-0.log": "33ad04625980ecc9dabee0b7c0aab5017fd75a62d58f9c2004ee25b90c5b418d",
+    "step-1.log": "e74d3ab213ba2515ff80b8902f187eeef947b7e36064f8f0dbe9700f7d516cc1"
+  },
+  "modal_app_id": "ap-K3LT7weEc4ntTm3xf7XAtK",
+  "readback_verified_files": [
+    "rank-0.json",
+    "rank-1.json",
+    "step-1.log"
+  ]
+}
