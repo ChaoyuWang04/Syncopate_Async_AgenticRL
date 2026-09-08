@@ -4,6 +4,8 @@ description: U 路（OPD+多轮+CoT）的 v14 历史终态与坑清单；当前�
 metadata:
   type: project
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 > **历史记忆，不是当前队列。** 现行训练状态看 `docs/syncopate/04-TRAINING.md`，
 > 当前任务只看 `docs/syncopate/01-TASKS.md`。

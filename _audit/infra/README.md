@@ -1,34 +1,9 @@
-# Infra 施工记录与原始证据
+# 旧 Infra 实验与证据
 
-> 本目录保存实验施工记录和机器证据，不决定当前状态。当前状态看
-> `docs/infra_exp/00-START.md`，当前队列看 `docs/infra_exp/01-TASKS.md`。
+本目录的 B01、B02、B03 等及更早的平铺文件全部属于旧系列，原地保留，不再登记新实验。旧设置、数字、未完成项不作为新系列的依赖、默认基线、预算或验收；不重命名、不覆盖原报告与产物。
 
-## 旧的平铺文件
+新系列 `infra-probes` 从 B00 开始，报告放 `docs/infra_exp/experiments/Bxx/REPORT.md`，原始大产物放独立 Volume 路径。详见 [实验协议](../../docs/infra_exp/06-EXPERIMENTS.md) 与 [当前 TASKS](../../docs/infra_exp/01-TASKS.md)。
 
-目录根部现有的 `a*`、`b*`、`e*` JSON 和 `nsys/` 文件来自 4×5090、旧模型或旧软件栈。
+旧 4×5090、旧模型/栈的计时和机制解释只能按当时背景引用；一些旧 RL 结论后来已作废，先查 [作废数字档案](../../docs/archive/syncopate/pre-consolidation-v16/21-invalidated-numbers.md)。历史文档在 `docs/archive/infra_exp/`，原始证据可用性须另行核验。
 
-- 计时文件仍能说明当时那次运行花了多久。
-- 一部分机制和精度解释后来被 E21/E22 的静默正确性问题推翻。
-- 它们不能作为 Modal B200 的 before，也不能和新的 B 系列直接计算加速比。
-- 完整背景和 E 报告在 `docs/archive/infra_exp/legacy-4x5090/`。
-
-这些文件原样保留，不改名、不覆盖。
-
-## 新的 B 系列
-
-新实验按下面的目录形状落盘：
-
-```text
-_audit/infra/B01/
-  REPORT.md          预注册、过程记录、结论和证据索引
-  manifest.json       环境、代码、模型、数据、拓扑和用户授权身份
-  baseline/           before 臂
-  candidate/          after 臂
-  summary.json        预注册判据与最终读数
-```
-
-多臂实验可增加子目录，但不能让两个写者共享同一路径。`REPORT.md` 不维护
-第二份任务队列；每份 `summary.json` 必须能追到原始日志、trace、checkpoint 或
-评测文件，空字段和跳过不能算通过。
-
-实验编号、报告路径和验收规则见 `docs/infra_exp/06-EXPERIMENTS.md`。
+产物可用性变更见 [2026-09-07 存储清理](../../docs/infra_exp/storage/20260907-cleanup.md)：旧合并模型及部分 checkpoint 大文件已删除，保留历史结果和必要的小型复核资产。

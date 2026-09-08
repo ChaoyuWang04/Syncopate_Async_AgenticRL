@@ -2,7 +2,7 @@
 
 > **这里没有当前答案，也没有待办。**
 > 主线现状只看 `docs/syncopate/00-START.md`，infra 现状只看
-> `docs/infra_exp/00-START.md`；待办分别只看两边的 `01-TASKS.md`。
+> `docs/infra_exp/00-START.md`；当前实验只看 infra 的 `01-TASKS.md`；原主线 TASKS 仅登记停止项。
 
 归档的作用是保留旧方案、旧机器结果、施工过程和调查笔记。归档文档可能包含
 已经失效的数字、路径、判断或待办，不能直接拿来指导现在的运行。
@@ -15,7 +15,7 @@
 | `syncopate/legacy-notes/` | 更早的主线调查、数据与轨迹分析、训练记录、复盘和旧部署说明 |
 | `infra_exp/legacy-4x5090/` | 旧 4×5090 时期的 E01～E33、设计文档、简历材料和已退役的跨线文件 |
 | `infra_exp/legacy-notes/` | 旧框架调研、verl 学习笔记、调度/训推一致性/去 padding/权重同步调查 |
-| `infra_exp/b-series/` | B200/B300 时代已经结束并验收过的完整实验报告；目前还没有正式报告 |
+| `infra_exp/b-series/` | 旧版预留归档目录；新 B REPORT 关闭后原地保留 |
 
 `docs/archive/` 根目录只保留这份地图，不再平铺历史文档。
 
@@ -34,8 +34,7 @@
 
 1. 当前事实提炼回 `docs/syncopate/02～07` 或 `docs/infra_exp/02～05`。
 2. 未完成事项只进入对应线路的 `01-TASKS.md`，不能留在归档中继续追踪。
-3. B 系列施工报告与原始证据先放 `_audit/infra/Bxx/`；实验结束后，完整报告
-   才移入 `infra_exp/b-series/`。
+3. 每个 B 实验唯一人工记录保留 `docs/infra_exp/experiments/Bxx/REPORT.md`，结束后也不搬迁；原始大产物留专属 Volume 路径。旧归档原地保留。
 4. 归档后原则上冻结内容；只修坏链接、归档提示或会造成误读的明显标记。
 5. 引用旧数字前，先看
    [`syncopate/pre-consolidation-v16/21-invalidated-numbers.md`](syncopate/pre-consolidation-v16/21-invalidated-numbers.md)。

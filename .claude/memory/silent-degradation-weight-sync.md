@@ -5,6 +5,8 @@ metadata:
   node_type: memory
   type: project
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 **2026-08-18（E22）**：`fully_async` / `one_step_off` 下，每次权重同步推给 vLLM 的都是
 **未经修改的冻结基座** —— LoRA adapter **一个字节都没推过去**。

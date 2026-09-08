@@ -1,49 +1,29 @@
-# Syncopate
+# Syncopate · Training & Inference Infra
 
-在模拟业务场景中，把多轮工具 agent 的 SFT → RL → OPD、评测与服务工程做好。用真实更新和可重复实验理解训练、推理与基础设施，不以业务上线、刷分、PR 或论文为目标。
+面向开源贡献的训练与推理基础设施实验。先在合理的模型、硬件和并行组合跑真实训练，观察速度瓶颈，再引入优化并回原入口A/B，交付可复现证据和实验性修复；疑似上游问题以 DRAFT 移交，由 upstream 负责人完成正式考据、PR 与提交。
 
-## 从这里开始
+## 当前方向（2026-09-08）
 
-- [项目规则](AGENTS.md)
-- [主线入口](docs/syncopate/00-START.md) · [主线任务](docs/syncopate/01-TASKS.md)
-- [Infra 入口](docs/infra_exp/00-START.md) · [Infra 任务](docs/infra_exp/01-TASKS.md)
-- [数据](docs/syncopate/03-DATA.md) · [训练与评测](docs/syncopate/04-TRAINING.md)
-- [计算资源](docs/syncopate/05-COMPUTE.md) · [Modal 操作](modal_app/README.md)
+- 工作重心：训练框架、SFT/RL/async/OPD、推理引擎、MoE、算子/量化、通信与权重传递。
+- 现有业务场景的数据构建、教师扩写、清洗和全链学习排期停止。已有代码、数据和历史产物保留；模型只作为负载，固定一个MoE和一个dense；复用公开数据，仅做必要格式转换。
+- 每个实验先做最新官方资料/GitHub 背景调查，先确认真实组合可运行并形成画像，再以瓶颈证据安排优化；不先猜算子错误。业务准确率后置，探索保留执行健康，优化后补定向回归。没有证据不登记“上游 bug”；已有可用修法先验证，不重复造轮子。
+- 每个具体实验只有一份 REPORT，记录背景、完整设置、每次测试和结论。新实验不等待旧 B03 或 SFT→RL→OPD 产物链。
+- 本项目与 `harness-lab/`、`sandbox-rl-MOPD-lab/` 默认完全独立。Harness/tool runtime 由其他 Lab 探索，本项目不复制其排期；未来交互另行约定。
 
-## 当前边界
+## 入口
 
-Mac 用于阅读、修改、Git 和 CPU 检查。云端只使用 Modal：需要 CPU 就申请 CPU，需要单卡就申请一张 B200，双卡实验申请两张 B200。独立实验可以同时申请多组资源，各自保存产物。
+- [工作规则](AGENTS.md)
+- [Infra START](docs/infra_exp/00-START.md) · [实际执行队列](docs/infra_exp/01-TASKS.md)
+- [实验地图与组合筛选](docs/infra_exp/02-SYSTEM.md) · [背景调查与实验记录规范](docs/infra_exp/06-EXPERIMENTS.md)
+- [资源、隔离和费用](docs/syncopate/05-COMPUTE.md) · [现有 Modal 入口](modal_app/README.md)
+- [原业务线状态](docs/syncopate/01-TASKS.md) · [上游移交](docs/upstream/README.md)
 
-数据、模型、checkpoint 和完整轨迹保存在 Modal 的 `syncopate-home` Volume。Git 只保存代码、配置、测试、文档和小型审计结论。历史归档用于追查证据，不是运行指南。
+## 实现与证据边界
 
-当前 v16 管线已经完成 B02 机械全链 smoke，各训练段有真实更新和可加载产物；质量仍有告警，尚未建立固定源码性能基线，也没有运行 candidate。最新进度只认两份 TASKS。
+`syncopate/` 放可复用 Python，`scripts/` 放固定入口和薄调度，`modal_app/` 管资源。当前实现仍包含 v16 业务 runbook；本次方向调整没有实现通用 base 探针入口或新卡型调度，不能把新规划当成已可运行能力。
 
-现有数据冻结，不再做语义清洗。质量告警保留观察，但不阻塞 infra；token/mask、数值、身份、数据隔离和真实更新仍必须正确。发现工程问题就修复并记录，通用问题按 `docs/upstream/` 留材料，不要求强行扩展成投稿。
+Modal 是主要计算平台，本轮上限8卡B200，按真实场景需要分配，所有角色和并发计入；RL框架仅verl/AReaL/ROLL/NeMo-RL/Miles/slime，以verl为主；训练FSDP2/Megatron，推理vLLM/SGLang/TensorRT-LLM。每run的卡数、拓扑、镜像、时限和费用登记；共享主机可能有其他 Lab 的 5090 任务，停进程先核对归属。
 
-## 固定入口
-
-```bash
-# Mac：按锁文件安装 CPU 开发和 Runtime 测试依赖
-uv sync --frozen --extra dev --extra runtime
-
-# 本地先检查命令和阶段连接
-bash scripts/v16_pipeline.sh --dry-run --profile smoke --gate-mode observe all
-```
-
-云端由 `modal_app/stack_probe.py` 编排，业务步骤只调用 `scripts/v16_pipeline.sh`。默认 `smoke/observe`：质量告警留下证据并继续；错误身份、数据越桶、NaN、坏产物和零真实更新仍停止。Candidate 的门槛和运行需要单独批准。
-
-## 目录
-
-```text
-syncopate/   可复用 Python 组件：数据、训练、评测和 Runtime
-scripts/     固定入口、Shell 调度和探针
-modal_app/   Modal 编排与冻结的云端依赖
-configs/     数据和训练配置
-tests/       自动检查
-docs/        当前专题和历史归档
-_audit/      小型报告；大体积原始证据保存在 Volume
-```
-
-模型路径由 `syncopate/core/model_paths.py` 定义，训练预算由 `syncopate/train/rollout_budget.py` 定义。不要在入口中复制默认值。
+Git 保存代码、配置、测试、报告和小型证据索引；模型、原始轨迹、checkpoint、缓存与遥测留在实验专属持久存储。历史资料只用于追溯，不驱动当前排期。
 
 MIT License，见 [LICENSE](LICENSE)。

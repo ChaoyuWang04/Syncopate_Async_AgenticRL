@@ -1,3 +1,5 @@
+> **2026-09-07 历史范围说明：**本文保留当时的设置、结果、授权和未完成项；正文中的“当前/下一步”、旧定位及资源限制只属于当时，不构成新实验排期或运行授权。原业务造数和完整学习计划已停止，原始证据与运行身份不倒写。 当前方向与任务只认 [Infra TASKS](../../../infra_exp/01-TASKS.md)。
+
 # 01 · Why verl？——从 TRL 的痛点到两次解耦，再到五层抽象
 
 > 代码锚点全部来自 `reference/industrial_posttrain_training_release/verl/upstream/`（verl `0.8.0.dev` 快照），下文简称 `UP/`。

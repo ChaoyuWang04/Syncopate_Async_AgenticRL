@@ -1,75 +1,39 @@
-# Infra · Rollout 与 Serving
+# Infra · 推理引擎与 Rollout
 
-> 本文是模型引擎拓扑、调度、缓存、解码、量化和性能评测的现行说明。
-> 生产 API、数据库、队列和发布规则看主线 [07-SERVING.md](../syncopate/07-SERVING.md)。
+> G3 研究模型引擎计算与调度；业务 API/队列、Harness/tool runtime 由独立 Lab 负责。本项目不承担原 Serving 完整验收排期。
 
-## 1. 当前状态
+## 1. 基线
 
-- 当前引擎栈是 vLLM 0.28，运行在 Modal B200。
-- 单卡启动和双卡 EP 启动已经通过环境探针。
-- B02 的真实 SFT/RL/OPD 评测已在 vLLM 上运行，暴露了 FlashInfer tuning bucket 未覆盖、推理期 Triton JIT 和 raw prompt API 弃用警告；这些是待测线索，不是性能结论。
-- 主线 Serving 主体代码已经施工完成，但当前部署环境的正式验收尚未结束。
-- 还没有 B 系列的吞吐、goodput、TTFT、TPOT、cache 或容量曲线。
+范围只含vLLM、SGLang、TensorRT-LLM。采用当前官方稳定、适合目标模型和真实训练接线的配置；TensorRT-LLM用于有需求的低精度/NVIDIA特性探索，不自动视为所有RL框架已支持。先查 GitHub 最新源码、issue/PR 和后端支持，固定具体 revision、容器与 kernel；已有 B200 vLLM 启动成功不代表新模型/新功能兼容，当前没有新的 SGLang 对照结论。
 
-因此当前不能把“四引擎默认”“PD no-go”“FP8 KV 默认”或旧并发数字直接搬到 B200。
+直接使用公开 base 与冻结输入，不要求原业务模型。可控 replay 测固定工作量；真实采样测请求调度和输出差异，不能将回答缩短算成引擎提速。
 
-## 2. 两种负载
+## 2. 有现实意义的负载
 
-Infra 必须分开报告：
+| 负载 | 观察什么 |
+|---|---|
+| 长 prompt / 短输出 | prefill、chunking、KV 分配、prefix cache |
+| 短 prompt / 持续 decode | 访存、每 token 延迟、batch 与 launch 开销 |
+| 长短混合和动态到达 | 队头等待、批内位置、scheduler、公平性和尾延迟 |
+| MoE + 少 token/专家 | 路由不均、grouped GEMM、dispatch/combine |
+| RL 周期性权重更新 | 引擎暂停、加载、版本、缓存失效和恢复吞吐 |
 
-| 负载 | 主要目标 | 不能省略 |
-|---|---|---|
-| RL rollout | 单位墙钟内产生健康轨迹 | 权重版本、采样契约、陈旧度、轨迹完整性 |
-| 业务 Serving | 在 SLO 内完成真实请求 | 成功终态、TTFT、TPOT、排队、恢复和任务质量 |
+每个选中负载先登记长度/到达率/并发的来源，不构造无人会采用的极端组合来凑 bug。压力边界须说明对应的实际容量情境。
 
-两者可以共用 vLLM，但不能共用一个模糊的“吞吐更高”结论。
+## 3. 画像指标与优化后的验收
 
-## 3. 拓扑比较
+初始探索不全面对拍概率；形成优化后按受影响路径跟踪“请求下发 → 实际 batch/位置 → 算子 → 输出概率”，同引擎重复与跨引擎差分开。
 
-候选形态包括单卡、DP=2、TP=2、EP=2，以及当前版本实际支持的 DeepEP/EPLB。比较前先证明：
+延迟至少包括 TTFT（首 token 等待）、TPOT（后续 token 时间）和端到端尾部；吞吐包括请求、有效输出 token 与给定延迟约束内的成功吞吐。记录失败/取消、排队、prefill/decode、KV/显存、编译与缓存，不能只统计最快成功请求。
 
-- 模型、LoRA、MoE 路由和采样契约一致；
-- 两张卡都收到并完成了预期份额，不能只看进程数量；
-- 请求没有被日预算、错误快速终止或重试污染；
-- 每个拓扑使用相同 trace、预热、并发阶梯和统计窗口；
-- 失败和降级行为也被计入，而不是只统计成功快请求。
+TP/DP/EP/PD 先证容量和通信可行。拓扑不同只能作整体方案比较，不能将全部差异归因于某个 kernel。多卡并非必然优于单卡；收益需在同任务负载下证明。
 
-## 4. 指标
+## 4. 单因素开关
 
-B11 增加 continuous batching（请求不断加入、退出同一计算批次）的训推一致性检查：固定请求 token 和权重，只改变到达顺序、相邻请求和批内位置，追踪“调度器下发了什么 → 实际在哪个 batch/位置计算 → 命中了哪个算子”。分别比较同引擎重复、批次变化及 trainer 的 logprob，确认差异从哪里出现；不能把调度编号当作实际计算位置，也不预先认定算子不同就是 bug。
+Graph/compile 覆盖与重捕获、prefix cache 命中、chunked prefill、量化 KV/权重、投机解码、LoRA sleep/wake 分开验证。投机解码核对采样语义和接受率；低精度量化另设数值/输出回归，不能只验程序退出码。
 
-每次 Serving 实验至少报告：
+## 5. 上游与既有线索
 
-- request/s、output tokens/s 和 **goodput@SLO**；
-- TTFT、TPOT、端到端延迟的中位数与尾部；
-- 排队时间、prefill/decode 时间、batch 大小和调度等待；
-- KV 占用、prefix cache 命中、显存、GPU 忙闲与功耗；
-- 每个成功请求或有效输出 token 的成本；
-- 任务级质量，以及超时、失败、取消和错误快速终止数量。
+旧 B02 的 JIT/tuning bucket/Renderer 警告只能导航调查。先查当前实现是否已修或有官方配置，找到具体调用路径后再复现；引擎排行榜不是贡献本身。
 
-一个组件更快但 goodput、质量或成本没有改善，只能写组件结果。
-
-## 5. 解码、缓存与量化
-
-- MTP、ngram 或其他投机解码必须报告接受率、额外模型成本、单流和并发两种结果，并做输出质量对照。
-- Prefix cache 要使用真实重复结构与随机化对照，命中率必须和端到端收益一起读。
-- FP8 KV、FP8/NVFP4 权重必须分别隔离；容量收益、kernel 收益和质量代价不能打包归因。
-- CUDA Graph 要报告覆盖率、未捕获形状和重编译/重捕获成本。
-- PD 分离必须先证明有足够 prefill 计算可卸载，再核算 KV 搬运和排队收益。
-
-## 6. 与主线 Serving 的边界
-
-Infra 可以产出引擎选型、容量曲线和候选默认值；是否进入生产由主线 Serving 验收决定。
-
-当 infra 结果建议改变主线默认值时：
-
-1. 完成 B 报告和原始证据；
-2. 用 Codex 任务消息把结论、适用边界和复验方法发给主线负责人；
-3. 主线在自己的 TASKS 和专题文档中决定是否采用；
-4. 不创建新的交互文档，也不在两边复制状态。
-
-## 7. 证据位置
-
-- 当前环境和已有探针：[主线 Compute](../syncopate/05-COMPUTE.md)、[Modal README](../../modal_app/README.md)
-- B 系列原始证据：`_audit/infra/Bxx/`
-- B 系列报告生命周期：[06-EXPERIMENTS.md](06-EXPERIMENTS.md)
+从真实训练rollout路径出发，出现瓶颈后才按需复用 [vLLM benchmark](https://github.com/vllm-project/vllm/tree/main/benchmarks) 与 [SGLang](https://github.com/sgl-project/sglang) 的官方测试，实验 REPORT 钉住实际使用 commit，不能让动态 main 链接代替身份。

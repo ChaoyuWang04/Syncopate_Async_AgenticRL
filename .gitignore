@@ -1,5 +1,8 @@
 # 环境
 /harness-lab/
+# 独立实验仓库：单独提交与推送，不作为 submodule。
+/sandbox-rl-MOPD-lab/
+/agent-framework-lab/
 .venv/
 __pycache__/
 *.pyc

@@ -7,6 +7,8 @@ metadata:
   originSessionId: f5bed7da-2659-5ec6-bac9-73049c9ac8d6
   modified: 2026-08-31T08:48:53.627Z
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 > **历史记忆，不是当前队列。** 现行协议看 `docs/syncopate/02-SYSTEM.md` 与
 > `docs/syncopate/06-RUNTIME.md`；现行进度只看 `docs/syncopate/01-TASKS.md`。

@@ -1,19 +1,22 @@
+
+> **2026-09-07 定位边界：**这是停止推进的业务系统实现说明，不是当前交付目标。Harness 与 Sandbox 两个 Lab 默认独立，本文不规定它们的接口、数据、资源或排期。 当前实验队列见 [Infra TASKS](../infra_exp/01-TASKS.md)。
+
 # Syncopate · 系统总览
 
 > 本文只说明整套系统如何连接、每个模块负责什么、哪些文件是唯一事实来源。
 > 当前工作排期看 [01-TASKS.md](01-TASKS.md)，专题细节看 03～07。
 
-## 1. 系统要交付什么
+## 1. 保留系统原来的职责
 
-Syncopate 用虚构业务场景承载一个能调用工具、连续多步办事的 agent。当前目标是把项目工程做好，并通过同一条管线理解 SFT、RL 和 OPD，不要求模型实际投产。
+原系统用虚构业务场景承载多轮工具调用 agent。该业务建设已停止，以下仅说明保留代码之间的关系。项目当前主线是训练与推理 infra 的问题探针，完整地图见 [Infra SYSTEM](../infra_exp/02-SYSTEM.md)。
 
-系统必须同时满足三件事：
+旧系统的三个实现契约是：
 
 1. 数据里的请求、历史、工具、观测和回答与线上真实请求同形。
 2. SFT、RL、OPD 和评测使用同一套消息契约、模型路径和长度预算。
 3. 线上每个动作经过权限、审批、幂等、审计和恢复机制，而不是让模型直接碰外部世界。
 
-异步 RL、推理和 kernel 是同一工程闭环的一部分。只优化实测问题，不强求 PR、论文或简历成果；现有数据冻结，质量告警用于观察学习，不启动新一轮语义清洗。
+异步 RL、推理和 kernel 作为独立问题实验推进，以开源贡献为方向；实验组将证据移交 upstream，由独立负责人处理正式 PR。原数据构建、教师扩写和完整学习计划停止。
 
 ## 2. 两条主流程
 
@@ -58,7 +61,7 @@ Runtime 负责“模型如何思考和行动”，Serving 负责“请求如何�
 | Compute | Modal、GPU、镜像、Volume、依赖和机器探针 | 模型质量结论 |
 | Runtime | 消息契约、AgentLoop、工具、安全闸、会话和 RAG | 服务发布、队列运维 |
 | Serving | API、数据库、队列、worker、事件、恢复、发布和 SLO | 训练数据构造 |
-| Infra | 分布式训练、通信、kernel 和性能实验 | 主线任务排期 |
+| Infra | 当前主线：训练/推理、通信、kernel 与性能实验 | 原业务造数、Harness/tool runtime 独立 Lab |
 
 ## 4. 当前契约
 
@@ -96,7 +99,7 @@ Runtime 负责“模型如何思考和行动”，Serving 负责“请求如何�
 | 数据到 OPD 的执行顺序 | [scripts/v16_pipeline.sh](../../scripts/v16_pipeline.sh) |
 | Modal 镜像和机器探针 | [modal_app/stack_probe.py](../../modal_app/stack_probe.py) |
 | 数据库结构 | [syncopate/runtime/migrations](../../syncopate/runtime/migrations) 与 [schema.snapshot.txt](../../syncopate/runtime/schema.snapshot.txt) |
-| 当前任务 | [01-TASKS.md](01-TASKS.md) |
+| 当前任务 | [Infra TASKS](../infra_exp/01-TASKS.md)；[旧业务停止项](01-TASKS.md) |
 
 文档解释这些来源，不复制一套可漂移的默认值。代码与文档冲突时，先核对真实入口和审计证据，再修正文档或代码。
 
@@ -106,7 +109,7 @@ Runtime 负责“模型如何思考和行动”，Serving 负责“请求如何�
 - B02 已用真实 v16 数据完成 SFT 30 次、RL 2 次和 OPD 1 次真实更新，并证明合并模型、checkpoint 与 adapter 连续传递。
 - 固定 smoke 的机械链路已通过；Exam、RL 长回复和 OPD 短评测仍有质量 WARN，所以不是 candidate 或稳定性能 baseline。
 - Runtime 与 Serving 主体能力已经实现；Serving 的当前环境正式验收仍未结束。
-- 云端只使用 Modal CPU / B200；按步骤分配资源，独立实验可以并行。
+- 保留运行入口主要为 Modal CPU / B200；新硬件候选、实现缺口和资源边界见 [Compute](05-COMPUTE.md)。
 
 ## 7. 不变量
 

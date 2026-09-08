@@ -1,13 +1,17 @@
-- [Modal+B200 新栈现场](modal-migration-state.md) — 数据冻结；B03 的 35B 同步/token 与小模型梯度/恢复已验，35B 概率、路由和重复性仍在队首；B04/B06 前置未上 GPU
+# 项目记忆索引
+
+当前方向见 [项目定位](syncopate-project-framing.md)；当前队列只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。当前从真实训练速度画像出发，再按瓶颈安排优化；原业务数据建设与完整学习计划停止。以下技术经验来自历史运行，旧默认、待办、硬件限制和成果表述不自动适用于新实验。
+
+- [Modal+B200 新栈现场](modal-migration-state.md) — Modal 主资源、新卡型待验；历史 B200 证据与入口边界
 - [被调脚本也得是当前版本](pipeline-callees-must-be-current-too.md) — ★09-05 Chaoyu：runbook 固定"调谁"≠被调的是新版；一天查出 9 类旧东西还在起作用且不报错；旧版本号的名字本身就是线索
 - [v15 契约重构历史](v15-contract-refactor.md) — 行为进入 session.* 强通道的形成过程；当前协议看 docs/syncopate/02-SYSTEM.md 与 06-RUNTIME.md
 - [模型只装知识不装运行态身份](model-learns-knowledge-not-runtime-identity.md) — ★09-02 裁定⑨：account_id/清单一律 runtime 注入；数据要逐条渲染给人看（画廊抓到 4 条脚本没抓到的）
-- [Syncopate 项目定位](syncopate-project-framing.md) — 模拟场景中把项目工程做好，观察 SFT/RL/OPD；不追业务上线、数据清洗、求职或投稿
+- [Syncopate 项目定位](syncopate-project-framing.md) — 训练与推理 infra 探针、开源贡献方向；停止业务造数与完整学习排期
 - [文档入口与分工](syncopate-docs-map.md) — 该读哪份、哪份放什么；★含「章节验收怎么做」的五步（M8 立、M9 照做）
 - [干净机器才暴露的缺口](clean-machine-only-gaps.md) — 「一条命令重建」是假的；手动装过的东西 = 隐形前提
 - [集合通信的 16 字节对齐悬崖](collective-alignment-cliff.md) — 分块不被 16 整除，all_gather 掉 12×；「3 卡受诅咒」的真相
 - [U 路统一训练历史](u-route-unified-training.md) — v14 的 OPD、多轮与 CoT 施工终态；不是当前队首
-- [infra 线当前入口](infra-line-state.md) — B01/B02 边界、B03～B13 当前状态、7 份现行文档与历史证据边界
+- [infra 线当前入口](infra-line-state.md) — 真实训练画像队列与G参考地图、B系列历史证据边界
 - [先测量后动手](feedback-measure-dont-infer.md) — 用推理代替测量，一天里付了两次钱
 - [机制在但没接上](project-mechanism-not-wired.md) — 最反复出现的失效形状；★第七形态 = 默认值/存在性检查**指向了另一件事**且不报错；★第八形态 = 测试全绿但服务**从没被真的起过**（入口/流关闭只在实跑存在）
 - [按旧单位标定的阈值](thresholds-calibrated-in-old-units.md) — ★换契约让「按旧口径标定」的数字同时失效；08-30 一天撞五次，一次都不报错
@@ -33,4 +37,4 @@
 - [模型填的是我们给的那张表](contract-shapes-behavior.md) — answer_fields 一格 ⇒ 机器标签；改契约 5 分钟拿回一半人话；★但**只要人话会把办事能力换走**（实测）
 - [开训前逐通道体检](audit-every-channel-before-training.md) — ★数据的病不崩任何东西，只是让模型学到更省事的策略；同一个坑三次
 - [训练样例必须和线上同形](train-data-must-match-production-shape.md) — ★★守则⑮；08-31 通查出 7 处不同形，全是造数据时的临时办法
-- [K 线 serving 施工历史](serving-harness-k-line.md) — ★09-02 K0–K11 主体落地；现行入口 `docs/syncopate/07-SERVING.md`，正式验收仍看 `01-TASKS.md`
+- [K 线 serving 施工历史](serving-harness-k-line.md) — ★09-02 K0–K11 主体落地；现行入口 `docs/syncopate/07-SERVING.md`，原业务验收已停止，Lab 独立推进

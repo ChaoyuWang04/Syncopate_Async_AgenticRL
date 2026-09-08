@@ -7,6 +7,8 @@ metadata:
   originSessionId: 8fda7c79-7275-5040-8ca9-2552dddaa97f
   modified: 2026-08-19T13:34:02.557Z
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 **E25（2026-08-19）实测证伪了「trainer 没喂饱」**：`micro_batch` 1→2 是**负收益**
 （定长慢 1.0% / 变长慢 6.3%，多花 4.2 GB；mb=4 OOM），关 `gradient_checkpointing`

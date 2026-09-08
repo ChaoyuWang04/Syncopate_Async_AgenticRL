@@ -5,7 +5,7 @@
 
 当前结构：
 
-- `v16_pipeline.sh`：主线唯一固定入口；默认 `smoke/observe`，candidate/strict 必须显式选择。
+- `v16_pipeline.sh`：已停止业务链的保留入口；默认 `smoke/observe`，candidate/strict 必须显式选择。
 - `v16/`：v16 数据、考场与行为探针；考场 shell 只负责编排。
 - `serving/`：服务启停、压测、故障演练与运行读数。
 - `infra/`：硬件、通信、kernel 和训练基础设施探针。
@@ -23,6 +23,4 @@
 需要新增 Python 文件时，先问一句：它是“可被 import/重用的功能”，还是“仅负责观测或现场执行”？
 前者进 `syncopate/`，后者才进这里。
 
-注意：这些脚本**不是每次都会跑**。日常主线只从 `v16_pipeline.sh` 进入，它调用
-`syncopate/` 中的正式组件，考场阶段再调 `v16/exam_chain.sh`。`serving/`、`infra/`、
-`tools/` 与其他 `v16/` 探针都只在对应验收、调试或运维时按需使用。
+当前主线按 [Infra TASKS](../docs/infra_exp/01-TASKS.md) 为具体问题选择固定探针入口。通用 base/adapter 入口尚待 G0.3 实现；`v16_pipeline.sh` 保留原业务依赖，不是所有探针的强制入口。数据构建与完整业务链已停止，脚本存在不表示应当执行。

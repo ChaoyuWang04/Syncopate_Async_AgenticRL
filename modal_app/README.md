@@ -1,18 +1,37 @@
-# Modal / B200 运行入口
+# Modal 运行入口与保留 B200 实现
 
 > 当前机器、依赖、Volume 和安全规则见
 > [docs/syncopate/05-COMPUTE.md](../docs/syncopate/05-COMPUTE.md)。
-> 训练顺序见 [docs/syncopate/04-TRAINING.md](../docs/syncopate/04-TRAINING.md)，
-> 当前任务见 [docs/syncopate/01-TASKS.md](../docs/syncopate/01-TASKS.md)。
+> 当前任务见 [Infra TASKS](../docs/infra_exp/01-TASKS.md)。原业务数据构建与完整学习链已停止。
+> 以下是保留入口，不是执行清单。当前先真实训练画像再定位；Modal上限8卡B200，但现有双卡微探针不能冒充新的8卡真实训练入口。新入口按Q21支持/容量核验后按需实现。
 
-## 两个入口
+B11追加测量入口为 `communication_baseline_batch.py --phase cpu|gpu|graph|direct --run-id ID [--preflight 精确CPUattempt]`：CPU在独立目录编译固定SHA的官方nccl-tests；同一派生MPI镜像的双B200对比native/PyTorch eager/Graph。实际执行状态只看B11 REPORT，不能把入口存在当基线通过。
 
-- [stack_probe.py](stack_probe.py)：创建 Modal 环境、检查机器、执行探针，并把结果写入审计目录。
-- [scripts/v16_pipeline.sh](../scripts/v16_pipeline.sh)：数据、SFT、Exam、RL、OPD 的唯一业务管线。
+## 保留定位探针入口（仅在真实画像触发后使用）
 
-Modal 层只负责选机器、准备容器、挂载 Volume 和调用固定管线，不复制模型路径、预算或训练参数。
+- [probability_batch.py](probability_batch.py)：概率与GDN定位探针，`--phase cpu|fsdp|vllm|layers|fp8|gdn|gemm_cpu|gemm|splitk_cpu|splitk|lora_cpu|lora`（新系列B04/B05已完成；`gemm_cpu/gemm`及固定M因果对照`splitk_cpu/splitk`用于B07，`lora_cpu/lora`用于B08；CPU gate绑定源码/镜像）；CPU 返回精确 attempt 路径作为 GPU 的 `--preflight`。每次投递独立目录，程序退出和必需结果内容均验证。
+- 本批新增 `residual_cpu/residual`（B09，CPU→单B200）、`opd_cpu`（B10，只用CPU）、`communication_cpu/communication`（B11，CPU→双B200）；通信只核模型元数据，不读取整份模型权重。同问题后续入口为 `residual_follow_cpu/residual_follow`（B09严格重放与联合干预）及 `communication_focus_cpu/communication_focus`（B11交错尺寸与独立trace）。新入口按各REPORT的当前验证状态使用。每次函数使用独立容器，通信三次分配分别保留拓扑与全部样本。
+- [gdn_fastpath_batch.py](gdn_fastpath_batch.py)：B06派生镜像，只增加固定causal-conv1d依赖；`--phase cpu|gpu`，GPU必须引用同源码/同派生镜像的CPU attempt。
 
-## 当前环境
+- [infra_probes.py](infra_probes.py)：infra-probes/B00 长度指标CPU对照、B01公开MoE同token的CPU/单B200对照。
+- [lora_probe.py](lora_probe.py)：infra-probes/B02 tiny MoE + LoRA的CPU/双B200更新对照。
+- 参数/资源/判据和验证状态只认各 [实验REPORT](../docs/infra_exp/experiments/)。示例命令里的新ID必须替换，不得重写旧run。
+
+```bash
+PYTHONPATH=. modal run --detach modal_app/infra_probes.py --probe b01-cpu --run-id <new-cpu-id>
+PYTHONPATH=. modal run --detach modal_app/infra_probes.py --probe b01-gpu --run-id <new-gpu-id> --cpu-run <passed-cpu-id>
+PYTHONPATH=. modal run --detach modal_app/lora_probe.py --mode cpu --run-id <new-cpu-id>
+PYTHONPATH=. modal run --detach modal_app/lora_probe.py --mode gpu --run-id <new-gpu-id> --cpu-run <passed-cpu-id>
+```
+
+这些入口复用冻结stack镜像，在`/opt/syncopate-current`执行实际源码快照，不同步共享bare repo或连接业务数据目录。GPU前置核对对应CPU的输入、源码和依赖身份；只在自己的`/vol/_audit/infra-probes/Bxx/<run-id>/`写日志、证据及私有缓存。诊断hook不用于测速；B01仅在自有引擎IPC内传已知观察函数。
+
+## 保留入口
+
+- [stack_probe.py](stack_probe.py)：保留机器/历史探针与业务管线编排。
+- [scripts/v16_pipeline.sh](../scripts/v16_pipeline.sh)：保留数据、SFT、Exam、RL、OPD业务管线，当前停止排期。
+
+## 保留入口的环境
 
 - Volume：`syncopate-home`
 - 资源：CPU、B200 或 B200:2，按实际步骤选择；独立对照可以同时起多组资源
@@ -22,10 +41,10 @@ Modal 层只负责选机器、准备容器、挂载 Volume 和调用固定管线
 
 精确布局和依赖版本只在 [05-COMPUTE.md](../docs/syncopate/05-COMPUTE.md) 维护。
 
-当前验证状态：B01 上云前认证已通过；B02 已把 2×B200 真实 v16 全链机械接通。B03 的 35B 身份证据和小模型双卡梯度/正常恢复已有局部通过；B13 已取得首轮双卡通信与 BF16 GEMM 读数。B04/B06 仍在正确性前置阶段。
-详细边界只看 [infra TASKS](../docs/infra_exp/01-TASKS.md) 和各 B 系列 REPORT。当前仍没有 candidate 或稳定性能 baseline。
+历史验证边界（本次未重跑）：B01 上云前认证已通过；B02 已把 2×B200 真实 v16 全链机械接通。B03 的 35B 身份证据和小模型双卡梯度/正常恢复已有局部通过；B13 已取得首轮双卡通信与 BF16 GEMM 读数。B04/B06 仍在正确性前置阶段。
+详细边界只看 [infra TASKS](../docs/infra_exp/01-TASKS.md) 和各 B 系列 REPORT。没有candidate或真实训练性能baseline；B11原生NCCL局部基线只覆盖其已测配置。
 
-## 常用探针
+## 保留探针命令（按新实验准入后选用）
 
 ```bash
 # 依赖和机器

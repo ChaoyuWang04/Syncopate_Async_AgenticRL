@@ -7,6 +7,8 @@ metadata:
   originSessionId: d41319ab-b22c-5d75-a1c9-8bcb12bcbd24
   modified: 2026-09-02T05:01:11.943Z
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 > **历史记忆，不是当前验收结论。** K0–K11 主体虽已施工，正式验收仍未完成；
 > 现行说明看 `docs/syncopate/07-SERVING.md`，未完成事项只看 `01-TASKS.md`。

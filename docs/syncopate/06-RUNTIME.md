@@ -1,6 +1,9 @@
+
+> **2026-09-07 定位边界：**原业务场景的数据构建、教师扩写、训练全链及服务建设停止。本文保留契约和操作参考，正文待办/命令不构成继续执行授权；Harness/tool runtime 由独立 Lab 自行规划。 当前实验队列见 [Infra TASKS](../infra_exp/01-TASKS.md)。
+
 # Syncopate · Runtime 与 RAG
 
-> 本文是模型交互、AgentLoop、工具、安全闸、会话和 RAG 的唯一现行说明。
+> 本文是模型交互、AgentLoop、工具、安全闸、会话和 RAG 的保留实现说明。
 > API、队列、数据库运维和发布看 [07-SERVING.md](07-SERVING.md)。
 
 ## 1. Runtime 负责什么

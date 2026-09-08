@@ -7,6 +7,8 @@ metadata:
   originSessionId: 254d8707-7512-4e9b-bd89-6e1eeec39011
   modified: 2026-08-13T17:24:38.589Z
 ---
+> **2026-09-07 历史范围说明：**本文是历史工程经验；旧模型/卡型/默认值、业务数据建设与学习排期不自动沿用。技术线索须在新实验背景调查和当前栈中重新确认。 当前方向与任务只认 [Infra TASKS](../../docs/infra_exp/01-TASKS.md)。
+
 
 Chaoyu（RunPod 上的开发者，中文交流）：
 
